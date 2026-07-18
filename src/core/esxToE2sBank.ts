@@ -1,0 +1,205 @@
+/**
+ * esxToE2sBank.ts — Direkt-Converter KORG ESX-1 (.esx) → Electribe 2 Sampler.
+ *
+ * Produziert aus einem geparsten ESX-1-Backup beides zum Import auf die E2S:
+ *   - `.e2sallpat` Pattern-Bank (250 Slots), Parts auf User-Sample-Nummern (501+)
+ *     repointet → spielen direkt die mit-konvertierten Samples.
+ *   - `.all` Sample-Bank: die von den Patterns genutzten Samples, nummeriert ab
+ *     501 (OSC_0index +0x08 + +0x56), korrekt mit WAV_dataSize/playLogPeriod/UFix.
+ *
+ * Reine TS-Logik (kein DOM) — die UI (EsxToE2sConverter) lädt nur die ESX-Datei
+ * und bietet die zurückgegebenen Bytes als Download an.
+ *
+ * Verknüpfung Pattern↔Sample über die ESX-Sample-Slot-ID (Part.sampleId ==
+ * EsxSample.index). Nur Samples, die ein Part mit aktiven Steps triggert, werden
+ * exportiert; bei Überschreiten des E2S-Sample-RAMs (~270s mono) werden die
+ * überzähligen weggelassen (Report) — das verhindert den "Import-Fehler".
+ */
+
+import type { EsxBank, EsxPattern, EsxSample } from "./esxParser";
+import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
+import { buildE2AllPatFile } from "./e2sExport";
+import type { E2PatternInput } from "./electribePatternBuilder";
+
+/** E2S User-Sample-Nummerierung beginnt bei 501 (Factory 1..~500). */
+export const E2S_USER_SAMPLE_BASE = 501;
+/** Sicherer Mono-Sekunden-Deckel fürs Sample-RAM (Hardware ~270s mono). */
+export const E2S_SAMPLE_SECONDS_CAP = 260;
+/** MIDI-Note für "keine Tonhöhenänderung" (C5). */
+const E2_BASE_NOTE = 0x48;
+
+export interface EsxToE2sResult {
+  /** .e2sallpat-Bytes (4 161 792). */
+  allpat: Uint8Array;
+  /** .all-Sample-Bank-Bytes. */
+  all: Uint8Array;
+  /** Mapping/Anleitung (Markdown). */
+  mapping: string;
+  stats: {
+    patterns: number;
+    samples: number;
+    droppedSamples: number;
+    audioSeconds: number;
+    activeParts: number;
+    linkedParts: number;
+  };
+}
+
+export interface EsxToE2sOptions {
+  userSampleBase?: number;
+  secondsCap?: number;
+}
+
+/** Linearer Mono-Resampler (dependency-frei). */
+function resampleMono(pcm: Float32Array, fromRate: number, toRate: number): Float32Array {
+  if (fromRate === toRate || pcm.length === 0) return pcm;
+  const ratio = toRate / fromRate;
+  const outLen = Math.max(1, Math.round(pcm.length * ratio));
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const src = i / ratio;
+    const i0 = Math.floor(src);
+    const i1 = Math.min(pcm.length - 1, i0 + 1);
+    const frac = src - i0;
+    out[i] = pcm[i0] * (1 - frac) + pcm[i1] * frac;
+  }
+  return out;
+}
+
+function esxStepLengthToE2(lengthSteps: number): 16 | 32 | 64 {
+  return lengthSteps === 32 ? 32 : lengthSteps === 64 ? 64 : 16;
+}
+
+/**
+ * Konvertiert ein geparstes ESX-1-Backup in E2S-Bank-Dateien.
+ */
+export function convertEsxToE2sBank(
+  esx: EsxBank,
+  opts: EsxToE2sOptions = {},
+): EsxToE2sResult {
+  const base = opts.userSampleBase ?? E2S_USER_SAMPLE_BASE;
+  const secondsCap = opts.secondsCap ?? E2S_SAMPLE_SECONDS_CAP;
+
+  // 1) Nicht-leere Patterns (Name ODER mind. ein aktiver Step), max 250.
+  const selected = esx.patterns
+    .filter(
+      (p) =>
+        (p.name && p.name.trim().length > 0) ||
+        p.parts.some((pt) => pt.steps.some((s) => s.active)),
+    )
+    .slice(0, 250);
+
+  // 2) Nur Samples, die ein Part mit aktiven Steps triggert.
+  const usedIndices = new Set<number>();
+  for (const p of selected) {
+    for (const part of p.parts) {
+      if (part.steps.some((s) => s.active)) usedIndices.add(part.sampleId);
+    }
+  }
+
+  // 3) Sample-Liste aufbauen, gedeckelt aufs Sample-RAM (mono-Sekunden).
+  //    Mono = Sekunden, Stereo = 2× (interner Speicher-Daumenwert).
+  const sampleMap = new Map<number, { hwNumber: number; name: string }>();
+  const slots: E2sSlotInput[] = [];
+  let audioSeconds = 0;
+  let droppedSamples = 0;
+  let nextSlot = 0;
+  for (const s of esx.monoSamples as EsxSample[]) {
+    if (!usedIndices.has(s.index)) continue;
+    if (nextSlot >= 250) {
+      droppedSamples++;
+      continue;
+    }
+    const seconds = s.sampleRate > 0 ? s.frames / s.sampleRate : 0;
+    if (audioSeconds + seconds > secondsCap) {
+      droppedSamples++;
+      continue;
+    }
+    const targetRate = s.sampleRate === 48000 ? 48000 : 44100;
+    const pcm = resampleMono(s.pcmData, s.sampleRate, targetRate);
+    const name = (s.name && s.name.trim()) || `ESX ${s.index}`;
+    const hwNumber = base + nextSlot;
+    sampleMap.set(s.index, { hwNumber, name });
+    slots.push({
+      slotIndex: nextSlot,
+      sampleNumber: hwNumber,
+      category: 17, // "User"
+      name,
+      pcmData: pcm,
+      sampleRate: targetRate,
+      channels: 1,
+    });
+    audioSeconds += seconds;
+    nextSlot++;
+  }
+
+  // 4) Patterns → E2PatternInput, Parts auf die User-Nummern repointen.
+  let activeParts = 0;
+  let linkedParts = 0;
+  const e2Inputs: E2PatternInput[] = selected.map((p: EsxPattern) => {
+    const stepLength = esxStepLengthToE2(p.lengthSteps);
+    const parts = p.parts.map((part) => {
+      const active = part.steps.some((s) => s.active);
+      const mapped = sampleMap.get(part.sampleId);
+      if (active) {
+        activeParts++;
+        if (mapped) linkedParts++;
+      }
+      const note = Math.max(0, Math.min(127, E2_BASE_NOTE + (part.pitch ?? 0)));
+      return {
+        volume: part.volume,
+        pan: part.pan,
+        sampleId: mapped ? mapped.hwNumber : undefined,
+        steps: part.steps.map((s) => ({
+          active: !!s.active,
+          velocity: typeof s.velocity === "number" ? s.velocity : undefined,
+          accent: !!s.accent,
+          note,
+        })),
+      };
+    });
+    return { name: p.name || "ESX Pattern", bpm: p.bpm, stepLength, parts };
+  });
+
+  // 5) Bytes bauen.
+  const allpat = new Uint8Array(buildE2AllPatFile(e2Inputs));
+  const all = new Uint8Array(buildE2sBank(slots).buffer);
+
+  // 6) Mapping/Anleitung.
+  const lines: string[] = [];
+  lines.push("# ESX → KORG Electribe 2 Sampler — Import-Anleitung");
+  lines.push("");
+  lines.push(`Quelle: ${esx.source}`);
+  lines.push("");
+  lines.push("## Dateien");
+  lines.push("- `*.all` → auf SD-Karte (Sample-Ordner), am Gerät importieren. User-Samples ab " + base + ".");
+  lines.push("- `*.e2sallpat` → Pattern-Bank importieren. Parts zeigen bereits auf die Nummern.");
+  lines.push("");
+  lines.push(`## Stats`);
+  lines.push(`- Patterns: ${selected.length}`);
+  lines.push(`- Samples: ${slots.length} (${audioSeconds.toFixed(1)}s, Limit ~${secondsCap}s)` + (droppedSamples ? `, ${droppedSamples} wegen Speicher weggelassen` : ""));
+  lines.push(`- Aktive Parts: ${activeParts}, davon mit Sample verlinkt: ${linkedParts}`);
+  lines.push("");
+  lines.push("## Sample-Liste (Geräte-Nr. → Name → ESX-Index)");
+  lines.push("");
+  lines.push("| Geräte-# | Name | ESX-Index |");
+  lines.push("|---:|---|---:|");
+  for (const [esxIdx, m] of [...sampleMap.entries()].sort((a, b) => a[1].hwNumber - b[1].hwNumber)) {
+    lines.push(`| ${m.hwNumber} | ${m.name} | ${esxIdx} |`);
+  }
+  const mapping = lines.join("\n") + "\n";
+
+  return {
+    allpat,
+    all,
+    mapping,
+    stats: {
+      patterns: selected.length,
+      samples: slots.length,
+      droppedSamples,
+      audioSeconds,
+      activeParts,
+      linkedParts,
+    },
+  };
+}
