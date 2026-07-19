@@ -7,6 +7,7 @@
 import { parseEsxBank, type EsxBank, type EsxPattern } from "../core/esxParser";
 import {
   convertEsxToE2sBank,
+  suggestE2StepLength,
   E2S_USER_SAMPLE_BASE,
   E2S_SAMPLE_SECONDS_CAP,
 } from "../core/esxToE2sBank";
@@ -17,6 +18,8 @@ import { $, download, escapeHtml } from "./shared";
 let bank: EsxBank | null = null;
 let stem = "esx";
 const selected = new Set<number>();
+/** Gewählte Ziel-Steplänge pro Pattern-Index (Default = Vorschlag). */
+const stepTargets = new Map<number, 16 | 32 | 64>();
 /** Letztes Konvertierungs-Ergebnis (für „Im Editor öffnen"). */
 let lastResult: EsxToE2sResult | null = null;
 /** Callback, den main.ts setzt: Projekt an den Editor übergeben + Tab wechseln. */
@@ -46,12 +49,28 @@ function renderLoaded(): void {
     .map((p) => {
       const active = p.parts.filter((pt) => pt.steps.some((s) => s.active)).length;
       const checked = selected.has(p.index) ? "checked" : "";
+      // Steps→E2: Original-Länge + Ziel-Auswahl (Vorschlag vorgewählt).
+      // ESX kann bis 128 Steps, die E2S nur 16/32/64 — Überstand wird gecuttet.
+      const suggestion = suggestE2StepLength(p.lengthSteps);
+      const target = stepTargets.get(p.index) ?? suggestion;
+      const opts = ([16, 32, 64] as const)
+        .map((n) => {
+          const cut = p.lengthSteps > n ? ` (Cut bei ${n})` : "";
+          const mark = n === suggestion ? " ★" : "";
+          return `<option value="${n}" ${target === n ? "selected" : ""}>${n}${cut}${mark}</option>`;
+        })
+        .join("");
+      const warn =
+        p.lengthSteps > target
+          ? ` <span class="warn" title="Original ${p.lengthSteps} Steps — Steps ${target + 1}..${p.lengthSteps} werden abgeschnitten">✂</span>`
+          : "";
       return `<tr>
         <td><input type="checkbox" data-idx="${p.index}" ${checked}></td>
         <td>${p.index + 1}</td>
         <td>${escapeHtml(p.name || "(ohne Name)")}</td>
         <td>${p.bpm.toFixed(1)}</td>
         <td>${p.lengthSteps}</td>
+        <td><select data-steps="${p.index}" title="Ziel-Steplänge auf der E2S (★ = Vorschlag)">${opts}</select>${warn}</td>
         <td>${active}</td>
       </tr>`;
     })
@@ -62,6 +81,12 @@ function renderLoaded(): void {
       if (cb.checked) selected.add(idx);
       else selected.delete(idx);
       updateSelCount();
+    });
+  });
+  patRows.querySelectorAll<HTMLSelectElement>("select[data-steps]").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      stepTargets.set(Number(sel.dataset.steps), Number(sel.value) as 16 | 32 | 64);
+      renderLoaded();
     });
   });
   updateSelCount();
@@ -87,6 +112,7 @@ async function loadFile(file: File): Promise<void> {
       file.name.replace(/\.(esx|ess)$/i, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 50) ||
       "esx";
     selected.clear();
+    stepTargets.clear();
     for (const p of esx.patterns) if (isRelevant(p)) selected.add(p.index);
     renderLoaded();
   } catch (err) {
@@ -107,7 +133,11 @@ function convert(): void {
       };
       const base = Number($<HTMLInputElement>("base").value) || E2S_USER_SAMPLE_BASE;
       const cap = Number($<HTMLInputElement>("cap").value) || E2S_SAMPLE_SECONDS_CAP;
-      const res = convertEsxToE2sBank(filtered, { userSampleBase: base, secondsCap: cap });
+      const res = convertEsxToE2sBank(filtered, {
+        userSampleBase: base,
+        secondsCap: cap,
+        stepTargets: Object.fromEntries(stepTargets),
+      });
       lastResult = res;
       const s = res.stats;
       $("resultStats").innerHTML =

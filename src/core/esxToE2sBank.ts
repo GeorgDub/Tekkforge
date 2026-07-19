@@ -50,6 +50,22 @@ export interface EsxToE2sResult {
 export interface EsxToE2sOptions {
   userSampleBase?: number;
   secondsCap?: number;
+  /**
+   * Ziel-Steplänge pro Pattern (Key = EsxPattern.index). ESX kann bis 128
+   * Steps, die E2S nur 16/32/64 — fehlt ein Eintrag, greift
+   * suggestE2StepLength(). Steps jenseits des Ziels werden abgeschnitten.
+   */
+  stepTargets?: Record<number, 16 | 32 | 64>;
+}
+
+/**
+ * Vorschlag für die E2-Steplänge: kleinstes 16/32/64 ≥ Original-Steps;
+ * ab 65+ wird bei 64 gecuttet (E2-Hardware-Maximum).
+ */
+export function suggestE2StepLength(totalSteps: number): 16 | 32 | 64 {
+  if (totalSteps <= 16) return 16;
+  if (totalSteps <= 32) return 32;
+  return 64;
 }
 
 /** Linearer Mono-Resampler (dependency-frei). */
@@ -66,10 +82,6 @@ function resampleMono(pcm: Float32Array, fromRate: number, toRate: number): Floa
     out[i] = pcm[i0] * (1 - frac) + pcm[i1] * frac;
   }
   return out;
-}
-
-function esxStepLengthToE2(lengthSteps: number): 16 | 32 | 64 {
-  return lengthSteps === 32 ? 32 : lengthSteps === 64 ? 64 : 16;
 }
 
 /**
@@ -136,27 +148,40 @@ export function convertEsxToE2sBank(
   }
 
   // 4) Patterns → E2PatternInput, Parts auf die User-Nummern repointen.
+  //    Steplänge: gewähltes Ziel (stepTargets) oder Vorschlag aus der echten
+  //    ESX-Länge (bis 128 Steps) — gecuttet auf 16/32/64.
   let activeParts = 0;
   let linkedParts = 0;
   const e2Inputs: E2PatternInput[] = selected.map((p: EsxPattern) => {
-    const stepLength = esxStepLengthToE2(p.lengthSteps);
+    const stepLength = opts.stepTargets?.[p.index] ?? suggestE2StepLength(p.lengthSteps);
+    const usedSteps = Math.min(stepLength, p.lengthSteps);
     const parts = p.parts.map((part) => {
-      const active = part.steps.some((s) => s.active);
+      const active = part.steps.slice(0, usedSteps).some((s) => s.active);
       const mapped = sampleMap.get(part.sampleId);
       if (active) {
         activeParts++;
         if (mapped) linkedParts++;
       }
-      const note = Math.max(0, Math.min(127, E2_BASE_NOTE + (part.pitch ?? 0)));
+      // Fallback-Note aus Part-Pitch (Drum/Stretch); Keyboard-Steps bringen
+      // ihre eigene Note mit (ESX NoteNumber = MIDI, C4=60 = E2-Unity).
+      const partNote = Math.max(0, Math.min(127, E2_BASE_NOTE + (part.pitch ?? 0)));
       return {
         volume: part.volume,
         pan: part.pan,
         sampleId: mapped ? mapped.hwNumber : undefined,
-        steps: part.steps.map((s) => ({
-          active: !!s.active,
-          velocity: typeof s.velocity === "number" ? s.velocity : undefined,
+        steps: part.steps.slice(0, stepLength).map((s, si) => ({
+          active: si < usedSteps && !!s.active,
+          velocity: typeof s.velocity === "number" && s.velocity > 0 ? s.velocity : undefined,
           accent: !!s.accent,
-          note,
+          note:
+            typeof s.note === "number"
+              ? Math.max(0, Math.min(127, s.note))
+              : partNote,
+          // ESX-Gate 0..127 → E2-Gate 1..96 (96 = Tie)
+          gate:
+            typeof s.gate === "number"
+              ? Math.max(1, Math.min(96, Math.round((s.gate * 96) / 127)))
+              : undefined,
         })),
       };
     });

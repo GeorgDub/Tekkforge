@@ -103,10 +103,14 @@ export function syxDec(syx: Uint8Array): Uint8Array {
 
 // ─── Message-Builder ─────────────────────────────────────────────────────────
 
-/** Index 0..249 → (msb, lsb) wie im Gerät (msb zuerst auf dem Draht). */
+/**
+ * Index 0..249 → (lsb, msb). Reihenfolge auf dem Draht: LSB zuerst — so
+ * sendet das hardware-erprobte hacktribe e2pat2syx.py ("0x4c, lsb, msb");
+ * die msb-first-Benennung im hacktribe-editor-Struct ist irreführend.
+ */
 function indexBytes(index: number): [number, number] {
   const i = Math.min(249, Math.max(0, Math.trunc(index)));
-  return [Math.floor(i / 128), i % 128];
+  return [i % 128, Math.floor(i / 128)];
 }
 
 /**
@@ -125,19 +129,21 @@ export function buildCurrentPatternDump(body: Uint8Array, opts?: E2SysexOptions)
 
 /**
  * „Pattern Dump" (0x4C) an einen konkreten Speicherplatz `index` (0..249).
- * Index-Reihenfolge msb,lsb gem. hacktribe-editor (ht_sysex.set_pattern).
+ * TekkForge-Fix: Index-Reihenfolge LSB,MSB — wie das hardware-erprobte
+ * hacktribe e2pat2syx.py ([…, 0x4c, lsb, msb]). Vorher msb-first → das Gerät
+ * ignorierte den Dump („Pattern → Slot" tat nichts).
  */
 export function buildPatternDump(
   body: Uint8Array,
   index: number,
   opts?: E2SysexOptions,
 ): Uint8Array {
-  const [msb, lsb] = indexBytes(index);
+  const [lsb, msb] = indexBytes(index);
   return Uint8Array.from([
     ...head(opts),
     E2_MSG.patternDump,
-    msb,
     lsb,
+    msb,
     ...syxEnc(body),
     SYSEX_END,
   ]);
@@ -150,14 +156,19 @@ export function buildCurrentPatternRequest(opts?: E2SysexOptions): Uint8Array {
 
 /** „Pattern Request" (0x1C) für Slot `index`: Gerät antwortet mit 0x4C-Dump. */
 export function buildPatternRequest(index: number, opts?: E2SysexOptions): Uint8Array {
-  const [msb, lsb] = indexBytes(index);
-  return Uint8Array.from([...head(opts), E2_MSG.patternRequest, msb, lsb, SYSEX_END]);
+  const [lsb, msb] = indexBytes(index);
+  return Uint8Array.from([...head(opts), E2_MSG.patternRequest, lsb, msb, SYSEX_END]);
 }
 
 /** „Pattern Write" (0x11): speichert den Edit-Buffer in Slot `index`. */
 export function buildPatternWrite(index: number, opts?: E2SysexOptions): Uint8Array {
-  const [msb, lsb] = indexBytes(index);
-  return Uint8Array.from([...head(opts), E2_MSG.patternWrite, msb, lsb, SYSEX_END]);
+  const [lsb, msb] = indexBytes(index);
+  return Uint8Array.from([...head(opts), E2_MSG.patternWrite, lsb, msb, SYSEX_END]);
+}
+
+/** „Global Request" (0x0E): Gerät antwortet mit Global-Dump (0x51). */
+export function buildGlobalRequest(opts?: E2SysexOptions): Uint8Array {
+  return Uint8Array.from([...head(opts), E2_MSG.globalRequest, SYSEX_END]);
 }
 
 /** KORG-Device-Search — zur Erkennung von Channel + Produkt-ID. */
@@ -209,7 +220,8 @@ export function decodeDump(bytes: Uint8Array): ParsedDump | null {
     return { msgId, index: null, body: syxDec(bytes.subarray(7, end)) };
   }
   if (msgId === E2_MSG.patternDump) {
-    const index = (bytes[7] ?? 0) * 128 + (bytes[8] ?? 0);
+    // LSB, MSB (siehe indexBytes)
+    const index = (bytes[7] ?? 0) + (bytes[8] ?? 0) * 128;
     return { msgId, index, body: syxDec(bytes.subarray(9, end)) };
   }
   return null;

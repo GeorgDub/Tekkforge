@@ -218,7 +218,8 @@
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
                 <button id="midiSendCurrent" class="primary" title="In den Edit-Buffer — spielt sofort, überschreibt keinen Speicherplatz">▶ Pattern → Gerät (Live)</button>
-                <button id="midiSendSlot" class="ghost">Pattern → Slot…</button>
+                <button id="midiSendSlot" class="ghost" title="Aktuelles Pattern dauerhaft speichern (Edit-Buffer + Write-Befehl)">Pattern → Slot…</button>
+                <button id="midiSendAll" class="ghost" title="Alle Projekt-Patterns nacheinander auf die Slots ab dieser Nummer schreiben">Alle → Slots ab…</button>
                 <input id="midiSlot" type="number" min="1" max="250" value="1" style="width:64px" title="Slot 1–250" />
                 <button id="midiGet" class="ghost">Pattern ← Gerät holen</button>
                 <span style="flex:1"></span>
@@ -326,7 +327,7 @@
           <div class="tableWrap">
             <table>
               <thead>
-                <tr><th></th><th>#</th><th>Name</th><th>BPM</th><th>Steps</th><th>Aktive Parts</th></tr>
+                <tr><th></th><th>#</th><th>Name</th><th>BPM</th><th>Steps (Orig.)</th><th>Steps → E2 (★ Vorschlag)</th><th>Aktive Parts</th></tr>
               </thead>
               <tbody id="patRows"></tbody>
             </table>

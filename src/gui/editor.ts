@@ -30,7 +30,7 @@ import {
 } from "../core/editorModel";
 import {
   buildCurrentPatternDump,
-  buildPatternDump,
+  buildPatternWrite,
   buildCurrentPatternRequest,
   buildSearchDevice,
   parseSearchReply,
@@ -667,6 +667,20 @@ async function midiSendCurrent(): Promise<void> {
   }
 }
 
+/**
+ * Schreibt EIN Pattern dauerhaft auf einen Slot — über den verifizierten Weg:
+ * 0x40 (Edit-Buffer, funktioniert nachweislich am Gerät) + 0x11
+ * (Write-Buffer→Slot). Beide sind reine Sende-Befehle, brauchen also keinen
+ * funktionierenden MIDI-Rückkanal.
+ */
+async function writePatternToSlot(p: EditorPattern, slot1based: number): Promise<void> {
+  const body = new Uint8Array(buildPatternFile(p).slice(0x100));
+  await midi.sendAsync(buildCurrentPatternDump(body, midiOpts()));
+  await new Promise((r) => setTimeout(r, 150)); // Gerät den Buffer übernehmen lassen
+  await midi.sendAsync(buildPatternWrite(slot1based - 1, midiOpts()));
+  await new Promise((r) => setTimeout(r, 250)); // Write aufs Flash abwarten
+}
+
 async function midiSendSlot(): Promise<void> {
   const slot = Number($<HTMLInputElement>("midiSlot").value);
   if (!Number.isFinite(slot) || slot < 1 || slot > 250) {
@@ -677,11 +691,37 @@ async function midiSendSlot(): Promise<void> {
     return;
   setMidiStatus("sende …");
   try {
-    const msg = buildPatternDump(currentPatternBody(), slot - 1, midiOpts());
-    await midi.sendAsync(msg);
-    setMidiStatus(`„${project.patterns[cur].name}" → Slot ${slot} gesendet (${msg.length} Bytes)`);
+    await writePatternToSlot(project.patterns[cur], slot);
+    setMidiStatus(
+      `„${project.patterns[cur].name}" → Slot ${slot} geschrieben (Edit-Buffer + Write). Am Gerät prüfen.`,
+    );
   } catch (err) {
     setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/** Alle Projekt-Patterns nacheinander auf die Geräte-Slots ab Start schreiben. */
+async function midiSendAll(): Promise<void> {
+  const start = Number($<HTMLInputElement>("midiSlot").value) || 1;
+  const count = project.patterns.length;
+  if (start + count - 1 > 250) {
+    alert(`Passt nicht: ${count} Patterns ab Slot ${start} überschreitet 250.`);
+    return;
+  }
+  if (
+    !confirm(
+      `${count} Pattern(s) auf die Geräte-Slots ${start}–${start + count - 1} schreiben? Überschreibt deren Inhalt.`,
+    )
+  )
+    return;
+  try {
+    for (let i = 0; i < count; i++) {
+      setMidiStatus(`schreibe ${i + 1}/${count} → Slot ${start + i} …`);
+      await writePatternToSlot(project.patterns[i], start + i);
+    }
+    setMidiStatus(`${count} Pattern(s) auf Slots ${start}–${start + count - 1} geschrieben.`);
+  } catch (err) {
+    setMidiStatus(`Abbruch: ${err instanceof Error ? err.message : err}`);
   }
 }
 
@@ -722,6 +762,7 @@ function setupMidi(): void {
   $("midiSearch").addEventListener("click", () => void midiSearchDevice());
   $("midiSendCurrent").addEventListener("click", midiSendCurrent);
   $("midiSendSlot").addEventListener("click", midiSendSlot);
+  $("midiSendAll").addEventListener("click", () => void midiSendAll());
   $("midiGet").addEventListener("click", () => void midiGetPattern());
 }
 

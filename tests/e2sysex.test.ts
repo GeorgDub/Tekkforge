@@ -67,12 +67,12 @@ describe("e2sysex — Message-Builder", () => {
     expect([...msg.slice(0, 7)]).toEqual([0xf0, 0x42, 0x35, 0x00, 0x01, 0x23, 0x40]);
   });
 
-  it("pattern dump to a slot preserves index and body", () => {
+  it("pattern dump to a slot preserves index and body (LSB,MSB wire order)", () => {
     const msg = buildPatternDump(body, 200, { channel: 0 });
     expect(msg[6]).toBe(E2_MSG.patternDump); // 0x4c
-    // index 200 → msb=1, lsb=72
-    expect(msg[7]).toBe(1);
-    expect(msg[8]).toBe(72);
+    // index 200 → lsb=72, msb=1 — LSB ZUERST (hardware-erprobtes e2pat2syx.py)
+    expect(msg[7]).toBe(72);
+    expect(msg[8]).toBe(1);
     const dec = decodeDump(msg)!;
     expect(dec.index).toBe(200);
     expect([...dec.body]).toEqual([...body]);
@@ -83,8 +83,11 @@ describe("e2sysex — Message-Builder", () => {
     expect([...cur]).toEqual([0xf0, 0x42, 0x30, 0x00, 0x01, 0x24, E2_MSG.currentPatternRequest, 0xf7]);
     const req = buildPatternRequest(5);
     expect(req[6]).toBe(E2_MSG.patternRequest);
-    expect(req[7]).toBe(0); // msb
-    expect(req[8]).toBe(5); // lsb
+    expect(req[7]).toBe(5); // lsb zuerst
+    expect(req[8]).toBe(0); // msb
+    const req2 = buildPatternRequest(130);
+    expect(req2[7]).toBe(2); // 130 % 128
+    expect(req2[8]).toBe(1); // 130 / 128
   });
 
   it("search device frame is F0 42 50 00 00 F7", () => {

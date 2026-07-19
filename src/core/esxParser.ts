@@ -193,22 +193,28 @@ export interface EsxStepEvent {
    * Synthstudio-Kontext.
    */
   accent?: boolean;
+  /**
+   * TekkForge: MIDI-Note des Steps (Keyboard-Parts, TABLE7: Bits0-6, C4=60).
+   * undefined bei Drum/Stretch/Slice-Parts (keine Per-Step-Noten).
+   */
+  note?: number;
+  /** TekkForge: Gate-Länge 0..127 (Keyboard-/AudioIn-Parts). */
+  gate?: number;
 }
 
 /**
- * Ein Pattern-Part (Drum/Synth-Spur).
+ * Ein Pattern-Part (Drum/Keyboard/Stretch/Slice/AudioIn-Spur).
  *
- * v3.5 Best-Effort:
- *   - `partIndex` ist 0..15 (= Position im 16-Part-Layout)
- *   - `steps` enthaelt immer ESX1_DEFAULT_STEPS Eintraege
- *   - `volume`/`pan`/`pitch`/`fxAmount` sind Hardware-Defaults wenn nicht
- *     verifiziert; siehe Begleit-Doku zu unbekannten Offsets.
- *   - `motionSequencer` wird in v3.5 NICHT gesetzt (Motion-Daten-Layout
- *     ist nicht RE-d).
+ * TekkForge (offizielle Spec ESX1midiimp.txt):
+ *   - `partIndex` ist 0..15 (= Position im 16-Part-Layout):
+ *     0..8 Drum 1..9 · 9..10 Keyboard 1..2 · 11..13 Stretch/Slice ·
+ *     14 AudioIn · 15 leer (Accent wirkt als Velocity-Boost auf alle Parts)
+ *   - `steps` enthaelt immer ESX1_MAX_STEPS (128) Eintraege; `lengthSteps`
+ *     des Patterns bestimmt den genutzten Teil.
  */
 export interface EsxPart {
   partIndex: number;
-  /** 0..255 — ESX-1 Sample-Slot-Index. Best-Effort; 0 wenn unbekannt. */
+  /** 0..255 — ESX-1 Sample-Slot-Index. 0 wenn unbelegt. */
   sampleId: number;
   /** 0..127. */
   volume: number;
@@ -218,9 +224,9 @@ export interface EsxPart {
   pitch: number;
   /** 0..127. */
   fxAmount: number;
-  /** Trigger-Steps, Laenge === ESX1_DEFAULT_STEPS. */
+  /** Trigger-Steps, Laenge === ESX1_MAX_STEPS (128). */
   steps: EsxStepEvent[];
-  /** Reserviert fuer Motion-Sequencer (v3.5: stets undefined). */
+  /** Reserviert fuer Motion-Sequencer (stets undefined). */
   motionSequencer?: undefined;
 }
 
@@ -564,50 +570,77 @@ export function isEmptyEsxPattern(raw: Uint8Array): boolean {
 // ESX1_STRETCH_PART_INDEX = 10 (1 Stretch part at offset 0x25C, 34B-stride).
 // ESX1_SHORT_PART_INDICES = 11..14 (4 Sample/Slice parts, 32B-stride).
 // ESX1_AUDIOIN_PART_INDEX = 15 (Audio-In, no triggers in real files → Defaults).
-const ESX1_PART_STRIDE = 34;
-const ESX1_PART_HEADER_BYTES = 18;
-const ESX1_PART_STEPS_BYTES = 16;
-const ESX1_DRUM_PART_OFFSET = 24;
-const ESX1_DRUM_PARTS_DECODED = 10;
+// ═══ TekkForge-Korrektur (2026-07-19): Layout jetzt nach OFFIZIELLER Spec ═══
+// Quelle: KORG "ESX1_Midi_Imp.txt" (TABLE6/7/8/9/10/23), via lammas/electribe
+// Node-Toolkit verifiziert. Ersetzt das eigene Hex-Diff-RE von v3.20:
+//
+//   0x018  9 × Drum-Part      (34B: 18B Header + 16B Step-BITS)
+//   0x14A  2 × Keyboard-Part  (274B: 18B Header + 128 Noten + 128 Gates)
+//   0x36E  3 × Stretch/Slice  (32B: 16B Header + 16B Step-BITS)
+//   0x3CE  1 × AudioIn        (156B: 12B Header + 16B Step-BITS + 128 Gates)
+//   0x46A  1 × Accent         (18B: Level + 16B Step-BITS + 1B reserve)
+//   0x47C  3 × FX-Param (4B) · 0x488  24 × Motion-Param (130B)
+//
+// Step-Encoding (TABLE23): 16 Bytes = 128 Steps, BIT-GEPACKT LSB-first:
+//   Byte n, Bit b → Step n*8+b ("Bit0~7 = Step1~8"). Der frühere
+//   Byte-pro-Step-Decode las effektiv nur jeden 8. Step → falsche Sequenzen.
+//
+// Keyboard-Noten (TABLE7): 1 Byte/Step, Bits0-6 = MIDI-Note (C4=60),
+// Bit7 = OFF. Gates: 1 Byte/Step (0..127).
+//
+// Das frühere Layout hielt Keyboard-Part-2-Header (0x25C) für einen "Stretch-
+// Part" und AudioIn (0x3CE) für einen 4. Short-Part — beides korrigiert.
+const ESX1_NUM_DRUM_PARTS = 9;
+const ESX1_DRUM_PART_OFFSET = 0x18;
+const ESX1_DRUM_PART_STRIDE = 34;
+const ESX1_DRUM_HEADER_BYTES = 18;
+const ESX1_KEYBOARD_PART_OFFSET = 0x14a;
+const ESX1_KEYBOARD_PART_STRIDE = 274;
+const ESX1_KEYBOARD_HEADER_BYTES = 18;
+const ESX1_KEYBOARD_GATES_OFFSET = 146; // 18 + 128
+const ESX1_STRETCHSLICE_PART_OFFSET = 0x36e;
+const ESX1_STRETCHSLICE_PART_STRIDE = 32;
+const ESX1_STRETCHSLICE_HEADER_BYTES = 16;
+const ESX1_AUDIOIN_PART_OFFSET = 0x3ce;
+const ESX1_AUDIOIN_HEADER_BYTES = 12;
+const ESX1_AUDIOIN_GATES_OFFSET = 28; // 12 + 16
+const ESX1_ACCENT_PART_OFFSET = 0x46a;
+const ESX1_SEQ_BITS_BYTES = 16;
+/** Max Steps pro Pattern: 8 Takte × 16 = 128. */
+export const ESX1_MAX_STEPS = 128;
 const ESX1_SAMPLEID_UNASSIGNED = 0x8000;
-
-/** Offset of the Stretch part 11 (34B-stride like drum parts). */
-const ESX1_STRETCH_PART_OFFSET = 0x25c;
-/** Per-part offsets for parts 12..15 (16B header + 16B steps = 32B stride). */
-const ESX1_SHORT_PART_OFFSETS: ReadonlyArray<number> = [
-  0x36e, // Part 12 (Sample 1 / Slice 1 — best-effort)
-  0x38e, // Part 13 (Sample 2 / Slice 2)
-  0x3ae, // Part 14 (Synth 1)
-  0x3ce, // Part 15 (Synth 2 / Audio-In — usually default-empty)
-];
-const ESX1_SHORT_PART_HEADER_BYTES = 16;
-const ESX1_SHORT_PART_STEPS_BYTES = 16;
 const ESX1_PITCH_NEUTRAL_RAW = 0x40;
 
 /**
- * v3.23.0: Decoded ein einzelnes step-byte zu {active, velocity, accent}.
- *
- * Verifiziertes Bit-Layout (siehe Header-Doc v3.23.0):
- *   bit 0 = trigger active
- *   bit 4 = accent (Best-Effort, 70.9% Drum + 38.2% Short der active-steps)
- *
- * Mapping-Konvention:
- *   active + accent → velocity 127 (TR-style boost)
- *   active ohne accent → velocity 100 (Default)
- *   inactive → velocity 0, accent weggelassen (undefined)
- *
- * Wir mappen explizit die zwei verifizierten Bits — die Bits 1..3, 5..7
- * bleiben nicht-RE-d und werden NICHT als Pseudo-Velocity exportiert
- * (vermeidet false-positive Note-Encodings).
+ * TABLE23: dekodiert 16 bit-gepackte Sequenz-Bytes zu 128 Booleans.
+ * Byte n, Bit b (LSB-first) = Step n*8+b.
  */
-function decodeStepByte(rawByte: number): EsxStepEvent {
-  const b = rawByte & 0xff;
-  const active = (b & 0x01) !== 0;
-  if (!active) {
-    return { active: false, velocity: 0 };
+function decodeStepBits(raw: Uint8Array, off: number): boolean[] {
+  const out: boolean[] = new Array(ESX1_MAX_STEPS);
+  for (let n = 0; n < ESX1_SEQ_BITS_BYTES; n++) {
+    const b = off + n < raw.length ? raw[off + n] : 0;
+    for (let bit = 0; bit < 8; bit++) {
+      out[n * 8 + bit] = (b & (1 << bit)) !== 0;
+    }
   }
-  const accent = (b & 0x10) !== 0;
-  return { active: true, velocity: accent ? 127 : 100, accent };
+  return out;
+}
+
+/**
+ * Baut 128 Trigger-Steps aus Bits + Accent-Spur:
+ *   Trigger + Accent-Step an → velocity 127, sonst 100 (TR-style Boost).
+ */
+function stepsFromBits(bits: boolean[], accentBits: boolean[] | null): EsxStepEvent[] {
+  const steps: EsxStepEvent[] = new Array(ESX1_MAX_STEPS);
+  for (let s = 0; s < ESX1_MAX_STEPS; s++) {
+    if (!bits[s]) {
+      steps[s] = { active: false, velocity: 0 };
+    } else {
+      const accent = accentBits ? accentBits[s] : false;
+      steps[s] = { active: true, velocity: accent ? 127 : 100, accent };
+    }
+  }
+  return steps;
 }
 
 /**
@@ -629,122 +662,116 @@ function decodePitchByte(rawByte: number): number {
   return signed;
 }
 
-/** Decoded part = 0..9 (Drum 1..10). Out-of-range → undefined (Defaults). */
+interface DecodedEsxPart {
+  sampleId: number;
+  volume: number;
+  pan: number;
+  pitch: number;
+  fxAmount: number;
+  steps: EsxStepEvent[];
+}
+
+/** Sample-Pointer u16BE: Bit15 = OFF; sonst Slot-Index 0..383. */
+function decodeSamplePointer(raw: Uint8Array, off: number): number {
+  const sidRaw = (raw[off] << 8) | raw[off + 1];
+  if ((sidRaw & ESX1_SAMPLEID_UNASSIGNED) !== 0) return 0;
+  return sidRaw & 0x01ff;
+}
+
+/** TABLE6: Drum-Part 0..8 (34B: Header 18 + 16B Step-Bits). */
 function decodeDrumPart(
   raw: Uint8Array,
-  partIndex: number,
-):
-  | {
-      sampleId: number;
-      volume: number;
-      pan: number;
-      pitch: number;
-      fxAmount: number;
-      steps: EsxStepEvent[];
-    }
-  | undefined {
-  if (partIndex < 0 || partIndex >= ESX1_DRUM_PARTS_DECODED) return undefined;
-  const partOff = ESX1_DRUM_PART_OFFSET + partIndex * ESX1_PART_STRIDE;
-  if (partOff + ESX1_PART_STRIDE > raw.length) return undefined;
-
-  // sample-id BE u16
-  const sidRaw = (raw[partOff] << 8) | raw[partOff + 1];
-  // 0x8000 = unassigned. Lower 9 bits cover 0..511 valid slot range
-  // (ESX-1: 256 mono + 128 stereo = 384 max).
-  const sampleId = sidRaw === ESX1_SAMPLEID_UNASSIGNED ? 0 : (sidRaw & 0x01ff);
-
-  // Pitch @ +8 (signed i8 around 0x40 = neutral)  — v3.20.0
-  const pitch = decodePitchByte(raw[partOff + 8] ?? ESX1_PITCH_NEUTRAL_RAW);
-
-  // Level + Pan
-  const volume = Math.max(0, Math.min(127, raw[partOff + 9] || 100));
-  const pan = Math.max(0, Math.min(127, raw[partOff + 10] || 64));
-
-  // FxSend @ +11 (u8, 0..127)  — v3.20.0
-  const fxAmount = Math.max(0, Math.min(127, raw[partOff + 11] ?? 0));
-
-  // 16 step-bytes
-  const stepsOff = partOff + ESX1_PART_HEADER_BYTES;
-  const steps: EsxStepEvent[] = new Array(ESX1_DEFAULT_STEPS);
-  for (let s = 0; s < ESX1_DEFAULT_STEPS; s++) {
-    const b = raw[stepsOff + s] || 0;
-    steps[s] = decodeStepByte(b);
-  }
-  return { sampleId, volume, pan, pitch, fxAmount, steps };
-}
-
-/**
- * Decoded Stretch-Part (Part-Index 10) — 34B-Layout @ 0x25C, gleicher Stride
- * wie Drum-Parts. v3.20.0 NEU.
- */
-function decodeStretchPart(raw: Uint8Array):
-  | {
-      sampleId: number;
-      volume: number;
-      pan: number;
-      pitch: number;
-      fxAmount: number;
-      steps: EsxStepEvent[];
-    }
-  | undefined {
-  const partOff = ESX1_STRETCH_PART_OFFSET;
-  if (partOff + ESX1_PART_STRIDE > raw.length) return undefined;
-  // Same shape as drum-part. Just reuse the layout interpretation.
-  const sidRaw = (raw[partOff] << 8) | raw[partOff + 1];
-  const sampleId = sidRaw === ESX1_SAMPLEID_UNASSIGNED ? 0 : (sidRaw & 0x01ff);
+  drumIndex: number,
+  accentBits: boolean[] | null,
+): DecodedEsxPart | undefined {
+  if (drumIndex < 0 || drumIndex >= ESX1_NUM_DRUM_PARTS) return undefined;
+  const partOff = ESX1_DRUM_PART_OFFSET + drumIndex * ESX1_DRUM_PART_STRIDE;
+  if (partOff + ESX1_DRUM_PART_STRIDE > raw.length) return undefined;
+  const sampleId = decodeSamplePointer(raw, partOff);
+  // TABLE6: +8 Pitch (0x40 neutral), +9 Level, +10 Pan
   const pitch = decodePitchByte(raw[partOff + 8] ?? ESX1_PITCH_NEUTRAL_RAW);
   const volume = Math.max(0, Math.min(127, raw[partOff + 9] || 100));
   const pan = Math.max(0, Math.min(127, raw[partOff + 10] || 64));
-  const fxAmount = Math.max(0, Math.min(127, raw[partOff + 11] ?? 0));
-  const stepsOff = partOff + ESX1_PART_HEADER_BYTES;
-  const steps: EsxStepEvent[] = new Array(ESX1_DEFAULT_STEPS);
-  for (let s = 0; s < ESX1_DEFAULT_STEPS; s++) {
-    const b = raw[stepsOff + s] || 0;
-    steps[s] = decodeStepByte(b);
-  }
-  return { sampleId, volume, pan, pitch, fxAmount, steps };
+  const fxAmount = Math.max(0, Math.min(127, raw[partOff + 13] ?? 0));
+  const bits = decodeStepBits(raw, partOff + ESX1_DRUM_HEADER_BYTES);
+  return { sampleId, volume, pan, pitch, fxAmount, steps: stepsFromBits(bits, accentBits) };
 }
 
-/**
- * Decoded Short-Part (Sample/Slice/Synth) — 32B-Layout (16B Header + 16B Steps).
- * v3.20.0 NEU. Index 0..3 maps to part-indices 11..14.
- */
-function decodeShortPart(
+/** TABLE7: Keyboard-Part 0..1 (274B: Header 18 + 128 Noten + 128 Gates). */
+function decodeKeyboardPart(
   raw: Uint8Array,
-  shortIndex: number,
-):
-  | {
-      sampleId: number;
-      volume: number;
-      pan: number;
-      pitch: number;
-      fxAmount: number;
-      steps: EsxStepEvent[];
+  kbIndex: number,
+  accentBits: boolean[] | null,
+): DecodedEsxPart | undefined {
+  if (kbIndex < 0 || kbIndex > 1) return undefined;
+  const partOff = ESX1_KEYBOARD_PART_OFFSET + kbIndex * ESX1_KEYBOARD_PART_STRIDE;
+  if (partOff + ESX1_KEYBOARD_PART_STRIDE > raw.length) return undefined;
+  const sampleId = decodeSamplePointer(raw, partOff);
+  // TABLE7: +9 Level, +10 Pan (Tonhöhe kommt aus den Noten, nicht aus Pitch)
+  const volume = Math.max(0, Math.min(127, raw[partOff + 9] || 100));
+  const pan = Math.max(0, Math.min(127, raw[partOff + 10] || 64));
+  const steps: EsxStepEvent[] = new Array(ESX1_MAX_STEPS);
+  for (let s = 0; s < ESX1_MAX_STEPS; s++) {
+    const noteByte = raw[partOff + ESX1_KEYBOARD_HEADER_BYTES + s] ?? 0x80;
+    const gateByte = raw[partOff + ESX1_KEYBOARD_GATES_OFFSET + s] ?? 0;
+    const off = (noteByte & 0x80) !== 0; // Bit7 = OFF
+    if (off) {
+      steps[s] = { active: false, velocity: 0 };
+    } else {
+      const accent = accentBits ? accentBits[s] : false;
+      steps[s] = {
+        active: true,
+        velocity: accent ? 127 : 100,
+        accent,
+        note: noteByte & 0x7f, // MIDI, C4=60 (TABLE: NoteNumber)
+        gate: gateByte & 0x7f,
+      };
     }
-  | undefined {
-  if (shortIndex < 0 || shortIndex >= ESX1_SHORT_PART_OFFSETS.length) return undefined;
-  const partOff = ESX1_SHORT_PART_OFFSETS[shortIndex];
-  const blockSize = ESX1_SHORT_PART_HEADER_BYTES + ESX1_SHORT_PART_STEPS_BYTES;
-  if (partOff + blockSize > raw.length) return undefined;
-  // Header layout (verified BOTTROP[1] @0x36E):
-  //   +0..+1 = sample-id BE u16
-  //   +6     = pitch (i8, 0x40 neutral)
-  //   +7     = level (u8 0..127)
-  //   +8     = pan (u8 0..127, 0x40 center)
-  //   +10    = fxSend (u8 0..127)
-  const sidRaw = (raw[partOff] << 8) | raw[partOff + 1];
-  const sampleId = sidRaw === ESX1_SAMPLEID_UNASSIGNED ? 0 : (sidRaw & 0x01ff);
+  }
+  return { sampleId, volume, pan, pitch: 0, fxAmount: 0, steps };
+}
+
+/** TABLE8: Stretch/Slice-Part 0..2 (32B: Header 16 + 16B Step-Bits). */
+function decodeStretchSlicePart(
+  raw: Uint8Array,
+  ssIndex: number,
+  accentBits: boolean[] | null,
+): DecodedEsxPart | undefined {
+  if (ssIndex < 0 || ssIndex > 2) return undefined;
+  const partOff = ESX1_STRETCHSLICE_PART_OFFSET + ssIndex * ESX1_STRETCHSLICE_PART_STRIDE;
+  if (partOff + ESX1_STRETCHSLICE_PART_STRIDE > raw.length) return undefined;
+  const sampleId = decodeSamplePointer(raw, partOff);
+  // TABLE8: +6 Pitch, +7 Level, +8 Pan
   const pitch = decodePitchByte(raw[partOff + 6] ?? ESX1_PITCH_NEUTRAL_RAW);
   const volume = Math.max(0, Math.min(127, raw[partOff + 7] || 100));
   const pan = Math.max(0, Math.min(127, raw[partOff + 8] || 64));
-  const fxAmount = Math.max(0, Math.min(127, raw[partOff + 10] ?? 0));
-  const stepsOff = partOff + ESX1_SHORT_PART_HEADER_BYTES;
-  const steps: EsxStepEvent[] = new Array(ESX1_DEFAULT_STEPS);
-  for (let s = 0; s < ESX1_DEFAULT_STEPS; s++) {
-    const b = raw[stepsOff + s] || 0;
-    steps[s] = decodeStepByte(b);
+  const fxAmount = Math.max(0, Math.min(127, raw[partOff + 11] ?? 0));
+  const bits = decodeStepBits(raw, partOff + ESX1_STRETCHSLICE_HEADER_BYTES);
+  return { sampleId, volume, pan, pitch, fxAmount, steps: stepsFromBits(bits, accentBits) };
+}
+
+/** TABLE9: AudioIn-Part (156B: Header 12 + 16B Step-Bits + 128 Gates). */
+function decodeAudioInPart(
+  raw: Uint8Array,
+  accentBits: boolean[] | null,
+): DecodedEsxPart | undefined {
+  const partOff = ESX1_AUDIOIN_PART_OFFSET;
+  if (partOff + 156 > raw.length) return undefined;
+  // TABLE9: +4 Level, +5 Pan (kein Sample — Audio-Eingang)
+  const volume = Math.max(0, Math.min(127, raw[partOff + 4] || 100));
+  const pan = Math.max(0, Math.min(127, raw[partOff + 5] || 64));
+  const bits = decodeStepBits(raw, partOff + ESX1_AUDIOIN_HEADER_BYTES);
+  const steps = stepsFromBits(bits, accentBits);
+  for (let s = 0; s < ESX1_MAX_STEPS; s++) {
+    if (steps[s].active) steps[s].gate = (raw[partOff + ESX1_AUDIOIN_GATES_OFFSET + s] ?? 0) & 0x7f;
   }
-  return { sampleId, volume, pan, pitch, fxAmount, steps };
+  return { sampleId: 0, volume, pan, pitch: 0, fxAmount: 0, steps };
+}
+
+/** TABLE10: Accent-Part-Step-Bits @0x46A+1 — als Velocity-Boost angewandt. */
+function decodeAccentBits(raw: Uint8Array): boolean[] | null {
+  if (ESX1_ACCENT_PART_OFFSET + 18 > raw.length) return null;
+  return decodeStepBits(raw, ESX1_ACCENT_PART_OFFSET + 1);
 }
 
 /**
@@ -796,54 +823,42 @@ export function parseEsxPattern(
   if (!Number.isFinite(bpm) || bpm < 20) bpm = 20;
   if (bpm > 300) bpm = 300;
 
-  // Step-length-Indikator: byte 13. init=0x0F → 16 Steps (0-based count).
-  // Wir klamern auf 1..64 als Hardware-plausibles Maximum.
-  const stepIndicator = raw[13];
-  let lengthSteps = (stepIndicator & 0x7f) + 1;
+  // Pattern-Länge (offizielle Spec):
+  //   0x0B Bits0-2 = Länge-1 in TAKTEN (1..8)
+  //   0x0D = Last Step (0..15 → 1..16 Steps pro Takt)
+  //   → Gesamt-Steps = Takte × Steps/Takt (max 128).
+  const bars = (raw[0x0b] & 0x07) + 1;
+  const stepsPerBar = (raw[0x0d] & 0x0f) + 1;
+  let lengthSteps = bars * stepsPerBar;
   if (!Number.isFinite(lengthSteps) || lengthSteps < 1) lengthSteps = ESX1_DEFAULT_STEPS;
-  if (lengthSteps > 64) lengthSteps = ESX1_DEFAULT_STEPS;
+  if (lengthSteps > ESX1_MAX_STEPS) lengthSteps = ESX1_MAX_STEPS;
 
-  // Swing: byte 15, Best-Effort, geklemmt 0..100.
-  let swing = raw[15] & 0x7f;
-  if (swing > 100) swing = 100;
+  // Swing @0x0A: 0..25 → 50..75%.
+  const swing = 50 + Math.min(25, raw[0x0a] & 0x7f);
 
-  // Build 16 Parts. v3.20.0:
-  //   parts 0..9   → decodeDrumPart  (34B-Stride @ 0x18 + i*34)
-  //   part 10      → decodeStretchPart (34B-Stride @ 0x25C)
-  //   parts 11..14 → decodeShortPart  (32B-Stride @ 0x36E, 0x38E, 0x3AE, 0x3CE)
-  //   part 15      → Defaults (Audio-In is unused in real-files)
+  // Accent-Spur → Velocity-Boost für alle Parts.
+  const accentBits = decodeAccentBits(raw);
+
+  // 16 Parts nach offizieller Spec:
+  //   0..8   Drum 1..9 · 9..10 Keyboard 1..2 (Noten+Gates!) ·
+  //   11..13 Stretch/Slice 1..3 · 14 AudioIn · 15 leer
   const parts: EsxPart[] = new Array(ESX1_PARTS_PER_PATTERN);
   for (let p = 0; p < ESX1_PARTS_PER_PATTERN; p++) {
-    let decoded:
-      | {
-          sampleId: number;
-          volume: number;
-          pan: number;
-          pitch: number;
-          fxAmount: number;
-          steps: EsxStepEvent[];
-        }
-      | undefined;
-    if (p < ESX1_DRUM_PARTS_DECODED) {
-      decoded = decodeDrumPart(raw, p);
-    } else if (p === 10) {
-      decoded = decodeStretchPart(raw);
-    } else if (p >= 11 && p <= 14) {
-      decoded = decodeShortPart(raw, p - 11);
+    let decoded: DecodedEsxPart | undefined;
+    if (p < ESX1_NUM_DRUM_PARTS) {
+      decoded = decodeDrumPart(raw, p, accentBits);
+    } else if (p === 9 || p === 10) {
+      decoded = decodeKeyboardPart(raw, p - 9, accentBits);
+    } else if (p >= 11 && p <= 13) {
+      decoded = decodeStretchSlicePart(raw, p - 11, accentBits);
+    } else if (p === 14) {
+      decoded = decodeAudioInPart(raw, accentBits);
     }
     if (decoded) {
-      parts[p] = {
-        partIndex: p,
-        sampleId: decoded.sampleId,
-        volume: decoded.volume,
-        pan: decoded.pan,
-        pitch: decoded.pitch,
-        fxAmount: decoded.fxAmount,
-        steps: decoded.steps,
-      };
+      parts[p] = { partIndex: p, ...decoded };
     } else {
-      const steps: EsxStepEvent[] = new Array(ESX1_DEFAULT_STEPS);
-      for (let s = 0; s < ESX1_DEFAULT_STEPS; s++) {
+      const steps: EsxStepEvent[] = new Array(ESX1_MAX_STEPS);
+      for (let s = 0; s < ESX1_MAX_STEPS; s++) {
         steps[s] = { active: false, velocity: 0 };
       }
       parts[p] = {
