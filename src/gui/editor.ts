@@ -588,16 +588,40 @@ function refreshMidiPorts(): void {
   fill($<HTMLSelectElement>("midiIn"), midi.inputs(), midi.selectedInput);
 }
 
+let midiMonitorLines: string[] = [];
+function pushMonitor(bytes: number[]): void {
+  const hex = bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ");
+  const label = bytes[0] === 0xf0 ? `SysEx[${bytes.length}]` : `MIDI[${bytes.length}]`;
+  midiMonitorLines.unshift(`${label}: ${hex.length > 180 ? hex.slice(0, 180) + " …" : hex}`);
+  midiMonitorLines = midiMonitorLines.slice(0, 12);
+  $("midiMonitor").textContent = midiMonitorLines.join("\n");
+}
+
 async function midiEnable(): Promise<void> {
   try {
     await midi.enable();
     midi.onPortsChanged = () => refreshMidiPorts();
+    midi.onAnyMessage = (bytes) => pushMonitor(bytes);
     refreshMidiPorts();
     $("midiEnable").classList.add("hidden");
     $("midiControls").classList.remove("hidden");
-    setMidiStatus(
-      midi.outputs().length ? "bereit — Gerät suchen empfohlen" : "kein MIDI-Port gefunden",
-    );
+    const outName = midi.outputs().find((p) => p.id === midi.selectedOutput)?.label ?? "?";
+    if (!midi.outputs().length) {
+      setMidiStatus("kein MIDI-Port gefunden");
+      return;
+    }
+    // Ports upfront öffnen (im Worker → kein Freeze). Danach sind Suche/Senden
+    // sofort möglich, ohne Timing-Rennen mit dem Suche-Timeout.
+    setMidiStatus(`öffne Ports (Ausgang: ${outName}) …`);
+    try {
+      await midi.connect();
+      setMidiStatus(`verbunden — Ausgang: ${outName}. „Gerät suchen" oder „→ Gerät (Live)".`);
+    } catch (err) {
+      setMidiStatus(
+        `Port konnte nicht geöffnet werden (${err instanceof Error ? err.message : err}). ` +
+          `Anderen Port wählen oder Gerät/USB prüfen.`,
+      );
+    }
   } catch (err) {
     alert(`MIDI konnte nicht aktiviert werden: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -617,8 +641,12 @@ async function midiSearchDevice(): Promise<void> {
     midiProductId = r.productId;
     const kind = r.productId === E2_PRODUCT_ID_SAMPLER ? "Sampler" : "Synth";
     setMidiStatus(`gefunden: E2 ${kind} · Ch ${r.channel + 1} · v${r.version}`);
-  } catch (err) {
-    setMidiStatus(`keine Antwort — Ports prüfen (${err instanceof Error ? err.message : err})`);
+  } catch {
+    const outName = midi.outputs().find((p) => p.id === midi.selectedOutput)?.label ?? "?";
+    setMidiStatus(
+      `keine Antwort. Ausgang = „${outName}" — muss „electribe2 sampler" sein (nicht GS Wavetable). ` +
+        `Suche ist optional: „→ Gerät (Live)" geht auch mit Standard (Ch 1, Sampler).`,
+    );
   }
 }
 

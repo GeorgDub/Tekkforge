@@ -32,6 +32,13 @@ function bridge(): TekkMidiBridge | undefined {
   return typeof window !== "undefined" ? window.tekkMidi : undefined;
 }
 
+/** Wählt den Electribe/KORG-Port (falls vorhanden), sonst den ersten. */
+function pickPort(ports: PortInfo[]): string | null {
+  if (ports.length === 0) return null;
+  const match = ports.find((p) => /electribe|korg|e2|elect/i.test(p.name ?? p.label ?? ""));
+  return (match ?? ports[0]).id;
+}
+
 export class MidiIO {
   private outs: PortInfo[] = [];
   private ins: PortInfo[] = [];
@@ -41,8 +48,12 @@ export class MidiIO {
   private rxBuffer: number[] = [];
   private inSysex = false;
 
-  /** Callback für vollständige SysEx-Frames (F0…F7). */
+  /** Callback für vollständige SysEx-Frames (F0…F7). Wird von requestSysex
+   *  temporär umgehängt. */
   onSysex: ((bytes: Uint8Array) => void) | null = null;
+  /** Monitor-Callback: feuert bei JEDEM empfangenen Frame (auch Nicht-SysEx),
+   *  unabhängig von requestSysex — für die Roh-Anzeige. */
+  onAnyMessage: ((bytes: number[]) => void) | null = null;
   /** Callback bei Port-Änderungen (aktuell ungenutzt; API-kompatibel). */
   onPortsChanged: (() => void) | null = null;
 
@@ -68,8 +79,10 @@ export class MidiIO {
     const { outputs, inputs } = await b.list();
     this.outs = outputs;
     this.ins = inputs;
-    if (!this.outId && outputs[0]) this.outId = outputs[0].id;
-    if (!this.inId && inputs[0]) this.inId = inputs[0].id;
+    // Bevorzugt den Electribe/KORG-Port statt blind [0] — sonst landet der
+    // erste Ausgang oft auf „Microsoft GS Wavetable Synth" (kein E2S-Reply).
+    if (!this.outId) this.outId = pickPort(outputs);
+    if (!this.inId) this.inId = pickPort(inputs);
     b.onMessage((bytes) => this.rx(bytes));
     this.started = true;
   }
@@ -86,6 +99,12 @@ export class MidiIO {
       await b.selectIn(this.inId);
       this.inOpened = true;
     }
+  }
+
+  /** Öffnet Ein-/Ausgang explizit (upfront), Fehler werden geworfen. So sind
+   *  die Ports vor Suche/Senden offen und es gibt kein Timing-Rennen. */
+  async connect(): Promise<void> {
+    await this.ensureOpen();
   }
 
   private labelOf(p: PortInfo): string {
@@ -139,6 +158,8 @@ export class MidiIO {
   /** SysEx-Reassembly: sammelt Bytes zwischen F0 und F7 (native liefert i.d.R.
    *  komplette Frames, wird aber defensiv reassembliert). */
   private rx(data: number[]): void {
+    // Monitor: jede eingehende Nachricht roh melden (Diagnose).
+    this.onAnyMessage?.(data);
     for (const byte of data) {
       if (byte === 0xf0) {
         this.inSysex = true;
