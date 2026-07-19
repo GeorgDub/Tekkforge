@@ -154,6 +154,23 @@ export function importSampleFromWav(
   filename: string,
   existing: readonly PoolSample[],
 ): PoolSample {
+  const p = processWavToMono(bytes, filename);
+  return { number: nextFreeSampleNumber(existing), ...p };
+}
+
+/** Filtert einen Sample-Namen auf druckbares ASCII, max 16 Zeichen. */
+export function sanitizeSampleName(name: string): string {
+  return name.replace(/[^\x20-\x7e]+/g, "").trim().slice(0, 16) || "Sample";
+}
+
+/**
+ * WAV → E2S-Mono-Audio (Parse → Downmix → Resample 44.1/48 kHz), OHNE
+ * Slot-Nummer. Basis für Neu-Import UND Audio-Replace eines Slots.
+ */
+export function processWavToMono(
+  bytes: Uint8Array,
+  filename: string,
+): { name: string; sampleRate: number; pcm: Float32Array } {
   const wav = parseWav(bytes);
   if (wav.frames === 0) throw new Error(`"${filename}" enthält kein Audio`);
   const channels = wav.channels === 1 ? 1 : 2;
@@ -170,15 +187,8 @@ export function importSampleFromWav(
     forceMono: true,
     targetSampleRate: wav.sampleRate === 48000 ? 48000 : 44100,
   });
-  const name =
-    filename
-      .replace(/\.[^.]+$/, "")
-      .replace(/[^\x20-\x7e]+/g, "")
-      .trim()
-      .slice(0, 16) || "Sample";
   return {
-    number: nextFreeSampleNumber(existing),
-    name,
+    name: sanitizeSampleName(filename.replace(/\.[^.]+$/, "")),
     sampleRate: processed.sampleRate,
     pcm: processed.pcm,
   };
@@ -372,22 +382,51 @@ export function buildBankFiles(project: EditorProject): BankBuildResult {
     buildE2AllPatFile(project.patterns.slice(0, 250).map(patternToE2Input)),
   );
 
-  let all: Uint8Array | null = null;
-  if (project.samples.length > 0) {
-    const sorted = [...project.samples].sort((a, b) => a.number - b.number).slice(0, 250);
-    const slots: E2sSlotInput[] = sorted.map((s, i) => ({
-      slotIndex: i,
-      sampleNumber: s.number,
-      category: 17, // "User"
-      name: s.name,
-      pcmData: s.pcm,
-      sampleRate: s.sampleRate,
-      channels: 1,
-    }));
-    all = new Uint8Array(buildE2sBank(slots).buffer);
-  }
+  return { allpat, all: buildSampleBank(project.samples), warnings };
+}
 
-  return { allpat, all, warnings };
+/**
+ * Baut nur die `.all`-Sample-Bank aus einer Sample-Liste (null wenn leer).
+ * Samples werden nach Geräte-Nummer sortiert, max 250. Standalone nutzbar zum
+ * `.all`-Bearbeiten/Exportieren (unabhängig von Patterns).
+ */
+export function buildSampleBank(samples: readonly PoolSample[]): Uint8Array | null {
+  if (samples.length === 0) return null;
+  const sorted = [...samples].sort((a, b) => a.number - b.number).slice(0, 250);
+  const slots: E2sSlotInput[] = sorted.map((s, i) => ({
+    slotIndex: i,
+    sampleNumber: s.number,
+    category: 17, // "User"
+    name: s.name,
+    pcmData: s.pcm,
+    sampleRate: s.sampleRate,
+    channels: 1,
+  }));
+  return new Uint8Array(buildE2sBank(slots).buffer);
+}
+
+// ─── Sample-Bank bearbeiten (rename/renumber/replace) ────────────────────────
+
+/**
+ * Ändert die Geräte-Nummer eines Pool-Samples und remappt ALLE Parts, die
+ * darauf zeigen — so bleiben Pattern-Verknüpfungen intakt. Gibt false zurück
+ * bei Kollision, out-of-range oder unbekanntem Sample.
+ */
+export function renumberSample(
+  project: EditorProject,
+  oldNumber: number,
+  newNumber: number,
+): boolean {
+  if (oldNumber === newNumber) return true;
+  if (!Number.isFinite(newNumber) || newNumber < EDITOR_SAMPLE_BASE || newNumber > EDITOR_SAMPLE_MAX)
+    return false;
+  if (project.samples.some((s) => s.number === newNumber)) return false;
+  const s = project.samples.find((x) => x.number === oldNumber);
+  if (!s) return false;
+  s.number = newNumber;
+  for (const p of project.patterns)
+    for (const part of p.parts) if (part.sampleNumber === oldNumber) part.sampleNumber = newNumber;
+  return true;
 }
 
 // ─── Projekt-Serialisierung (.tekkforge JSON, Samples als Base64-WAV) ────────

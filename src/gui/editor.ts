@@ -9,8 +9,12 @@ import {
   createPattern,
   clonePattern,
   importSampleFromWav,
+  processWavToMono,
+  sanitizeSampleName,
   buildPatternFile,
   buildBankFiles,
+  buildSampleBank,
+  renumberSample,
   serializeProject,
   deserializeProject,
   editorProjectFromE2Files,
@@ -286,35 +290,104 @@ document.addEventListener("click", (e) => {
 
 // ─── Sample-Pool ─────────────────────────────────────────────────────────────
 
+/** Slot, dessen Audio gerade per ↻ ersetzt werden soll. */
+let replaceTargetNumber: number | null = null;
+
 function renderPool(): void {
   const tbody = $("poolRows");
-  tbody.innerHTML = project.samples
+  const sorted = [...project.samples].sort((a, b) => a.number - b.number);
+  tbody.innerHTML = sorted
     .map(
-      (s, i) => `<tr>
-        <td>${s.number}</td>
-        <td>${escapeHtml(s.name)}</td>
+      (s) => `<tr>
+        <td><input class="poolNum" data-num="${s.number}" type="number" min="501" max="999"
+              value="${s.number}" style="width:44px;background:var(--elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 3px;font:inherit" /></td>
+        <td><input class="poolName" data-num="${s.number}" type="text" maxlength="16"
+              value="${escapeHtml(s.name)}" style="width:96px;background:var(--elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 4px;font:inherit" /></td>
         <td>${(s.pcm.length / s.sampleRate).toFixed(1)}</td>
-        <td>
-          <a data-play="${i}" style="cursor:pointer" title="Anhören">▶</a>
-          <a data-del="${i}" style="cursor:pointer;color:var(--danger)" title="Entfernen">✕</a>
+        <td style="white-space:nowrap">
+          <a data-play="${s.number}" style="cursor:pointer" title="Anhören">▶</a>
+          <a data-replace="${s.number}" style="cursor:pointer;color:var(--accent2)" title="Audio ersetzen (WAV)">↻</a>
+          <a data-del="${s.number}" style="cursor:pointer;color:var(--danger)" title="Entfernen">✕</a>
         </td>
       </tr>`,
     )
     .join("");
-  tbody.querySelectorAll<HTMLAnchorElement>("a[data-play]").forEach((a) =>
-    a.addEventListener("click", () => player.audition(project.samples[Number(a.dataset.play)])),
+
+  const byNum = (n: number) => project.samples.find((s) => s.number === n);
+
+  tbody.querySelectorAll<HTMLInputElement>("input.poolName").forEach((inp) =>
+    inp.addEventListener("change", () => {
+      const s = byNum(Number(inp.dataset.num));
+      if (!s) return;
+      s.name = sanitizeSampleName(inp.value);
+      inp.value = s.name;
+      markDirty();
+    }),
   );
-  tbody.querySelectorAll<HTMLAnchorElement>("a[data-del]").forEach((a) =>
-    a.addEventListener("click", () => {
-      const idx = Number(a.dataset.del);
-      const num = project.samples[idx].number;
-      const used = project.patterns.some((p) => p.parts.some((pt) => pt.sampleNumber === num));
-      if (used && !confirm(`Sample #${num} wird von Parts benutzt — trotzdem entfernen?`)) return;
-      project.samples.splice(idx, 1);
+  tbody.querySelectorAll<HTMLInputElement>("input.poolNum").forEach((inp) =>
+    inp.addEventListener("change", () => {
+      const oldNum = Number(inp.dataset.num);
+      const newNum = Number(inp.value);
+      if (!renumberSample(project, oldNum, newNum)) {
+        alert(`Nummer ${newNum} nicht möglich (belegt oder außerhalb 501–999).`);
+        renderPool();
+        return;
+      }
       markDirty();
       renderAll();
     }),
   );
+  tbody.querySelectorAll<HTMLAnchorElement>("a[data-play]").forEach((a) =>
+    a.addEventListener("click", () => {
+      const s = byNum(Number(a.dataset.play));
+      if (s) player.audition(s);
+    }),
+  );
+  tbody.querySelectorAll<HTMLAnchorElement>("a[data-replace]").forEach((a) =>
+    a.addEventListener("click", () => {
+      replaceTargetNumber = Number(a.dataset.replace);
+      $<HTMLInputElement>("replaceFile").click();
+    }),
+  );
+  tbody.querySelectorAll<HTMLAnchorElement>("a[data-del]").forEach((a) =>
+    a.addEventListener("click", () => {
+      const num = Number(a.dataset.del);
+      const used = project.patterns.some((p) => p.parts.some((pt) => pt.sampleNumber === num));
+      if (used && !confirm(`Sample #${num} wird von Parts benutzt — trotzdem entfernen?`)) return;
+      const idx = project.samples.findIndex((s) => s.number === num);
+      if (idx >= 0) project.samples.splice(idx, 1);
+      markDirty();
+      renderAll();
+    }),
+  );
+}
+
+async function replaceSampleAudio(file: File): Promise<void> {
+  const num = replaceTargetNumber;
+  replaceTargetNumber = null;
+  if (num === null) return;
+  const s = project.samples.find((x) => x.number === num);
+  if (!s) return;
+  try {
+    const rep = processWavToMono(new Uint8Array(await file.arrayBuffer()), file.name);
+    s.pcm = rep.pcm;
+    s.sampleRate = rep.sampleRate;
+    // Name nur übernehmen, wenn er noch der Default/Auto-Name war? Nein — Nutzer
+    // erwartet i.d.R. Beibehaltung; Name bleibt, nur Audio wird getauscht.
+    markDirty();
+    renderAll();
+  } catch (err) {
+    alert(`Ersetzen fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function exportSampleBank(): void {
+  const all = buildSampleBank(project.samples);
+  if (!all) {
+    alert("Der Sample-Pool ist leer — nichts zu exportieren.");
+    return;
+  }
+  download(all, "sample-bank.all", "application/octet-stream");
 }
 
 async function importWavFiles(files: FileList | File[]): Promise<void> {
@@ -507,6 +580,20 @@ export function initEditor(): void {
     poolDrop.classList.remove("drag");
     if (e.dataTransfer?.files?.length) void importWavFiles(e.dataTransfer.files);
   });
+  const replaceFile = $<HTMLInputElement>("replaceFile");
+  replaceFile.addEventListener("change", () => {
+    const f = replaceFile.files?.[0];
+    replaceFile.value = "";
+    if (f) void replaceSampleAudio(f);
+  });
+  // .all direkt in den Pool laden (Sample-Bank bearbeiten, ohne Patterns)
+  const importAllFile = $<HTMLInputElement>("importAllFile");
+  $("importAll").addEventListener("click", () => importAllFile.click());
+  importAllFile.addEventListener("change", () => {
+    if (importAllFile.files?.length) void importE2Files(importAllFile.files);
+    importAllFile.value = "";
+  });
+  $("exportAll").addEventListener("click", exportSampleBank);
 
   $("expPat").addEventListener("click", exportPattern);
   $("expBank").addEventListener("click", exportBank);

@@ -237,15 +237,25 @@
           </div>
 
           <div class="edPool card">
-            <h2>Sample-Pool (ab #501)</h2>
+            <h2>Sample-Bank / Pool (ab #501)</h2>
             <div id="poolDrop" class="dropMini">WAVs hier ablegen / klicken</div>
             <input id="poolFile" type="file" accept=".wav,.WAV" multiple class="hidden" />
+            <input id="replaceFile" type="file" accept=".wav,.WAV" class="hidden" />
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <button id="importAll" class="ghost" style="flex:1" title="Vorhandene .all-Sample-Bank laden">⇪ .all laden</button>
+              <button id="exportAll" class="ghost" style="flex:1" title="Sample-Pool als .all speichern">⬇ .all export</button>
+            </div>
+            <input id="importAllFile" type="file" accept=".all" class="hidden" />
             <div class="poolList">
               <table>
                 <thead><tr><th>#</th><th>Name</th><th>s</th><th></th></tr></thead>
                 <tbody id="poolRows"></tbody>
               </table>
             </div>
+            <p class="sub" style="margin-top:6px">
+              # / Name direkt editierbar · ↻ Audio ersetzen · ▶ anhören · ✕ entfernen.
+              Nummer ändern remappt verlinkte Parts.
+            </p>
           </div>
         </div>
       </section>
