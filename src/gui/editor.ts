@@ -560,8 +560,14 @@ function setMidiStatus(text: string): void {
 }
 
 function refreshMidiPorts(): void {
-  const fill = (sel: HTMLSelectElement, ports: { id: string; label: string }[], selId: string | null) => {
-    sel.innerHTML = ports.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("");
+  const fill = (
+    sel: HTMLSelectElement,
+    ports: { id: string; label?: string }[],
+    selId: string | null,
+  ) => {
+    sel.innerHTML = ports
+      .map((p) => `<option value="${p.id}">${escapeHtml(p.label ?? p.id)}</option>`)
+      .join("");
     if (selId) sel.value = selId;
   };
   fill($<HTMLSelectElement>("midiOut"), midi.outputs(), midi.selectedOutput);

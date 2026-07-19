@@ -1,70 +1,123 @@
 /**
- * midi.ts — Web-MIDI-Wrapper für den Pattern-Transfer zum/vom Electribe 2.
+ * midi.ts — MIDI-Wrapper für den Pattern-Transfer zum/vom Electribe 2.
  *
- * Nutzt die Web MIDI API (in der Electron-Shell + Chromium verfügbar; im
- * file://-Browser ggf. nicht — dann graceful "nicht verfügbar"). SysEx-Frames
- * (F0…F7) werden reassembliert und an onSysex geliefert.
+ * Nutzt die native MIDI-Bridge (window.tekkMidi, bereitgestellt vom Electron-
+ * Preload). Web MIDI wird NICHT verwendet, weil requestMIDIAccess in Electron
+ * auf Windows hängt. Ohne Bridge (reiner Browser) ist MIDI nicht verfügbar.
+ * SysEx-Frames (F0…F7) werden reassembliert und an onSysex geliefert.
  */
 
-// Web MIDI-Typen (MIDIAccess, MIDIInput, MIDIOutput …) kommen aus der DOM-lib.
-type NavMidi = Navigator & {
-  requestMIDIAccess?: (opts?: { sysex?: boolean }) => Promise<MIDIAccess>;
-};
+interface TekkMidiBridge {
+  available: boolean;
+  list(): Promise<{ outputs: PortInfo[]; inputs: PortInfo[] }>;
+  selectOut(id: string): Promise<boolean>;
+  selectIn(id: string): Promise<boolean>;
+  send(bytes: number[]): Promise<boolean>;
+  onMessage(cb: (bytes: number[]) => void): () => void;
+}
+
+declare global {
+  interface Window {
+    tekkMidi?: TekkMidiBridge;
+  }
+}
 
 export interface PortInfo {
   id: string;
-  label: string;
+  label?: string;
+  name?: string;
+}
+
+function bridge(): TekkMidiBridge | undefined {
+  return typeof window !== "undefined" ? window.tekkMidi : undefined;
 }
 
 export class MidiIO {
-  private access: MIDIAccess | null = null;
+  private outs: PortInfo[] = [];
+  private ins: PortInfo[] = [];
   private outId: string | null = null;
   private inId: string | null = null;
+  private started = false;
   private rxBuffer: number[] = [];
   private inSysex = false;
 
   /** Callback für vollständige SysEx-Frames (F0…F7). */
   onSysex: ((bytes: Uint8Array) => void) | null = null;
-  /** Callback bei Port-Änderungen (an-/abgesteckt). */
+  /** Callback bei Port-Änderungen (aktuell ungenutzt; API-kompatibel). */
   onPortsChanged: (() => void) | null = null;
 
   get available(): boolean {
-    return typeof (navigator as NavMidi).requestMIDIAccess === "function";
+    return !!bridge()?.available;
   }
-
   get ready(): boolean {
-    return this.access !== null;
+    return this.started;
   }
 
-  /** Fordert MIDI-Zugriff inkl. SysEx an. Muss aus einem User-Gesture kommen. */
+  private outOpened = false;
+  private inOpened = false;
+
+  /**
+   * Initialisiert die Bridge: nur Ports laden + Empfang registrieren. Die Ports
+   * werden NICHT sofort geöffnet — das Öffnen ist ein synchroner nativer Aufruf,
+   * der blockiert, falls ein anderer Prozess den Port hält. Geöffnet wird daher
+   * erst bei der ersten tatsächlichen Aktion (Senden/Empfangen).
+   */
   async enable(): Promise<void> {
-    const nav = navigator as NavMidi;
-    if (!nav.requestMIDIAccess) throw new Error("Web MIDI in dieser Umgebung nicht verfügbar.");
-    this.access = await nav.requestMIDIAccess({ sysex: true });
-    this.access.onstatechange = () => this.onPortsChanged?.();
-    // Erste Ports vorwählen
-    const outs = this.outputs();
-    const ins = this.inputs();
-    if (!this.outId && outs[0]) this.outId = outs[0].id;
-    if (!this.inId && ins[0]) this.inId = ins[0].id;
-    this.attachInput();
+    const b = bridge();
+    if (!b) throw new Error("MIDI-Bridge nicht verfügbar (nur in der Desktop-App).");
+    const { outputs, inputs } = await b.list();
+    this.outs = outputs;
+    this.ins = inputs;
+    if (!this.outId && outputs[0]) this.outId = outputs[0].id;
+    if (!this.inId && inputs[0]) this.inId = inputs[0].id;
+    b.onMessage((bytes) => this.rx(bytes));
+    this.started = true;
+  }
+
+  /** Öffnet die gewählten Ports lazy (einmalig) vor der ersten Nutzung. */
+  private async ensureOpen(): Promise<void> {
+    const b = bridge();
+    if (!b) throw new Error("MIDI nicht aktiviert.");
+    if (this.outId && !this.outOpened) {
+      await b.selectOut(this.outId);
+      this.outOpened = true;
+    }
+    if (this.inId && !this.inOpened) {
+      await b.selectIn(this.inId);
+      this.inOpened = true;
+    }
+  }
+
+  private labelOf(p: PortInfo): string {
+    return p.label ?? p.name ?? "MIDI-Port";
   }
 
   outputs(): PortInfo[] {
-    if (!this.access) return [];
-    return [...this.access.outputs.values()].map((p) => ({ id: p.id, label: portLabel(p) }));
+    return this.outs.map((p) => ({ id: p.id, label: this.labelOf(p) }));
   }
   inputs(): PortInfo[] {
-    if (!this.access) return [];
-    return [...this.access.inputs.values()].map((p) => ({ id: p.id, label: portLabel(p) }));
+    return this.ins.map((p) => ({ id: p.id, label: this.labelOf(p) }));
   }
 
   selectOutput(id: string): void {
     this.outId = id;
+    this.outOpened = false;
+    bridge()
+      ?.selectOut(id)
+      .then(() => {
+        this.outOpened = true;
+      })
+      .catch((e) => console.error("selectOut", e));
   }
   selectInput(id: string): void {
     this.inId = id;
-    this.attachInput();
+    this.inOpened = false;
+    bridge()
+      ?.selectIn(id)
+      .then(() => {
+        this.inOpened = true;
+      })
+      .catch((e) => console.error("selectIn", e));
   }
   get selectedOutput(): string | null {
     return this.outId;
@@ -73,28 +126,19 @@ export class MidiIO {
     return this.inId;
   }
 
-  /** Sendet rohe Bytes (typisch ein kompletter SysEx-Frame) an den Out-Port. */
+  /** Sendet rohe Bytes (typisch ein kompletter SysEx-Frame). Öffnet die Ports
+   *  bei Bedarf lazy vor dem ersten Senden. */
   send(bytes: Uint8Array): void {
-    if (!this.access) throw new Error("MIDI nicht aktiviert.");
-    if (!this.outId) throw new Error("Kein MIDI-Ausgang gewählt.");
-    const out = this.access.outputs.get(this.outId);
-    if (!out) throw new Error("MIDI-Ausgang nicht mehr verfügbar.");
-    out.send(bytes);
+    const b = bridge();
+    if (!b) throw new Error("MIDI nicht aktiviert.");
+    this.ensureOpen()
+      .then(() => b.send(Array.from(bytes)))
+      .catch((e) => console.error("midi send", e));
   }
 
-  private attachInput(): void {
-    if (!this.access) return;
-    for (const inp of this.access.inputs.values()) inp.onmidimessage = null;
-    if (!this.inId) return;
-    const inp = this.access.inputs.get(this.inId);
-    if (!inp) return;
-    inp.onmidimessage = (e) => {
-      if (e.data) this.rx(e.data);
-    };
-  }
-
-  /** SysEx-Reassembly: sammelt Bytes zwischen F0 und F7. */
-  private rx(data: Uint8Array): void {
+  /** SysEx-Reassembly: sammelt Bytes zwischen F0 und F7 (native liefert i.d.R.
+   *  komplette Frames, wird aber defensiv reassembliert). */
+  private rx(data: number[]): void {
     for (const byte of data) {
       if (byte === 0xf0) {
         this.inSysex = true;
@@ -109,11 +153,6 @@ export class MidiIO {
       }
     }
   }
-}
-
-function portLabel(p: MIDIPort): string {
-  const name = p.name ?? "MIDI-Port";
-  return p.manufacturer && !name.includes(p.manufacturer) ? `${p.manufacturer} ${name}` : name;
 }
 
 /**

@@ -23,7 +23,11 @@
     "convert": "node dist/cli.mjs convert"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "electron"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "electron",
+      "@julusian/midi"
+    ]
   },
   "build": {
     "appId": "de.georg.tekkforge",
@@ -31,9 +35,22 @@
     "directories": {
       "output": "release"
     },
-    "files": ["dist/**", "electron/**", "package.json"],
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json",
+      "node_modules/@julusian/**",
+      "node_modules/pkg-prebuilds/**"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/@julusian/**"
+    ],
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": true,
@@ -49,5 +66,8 @@
     "vite": "^7.0.0",
     "vite-plugin-singlefile": "^2.2.0",
     "vitest": "^3.1.0"
+  },
+  "dependencies": {
+    "@julusian/midi": "^3.6.1"
   }
 }
