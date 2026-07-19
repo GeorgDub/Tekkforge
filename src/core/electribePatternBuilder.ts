@@ -116,6 +116,8 @@ export interface E2PartInput {
   steps: E2StepInput[];
   /** EXPERIMENTELL: Klangparameter (Filter/Amp/IFX…) → Part-Header-Bytes. */
   params?: Record<string, number>;
+  /** Part-Mute @ +0x01 (0/1) — wird mit aufs Gerät übertragen. */
+  muted?: boolean;
 }
 
 export interface E2MotionSlot {

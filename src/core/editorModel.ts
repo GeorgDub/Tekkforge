@@ -85,8 +85,9 @@ export interface EditorPart {
    */
   params?: Record<string, number>;
   /**
-   * Preview-Mute: wird NUR beim Vorhören berücksichtigt (Part spielt nicht),
-   * nicht ins Geräte-Pattern geschrieben. Zum Isolieren einzelner Parts.
+   * Part-Mute: wirkt beim Vorhören UND wird ins Geräte-Pattern geschrieben
+   * (Part-Header +0x01) — gemutete Parts sind nach dem Übertragen auch am
+   * E2S stumm. Beim Import wird der Geräte-Zustand übernommen.
    */
   muted?: boolean;
 }
@@ -237,6 +238,7 @@ export function patternToE2Input(p: EditorPattern): E2PatternInput {
       pan: part.pan,
       sampleId: part.sampleNumber ?? undefined,
       params: part.params,
+      muted: part.muted ?? false,
       steps: part.steps.slice(0, p.stepLength).map((s) => ({
         active: s.on,
         velocity: s.velocity,
@@ -279,6 +281,7 @@ export function editorPatternFromParsed(p: ParsedPattern): EditorPattern {
     part.sampleNumber = src.sampleId > 0 ? src.sampleId : null;
     part.volume = clamp127(src.volume, 127);
     part.pan = clamp127(src.pan, 64);
+    if (src.muted) part.muted = true;
     for (let si = 0; si < EDITOR_MAX_STEPS; si++) {
       const st = src.steps[si];
       if (!st) continue;

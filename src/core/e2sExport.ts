@@ -91,8 +91,15 @@ const PART_STRIDE = 816; // 0x330
  *  values span 1..~500 (factory sample numbers), 0 = no/empty sample.
  *  (The read-side parser historically guessed +0x04, which is almost always 0.) */
 const PART_SAMPLE_OFF = 0x08;
-const PART_VOLUME_OFF = 0x15;
-const PART_PAN_OFF = 0x22;
+// TekkForge-Korrektur (2026-07-19, verifiziert per Histogramm über die
+// e2s-2016-Factory-Bank + elecmidi-C-Struct + Briefing §4.1):
+//   +0x01 = Mute (0/1) · +0x18 = ampLevel (0..127, Top-Werte 127/85/100)
+//   +0x19 = ampPan SIGNED (0 = Mitte, ±63; als Two's-Complement-Byte)
+// Die früheren Offsets 0x15/0x22 waren EGDecay bzw. IFXEdit (deren Defaults
+// 127 bzw. 64 die Histogramme täuschend ähnlich aussehen ließen).
+const PART_MUTE_OFF = 0x01;
+const PART_VOLUME_OFF = 0x18;
+const PART_PAN_OFF = 0x19;
 const PART_STEPS_OFF = 0x30;
 const STEP_RECORD_SIZE = 12;
 const STEPS_PER_PART = 64;
@@ -215,7 +222,13 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
       body[partStart + PART_VOLUME_OFF] = clampInt(part.volume, 0, 127, 127);
     }
     if (typeof part.pan === "number") {
-      body[partStart + PART_PAN_OFF] = clampInt(part.pan, 0, 127, 64);
+      // Editor-Pan 0..127 (64 = Mitte) → Geräte-Pan signed (0 = Mitte, ±63).
+      const signed = clampInt(part.pan, 0, 127, 64) - 64;
+      body[partStart + PART_PAN_OFF] = signed & 0xff;
+    }
+    // Mute @ +0x01 (0/1) — Editor-Mutes werden mit aufs Gerät übertragen.
+    if (typeof part.muted === "boolean") {
+      body[partStart + PART_MUTE_OFF] = part.muted ? 1 : 0;
     }
     // Per-part sample reference @ +0x08 (u16 LE). Only written when the caller
     // provides one (e.g. repointing parts to imported user samples at 501+);

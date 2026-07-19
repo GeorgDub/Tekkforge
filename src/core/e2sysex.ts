@@ -33,7 +33,37 @@ export const E2_MSG = {
   currentPatternDump: 0x40,
   patternDump: 0x4c,
   globalDump: 0x51,
+  // Bestätigungen vom Gerät (hacktribe ht_sysex_format):
+  writeComplete: 0x21,
+  writeError: 0x22,
+  dataLoadComplete: 0x23,
+  dataLoadError: 0x24,
+  dataFormatError: 0x26,
 } as const;
+
+/** ACK-Codes, die einen erfolgreichen Schritt melden. */
+export const E2_ACK_OK: ReadonlySet<number> = new Set([
+  E2_MSG.writeComplete,
+  E2_MSG.dataLoadComplete,
+]);
+/** ACK-Codes, die einen Fehler melden. */
+export const E2_ACK_ERROR: ReadonlySet<number> = new Set([
+  E2_MSG.writeError,
+  E2_MSG.dataLoadError,
+  E2_MSG.dataFormatError,
+]);
+
+/**
+ * Parst eine kurze Status-/ACK-Antwort (F0 42 3g 00 01 id <msgId> F7).
+ * Gibt die msgId zurück oder null, wenn kein KORG-E2-Frame.
+ */
+export function parseAck(bytes: Uint8Array): number | null {
+  if (bytes.length < 8) return null;
+  if (bytes[0] !== SYSEX_START || bytes[1] !== KORG_MANUFACTURER_ID) return null;
+  if ((bytes[2] & 0xf0) !== 0x30) return null;
+  if (bytes[3] !== 0x00 || bytes[4] !== 0x01) return null;
+  return bytes[6];
+}
 
 export interface E2SysexOptions {
   /** Global-MIDI-Channel 0..15 (Gerät-Default 0 = Ch 1). */

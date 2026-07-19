@@ -237,3 +237,32 @@ export function requestSysex(
     }
   });
 }
+
+/**
+ * Wartet (ohne selbst zu senden) auf die erste SysEx-Antwort, die `match`
+ * erfüllt — für ACK-Bestätigungen NACH einem bereits abgesetzten Send.
+ * Resolved mit den Bytes oder null bei Timeout (kein Reject — Timeout ist
+ * bei ACKs ein legitimer „Gerät bestätigt nicht"-Fall).
+ */
+export function waitSysex(
+  io: MidiIO,
+  match: (bytes: Uint8Array) => boolean,
+  timeoutMs: number,
+): Promise<Uint8Array | null> {
+  return new Promise((resolve) => {
+    const prev = io.onSysex;
+    let done = false;
+    const finish = (result: Uint8Array | null) => {
+      if (done) return;
+      done = true;
+      io.onSysex = prev;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    io.onSysex = (bytes) => {
+      prev?.(bytes);
+      if (match(bytes)) finish(bytes);
+    };
+  });
+}

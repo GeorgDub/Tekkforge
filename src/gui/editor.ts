@@ -35,10 +35,13 @@ import {
   buildSearchDevice,
   parseSearchReply,
   decodeDump,
+  parseAck,
+  E2_ACK_OK,
+  E2_ACK_ERROR,
   E2_PRODUCT_ID_SAMPLER,
   type E2SysexOptions,
 } from "../core/e2sysex";
-import { MidiIO, requestSysex } from "./midi";
+import { MidiIO, requestSysex, waitSysex } from "./midi";
 import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
@@ -166,7 +169,9 @@ function renderGrid(): void {
     const muteBtn = document.createElement("button");
     muteBtn.className = "ghost";
     muteBtn.textContent = part.muted ? "🔇" : "🔈";
-    muteBtn.title = part.muted ? "Stumm (Vorhören) — klick zum Aufheben" : "Part stummschalten (nur Vorhören)";
+    muteBtn.title = part.muted
+      ? "Stumm (wird mit aufs Gerät übertragen) — klick zum Aufheben"
+      : "Part stummschalten — wirkt im Vorhören UND im übertragenen Pattern";
     muteBtn.style.cssText =
       "padding:2px 5px;font-size:11px;flex:none" + (part.muted ? ";border-color:var(--accent)" : "");
     muteBtn.addEventListener("click", (e) => {
@@ -667,18 +672,54 @@ async function midiSendCurrent(): Promise<void> {
   }
 }
 
+/** Wartet auf eine ACK-Antwort des Geräts. Ergebnis:
+ *  "ok" (Erfolgs-ACK) · "error:<name>" (Fehler-ACK) · "timeout" (keine Antwort). */
+async function waitDeviceAck(timeoutMs: number): Promise<string> {
+  const reply = await waitSysex(
+    midi,
+    (b) => {
+      const id = parseAck(b);
+      return id !== null && (E2_ACK_OK.has(id) || E2_ACK_ERROR.has(id));
+    },
+    timeoutMs,
+  );
+  if (!reply) return "timeout";
+  const id = parseAck(reply)!;
+  if (E2_ACK_OK.has(id)) return "ok";
+  const names: Record<number, string> = {
+    0x22: "Write-Fehler",
+    0x24: "Daten-Lade-Fehler",
+    0x26: "Format-Fehler",
+  };
+  return `error:${names[id] ?? `0x${id.toString(16)}`}`;
+}
+
 /**
- * Schreibt EIN Pattern dauerhaft auf einen Slot — über den verifizierten Weg:
- * 0x40 (Edit-Buffer, funktioniert nachweislich am Gerät) + 0x11
- * (Write-Buffer→Slot). Beide sind reine Sende-Befehle, brauchen also keinen
- * funktionierenden MIDI-Rückkanal.
+ * Schreibt EIN Pattern dauerhaft auf einen Slot: 0x40 (Edit-Buffer) + 0x11
+ * (Write-Buffer→Slot). Da der Rückkanal funktioniert, wird nach jedem Schritt
+ * auf die Geräte-Bestätigung gewartet (0x23 nach Dump, 0x21 nach Write) —
+ * das verhindert das Überrennen des Geräts bei Bulk-Transfers. Fällt bei
+ * ACK-Timeout auf konservative Delays zurück.
+ * @returns true wenn beide Schritte bestätigt wurden.
  */
-async function writePatternToSlot(p: EditorPattern, slot1based: number): Promise<void> {
+async function writePatternToSlot(p: EditorPattern, slot1based: number): Promise<boolean> {
   const body = new Uint8Array(buildPatternFile(p).slice(0x100));
+  // Schritt 1: Dump in den Edit-Buffer, auf Lade-Bestätigung warten.
+  const ackDump = waitDeviceAck(4000);
   await midi.sendAsync(buildCurrentPatternDump(body, midiOpts()));
-  await new Promise((r) => setTimeout(r, 150)); // Gerät den Buffer übernehmen lassen
+  const dumpResult = await ackDump;
+  if (dumpResult.startsWith("error")) throw new Error(`Gerät meldet ${dumpResult.slice(6)} beim Dump`);
+  if (dumpResult === "timeout") await new Promise((r) => setTimeout(r, 400));
+  // Schritt 2: Buffer → Slot schreiben, auf Write-Bestätigung warten (Flash!).
+  const ackWrite = waitDeviceAck(8000);
   await midi.sendAsync(buildPatternWrite(slot1based - 1, midiOpts()));
-  await new Promise((r) => setTimeout(r, 250)); // Write aufs Flash abwarten
+  const writeResult = await ackWrite;
+  if (writeResult.startsWith("error")) throw new Error(`Gerät meldet ${writeResult.slice(6)} beim Write`);
+  if (writeResult === "timeout") {
+    await new Promise((r) => setTimeout(r, 900));
+    return false;
+  }
+  return true;
 }
 
 async function midiSendSlot(): Promise<void> {
@@ -691,9 +732,10 @@ async function midiSendSlot(): Promise<void> {
     return;
   setMidiStatus("sende …");
   try {
-    await writePatternToSlot(project.patterns[cur], slot);
+    const confirmed = await writePatternToSlot(project.patterns[cur], slot);
     setMidiStatus(
-      `„${project.patterns[cur].name}" → Slot ${slot} geschrieben (Edit-Buffer + Write). Am Gerät prüfen.`,
+      `„${project.patterns[cur].name}" → Slot ${slot} ` +
+        (confirmed ? "geschrieben — vom Gerät bestätigt ✓" : "gesendet (keine Geräte-Bestätigung — am Gerät prüfen)"),
     );
   } catch (err) {
     setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
@@ -715,11 +757,18 @@ async function midiSendAll(): Promise<void> {
   )
     return;
   try {
+    let confirmed = 0;
     for (let i = 0; i < count; i++) {
       setMidiStatus(`schreibe ${i + 1}/${count} → Slot ${start + i} …`);
-      await writePatternToSlot(project.patterns[i], start + i);
+      const ok = await writePatternToSlot(project.patterns[i], start + i);
+      if (ok) confirmed++;
+      // Atempause zwischen Patterns — auch nach ACK braucht das Gerät kurz.
+      await new Promise((r) => setTimeout(r, 250));
     }
-    setMidiStatus(`${count} Pattern(s) auf Slots ${start}–${start + count - 1} geschrieben.`);
+    setMidiStatus(
+      `${count} Pattern(s) auf Slots ${start}–${start + count - 1} geschrieben` +
+        (confirmed === count ? " — alle vom Gerät bestätigt ✓" : ` (${confirmed}/${count} bestätigt)`),
+    );
   } catch (err) {
     setMidiStatus(`Abbruch: ${err instanceof Error ? err.message : err}`);
   }

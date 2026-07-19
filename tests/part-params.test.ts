@@ -31,10 +31,10 @@ describe("partParams — experimentelles Sound-Param-Editing", () => {
     expect(r.filterType).toBe(2);
   });
 
-  it("does NOT touch verified volume(0x15)/pan(0x22)/sample(0x08) offsets", () => {
-    // Keiner der Param-Offsets darf mit 0x08,0x09,0x15,0x22 kollidieren.
+  it("does NOT touch reserved mute(0x01)/sample(0x08)/volume(0x18)/pan(0x19) offsets", () => {
+    // Diese Bytes schreibt e2sExport fest verdrahtet — kein Param darf kollidieren.
     const used = new Set(PART_PARAMS.map((p) => p.offset));
-    for (const forbidden of [0x08, 0x09, 0x15, 0x22]) {
+    for (const forbidden of [0x01, 0x08, 0x09, 0x18, 0x19]) {
       expect(used.has(forbidden)).toBe(false);
     }
   });

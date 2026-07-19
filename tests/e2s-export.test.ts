@@ -173,13 +173,19 @@ describe("e2sExport — template-overlay fidelity", () => {
     expect([...body.slice(stepOff, stepOff + 5)]).toEqual([0x00, 0x48, 0x60, 0x00, 0x00]);
   });
 
-  it("part volume/pan overlay only the two header bytes", () => {
+  it("part volume(0x18)/pan(0x19 signed)/mute(0x01) overlay the header bytes", () => {
     const parts = emptyParts();
-    parts[3] = { volume: 100, pan: 0, steps: [] };
+    parts[3] = { volume: 100, pan: 0, muted: true, steps: [] }; // pan 0 = ganz links
+    parts[4] = { volume: 127, pan: 96, muted: false, steps: [] }; // pan 96 = +32 rechts
     const body = buildE2PatternBody({ ...NEUTRAL_INPUT, parts });
-    const partStart = 0x800 + 3 * 816;
-    expect(body[partStart + 0x15]).toBe(100);
-    expect(body[partStart + 0x22]).toBe(0);
+    const p3 = 0x800 + 3 * 816;
+    const p4 = 0x800 + 4 * 816;
+    expect(body[p3 + 0x18]).toBe(100); // ampLevel
+    expect(body[p3 + 0x19]).toBe(0xc0); // pan 0 → signed -64 → 0xC0
+    expect(body[p3 + 0x01]).toBe(1); // mute an
+    expect(body[p4 + 0x18]).toBe(127);
+    expect(body[p4 + 0x19]).toBe(32); // pan 96 → signed +32
+    expect(body[p4 + 0x01]).toBe(0); // mute aus
   });
 
   it("clamps out-of-range BPM, note, velocity", () => {

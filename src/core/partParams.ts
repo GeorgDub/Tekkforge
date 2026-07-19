@@ -1,13 +1,13 @@
 /**
  * partParams.ts — EXPERIMENTELLE Part-Klangparameter (Filter/Amp/IFX/Mod…).
  *
- * ⚠ ACHTUNG: Die Byte-Offsets im Sampler-Part-Header sind für diese Parameter
- * NICHT hardware-verifiziert. Sie stammen aus der Format-Doku (Korg-Forum
- * „Xanadu" / Briefing), die sich teils mit unseren verifizierten Offsets
- * widerspricht. Verifiziert und daher AUSGENOMMEN sind hier:
- *   Sample @0x08–09 (u16), Volume @0x15, Pan @0x22.
- * Die egDecay@0x15 / ifxEdit@0x22 aus der Doku sind bei uns nachweislich
- * Volume/Pan und werden NICHT angeboten.
+ * Offsets gem. elecmidi-C-Struct + Briefing §4.1 (2026-07-19 per Histogramm
+ * über die e2s-2016-Factory-Bank abgeglichen: 0x18=ampLevel, 0x19=ampPan
+ * signed, 0x1A=EGOnOff 0/1, 0x14=EGAttack ~0 — Layout konsistent).
+ * ⚠ Einzelne Wertebereiche sind weiterhin nicht am Gerät verifiziert.
+ *
+ * AUSGENOMMEN (fest verdrahtet in e2sExport): Sample @0x08–09 (u16),
+ * Mute @0x01, Volume @0x18, Pan @0x19 (signed).
  *
  * Weil der rohe Original-Body erhalten bleibt (EditorPattern.rawBody), ändert
  * das Schreiben eines Parameters nur genau sein Byte — am Gerät gefahrlos
@@ -43,12 +43,14 @@ export const PART_PARAMS: PartParam[] = [
   { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" },
   { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" },
   { key: "egAttack", label: "Amp Attack", offset: 0x14, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
+  { key: "egDecay", label: "Amp Decay", offset: 0x15, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
   { key: "ampEgOn", label: "Amp-EG an", offset: 0x1a, min: 0, max: 1, kind: "bool", group: "Amp/EG" },
   { key: "mfxSend", label: "MFX-Send", offset: 0x1b, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
   { key: "grooveType", label: "Groove-Typ", offset: 0x1c, min: 0, max: 15, kind: "u8", group: "Groove" },
   { key: "grooveDepth", label: "Groove-Depth", offset: 0x1d, min: 0, max: 127, kind: "u8", group: "Groove" },
   { key: "ifxOn", label: "IFX an", offset: 0x20, min: 0, max: 1, kind: "bool", group: "IFX" },
   { key: "ifxType", label: "IFX-Typ", offset: 0x21, min: 0, max: 63, kind: "u8", group: "IFX" },
+  { key: "ifxEdit", label: "IFX-Edit", offset: 0x22, min: 0, max: 127, kind: "u8", group: "IFX" },
   { key: "oscPitch", label: "Pitch (roh)", offset: 0x24, min: 0, max: 127, kind: "u8", group: "Osc" },
   { key: "oscGlide", label: "Glide", offset: 0x25, min: 0, max: 127, kind: "u8", group: "Osc" },
 ];

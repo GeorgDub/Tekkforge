@@ -254,8 +254,13 @@ export const ELECTRIBE_REAL_VELOCITY_DEFAULT_VALUE = 127;
  *   - Pitch: kein Byte zeigt signed-distribution in der Bank.
  *   - FxSend: kein klares default-pattern identifiziert.
  */
-export const ELECTRIBE_REAL_PART_VOLUME_OFFSET = 0x15;
-export const ELECTRIBE_REAL_PART_PAN_OFFSET    = 0x22;
+// TekkForge-Korrektur (2026-07-19): Volume/Pan liegen bei +0x18/+0x19
+// (elecmidi-C-Struct + Briefing §4.1, verifiziert per Histogramm über die
+// e2s-2016-Factory-Bank: 0x18 = Level-Verteilung 127/85/100, 0x19 = SIGNED
+// Pan um 0 zentriert). Die alten 0x15/0x22 sind EGDecay bzw. IFXEdit.
+export const ELECTRIBE_REAL_PART_MUTE_OFFSET   = 0x01;
+export const ELECTRIBE_REAL_PART_VOLUME_OFFSET = 0x18;
+export const ELECTRIBE_REAL_PART_PAN_OFFSET    = 0x19;
 
 /** Hardware-Default fuer Part-Volume (beobachtet in 63.4% aller part-samples). */
 export const ELECTRIBE_REAL_PART_VOLUME_DEFAULT = 127;
@@ -470,6 +475,8 @@ export interface ParsedPart {
   pitch: number;
   /** 0..127. */
   fxSend: number;
+  /** Part-Mute @ +0x01 (true = stumm). Undefined bei legacy Quellen. */
+  muted?: boolean;
   /** Trigger-Steps, immer `STEPS_PER_PART` lang. */
   steps: ParsedPartStep[];
   /** 4 Motion-Sequencer-Slots. */
@@ -743,24 +750,17 @@ function parseRealPartBlock(view: DataView, partOffset: number, partIndex: numbe
   // klares default-byte in der 4000-sample-bank gefunden).
   const sampleId = safeU16LE(8);
 
-  // Volume @ +0x15: 0..127. Defensive clamp gegen out-of-range (sollte nie
-  // > 127 sein laut bank-histogram, aber defensiv parsen).
+  // Volume (ampLevel) @ +0x18: 0..127. Defensive clamp gegen out-of-range.
   const rawVol = safeU8(ELECTRIBE_REAL_PART_VOLUME_OFFSET);
-  let volume: number = rawVol;
-  if (volume > 127) {
-    // eslint-disable-next-line no-console
-    console.warn(`Electribe-Parser: Part ${partIndex} volume ${rawVol} > 127 — clamp auf 127`);
-    volume = 127;
-  }
+  const volume = Math.min(127, rawVol);
 
-  // Pan @ +0x22: 0..127 (64 = center). Defensive clamp.
+  // Pan (ampPan) @ +0x19: SIGNED Byte, 0 = Mitte, ±63 → Editor 0..127 (64=Mitte).
   const rawPan = safeU8(ELECTRIBE_REAL_PART_PAN_OFFSET);
-  let pan: number = rawPan;
-  if (pan > 127) {
-    // eslint-disable-next-line no-console
-    console.warn(`Electribe-Parser: Part ${partIndex} pan ${rawPan} > 127 — clamp auf 127`);
-    pan = 127;
-  }
+  const signedPan = rawPan < 128 ? rawPan : rawPan - 256;
+  const pan = Math.min(127, Math.max(0, 64 + signedPan));
+
+  // Mute @ +0x01 (0/1).
+  const muted = safeU8(ELECTRIBE_REAL_PART_MUTE_OFFSET) !== 0;
 
   // Pitch + FxSend: nicht decodiert → Hardware-Defaults.
   const pitch    = 0;
@@ -821,6 +821,7 @@ function parseRealPartBlock(view: DataView, partOffset: number, partIndex: numbe
     pan,
     pitch,
     fxSend,
+    muted,
     steps,
     motion,
   };
