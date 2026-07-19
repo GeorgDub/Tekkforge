@@ -7,63 +7,106 @@
  */
 
 const { app, BrowserWindow, shell, session, protocol, ipcMain } = require("electron");
+const { Worker } = require("worker_threads");
 const fs = require("fs");
 const path = require("path");
 
 const APP_SCHEME = "app";
 const INDEX_HTML = path.join(__dirname, "..", "dist", "index.html");
 
-// ─── Native MIDI (Main-Prozess) ──────────────────────────────────────────────
-// Web MIDI hängt in Electron auf Windows → native @julusian/midi via IPC.
-let midiLib = null;
-try {
-  midiLib = require("@julusian/midi");
-} catch (err) {
-  console.error("MIDI-Lib nicht ladbar:", err.message);
+// ─── Native MIDI über Worker-Thread ──────────────────────────────────────────
+// Web MIDI hängt in Electron/Windows → native @julusian/midi. openPort() ist
+// synchron und kann blockieren (belegter Port) → daher im Worker mit Timeout,
+// damit die UI NIE einfriert. Bei Timeout wird der Worker neu gestartet.
+let midiWorker = null;
+let midiWin = null;
+let midiReqId = 0;
+const midiPending = new Map();
+
+function startMidiWorker() {
+  let w;
+  try {
+    w = new Worker(path.join(__dirname, "midi-worker.cjs"));
+  } catch (err) {
+    console.error("MIDI-Worker konnte nicht starten:", err.message);
+    midiWorker = null;
+    return;
+  }
+  midiWorker = w;
+  w.on("message", (m) => {
+    if (m.type === "midi") {
+      if (midiWin && !midiWin.isDestroyed()) midiWin.webContents.send("midi:message", m.data);
+      return;
+    }
+    if (m.type === "fatal") {
+      console.error("MIDI-Worker fatal:", m.error);
+      return;
+    }
+    const p = midiPending.get(m.id);
+    if (p) {
+      midiPending.delete(m.id);
+      m.ok ? p.resolve(m.result) : p.reject(new Error(m.error || "MIDI-Fehler"));
+    }
+  });
+  w.on("error", (err) => console.error("MIDI-Worker error:", err));
+  w.on("exit", () => {
+    // Nur reagieren, wenn dies noch der AKTUELLE Worker ist. Ein bereits durch
+    // restart() ersetzter alter Worker wird ignoriert (sonst würden die
+    // Requests/der Zustand des neuen Workers fälschlich abgeräumt).
+    if (midiWorker !== w) return;
+    midiWorker = null;
+    for (const [, p] of midiPending) p.reject(new Error("MIDI-Worker beendet"));
+    midiPending.clear();
+  });
 }
-let midiOut = null;
-let midiIn = null;
 
-function registerMidiIpc() {
-  ipcMain.handle("midi:list", () => {
-    if (!midiLib) return { outputs: [], inputs: [] };
-    const o = new midiLib.Output();
-    const i = new midiLib.Input();
-    const outputs = [];
-    const inputs = [];
-    for (let k = 0; k < o.getPortCount(); k++) outputs.push({ id: String(k), name: o.getPortName(k) });
-    for (let k = 0; k < i.getPortCount(); k++) inputs.push({ id: String(k), name: i.getPortName(k) });
-    o.closePort();
-    i.closePort();
-    return { outputs, inputs };
-  });
+function restartMidiWorker() {
+  if (midiWorker) {
+    midiWorker.terminate().catch(() => {});
+    midiWorker = null;
+  }
+  for (const [, p] of midiPending) p.reject(new Error("MIDI zurückgesetzt"));
+  midiPending.clear();
+  startMidiWorker();
+}
 
-  ipcMain.handle("midi:selectOut", (_e, id) => {
-    if (!midiLib) throw new Error("MIDI nicht verfügbar");
-    if (midiOut) midiOut.closePort();
-    midiOut = new midiLib.Output();
-    midiOut.openPort(Number(id));
-    return true;
-  });
-
-  ipcMain.handle("midi:selectIn", (event, id) => {
-    if (!midiLib) throw new Error("MIDI nicht verfügbar");
-    if (midiIn) midiIn.closePort();
-    midiIn = new midiLib.Input();
-    midiIn.ignoreTypes(false, false, false); // SysEx NICHT ignorieren
-    midiIn.on("message", (_dt, msg) => {
-      const wc = event.sender;
-      if (wc && !wc.isDestroyed()) wc.send("midi:message", Array.from(msg));
+function midiCall(cmd, payload, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    if (!midiWorker) {
+      reject(new Error("MIDI nicht verfügbar"));
+      return;
+    }
+    const id = ++midiReqId;
+    const timer = setTimeout(() => {
+      if (midiPending.delete(id)) {
+        // Hänger (z.B. belegter Port) → Worker neu starten, UI bleibt frei.
+        restartMidiWorker();
+        reject(new Error(`MIDI-Timeout (${cmd}) — Port belegt oder Gerät antwortet nicht.`));
+      }
+    }, timeoutMs);
+    midiPending.set(id, {
+      resolve: (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      reject: (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
     });
-    midiIn.openPort(Number(id));
-    return true;
+    midiWorker.postMessage({ id, cmd, ...payload });
   });
+}
 
-  ipcMain.handle("midi:send", (_e, bytes) => {
-    if (!midiOut) throw new Error("Kein MIDI-Ausgang geöffnet");
-    midiOut.sendMessage(Array.isArray(bytes) ? bytes : Array.from(bytes));
-    return true;
-  });
+function registerMidiIpc(win) {
+  midiWin = win;
+  startMidiWorker();
+  ipcMain.handle("midi:list", () => midiCall("list", {}, 3000));
+  ipcMain.handle("midi:selectOut", (_e, id) => midiCall("openOut", { port: id }, 2500));
+  ipcMain.handle("midi:selectIn", (_e, id) => midiCall("openIn", { port: id }, 2500));
+  ipcMain.handle("midi:send", (_e, bytes) =>
+    midiCall("send", { bytes: Array.isArray(bytes) ? bytes : Array.from(bytes) }, 2500),
+  );
 }
 
 // Muss VOR app-ready registriert werden: eigenes Schema als sicher + standard.
@@ -123,15 +166,18 @@ function createWindow() {
   });
 
   win.loadURL(`${APP_SCHEME}://local/index.html`);
+  return win;
 }
 
 app.whenReady().then(() => {
   grantMidiPermissions();
   registerAppProtocol();
-  registerMidiIpc();
-  createWindow();
+  const win = createWindow();
+  registerMidiIpc(win);
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      midiWin = createWindow();
+    }
   });
 });
 
