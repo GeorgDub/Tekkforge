@@ -54,6 +54,8 @@ export class MidiIO {
   /** Monitor-Callback: feuert bei JEDEM empfangenen Frame (auch Nicht-SysEx),
    *  unabhängig von requestSysex — für die Roh-Anzeige. */
   onAnyMessage: ((bytes: number[]) => void) | null = null;
+  /** Monitor-Callback für AUSGEHENDE Nachrichten (Diagnose). */
+  onSent: ((bytes: number[]) => void) | null = null;
   /** Callback bei Port-Änderungen (aktuell ungenutzt; API-kompatibel). */
   onPortsChanged: (() => void) | null = null;
 
@@ -87,24 +89,39 @@ export class MidiIO {
     this.started = true;
   }
 
-  /** Öffnet die gewählten Ports lazy (einmalig) vor der ersten Nutzung. */
-  private async ensureOpen(): Promise<void> {
+  /** Öffnet NUR den Ausgang (fürs Senden nötig; unabhängig vom Eingang). */
+  private async ensureOutOpen(): Promise<void> {
     const b = bridge();
     if (!b) throw new Error("MIDI nicht aktiviert.");
     if (this.outId && !this.outOpened) {
       await b.selectOut(this.outId);
       this.outOpened = true;
     }
+  }
+
+  /** Öffnet NUR den Eingang (fürs Empfangen). */
+  private async ensureInOpen(): Promise<void> {
+    const b = bridge();
+    if (!b) throw new Error("MIDI nicht aktiviert.");
     if (this.inId && !this.inOpened) {
       await b.selectIn(this.inId);
       this.inOpened = true;
     }
   }
 
-  /** Öffnet Ein-/Ausgang explizit (upfront), Fehler werden geworfen. So sind
-   *  die Ports vor Suche/Senden offen und es gibt kein Timing-Rennen. */
-  async connect(): Promise<void> {
-    await this.ensureOpen();
+  /**
+   * Öffnet Ausgang (nötig, wirft bei Fehler) und Eingang (best-effort — ein
+   * belegter Eingang darf das Senden NICHT blockieren). Gibt zurück, ob der
+   * Eingang (Empfang) verfügbar ist.
+   */
+  async connect(): Promise<{ inputOk: boolean; inputError?: string }> {
+    await this.ensureOutOpen();
+    try {
+      await this.ensureInOpen();
+      return { inputOk: true };
+    } catch (err) {
+      return { inputOk: false, inputError: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   private labelOf(p: PortInfo): string {
@@ -145,14 +162,23 @@ export class MidiIO {
     return this.inId;
   }
 
-  /** Sendet rohe Bytes (typisch ein kompletter SysEx-Frame). Öffnet die Ports
-   *  bei Bedarf lazy vor dem ersten Senden. */
+  /**
+   * Sendet rohe Bytes (typisch ein kompletter SysEx-Frame). Öffnet NUR den
+   * Ausgang bei Bedarf (unabhängig vom Eingang). Feuert-und-vergisst; für
+   * echtes Ergebnis `sendAsync()` nutzen.
+   */
   send(bytes: Uint8Array): void {
+    void this.sendAsync(bytes).catch((e) => console.error("midi send", e));
+  }
+
+  /** Wie send(), aber awaitbar — resolved erst nach erfolgreichem Senden. */
+  async sendAsync(bytes: Uint8Array): Promise<void> {
     const b = bridge();
     if (!b) throw new Error("MIDI nicht aktiviert.");
-    this.ensureOpen()
-      .then(() => b.send(Array.from(bytes)))
-      .catch((e) => console.error("midi send", e));
+    await this.ensureOutOpen();
+    const arr = Array.from(bytes);
+    this.onSent?.(arr);
+    await b.send(arr);
   }
 
   /** SysEx-Reassembly: sammelt Bytes zwischen F0 und F7 (native liefert i.d.R.

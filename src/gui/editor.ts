@@ -589,10 +589,12 @@ function refreshMidiPorts(): void {
 }
 
 let midiMonitorLines: string[] = [];
-function pushMonitor(bytes: number[]): void {
+function pushMonitor(dir: "◀ IN" | "▶ OUT", bytes: number[]): void {
   const hex = bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ");
-  const label = bytes[0] === 0xf0 ? `SysEx[${bytes.length}]` : `MIDI[${bytes.length}]`;
-  midiMonitorLines.unshift(`${label}: ${hex.length > 180 ? hex.slice(0, 180) + " …" : hex}`);
+  const kind = bytes[0] === 0xf0 ? "SysEx" : "MIDI";
+  midiMonitorLines.unshift(
+    `${dir} ${kind}[${bytes.length}]: ${hex.length > 160 ? hex.slice(0, 160) + " …" : hex}`,
+  );
   midiMonitorLines = midiMonitorLines.slice(0, 12);
   $("midiMonitor").textContent = midiMonitorLines.join("\n");
 }
@@ -601,7 +603,8 @@ async function midiEnable(): Promise<void> {
   try {
     await midi.enable();
     midi.onPortsChanged = () => refreshMidiPorts();
-    midi.onAnyMessage = (bytes) => pushMonitor(bytes);
+    midi.onAnyMessage = (bytes) => pushMonitor("◀ IN", bytes);
+    midi.onSent = (bytes) => pushMonitor("▶ OUT", bytes);
     refreshMidiPorts();
     $("midiEnable").classList.add("hidden");
     $("midiControls").classList.remove("hidden");
@@ -610,15 +613,18 @@ async function midiEnable(): Promise<void> {
       setMidiStatus("kein MIDI-Port gefunden");
       return;
     }
-    // Ports upfront öffnen (im Worker → kein Freeze). Danach sind Suche/Senden
-    // sofort möglich, ohne Timing-Rennen mit dem Suche-Timeout.
+    // Ausgang upfront öffnen (im Worker → kein Freeze), Eingang best-effort.
     setMidiStatus(`öffne Ports (Ausgang: ${outName}) …`);
     try {
-      await midi.connect();
-      setMidiStatus(`verbunden — Ausgang: ${outName}. „Gerät suchen" oder „→ Gerät (Live)".`);
+      const { inputOk, inputError } = await midi.connect();
+      setMidiStatus(
+        `verbunden — Ausgang: ${outName}` +
+          (inputOk ? " (Empfang aktiv)." : `. ⚠ Empfang nicht verfügbar: ${inputError}`) +
+          ` — „→ Gerät (Live)" oder „Gerät suchen".`,
+      );
     } catch (err) {
       setMidiStatus(
-        `Port konnte nicht geöffnet werden (${err instanceof Error ? err.message : err}). ` +
+        `Ausgang konnte nicht geöffnet werden (${err instanceof Error ? err.message : err}). ` +
           `Anderen Port wählen oder Gerät/USB prüfen.`,
       );
     }
@@ -650,16 +656,18 @@ async function midiSearchDevice(): Promise<void> {
   }
 }
 
-function midiSendCurrent(): void {
+async function midiSendCurrent(): Promise<void> {
+  setMidiStatus("sende …");
   try {
-    midi.send(buildCurrentPatternDump(currentPatternBody(), midiOpts()));
-    setMidiStatus(`„${project.patterns[cur].name}" → Edit-Buffer gesendet`);
+    const msg = buildCurrentPatternDump(currentPatternBody(), midiOpts());
+    await midi.sendAsync(msg);
+    setMidiStatus(`„${project.patterns[cur].name}" → Edit-Buffer gesendet (${msg.length} Bytes)`);
   } catch (err) {
     setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
   }
 }
 
-function midiSendSlot(): void {
+async function midiSendSlot(): Promise<void> {
   const slot = Number($<HTMLInputElement>("midiSlot").value);
   if (!Number.isFinite(slot) || slot < 1 || slot > 250) {
     alert("Slot muss 1–250 sein.");
@@ -667,9 +675,11 @@ function midiSendSlot(): void {
   }
   if (!confirm(`Pattern dauerhaft auf Geräte-Slot ${slot} schreiben? Überschreibt den dortigen Inhalt.`))
     return;
+  setMidiStatus("sende …");
   try {
-    midi.send(buildPatternDump(currentPatternBody(), slot - 1, midiOpts()));
-    setMidiStatus(`„${project.patterns[cur].name}" → Slot ${slot} gesendet`);
+    const msg = buildPatternDump(currentPatternBody(), slot - 1, midiOpts());
+    await midi.sendAsync(msg);
+    setMidiStatus(`„${project.patterns[cur].name}" → Slot ${slot} gesendet (${msg.length} Bytes)`);
   } catch (err) {
     setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
   }
