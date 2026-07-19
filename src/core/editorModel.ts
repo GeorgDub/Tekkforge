@@ -349,6 +349,24 @@ export function editorProjectFromE2Files(
   return { version: 1, patterns: patterns.length ? patterns : [createPattern("PATTERN 1")], samples };
 }
 
+/**
+ * Wandelt einen rohen 0x4000-Pattern-Body (z.B. per SysEx vom Gerät empfangen)
+ * in ein Editor-Pattern — umschließt ihn dazu mit einem minimalen .e2spat-Header
+ * (KORG / e2sampler / PTST), den der Parser erwartet.
+ */
+export function editorPatternFromBody(body: Uint8Array): EditorPattern {
+  const file = new Uint8Array(0x100 + body.length);
+  file[0] = 0x4b; // K
+  file[1] = 0x4f; // O
+  file[2] = 0x52; // R
+  file[3] = 0x47; // G
+  const id = "e2sampler";
+  for (let i = 0; i < id.length; i++) file[0x10 + i] = id.charCodeAt(i);
+  file.set(body, 0x100);
+  const bank = parseElectribeBank(file);
+  return editorPatternFromParsed(bank.patterns[0]);
+}
+
 export interface BankBuildResult {
   /** .e2sallpat (4 161 792 Bytes). */
   allpat: Uint8Array;

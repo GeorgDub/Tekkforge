@@ -5,8 +5,18 @@
  * Browser-Download-/File-Picker-APIs, Electron zeigt dafür native Dialoge).
  */
 
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, session } = require("electron");
 const path = require("path");
+
+/** Web-MIDI (inkl. SysEx) für den Pattern-Transfer zum Electribe 2 erlauben. */
+function grantMidiPermissions() {
+  const ses = session.defaultSession;
+  const allowed = new Set(["midi", "midiSysex"]);
+  ses.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(allowed.has(permission));
+  });
+  ses.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -34,6 +44,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  grantMidiPermissions();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

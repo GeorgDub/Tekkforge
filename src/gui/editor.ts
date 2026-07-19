@@ -18,6 +18,7 @@ import {
   serializeProject,
   deserializeProject,
   editorProjectFromE2Files,
+  editorPatternFromBody,
   importSamplesFromAll,
   noteName,
   EDITOR_DEFAULT_NOTE,
@@ -27,6 +28,17 @@ import {
   type EditorStep,
   type PoolSample,
 } from "../core/editorModel";
+import {
+  buildCurrentPatternDump,
+  buildPatternDump,
+  buildCurrentPatternRequest,
+  buildSearchDevice,
+  parseSearchReply,
+  decodeDump,
+  E2_PRODUCT_ID_SAMPLER,
+  type E2SysexOptions,
+} from "../core/e2sysex";
+import { MidiIO, requestSysex } from "./midi";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
 
@@ -453,6 +465,133 @@ async function openProject(file: File): Promise<void> {
   }
 }
 
+// ─── MIDI (SysEx-Transfer zum/vom Gerät) ─────────────────────────────────────
+
+const midi = new MidiIO();
+let midiChannel = 0;
+let midiProductId = E2_PRODUCT_ID_SAMPLER;
+
+function midiOpts(): E2SysexOptions {
+  return { channel: midiChannel, productId: midiProductId };
+}
+
+/** 0x4000-Body des aktuellen Patterns (ohne 0x100-Dateiheader). */
+function currentPatternBody(): Uint8Array {
+  return buildPatternFile(project.patterns[cur]).slice(0x100);
+}
+
+function setMidiStatus(text: string): void {
+  $("midiStatus").textContent = text;
+}
+
+function refreshMidiPorts(): void {
+  const fill = (sel: HTMLSelectElement, ports: { id: string; label: string }[], selId: string | null) => {
+    sel.innerHTML = ports.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("");
+    if (selId) sel.value = selId;
+  };
+  fill($<HTMLSelectElement>("midiOut"), midi.outputs(), midi.selectedOutput);
+  fill($<HTMLSelectElement>("midiIn"), midi.inputs(), midi.selectedInput);
+}
+
+async function midiEnable(): Promise<void> {
+  try {
+    await midi.enable();
+    midi.onPortsChanged = () => refreshMidiPorts();
+    refreshMidiPorts();
+    $("midiEnable").classList.add("hidden");
+    $("midiControls").classList.remove("hidden");
+    setMidiStatus(
+      midi.outputs().length ? "bereit — Gerät suchen empfohlen" : "kein MIDI-Port gefunden",
+    );
+  } catch (err) {
+    alert(`MIDI konnte nicht aktiviert werden: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function midiSearchDevice(): Promise<void> {
+  try {
+    setMidiStatus("suche Gerät …");
+    const reply = await requestSysex(
+      midi,
+      buildSearchDevice(),
+      (b) => parseSearchReply(b) !== null,
+      2000,
+    );
+    const r = parseSearchReply(reply)!;
+    midiChannel = r.channel;
+    midiProductId = r.productId;
+    const kind = r.productId === E2_PRODUCT_ID_SAMPLER ? "Sampler" : "Synth";
+    setMidiStatus(`gefunden: E2 ${kind} · Ch ${r.channel + 1} · v${r.version}`);
+  } catch (err) {
+    setMidiStatus(`keine Antwort — Ports prüfen (${err instanceof Error ? err.message : err})`);
+  }
+}
+
+function midiSendCurrent(): void {
+  try {
+    midi.send(buildCurrentPatternDump(currentPatternBody(), midiOpts()));
+    setMidiStatus(`„${project.patterns[cur].name}" → Edit-Buffer gesendet`);
+  } catch (err) {
+    setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+function midiSendSlot(): void {
+  const slot = Number($<HTMLInputElement>("midiSlot").value);
+  if (!Number.isFinite(slot) || slot < 1 || slot > 250) {
+    alert("Slot muss 1–250 sein.");
+    return;
+  }
+  if (!confirm(`Pattern dauerhaft auf Geräte-Slot ${slot} schreiben? Überschreibt den dortigen Inhalt.`))
+    return;
+  try {
+    midi.send(buildPatternDump(currentPatternBody(), slot - 1, midiOpts()));
+    setMidiStatus(`„${project.patterns[cur].name}" → Slot ${slot} gesendet`);
+  } catch (err) {
+    setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+async function midiGetPattern(): Promise<void> {
+  try {
+    setMidiStatus("fordere aktuelles Pattern an …");
+    const reply = await requestSysex(
+      midi,
+      buildCurrentPatternRequest(midiOpts()),
+      (b) => decodeDump(b) !== null,
+      2500,
+    );
+    const dump = decodeDump(reply)!;
+    const pattern = editorPatternFromBody(dump.body);
+    project.patterns.splice(cur + 1, 0, pattern);
+    cur += 1;
+    markDirty();
+    renderAll();
+    setMidiStatus(`Pattern „${pattern.name}" vom Gerät geholt`);
+  } catch (err) {
+    setMidiStatus(`Holen fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+function setupMidi(): void {
+  if (!midi.available) {
+    $("midiEnable").classList.add("hidden");
+    $("midiUnavailable").classList.remove("hidden");
+    return;
+  }
+  $("midiEnable").addEventListener("click", () => void midiEnable());
+  $<HTMLSelectElement>("midiOut").addEventListener("change", (e) =>
+    midi.selectOutput((e.target as HTMLSelectElement).value),
+  );
+  $<HTMLSelectElement>("midiIn").addEventListener("change", (e) =>
+    midi.selectInput((e.target as HTMLSelectElement).value),
+  );
+  $("midiSearch").addEventListener("click", () => void midiSearchDevice());
+  $("midiSendCurrent").addEventListener("click", midiSendCurrent);
+  $("midiSendSlot").addEventListener("click", midiSendSlot);
+  $("midiGet").addEventListener("click", () => void midiGetPattern());
+}
+
 /**
  * Import von Geräte-Dateien: eine Pattern-Datei (.e2spat/.e2sallpat, optional
  * mit begleitender .all-Sample-Bank) ersetzt das Projekt; eine alleinige
@@ -619,6 +758,7 @@ export function initEditor(): void {
     importFile.value = "";
   });
   $("previewPlay").addEventListener("click", togglePreview);
+  setupMidi();
 
   window.addEventListener("beforeunload", (e) => {
     if (dirty) e.preventDefault();

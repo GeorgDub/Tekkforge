@@ -195,6 +195,45 @@
           <button id="expBank" class="primary">⬇ Bank → .e2sallpat + .all</button>
         </div>
 
+        <details class="card" id="midiPanel" style="margin-bottom:12px">
+          <summary style="cursor:pointer;color:var(--accent2);font-weight:600">
+            🎛 MIDI — Pattern direkt aufs Gerät senden / holen (SysEx)
+          </summary>
+          <div style="margin-top:10px">
+            <div id="midiUnavailable" class="warn hidden">
+              Web MIDI ist hier nicht verfügbar. Öffne TekkForge als Desktop-App
+              (oder über den Dev-Server), nicht als lose <code>file://</code>-HTML.
+            </div>
+            <div id="midiControls" class="hidden">
+              <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+                <div>
+                  <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">MIDI-Ausgang (zum Gerät)</label>
+                  <select id="midiOut" style="min-width:200px"></select>
+                </div>
+                <div>
+                  <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">MIDI-Eingang (vom Gerät)</label>
+                  <select id="midiIn" style="min-width:200px"></select>
+                </div>
+                <button id="midiSearch" class="ghost">🔎 Gerät suchen</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+                <button id="midiSendCurrent" class="primary" title="In den Edit-Buffer — spielt sofort, überschreibt keinen Speicherplatz">▶ Pattern → Gerät (Live)</button>
+                <button id="midiSendSlot" class="ghost">Pattern → Slot…</button>
+                <input id="midiSlot" type="number" min="1" max="250" value="1" style="width:64px" title="Slot 1–250" />
+                <button id="midiGet" class="ghost">Pattern ← Gerät holen</button>
+                <span style="flex:1"></span>
+                <span id="midiStatus" class="sub" style="margin:0">nicht verbunden</span>
+              </div>
+              <p class="sub" style="margin-top:6px">
+                „Live" schreibt in den Edit-Buffer (sofort hörbar, nichts wird überschrieben).
+                „Slot" schreibt dauerhaft auf einen Speicherplatz. Beim Sampler müssen die
+                referenzierten Samples (Nummern) bereits im Gerät sein.
+              </p>
+            </div>
+            <button id="midiEnable" class="primary">MIDI aktivieren</button>
+          </div>
+        </details>
+
         <div class="edCols">
           <div class="edSide card">
             <h2>Patterns</h2>
