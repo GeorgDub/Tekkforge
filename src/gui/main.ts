@@ -4,8 +4,9 @@
  */
 
 import { $ } from "./shared";
-import { initEditor } from "./editor";
+import { initEditor, loadProject } from "./editor";
 import { initConverter } from "./converter";
+import type { EditorProject } from "../core/editorModel";
 
 function switchTab(tab: "editor" | "converter"): void {
   $("viewEditor").classList.toggle("hidden", tab !== "editor");
@@ -18,4 +19,12 @@ $("tabEditor").addEventListener("click", () => switchTab("editor"));
 $("tabConverter").addEventListener("click", () => switchTab("converter"));
 
 initEditor();
-initConverter();
+// Converter-Handoff: konvertiertes ESX-Ergebnis in den Editor laden + Tab wechseln.
+initConverter((project: EditorProject) => {
+  if (loadProject(project)) {
+    switchTab("editor");
+    alert(
+      `In den Editor geladen: ${project.patterns.length} Pattern(s), ${project.samples.length} Sample(s).`,
+    );
+  }
+});

@@ -13,12 +13,15 @@ import {
   buildBankFiles,
   serializeProject,
   deserializeProject,
+  editorProjectFromE2Files,
+  importSamplesFromAll,
   noteName,
   EDITOR_DEFAULT_NOTE,
   EDITOR_GATE_MAX,
   type EditorProject,
   type EditorPattern,
   type EditorStep,
+  type PoolSample,
 } from "../core/editorModel";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
@@ -36,6 +39,34 @@ function markDirty(): void {
 
 export function isDirty(): boolean {
   return dirty;
+}
+
+/**
+ * Ersetzt das aktuelle Projekt (z.B. Datei-Import oder ESX-Converter-Handoff).
+ * Fragt bei ungespeicherten Änderungen nach. Gibt false zurück, wenn abgebrochen.
+ */
+export function loadProject(next: EditorProject, opts: { confirmDirty?: boolean } = {}): boolean {
+  if (opts.confirmDirty !== false && dirty && !confirm("Ungespeicherte Änderungen verwerfen?"))
+    return false;
+  project = next;
+  cur = 0;
+  dirty = false;
+  lastNote.clear();
+  renderAll();
+  return true;
+}
+
+/** Merged Pool-Samples ein (Nummern-Kollisionen werden übersprungen). */
+function mergeSamples(incoming: PoolSample[]): number {
+  const known = new Set(project.samples.map((s) => s.number));
+  let added = 0;
+  for (const s of incoming) {
+    if (known.has(s.number)) continue;
+    project.samples.push(s);
+    known.add(s.number);
+    added++;
+  }
+  return added;
 }
 
 // ─── Pattern-Liste ───────────────────────────────────────────────────────────
@@ -349,6 +380,43 @@ async function openProject(file: File): Promise<void> {
   }
 }
 
+/**
+ * Import von Geräte-Dateien: eine Pattern-Datei (.e2spat/.e2sallpat, optional
+ * mit begleitender .all-Sample-Bank) ersetzt das Projekt; eine alleinige
+ * .all-Datei wird nur in den Sample-Pool gemerged.
+ */
+async function importE2Files(files: FileList | File[]): Promise<void> {
+  const arr = Array.from(files);
+  const patFile = arr.find((f) => /\.(e2spat|e2sallpat|e2pat|e2allpat)$/i.test(f.name));
+  const allFile = arr.find((f) => /\.all$/i.test(f.name));
+  try {
+    if (patFile) {
+      const patBytes = new Uint8Array(await patFile.arrayBuffer());
+      const allBytes = allFile ? new Uint8Array(await allFile.arrayBuffer()) : null;
+      const proj = editorProjectFromE2Files(patBytes, allBytes);
+      if (loadProject(proj)) {
+        alert(
+          `Importiert: ${proj.patterns.length} Pattern(s)` +
+            (allBytes ? ` + ${proj.samples.length} Sample(s)` : "") +
+            (allBytes
+              ? ""
+              : "\n\nHinweis: ohne .all-Sample-Bank kennen die Parts nur die Sample-Nummern (kein Audio). Eine passende .all mit-importieren oder Samples im Pool ergänzen."),
+        );
+      }
+    } else if (allFile) {
+      const pool = importSamplesFromAll(new Uint8Array(await allFile.arrayBuffer()));
+      const added = mergeSamples(pool);
+      markDirty();
+      renderAll();
+      alert(`${added} Sample(s) in den Pool importiert${added < pool.length ? ` (${pool.length - added} übersprungen — Nummer schon belegt)` : ""}.`);
+    } else {
+      alert("Bitte eine .e2spat-, .e2sallpat- oder .all-Datei wählen.");
+    }
+  } catch (err) {
+    alert(`Import fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 // ─── Preview ─────────────────────────────────────────────────────────────────
 
 function togglePreview(): void {
@@ -456,6 +524,12 @@ export function initEditor(): void {
     const f = projFile.files?.[0];
     projFile.value = "";
     if (f) void openProject(f);
+  });
+  const importFile = $<HTMLInputElement>("importFile");
+  $("importE2").addEventListener("click", () => importFile.click());
+  importFile.addEventListener("change", () => {
+    if (importFile.files?.length) void importE2Files(importFile.files);
+    importFile.value = "";
   });
   $("previewPlay").addEventListener("click", togglePreview);
 

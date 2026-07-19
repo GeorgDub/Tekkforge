@@ -1,6 +1,7 @@
 /**
- * converter.ts — ESX-Converter-Tab (unverändert aus TekkForge 0.1):
- * ESX laden → Pattern-Auswahl → convertEsxToE2sBank → Downloads.
+ * converter.ts — ESX-Converter-Tab:
+ * ESX laden → Pattern-Auswahl → convertEsxToE2sBank → Downloads
+ * ODER Ergebnis (Patterns + Samples) in den Pattern-Editor übergeben.
  */
 
 import { parseEsxBank, type EsxBank, type EsxPattern } from "../core/esxParser";
@@ -9,11 +10,17 @@ import {
   E2S_USER_SAMPLE_BASE,
   E2S_SAMPLE_SECONDS_CAP,
 } from "../core/esxToE2sBank";
+import { editorProjectFromE2Files, type EditorProject } from "../core/editorModel";
+import type { EsxToE2sResult } from "../core/esxToE2sBank";
 import { $, download, escapeHtml } from "./shared";
 
 let bank: EsxBank | null = null;
 let stem = "esx";
 const selected = new Set<number>();
+/** Letztes Konvertierungs-Ergebnis (für „Im Editor öffnen"). */
+let lastResult: EsxToE2sResult | null = null;
+/** Callback, den main.ts setzt: Projekt an den Editor übergeben + Tab wechseln. */
+let sendToEditor: ((project: EditorProject) => void) | null = null;
 
 function isRelevant(p: EsxPattern): boolean {
   return (
@@ -101,6 +108,7 @@ function convert(): void {
       const base = Number($<HTMLInputElement>("base").value) || E2S_USER_SAMPLE_BASE;
       const cap = Number($<HTMLInputElement>("cap").value) || E2S_SAMPLE_SECONDS_CAP;
       const res = convertEsxToE2sBank(filtered, { userSampleBase: base, secondsCap: cap });
+      lastResult = res;
       const s = res.stats;
       $("resultStats").innerHTML =
         stat("Patterns", s.patterns) +
@@ -145,7 +153,8 @@ function convert(): void {
   }, 30);
 }
 
-export function initConverter(): void {
+export function initConverter(onSendToEditor?: (project: EditorProject) => void): void {
+  sendToEditor = onSendToEditor ?? null;
   const dropEl = $("drop");
   const fileEl = $<HTMLInputElement>("file");
   dropEl.addEventListener("click", () => fileEl.click());
@@ -175,4 +184,18 @@ export function initConverter(): void {
     renderLoaded();
   });
   $("convert").addEventListener("click", convert);
+
+  $("toEditor").addEventListener("click", () => {
+    if (!lastResult) return;
+    if (!sendToEditor) {
+      alert("Editor nicht verfügbar.");
+      return;
+    }
+    try {
+      const project = editorProjectFromE2Files(lastResult.allpat, lastResult.all);
+      sendToEditor(project);
+    } catch (err) {
+      alert(`Übergabe an Editor fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
 }

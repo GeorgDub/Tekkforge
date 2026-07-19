@@ -185,6 +185,10 @@
           <button id="projOpen" class="ghost">Projekt öffnen…</button>
           <button id="projSave" class="ghost">Projekt speichern</button>
           <input id="projFile" type="file" accept=".tekkforge,.json" class="hidden" />
+          <button id="importE2" class="ghost" title="Geräte-Pattern-Bank oder Einzel-Pattern (optional mit .all-Sample-Bank) laden">
+            ⇪ .e2spat / .e2sallpat importieren
+          </button>
+          <input id="importFile" type="file" accept=".e2spat,.e2sallpat,.e2pat,.e2allpat,.all" multiple class="hidden" />
           <span style="flex:1"></span>
           <button id="previewPlay" class="ghost">▶ Vorhören</button>
           <button id="expPat" class="link">⬇ Pattern → .e2spat</button>
@@ -286,6 +290,12 @@
           <h2>Ergebnis</h2>
           <div class="stats" id="resultStats"></div>
           <p id="resultWarn" class="warn hidden"></p>
+          <div style="margin:8px 0">
+            <button id="toEditor" class="primary">✎ Im Editor öffnen zum Bearbeiten</button>
+            <span class="sub" style="margin-left:8px">
+              lädt Patterns + Samples in den Pattern-Editor
+            </span>
+          </div>
           <div id="downloads"></div>
           <p class="sub" style="margin-top:10px">
             Import am Gerät: beide Dateien auf die SD-Karte — erst die

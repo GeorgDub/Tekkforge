@@ -12,8 +12,10 @@
 import type { E2PatternInput } from "./electribePatternBuilder";
 import { buildE2AllPatFile, buildE2PatternFileV2 } from "./e2sExport";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
-import { convertToE2sSpec } from "./audioProcessor";
+import { convertToE2sSpec, downmixToMono } from "./audioProcessor";
 import { parseWav, encodeWav16, bytesToBase64, base64ToBytes } from "./wavCodec";
+import { parseElectribeBank, type ParsedPattern } from "./electribeImport";
+import { parseE2sBank, type E2sBank } from "./e2sBankReader";
 
 export const EDITOR_PARTS = 16;
 export const EDITOR_MAX_STEPS = 64;
@@ -206,6 +208,135 @@ export function patternToE2Input(p: EditorPattern): E2PatternInput {
 /** Einzel-Pattern als .e2spat (16640 Bytes). */
 export function buildPatternFile(p: EditorPattern): Uint8Array {
   return new Uint8Array(buildE2PatternFileV2(patternToE2Input(p)));
+}
+
+// ─── Import (.e2spat / .e2sallpat → Editor) ──────────────────────────────────
+
+const STEP_LENGTHS = [16, 32, 64] as const;
+
+function coerceStepLength(n: number): 16 | 32 | 64 {
+  return STEP_LENGTHS.includes(n as 16 | 32 | 64) ? (n as 16 | 32 | 64) : 16;
+}
+
+/** True, wenn das Pattern mindestens einen aktiven Step hat. */
+export function patternHasContent(p: EditorPattern): boolean {
+  return p.parts.some((part) => part.steps.some((s) => s.on));
+}
+
+/**
+ * Mappt ein geparstes Electribe-Pattern (aus einer .e2spat/.e2sallpat-Datei)
+ * zurück ins Editor-Modell. Part-Labels kommen aus dem festen Layout (die
+ * Datei speichert keine Part-Namen). sampleId 0 → kein Sample.
+ */
+export function editorPatternFromParsed(p: ParsedPattern): EditorPattern {
+  const stepLength = coerceStepLength(p.stepLength);
+  const parts: EditorPart[] = Array.from({ length: EDITOR_PARTS }, (_, pi) => {
+    const src = p.parts[pi];
+    const part = createPart(PART_LAYOUT_LABELS[pi] ?? `Part ${pi + 1}`);
+    if (!src) return part;
+    part.sampleNumber = src.sampleId > 0 ? src.sampleId : null;
+    part.volume = clamp127(src.volume, 127);
+    part.pan = clamp127(src.pan, 64);
+    for (let si = 0; si < EDITOR_MAX_STEPS; si++) {
+      const st = src.steps[si];
+      if (!st) continue;
+      part.steps[si] = {
+        on: !!st.active,
+        velocity: clampRange(st.velocity, 1, 127, EDITOR_DEFAULT_VELOCITY),
+        note: clampRange(st.note ?? EDITOR_DEFAULT_NOTE, 0, 127, EDITOR_DEFAULT_NOTE),
+        // 0xFF-Tie-Sentinel oder 96 → Tie (Editor kennt nur 1..96).
+        gate:
+          st.gate === undefined || st.gate >= EDITOR_GATE_MAX
+            ? EDITOR_GATE_MAX
+            : clampRange(st.gate, 1, EDITOR_GATE_MAX, EDITOR_DEFAULT_GATE),
+      };
+    }
+    return part;
+  });
+  return {
+    name: (p.name || "PATTERN").slice(0, 16),
+    bpm: clampRange(p.bpm, 20, 300, 120),
+    stepLength,
+    parts,
+  };
+}
+
+function clamp127(v: number, def: number): number {
+  return clampRange(v, 0, 127, def);
+}
+function clampRange(v: number, lo: number, hi: number, def: number): number {
+  if (!Number.isFinite(v)) return def;
+  return Math.min(hi, Math.max(lo, Math.round(v)));
+}
+
+export interface ImportE2Result {
+  patterns: EditorPattern[];
+  /** Anzahl im File gefundener Patterns (vor dem Leer-Filter). */
+  totalInFile: number;
+  /** True, wenn nur belegte Patterns übernommen wurden. */
+  filteredEmpty: boolean;
+}
+
+/**
+ * Parst eine `.e2spat`- oder `.e2sallpat`-Datei und liefert Editor-Patterns.
+ * `onlyNonEmpty` (default true) überspringt leere Init-Slots — nützlich, damit
+ * aus einer 250-Slot-Bank nicht 218 leere Grids importiert werden. Bleibt so
+ * nichts übrig, wird das erste Pattern trotzdem behalten.
+ */
+export function importE2Patterns(bytes: Uint8Array, onlyNonEmpty = true): ImportE2Result {
+  const bank = parseElectribeBank(bytes);
+  const all = bank.patterns.map(editorPatternFromParsed);
+  if (!onlyNonEmpty) return { patterns: all, totalInFile: all.length, filteredEmpty: false };
+  const nonEmpty = all.filter(patternHasContent);
+  const patterns = nonEmpty.length > 0 ? nonEmpty : all.slice(0, 1);
+  return {
+    patterns,
+    totalInFile: all.length,
+    filteredEmpty: patterns.length < all.length,
+  };
+}
+
+// ─── Import (.all → Sample-Pool) ─────────────────────────────────────────────
+
+/**
+ * Wandelt eine geparste `.all`-Sample-Bank in Pool-Samples (mono). Stereo-Slots
+ * werden gemischt. Die vom Gerät angezeigte Nummer (sampleNumber, z.B. 501+)
+ * bleibt erhalten — so linken die importierten Pattern-Parts direkt.
+ */
+export function poolSamplesFromE2sBank(bank: E2sBank): PoolSample[] {
+  const out: PoolSample[] = [];
+  for (const slot of bank.slots) {
+    if (!slot) continue;
+    let pcm = slot.pcmData;
+    if (slot.channels === 2) pcm = downmixToMono(pcm).pcm;
+    out.push({
+      number: slot.sampleNumber,
+      name: (slot.name || `Sample ${slot.sampleNumber}`).slice(0, 16),
+      sampleRate: slot.sampleRate,
+      pcm,
+    });
+  }
+  return out;
+}
+
+/** Convenience: `.all`-Bytes → Pool-Samples. */
+export function importSamplesFromAll(bytes: Uint8Array): PoolSample[] {
+  return poolSamplesFromE2sBank(parseE2sBank(bytes, "import.all"));
+}
+
+/**
+ * Baut ein Editor-Projekt aus einer Pattern-Bank (.e2sallpat/.e2spat) plus
+ * optionaler Sample-Bank (.all). Genau der Weg für „ESX-Converter-Ergebnis im
+ * Editor öffnen" (allpat + all aus convertEsxToE2sBank) und für den
+ * Datei-Import mit begleitender .all.
+ */
+export function editorProjectFromE2Files(
+  allpatBytes: Uint8Array,
+  allBytes?: Uint8Array | null,
+): EditorProject {
+  const { patterns } = importE2Patterns(allpatBytes, true);
+  const samples = allBytes ? importSamplesFromAll(allBytes) : [];
+  return { version: 1, patterns: patterns.length ? patterns : [createPattern("PATTERN 1")], samples };
 }
 
 export interface BankBuildResult {
