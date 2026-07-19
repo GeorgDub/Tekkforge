@@ -22,6 +22,7 @@ import {
   ELECTRIBE_ALLPAT_PATTERN_STRIDE,
   type ParsedPattern,
 } from "./electribeImport";
+import { readPartParamsFromBody } from "./partParams";
 import { parseE2sBank, type E2sBank } from "./e2sBankReader";
 
 export const EDITOR_PARTS = 16;
@@ -77,6 +78,12 @@ export interface EditorPart {
   pan: number;
   /** Immer EDITOR_MAX_STEPS Einträge; stepLength bestimmt den genutzten Teil. */
   steps: EditorStep[];
+  /**
+   * EXPERIMENTELL: Klangparameter (Filter/Amp/IFX/Mod…) key→Wert. Befüllt beim
+   * Import aus dem rawBody; beim Export an die (unbestätigten) Part-Offsets
+   * geschrieben. Siehe partParams.ts. undefined = nicht gesetzt/unbekannt.
+   */
+  params?: Record<string, number>;
 }
 
 export interface EditorPattern {
@@ -224,6 +231,7 @@ export function patternToE2Input(p: EditorPattern): E2PatternInput {
       volume: part.volume,
       pan: part.pan,
       sampleId: part.sampleNumber ?? undefined,
+      params: part.params,
       steps: part.steps.slice(0, p.stepLength).map((s) => ({
         active: s.on,
         velocity: s.velocity,
@@ -339,7 +347,10 @@ export function importE2Patterns(bytes: Uint8Array, onlyNonEmpty = true): Import
   const raw = extractRawBodies(bytes, bank.patterns.length);
   const all = bank.patterns.map((p, i) => {
     const ed = editorPatternFromParsed(p);
-    if (raw[i]) ed.rawBody = raw[i];
+    if (raw[i]) {
+      ed.rawBody = raw[i];
+      applyPartParamsFromBody(ed);
+    }
     return ed;
   });
   if (!onlyNonEmpty) return { patterns: all, totalInFile: all.length, filteredEmpty: false };
@@ -412,8 +423,19 @@ export function editorPatternFromBody(body: Uint8Array): EditorPattern {
   const bank = parseElectribeBank(file);
   const pattern = editorPatternFromParsed(bank.patterns[0]);
   // Roh-Body bewahren → Re-Export/Slot-Write behält Filter/Amp/IFX/Motion.
-  if (body.length === E2_BODY_SIZE) pattern.rawBody = Uint8Array.from(body);
+  if (body.length === E2_BODY_SIZE) {
+    pattern.rawBody = Uint8Array.from(body);
+    applyPartParamsFromBody(pattern);
+  }
   return pattern;
+}
+
+/** Befüllt part.params aus pattern.rawBody (experimentelle Offsets). */
+export function applyPartParamsFromBody(pattern: EditorPattern): void {
+  if (!pattern.rawBody) return;
+  pattern.parts.forEach((part, pi) => {
+    part.params = readPartParamsFromBody(pattern.rawBody!, pi);
+  });
 }
 
 export interface BankBuildResult {
@@ -558,6 +580,7 @@ export function deserializeProject(text: string): EditorProject {
       dst.sampleNumber = typeof src.sampleNumber === "number" ? src.sampleNumber : null;
       dst.volume = Number.isFinite(src.volume) ? Math.min(127, Math.max(0, src.volume)) : 127;
       dst.pan = Number.isFinite(src.pan) ? Math.min(127, Math.max(0, src.pan)) : 64;
+      if (src.params && typeof src.params === "object") dst.params = { ...src.params };
       for (let si = 0; si < EDITOR_MAX_STEPS; si++) {
         const st = src.steps?.[si];
         if (!st) continue;

@@ -61,6 +61,7 @@
 
 import { E2S_INIT_BODY_B64, E2S_GLST_BLOCK_B64 } from "./e2sExportAssets";
 import type { E2PatternInput } from "./electribePatternBuilder";
+import { writePartParamsToBody } from "./partParams";
 
 // ─── Layout constants (verified against real KORG files) ─────────────────────
 
@@ -222,6 +223,8 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
     if (typeof part.sampleId === "number" && Number.isFinite(part.sampleId)) {
       view.setUint16(partStart + PART_SAMPLE_OFF, clampInt(part.sampleId, 0, 0xffff, 0), true);
     }
+    // EXPERIMENTELL: Klangparameter (Filter/Amp/IFX…) an ihre Part-Offsets.
+    if (part.params) writePartParamsToBody(body, p, part.params);
 
     const steps = Array.isArray(part.steps) ? part.steps : [];
     for (let s = 0; s < STEPS_PER_PART; s++) {

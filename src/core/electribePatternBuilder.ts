@@ -114,6 +114,8 @@ export interface E2PartInput {
   fxSend?: number;
   /** Trigger steps. Will be padded to 64 entries with `{active: false}`. */
   steps: E2StepInput[];
+  /** EXPERIMENTELL: Klangparameter (Filter/Amp/IFX…) → Part-Header-Bytes. */
+  params?: Record<string, number>;
 }
 
 export interface E2MotionSlot {

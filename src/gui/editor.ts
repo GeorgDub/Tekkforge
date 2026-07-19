@@ -39,6 +39,7 @@ import {
   type E2SysexOptions,
 } from "../core/e2sysex";
 import { MidiIO, requestSysex } from "./midi";
+import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
 
@@ -208,7 +209,17 @@ function renderGrid(): void {
       markDirty();
     });
 
-    headEl.append(label, sampleSel, vol, pan);
+    const fxBtn = document.createElement("button");
+    fxBtn.className = "ghost";
+    fxBtn.textContent = "⚙";
+    fxBtn.title = "Klangparameter (experimentell): Filter/Amp/IFX/Mod…";
+    fxBtn.style.cssText = "padding:2px 6px;font-size:11px";
+    fxBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPartParams(fxBtn, pi);
+    });
+
+    headEl.append(label, sampleSel, vol, pan, fxBtn);
     row.appendChild(headEl);
 
     const stepsEl = document.createElement("div");
@@ -306,6 +317,63 @@ function openStepPopover(anchor: HTMLElement, pi: number, si: number): void {
 document.addEventListener("click", (e) => {
   if (popEl && !popEl.contains(e.target as Node)) closePopover();
 });
+
+// ─── Part-Klangparameter (EXPERIMENTELL) ─────────────────────────────────────
+
+function openPartParams(anchor: HTMLElement, pi: number): void {
+  closePopover();
+  const part = project.patterns[cur].parts[pi];
+  const params = part.params ?? (part.params = {});
+
+  const pop = document.createElement("div");
+  pop.className = "popover";
+  pop.style.width = "300px";
+
+  // Nach Gruppen sortiert rendern
+  const groups = [...new Set(PART_PARAMS.map((p) => p.group))];
+  const rows = groups
+    .map((g) => {
+      const items = PART_PARAMS.filter((p) => p.group === g)
+        .map((p: PartParam) => {
+          const val = params[p.key] ?? 0;
+          const ctrl =
+            p.kind === "bool"
+              ? `<input type="checkbox" data-key="${p.key}" ${val ? "checked" : ""}>`
+              : `<input type="number" data-key="${p.key}" min="${p.min}" max="${p.max}" value="${val}" style="width:56px">`;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin:2px 0">
+            <span style="color:var(--muted);font-size:11px">${p.label}</span>${ctrl}</div>`;
+        })
+        .join("");
+      return `<div style="margin-top:6px"><b style="color:var(--accent2);font-size:11px">${g}</b>${items}</div>`;
+    })
+    .join("");
+
+  pop.innerHTML = `
+    <b>Part ${pi + 1} „${escapeHtml(part.label)}" — Klangparameter</b>
+    <div class="warn" style="font-size:10px;margin:4px 0">
+      ⚠ EXPERIMENTELL — Byte-Offsets unbestätigt, am Gerät prüfen. Nicht editierte
+      Werte bleiben erhalten.
+    </div>
+    <div style="max-height:340px;overflow-y:auto">${rows}</div>
+    <div class="row"><button id="ppClose" class="ghost" style="flex:1">Schließen</button></div>`;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = `${Math.min(window.innerWidth - 320, r.left + window.scrollX)}px`;
+  pop.style.top = `${r.bottom + window.scrollY + 4}px`;
+  popEl = pop;
+
+  pop.querySelectorAll<HTMLInputElement>("input[data-key]").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const key = inp.dataset.key!;
+      const raw = inp.type === "checkbox" ? (inp.checked ? 1 : 0) : Number(inp.value);
+      const v = clampParamValue(key, raw);
+      params[key] = v;
+      if (inp.type !== "checkbox") inp.value = String(v);
+      markDirty();
+    });
+  });
+  pop.querySelector<HTMLButtonElement>("#ppClose")!.addEventListener("click", closePopover);
+}
 
 // ─── Sample-Pool ─────────────────────────────────────────────────────────────
 
