@@ -139,6 +139,12 @@ export interface E2PatternInput {
   parts: E2PartInput[];
   /** Up to 8 motion slots. Missing slots are zero-filled (disabled). */
   motionSlots?: E2MotionSlot[];
+  /**
+   * Optionaler 0x4000-Basis-Body: statt des Init-Templates wird dieser als
+   * Ausgangspunkt genommen und nur gesetzte Felder überlagert. Bewahrt
+   * Filter/Amp/IFX/Motion importierter Patterns. Muss 0x4000 lang sein.
+   */
+  baseBody?: Uint8Array;
 }
 
 // ─── Step-length code mapping (inverse of ELECTRIBE_REAL_STEP_LENGTH_CODES) ──

@@ -110,6 +110,13 @@ function renderGlobals(): void {
   $<HTMLInputElement>("gName").value = p.name;
   $<HTMLInputElement>("gBpm").value = String(p.bpm);
   $<HTMLSelectElement>("gLen").value = String(p.stepLength);
+  const badge = $("rawBadge");
+  if (p.rawBody) {
+    badge.textContent = "⚙ Original-Klang erhalten (Filter/Amp/IFX/Motion)";
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
 }
 
 // ─── Grid ────────────────────────────────────────────────────────────────────

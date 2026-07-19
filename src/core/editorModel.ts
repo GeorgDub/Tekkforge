@@ -14,7 +14,14 @@ import { buildE2AllPatFile, buildE2PatternFileV2 } from "./e2sExport";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { convertToE2sSpec, downmixToMono } from "./audioProcessor";
 import { parseWav, encodeWav16, bytesToBase64, base64ToBytes } from "./wavCodec";
-import { parseElectribeBank, type ParsedPattern } from "./electribeImport";
+import {
+  parseElectribeBank,
+  isElectribeAllPatBank,
+  isRealElectribeFile,
+  ELECTRIBE_ALLPAT_FIRST_PATTERN_OFFSET,
+  ELECTRIBE_ALLPAT_PATTERN_STRIDE,
+  type ParsedPattern,
+} from "./electribeImport";
 import { parseE2sBank, type E2sBank } from "./e2sBankReader";
 
 export const EDITOR_PARTS = 16;
@@ -77,6 +84,14 @@ export interface EditorPattern {
   bpm: number;
   stepLength: 16 | 32 | 64;
   parts: EditorPart[];
+  /**
+   * Roher 0x4000-Original-Body aus Import/Gerät. Beim Export wird er als Basis
+   * genommen (statt Init-Template) und nur die editierten Felder (Name/BPM/
+   * Länge, pro Part Volume/Pan/Sample/Steps) überlagert — so bleiben
+   * Filter/Amp-EG/IFX/Mod/Motion/Groove byte-genau erhalten. undefined bei
+   * von Grund auf neu gebauten Patterns.
+   */
+  rawBody?: Uint8Array;
 }
 
 export interface PoolSample {
@@ -130,7 +145,10 @@ export function createProject(): EditorProject {
 }
 
 export function clonePattern(p: EditorPattern): EditorPattern {
-  return JSON.parse(JSON.stringify(p)) as EditorPattern;
+  const { rawBody, ...rest } = p;
+  const copy = JSON.parse(JSON.stringify(rest)) as EditorPattern;
+  if (rawBody) copy.rawBody = Uint8Array.from(rawBody);
+  return copy;
 }
 
 // ─── Sample-Pool ─────────────────────────────────────────────────────────────
@@ -201,6 +219,7 @@ export function patternToE2Input(p: EditorPattern): E2PatternInput {
     name: p.name,
     bpm: p.bpm,
     stepLength: p.stepLength,
+    baseBody: p.rawBody,
     parts: p.parts.map((part) => ({
       volume: part.volume,
       pan: part.pan,
@@ -293,9 +312,36 @@ export interface ImportE2Result {
  * aus einer 250-Slot-Bank nicht 218 leere Grids importiert werden. Bleibt so
  * nichts übrig, wird das erste Pattern trotzdem behalten.
  */
+const E2_BODY_SIZE = 0x4000;
+
+/**
+ * Extrahiert die rohen 0x4000-Pattern-Bodies aus der Quelldatei (für
+ * fidelity-erhaltendes Re-Export). Index-aligned zu parseElectribeBank().
+ * Bei unbekanntem Layout leeres Array (dann kein rawBody).
+ */
+function extractRawBodies(bytes: Uint8Array, count: number): (Uint8Array | undefined)[] {
+  const out: (Uint8Array | undefined)[] = [];
+  if (isElectribeAllPatBank(bytes)) {
+    for (let i = 0; i < count; i++) {
+      const off = ELECTRIBE_ALLPAT_FIRST_PATTERN_OFFSET + i * ELECTRIBE_ALLPAT_PATTERN_STRIDE;
+      out.push(
+        off + E2_BODY_SIZE <= bytes.length ? bytes.slice(off, off + E2_BODY_SIZE) : undefined,
+      );
+    }
+  } else if (isRealElectribeFile(bytes)) {
+    out.push(0x100 + E2_BODY_SIZE <= bytes.length ? bytes.slice(0x100, 0x100 + E2_BODY_SIZE) : undefined);
+  }
+  return out;
+}
+
 export function importE2Patterns(bytes: Uint8Array, onlyNonEmpty = true): ImportE2Result {
   const bank = parseElectribeBank(bytes);
-  const all = bank.patterns.map(editorPatternFromParsed);
+  const raw = extractRawBodies(bytes, bank.patterns.length);
+  const all = bank.patterns.map((p, i) => {
+    const ed = editorPatternFromParsed(p);
+    if (raw[i]) ed.rawBody = raw[i];
+    return ed;
+  });
   if (!onlyNonEmpty) return { patterns: all, totalInFile: all.length, filteredEmpty: false };
   const nonEmpty = all.filter(patternHasContent);
   const patterns = nonEmpty.length > 0 ? nonEmpty : all.slice(0, 1);
@@ -364,7 +410,10 @@ export function editorPatternFromBody(body: Uint8Array): EditorPattern {
   for (let i = 0; i < id.length; i++) file[0x10 + i] = id.charCodeAt(i);
   file.set(body, 0x100);
   const bank = parseElectribeBank(file);
-  return editorPatternFromParsed(bank.patterns[0]);
+  const pattern = editorPatternFromParsed(bank.patterns[0]);
+  // Roh-Body bewahren → Re-Export/Slot-Write behält Filter/Amp/IFX/Motion.
+  if (body.length === E2_BODY_SIZE) pattern.rawBody = Uint8Array.from(body);
+  return pattern;
 }
 
 export interface BankBuildResult {
@@ -456,10 +505,13 @@ interface SerializedSample {
   wavB64: string;
 }
 
+/** Pattern in Serialisierung: rawBody als Base64 (statt kaputt als Uint8Array-Objekt). */
+type SerializedPattern = Omit<EditorPattern, "rawBody"> & { rawBodyB64?: string };
+
 interface SerializedProject {
   app: "tekkforge";
   version: 1;
-  patterns: EditorPattern[];
+  patterns: SerializedPattern[];
   samples: SerializedSample[];
 }
 
@@ -467,7 +519,10 @@ export function serializeProject(project: EditorProject): string {
   const doc: SerializedProject = {
     app: "tekkforge",
     version: 1,
-    patterns: project.patterns,
+    patterns: project.patterns.map((p) => {
+      const { rawBody, ...rest } = p;
+      return rawBody ? { ...rest, rawBodyB64: bytesToBase64(rawBody) } : { ...rest };
+    }),
     samples: project.samples.map((s) => ({
       number: s.number,
       name: s.name,
@@ -513,6 +568,11 @@ export function deserializeProject(text: string): EditorProject {
           gate: Number.isFinite(st.gate) ? Math.min(EDITOR_GATE_MAX, Math.max(1, st.gate)) : EDITOR_DEFAULT_GATE,
         };
       }
+    }
+    // Roh-Body wiederherstellen (Fidelity: Filter/Amp/IFX/Motion beim Re-Export).
+    if (p.rawBodyB64) {
+      const rb = base64ToBytes(p.rawBodyB64);
+      if (rb.length === E2_BODY_SIZE) base.rawBody = rb;
     }
     return base;
   });

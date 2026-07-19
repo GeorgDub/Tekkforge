@@ -179,7 +179,13 @@ function writeFileHeader(bytes: Uint8Array): void {
  * copy of the real init-pattern template. Returns a new `Uint8Array`.
  */
 export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
-  const body = b64ToBytes(E2S_INIT_BODY_B64).slice(); // fresh 16384-byte copy
+  // Basis: importierter/Geräte-Body (bewahrt Filter/Amp/IFX/Motion) oder das
+  // Init-Template bei Neu-Patterns. Beide sind 0x4000 Bytes.
+  const base =
+    input.baseBody && input.baseBody.length === E2S_BODY_SIZE
+      ? input.baseBody
+      : b64ToBytes(E2S_INIT_BODY_B64);
+  const body = Uint8Array.from(base); // frische 16384-Byte-Kopie
   const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
 
   // Name @ +0x10
