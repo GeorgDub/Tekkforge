@@ -35,16 +35,15 @@
     "directories": {
       "output": "release"
     },
+    "npmRebuild": false,
     "files": [
       "dist/**",
       "electron/**",
-      "package.json",
-      "node_modules/@julusian/**",
-      "node_modules/pkg-prebuilds/**"
+      "package.json"
     ],
     "asarUnpack": [
       "**/*.node",
-      "node_modules/@julusian/**"
+      "**/@julusian/**"
     ],
     "win": {
       "target": [
