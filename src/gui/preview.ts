@@ -74,6 +74,7 @@ export class PreviewPlayer {
     const p = this.pattern;
     if (!ctx || !p) return;
     for (const part of p.parts) {
+      if (part.muted) continue; // Preview-Mute: Part isolieren
       const st = part.steps[step];
       if (!st?.on || part.sampleNumber === null) continue;
       const buf = this.buffers.get(part.sampleNumber);

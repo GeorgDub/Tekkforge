@@ -84,6 +84,11 @@ export interface EditorPart {
    * geschrieben. Siehe partParams.ts. undefined = nicht gesetzt/unbekannt.
    */
   params?: Record<string, number>;
+  /**
+   * Preview-Mute: wird NUR beim Vorhören berücksichtigt (Part spielt nicht),
+   * nicht ins Geräte-Pattern geschrieben. Zum Isolieren einzelner Parts.
+   */
+  muted?: boolean;
 }
 
 export interface EditorPattern {
@@ -581,6 +586,7 @@ export function deserializeProject(text: string): EditorProject {
       dst.volume = Number.isFinite(src.volume) ? Math.min(127, Math.max(0, src.volume)) : 127;
       dst.pan = Number.isFinite(src.pan) ? Math.min(127, Math.max(0, src.pan)) : 64;
       if (src.params && typeof src.params === "object") dst.params = { ...src.params };
+      if (src.muted) dst.muted = true;
       for (let si = 0; si < EDITOR_MAX_STEPS; si++) {
         const st = src.steps?.[si];
         if (!st) continue;

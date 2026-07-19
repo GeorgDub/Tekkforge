@@ -158,9 +158,23 @@ function renderGrid(): void {
   p.parts.forEach((part, pi) => {
     const row = document.createElement("div");
     row.className = "gridRow";
+    if (part.muted) row.style.opacity = "0.4";
 
     const headEl = document.createElement("div");
     headEl.className = "rowHead";
+
+    const muteBtn = document.createElement("button");
+    muteBtn.className = "ghost";
+    muteBtn.textContent = part.muted ? "🔇" : "🔈";
+    muteBtn.title = part.muted ? "Stumm (Vorhören) — klick zum Aufheben" : "Part stummschalten (nur Vorhören)";
+    muteBtn.style.cssText =
+      "padding:2px 5px;font-size:11px;flex:none" + (part.muted ? ";border-color:var(--accent)" : "");
+    muteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      part.muted = !part.muted;
+      markDirty();
+      renderGrid();
+    });
 
     const label = document.createElement("input");
     label.className = "plabel";
@@ -219,7 +233,7 @@ function renderGrid(): void {
       openPartParams(fxBtn, pi);
     });
 
-    headEl.append(label, sampleSel, vol, pan, fxBtn);
+    headEl.append(muteBtn, label, sampleSel, vol, pan, fxBtn);
     row.appendChild(headEl);
 
     const stepsEl = document.createElement("div");
