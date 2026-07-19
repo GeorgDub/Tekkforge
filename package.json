@@ -1,10 +1,12 @@
 {
   "name": "tekkforge",
-  "version": "0.1.0",
-  "description": "TekkForge — KORG ESX-1 → Electribe 2 Sampler Converter (.esx → .e2sallpat + .all)",
+  "version": "0.2.0",
+  "description": "TekkForge — Electribe 2 Pattern-Editor & KORG ESX-1 Converter (Desktop)",
+  "author": "Georg <dubrowskijgeorg@gmail.com>",
   "license": "UNLICENSED",
   "private": true,
   "type": "module",
+  "main": "electron/main.cjs",
   "bin": {
     "tekkforge": "dist/cli.mjs"
   },
@@ -16,13 +18,32 @@
     "build:cli": "node scripts/build-cli.mjs",
     "build:gui": "vite build",
     "dev": "vite",
+    "desktop": "pnpm build:gui && electron .",
+    "dist:win": "pnpm build && electron-builder --win",
     "convert": "node dist/cli.mjs convert"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": ["esbuild", "electron"]
+  },
+  "build": {
+    "appId": "de.georg.tekkforge",
+    "productName": "TekkForge",
+    "directories": {
+      "output": "release"
+    },
+    "files": ["dist/**", "electron/**", "package.json"],
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": true,
+      "deleteAppDataOnUninstall": false
+    }
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "electron": "^40.10.1",
+    "electron-builder": "^26.8.1",
     "esbuild": "^0.25.0",
     "typescript": "^5.8.3",
     "vite": "^7.0.0",

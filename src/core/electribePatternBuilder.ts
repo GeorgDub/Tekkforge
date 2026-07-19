@@ -68,6 +68,7 @@ import {
   ELECTRIBE_REAL_STEP_RECORD_BYTES,
   ELECTRIBE_REAL_STEPS_PER_PART,
   ELECTRIBE_REAL_STEP_TRIGGER_OFFSET,
+  ELECTRIBE_REAL_STEP_GATE_OFFSET,
   ELECTRIBE_REAL_STEP_VELOCITY_OFFSET,
   ELECTRIBE_REAL_STEP_NOTE_OFFSET,
   ELECTRIBE_REAL_VELOCITY_DEFAULT_SENTINEL,
@@ -92,8 +93,10 @@ export interface E2StepInput {
   velocity?: number;
   /** Accent / tied flag. Default false. */
   accent?: boolean;
-  /** MIDI note 0..127. Default 0x48 (C5). */
+  /** MIDI note 0..127. Default 0x3C (C4 = Originaltonhöhe). */
   note?: number;
+  /** Gate-Länge 0..96 (96 = Tie), 0xFF = Factory-Tie-Sentinel. Default 0x48. */
+  gate?: number;
 }
 
 export interface E2PartInput {
@@ -148,22 +151,21 @@ const STEP_LENGTH_CODE_MAP: Record<16 | 32 | 64, number> = {
 
 // ─── Defaults (match observed read-side defaults / bank-histogram defaults) ──
 
-/** v3.34: Default velocity written when caller doesn't set one is now encoded
- *  as the 0xFF sentinel byte the KORG hardware uses ("use default 127"). The
- *  parser decodes 0xFF → 127, so the semantic round-trip is `undefined →
- *  byte 0xFF → parsed velocity 127`. This matches the byte layout observed in
- *  the real BodyTalk1 reference file across ~1000 active step records. */
-export const E2_DEFAULT_VELOCITY = ELECTRIBE_REAL_VELOCITY_DEFAULT_VALUE; // 127
-/** v3.34: Raw byte written for unset (or 127) velocity — KORG default sentinel. */
+/** TekkForge-Korrektur: Velocity ist Byte 2 (nicht Byte 1) und wird explizit
+ *  geschrieben. Default 0x60 = 96 — der mit Abstand häufigste Wert in den
+ *  Factory-Files (BodyTalk1: 299× 0x60 vs 14× 0x7F). Der frühere 0xFF-Sentinel
+ *  beruhte auf einer Fehlinterpretation des GATE-Bytes (0xFF = Tie). */
+export const E2_DEFAULT_VELOCITY = 0x60; // 96
+/** Deprecated — war der vermeintliche Velocity-Sentinel; 0xFF@b1 ist Gate-Tie. */
 export const E2_DEFAULT_VELOCITY_RAW_BYTE = ELECTRIBE_REAL_VELOCITY_DEFAULT_SENTINEL; // 0xFF
-/** Default MIDI note (C5) — matches the `0x48` constant observed across the
- *  Init181 reference file (1024 identical step-records). Used ONLY for ACTIVE
- *  steps; inactive steps now write 0x00 (smaller bit-drift vs real files). */
-export const E2_DEFAULT_NOTE = 0x48;
-/** v3.34: Inactive-step note byte. Real Init181 uses 0x00 (smaller drift vs
- *  the BodyTalk1 0x48 alternative). Parser ignores per-step note. */
+/** Default-Gate (Byte 1): 0x48 = 72, Init-181-Konvention (auch für inactive). */
+export const E2_DEFAULT_GATE = 0x48;
+/** Default MIDI note (Byte 4): 0x3C = C4 = 60 = Originaltonhöhe des Samples
+ *  (Briefing §4.1 + hardware-verifizierte Hardtekk-Patterns). */
+export const E2_DEFAULT_NOTE = 0x3c;
+/** Inactive-step note byte. Real Init181 uses 0x00. */
 export const E2_INACTIVE_STEP_NOTE = 0x00;
-/** Byte 2 of every step record is a constant 0x60 (note-attribute prefix). */
+/** Deprecated — Byte 2 ist die Velocity (Default 0x60), keine Konstante. */
 export const E2_STEP_BYTE2_CONSTANT = 0x60;
 
 /** Default part volume (Hardware-Standard, observed in 63.4% of bank samples). */
@@ -238,51 +240,37 @@ function writeAscii(view: DataView, offset: number, value: string, length: numbe
  *
  * v3.34 encoding (matches v3.12 read-side semantics + real-KORG byte layout):
  *   byte 0: trigger (0/1)
- *   byte 1: velocity raw byte:
- *             - 0xFF "default" sentinel when caller did NOT pass velocity
- *               OR explicitly passed velocity===127
- *             - 0..127 literal when caller passed a non-127 value
- *           (Parser maps 0xFF → 127, so both forms decode identically.)
- *   byte 2: constant 0x60
+ *   byte 1: gate 0..96 (96 = Tie), 0xFF = Factory-Tie-Sentinel; default 0x48
+ *   byte 2: velocity 0..127, default 0x60 (96)
  *   byte 3: accent flag (0/1)
  *   byte 4: note number:
- *             - ACTIVE steps:   clamp(note, 0..127), default 0x48 (C5)
- *             - INACTIVE steps: 0x00 (Real Init181 convention — parser
- *               doesn't expose per-step note so this is encoding-only)
+ *             - ACTIVE steps:   clamp(note, 0..127), default 0x3C (C4 = unity)
+ *             - INACTIVE steps: 0x00 (Real Init181 convention)
  *   bytes 5..11: zero
+ *   (Layout verifiziert gegen Factory-Files — siehe electribeImport.ts.)
  */
 export function writeStepRecord(view: DataView, offset: number, step: E2StepInput): void {
   const trigger = step.active ? 0x01 : 0x00;
   const accent = step.accent ? 0x01 : 0x00;
 
-  // v3.34 — velocity byte
-  let velocityByte: number;
-  const hasExplicitVelocity =
-    typeof step.velocity === "number" && Number.isFinite(step.velocity);
-  if (!hasExplicitVelocity) {
-    // Unset → KORG "use-default-127" sentinel.
-    velocityByte = E2_DEFAULT_VELOCITY_RAW_BYTE; // 0xFF
-  } else {
-    const v = clampInt(step.velocity, 0, 127, ELECTRIBE_REAL_VELOCITY_DEFAULT_VALUE);
-    // Explicit 127 → also 0xFF sentinel (matches KORG hardware encoding,
-    // round-trips to 127 through the parser).
-    velocityByte = v === ELECTRIBE_REAL_VELOCITY_DEFAULT_VALUE
-      ? E2_DEFAULT_VELOCITY_RAW_BYTE
-      : v;
-  }
+  // TekkForge-Korrektur: b1=Gate, b2=Velocity (explizit, kein 0xFF-Sentinel —
+  // der frühere Sentinel beruhte auf einer Fehlinterpretation des Gate-Bytes),
+  // b4=Note. Layout verifiziert gegen Factory-Files, siehe electribeImport.ts.
+  const gateByte =
+    step.gate === 0xff ? 0xff : clampInt(step.gate, 0, 96, E2_DEFAULT_GATE);
+  const velocityByte = clampInt(step.velocity, 0, 127, E2_DEFAULT_VELOCITY);
 
-  // v3.34 — note byte: inactive steps get 0x00 (smaller drift vs real files
-  // for sparse patterns; parser doesn't expose per-step note).
+  // Note byte: inactive steps get 0x00 (Init-181-Konvention).
   let noteByte: number;
   if (!step.active) {
     noteByte = E2_INACTIVE_STEP_NOTE; // 0x00
   } else {
-    noteByte = clampInt(step.note, 0, 127, E2_DEFAULT_NOTE); // default 0x48
+    noteByte = clampInt(step.note, 0, 127, E2_DEFAULT_NOTE); // default 0x3C
   }
 
   view.setUint8(offset + ELECTRIBE_REAL_STEP_TRIGGER_OFFSET, trigger);
+  view.setUint8(offset + ELECTRIBE_REAL_STEP_GATE_OFFSET, gateByte);
   view.setUint8(offset + ELECTRIBE_REAL_STEP_VELOCITY_OFFSET, velocityByte);
-  view.setUint8(offset + 2, E2_STEP_BYTE2_CONSTANT);
   view.setUint8(offset + 3, accent);
   view.setUint8(offset + ELECTRIBE_REAL_STEP_NOTE_OFFSET, noteByte);
   // bytes 5..11 are already 0 (full file is zero-initialised before fill).

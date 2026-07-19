@@ -131,19 +131,38 @@ describe("e2sExport — template-overlay fidelity", () => {
     expect(buildE2PatternBody({ ...NEUTRAL_INPUT, stepLength: 64 })[0x25]).toBe(3);
   });
 
-  it("an active step writes the verified 5-byte record (trigger/note/vel/gate/len)", () => {
+  it("an active step writes the verified 5-byte record (trigger/gate/vel/flag/note)", () => {
     const parts = emptyParts();
     parts[0] = {
-      steps: [{ active: true, note: 0x47, velocity: 0x7f }],
+      steps: [{ active: true, note: 0x47, velocity: 0x7f, gate: 0x24 }],
     };
     const body = buildE2PatternBody({ ...NEUTRAL_INPUT, parts });
     const stepOff = 0x800 + 0 * 816 + 0x30 + 0 * 12; // part0, step0
-    expect([...body.slice(stepOff, stepOff + 5)]).toEqual([0x01, 0x47, 0x7f, 0x01, 0x3d]);
+    // Korrigiertes Layout (Factory-verifiziert): b1=Gate, b2=Vel, b3=Flag, b4=Note
+    expect([...body.slice(stepOff, stepOff + 5)]).toEqual([0x01, 0x24, 0x7f, 0x01, 0x47]);
     // bytes 5..11 stay zero
     expect([...body.slice(stepOff + 5, stepOff + 12)]).toEqual([0, 0, 0, 0, 0, 0, 0]);
     // every OTHER step record is still the canonical inactive form
     const step1Off = stepOff + 12;
     expect([...body.slice(step1Off, step1Off + 5)]).toEqual([0x00, 0x48, 0x60, 0x00, 0x00]);
+  });
+
+  it("gate defaults to 0x48, clamps to 96, passes 0xFF tie through", () => {
+    const parts = emptyParts();
+    parts[0] = {
+      steps: [
+        { active: true }, // default gate
+        { active: true, gate: 999 }, // clamp → 96
+        { active: true, gate: 0xff }, // tie sentinel
+      ],
+    };
+    const body = buildE2PatternBody({ ...NEUTRAL_INPUT, parts });
+    const so = 0x800 + 0x30;
+    expect(body[so + 1]).toBe(0x48);
+    expect(body[so + 12 + 1]).toBe(96);
+    expect(body[so + 24 + 1]).toBe(0xff);
+    // Default-Note aktiver Steps = 0x3C (C4 = Originaltonhöhe)
+    expect(body[so + 4]).toBe(0x3c);
   });
 
   it("inactive step uses canonical 00 48 60 00 00", () => {
@@ -171,8 +190,8 @@ describe("e2sExport — template-overlay fidelity", () => {
     parts[0] = { steps: [{ active: true, note: 999, velocity: 999 }] };
     const b2 = buildE2PatternBody({ ...NEUTRAL_INPUT, parts });
     const so = 0x800 + 0x30;
-    expect(b2[so + 1]).toBe(127);
-    expect(b2[so + 2]).toBe(127);
+    expect(b2[so + 2]).toBe(127); // velocity geclampt
+    expect(b2[so + 4]).toBe(127); // note geclampt
   });
 });
 

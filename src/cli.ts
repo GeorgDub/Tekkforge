@@ -24,7 +24,7 @@ import { parseE2sBank, countE2sSlots } from "./core/e2sBankReader";
 import { buildE2sSampleMap } from "./core/e2sPatternSampleLink";
 import { parseElectribeAllPatBank } from "./core/electribeImport";
 
-const CLI_VERSION = "0.1.0";
+const CLI_VERSION = "0.2.0";
 
 const HELP = `TekkForge ${CLI_VERSION} — KORG ESX-1 → Electribe 2 Sampler Converter
 

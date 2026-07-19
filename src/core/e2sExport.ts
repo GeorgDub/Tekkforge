@@ -97,17 +97,23 @@ const STEP_RECORD_SIZE = 12;
 const STEPS_PER_PART = 64;
 const PARTS_PER_PATTERN = 16;
 
-// step-record byte positions
+// step-record byte positions — TekkForge-Korrektur (2026-07-18), verifiziert
+// per Byte-Histogramm gegen Factory-Files (BodyTalk1, Advi$ory1, e2s-2016) und
+// die hardware-getesteten Hardtekk-Patterns: b1=Gate, b2=Velocity, b4=Note.
+// (Vorher waren Note/Gate vertauscht: Note landete im Gate-Byte und der
+// vermeintliche "GateLen"-Default 0x3d im Note-Byte — Melodien gingen verloren.)
 const STEP_TRIGGER = 0;
-const STEP_NOTE = 1;
+const STEP_GATE = 1;
 const STEP_VELOCITY = 2;
-const STEP_GATE = 3;
-const STEP_GATELEN = 4;
+const STEP_FLAG = 3;
+const STEP_NOTE = 4;
 
-// step-record defaults (match the normalized template / observed real files)
-const DEFAULT_NOTE = 0x48; // C5
+// step-record defaults (match the Init-181 template / observed real files)
+const DEFAULT_GATE = 0x48; // 72 — häufigster Gate-Wert realer Files
 const DEFAULT_VELOCITY = 0x60; // 96
-const DEFAULT_GATELEN = 0x3d; // most common gate length across real files
+const DEFAULT_NOTE = 0x3c; // C4 = 60 = Originaltonhöhe (Briefing §4.1 + Hardtekk)
+const GATE_TIE = 0xff; // Factory-Sentinel für Tie/unendlich
+const GATE_MAX = 96;
 
 const STEP_LENGTH_CODE: Record<number, number> = { 16: 0, 32: 1, 64: 3 };
 
@@ -217,17 +223,18 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
       const step = steps[s];
       if (step && step.active) {
         body[so + STEP_TRIGGER] = 0x01;
-        body[so + STEP_NOTE] = clampInt(step.note, 0, 127, DEFAULT_NOTE);
+        body[so + STEP_GATE] =
+          step.gate === GATE_TIE ? GATE_TIE : clampInt(step.gate, 0, GATE_MAX, DEFAULT_GATE);
         body[so + STEP_VELOCITY] = clampInt(step.velocity, 0, 127, DEFAULT_VELOCITY);
-        body[so + STEP_GATE] = 0x01; // gate ON — required or the step is silent
-        body[so + STEP_GATELEN] = DEFAULT_GATELEN;
+        body[so + STEP_FLAG] = 0x01; // Factory-Konvention für aktive Steps
+        body[so + STEP_NOTE] = clampInt(step.note, 0, 127, DEFAULT_NOTE);
       } else {
-        // canonical inactive record (template already matches; enforce for safety)
+        // canonical inactive record — exakt wie Init-181: 00 48 60 00 00
         body[so + STEP_TRIGGER] = 0x00;
-        body[so + STEP_NOTE] = DEFAULT_NOTE;
+        body[so + STEP_GATE] = DEFAULT_GATE;
         body[so + STEP_VELOCITY] = DEFAULT_VELOCITY;
-        body[so + STEP_GATE] = 0x00;
-        body[so + STEP_GATELEN] = 0x00;
+        body[so + STEP_FLAG] = 0x00;
+        body[so + STEP_NOTE] = 0x00;
       }
       // bytes 5..11 remain as the template (zero) — never touched.
     }

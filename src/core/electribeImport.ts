@@ -214,18 +214,32 @@ export const ELECTRIBE_REAL_STEP_RECORD_BYTES = 12;
 export const ELECTRIBE_REAL_STEPS_PER_PART = 64;
 
 /**
- * v3.12: Real-File Step-Record Byte-Layout (12 Bytes each):
+ * TekkForge-Korrektur (2026-07-18): Real-File Step-Record Byte-Layout
+ * (12 Bytes each), verifiziert per Byte-Histogramm über die Factory-Files
+ * BodyTalk1/Advi$ory1/e2s-2016-Bank + die hardware-getesteten Hardtekk-Patterns
+ * (Melodie-Byte variiert bei b4, Gate-Längen variieren bei b1):
  *   byte 0:  Trigger-Flag (0x00 = off, 0x01 = on)
- *   byte 1:  Velocity (0x00..0x7F = explicit, 0xFF = default-velocity-127)
- *   byte 2:  Konstante 0x60 (vermutlich note-attribute prefix)
- *   byte 3:  Accent/Tied-Flag (0x00 oder 0x01 — Encoding noch nicht 100% klar)
- *   byte 4:  Note-Nummer / Pitch (MIDI 0..127, 0x48 = C5 default)
+ *   byte 1:  Gate-Länge (0..96, 96 = Tie; 0xFF in Factory-Files = Tie/Inf;
+ *            Default 0x48 = 72)
+ *   byte 2:  Velocity (0..127, Default 0x60 = 96)
+ *   byte 3:  Flag (0x00/0x01 — Factory nutzt beides; Semantik unklar)
+ *   byte 4:  Note (MIDI 0..127, 0x3C = C4 = Originaltonhöhe des Samples;
+ *            inactive Steps: 0x00)
  *   bytes 5..11: Reserved / nicht reverse-engineered (mostly 0x00)
+ *
+ * Die frühere Annahme "byte 1 = Velocity, byte 2 = Konstante 0x60" war ein
+ * Fehlschluss: byte 2 IST die Velocity (fast immer Default 96), byte 1 ist
+ * das Gate. 0xFF@b1 wurde fälschlich als Velocity-Sentinel interpretiert.
  */
 export const ELECTRIBE_REAL_STEP_TRIGGER_OFFSET = 0;
-export const ELECTRIBE_REAL_STEP_VELOCITY_OFFSET = 1;
+export const ELECTRIBE_REAL_STEP_GATE_OFFSET = 1;
+export const ELECTRIBE_REAL_STEP_VELOCITY_OFFSET = 2;
 export const ELECTRIBE_REAL_STEP_NOTE_OFFSET = 4;
-/** Sentinel-Wert: 0xFF in velocity-Byte = "use default-velocity 127". */
+/** Gate-Rohwert 0xFF (Factory-Files) = Tie/unendlich. */
+export const ELECTRIBE_REAL_GATE_TIE_SENTINEL = 0xff;
+/** Maximaler regulärer Gate-Wert (96 = Tie laut Format-Doku). */
+export const ELECTRIBE_REAL_GATE_MAX = 96;
+/** Defensive: 0xFF im Velocity-Byte wird als 127 gelesen. */
 export const ELECTRIBE_REAL_VELOCITY_DEFAULT_SENTINEL = 0xff;
 export const ELECTRIBE_REAL_VELOCITY_DEFAULT_VALUE = 127;
 
@@ -436,6 +450,11 @@ export interface ParsedPartStep {
   active: boolean;
   /** 0..127. */
   velocity: number;
+  /** Gate-Länge 0..96 (96 = Tie); 255 = Tie-Sentinel aus Factory-Files.
+   *  Undefined bei synthetischen/legacy Quellen ohne Step-Records. */
+  gate?: number;
+  /** MIDI-Note 0..127 (0x3C = Originaltonhöhe). Undefined bei legacy Quellen. */
+  note?: number;
 }
 
 export interface ParsedPart {
@@ -758,19 +777,24 @@ function parseRealPartBlock(view: DataView, partOffset: number, partIndex: numbe
       // 12-byte record passt nur dann komplett, wenn recOffsetWithinPart+11 < haveBytes.
       if (recOffsetWithinPart + ELECTRIBE_REAL_STEP_RECORD_BYTES <= haveBytes) {
         const trigByte = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_TRIGGER_OFFSET);
+        const gateByte = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_GATE_OFFSET);
         const velByte  = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_VELOCITY_OFFSET);
+        const noteByte = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_NOTE_OFFSET);
         const active = trigByte === 0x01;
-        // Velocity-Sentinel: 0xFF = use-default 127. Sonst direkt 0..127.
+        // Velocity 0..127; defensive: 0x80..0xFF → 127.
         let velocity: number;
-        if (velByte === ELECTRIBE_REAL_VELOCITY_DEFAULT_SENTINEL) {
-          velocity = ELECTRIBE_REAL_VELOCITY_DEFAULT_VALUE;
-        } else if (velByte >= 0 && velByte <= 127) {
+        if (velByte >= 0 && velByte <= 127) {
           velocity = velByte;
         } else {
-          // Out-of-range (z.B. 0x80..0xFE) — defensive clamp auf 127.
-          velocity = 127;
+          velocity = ELECTRIBE_REAL_VELOCITY_DEFAULT_VALUE;
         }
-        steps[s] = { active, velocity };
+        // Gate: 0..96 regulär, 0xFF = Tie-Sentinel (durchreichen), Rest clampen.
+        const gate =
+          gateByte === ELECTRIBE_REAL_GATE_TIE_SENTINEL
+            ? ELECTRIBE_REAL_GATE_TIE_SENTINEL
+            : Math.min(ELECTRIBE_REAL_GATE_MAX, gateByte);
+        const note = noteByte <= 127 ? noteByte : 127;
+        steps[s] = { active, velocity, gate, note };
       } else {
         steps[s] = { active: false, velocity: 0 };
       }

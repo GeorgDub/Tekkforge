@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TekkForge — ESX-1 → Electribe 2 Converter</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' blob: data:; base-uri 'none'; form-action 'none'"
+    />
+    <title>TekkForge — Electribe 2 Pattern-Editor & ESX-Converter</title>
     <style>
       :root {
         --bg: #101014;
@@ -23,138 +27,280 @@
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+        font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
         min-height: 100vh;
       }
-      .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
-      h1 { font-size: 22px; margin: 0; letter-spacing: 0.5px; }
+      .wrap { max-width: 1400px; margin: 0 auto; padding: 14px 16px 48px; }
+      header.top { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+      h1 { font-size: 20px; margin: 0; letter-spacing: 0.5px; }
       h1 .forge { color: var(--accent); }
-      .sub { color: var(--muted); font-size: 13px; margin: 4px 0 20px; }
-      .drop {
-        border: 2px dashed var(--border);
-        border-radius: 12px;
-        background: var(--panel);
-        padding: 36px 20px;
-        text-align: center;
-        cursor: pointer;
-        transition: border-color 0.15s, background 0.15s;
+      .tabs { display: flex; gap: 4px; }
+      .tabs button {
+        background: none; border: 0; color: var(--muted); font: inherit;
+        padding: 6px 14px; cursor: pointer; border-bottom: 2px solid transparent;
       }
-      .drop.drag { border-color: var(--accent); background: var(--elevated); }
-      .drop .big { font-size: 16px; font-weight: 600; }
-      .drop .hint { color: var(--dim); font-size: 12px; margin-top: 6px; }
+      .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+      .sub { color: var(--muted); font-size: 12px; margin: 2px 0 14px; }
+      .hidden { display: none !important; }
+
       .card {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 16px;
-        margin-top: 16px;
+        border-radius: 10px;
+        padding: 12px;
+        margin-top: 12px;
       }
-      .card h2 { font-size: 14px; margin: 0 0 10px; color: var(--accent2); }
-      .stats { display: flex; flex-wrap: wrap; gap: 10px; }
-      .stat {
-        background: var(--elevated);
-        border-radius: 8px;
-        padding: 8px 14px;
-        min-width: 110px;
-      }
-      .stat b { display: block; font-size: 18px; }
-      .stat span { color: var(--muted); font-size: 11px; }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--border); }
-      th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
-      tr:hover td { background: var(--elevated); }
-      .tableWrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
-      .opts { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; margin-top: 12px; }
-      .opts label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
-      .opts input[type="number"] {
-        background: var(--elevated); color: var(--text);
-        border: 1px solid var(--border); border-radius: 6px;
-        padding: 6px 8px; width: 100px; font: inherit;
-      }
+      .card h2 { font-size: 13px; margin: 0 0 8px; color: var(--accent2); }
       button.primary {
         background: var(--accent); color: #16100a; font-weight: 700;
-        border: 0; border-radius: 8px; padding: 10px 22px;
-        font: inherit; cursor: pointer;
+        border: 0; border-radius: 7px; padding: 7px 16px; font: inherit; cursor: pointer;
       }
       button.primary:disabled { opacity: 0.4; cursor: default; }
+      button.ghost {
+        background: var(--elevated); color: var(--text);
+        border: 1px solid var(--border); border-radius: 7px;
+        padding: 6px 12px; font: inherit; cursor: pointer;
+      }
+      button.ghost:hover { border-color: var(--accent2); }
       button.link {
         background: var(--elevated); color: var(--accent2);
-        border: 1px solid var(--border); border-radius: 8px;
-        padding: 8px 14px; font: inherit; cursor: pointer; margin: 4px 8px 4px 0;
+        border: 1px solid var(--border); border-radius: 7px;
+        padding: 7px 12px; font: inherit; cursor: pointer; margin: 3px 6px 3px 0;
       }
-      .warn { color: var(--danger); font-size: 13px; }
+      input[type="text"], input[type="number"], select {
+        background: var(--elevated); color: var(--text);
+        border: 1px solid var(--border); border-radius: 6px;
+        padding: 5px 7px; font: inherit;
+      }
+      .warn { color: var(--danger); font-size: 12px; }
       .ok { color: var(--success); }
-      pre.mapping {
-        background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-        padding: 12px; max-height: 260px; overflow: auto; font-size: 12px; color: var(--muted);
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { padding: 4px 7px; text-align: left; border-bottom: 1px solid var(--border); }
+      th { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; }
+
+      /* ── Editor-Layout ─────────────────────────────────────── */
+      .edCols { display: flex; gap: 12px; align-items: flex-start; }
+      .edSide { width: 190px; flex: none; }
+      .edMain { flex: 1; min-width: 0; }
+      .edPool { width: 270px; flex: none; }
+      .patList { list-style: none; margin: 0 0 8px; padding: 0; max-height: 380px; overflow-y: auto; }
+      .patList li {
+        padding: 6px 9px; border-radius: 6px; cursor: pointer; color: var(--muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
+      .patList li.sel { background: var(--elevated); color: var(--text); border-left: 3px solid var(--accent); }
+      .globals { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+      .globals label { display: block; color: var(--muted); font-size: 10px; margin-bottom: 2px; }
+      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
+
+      .gridWrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+      .gridRow { display: flex; align-items: center; gap: 0; border-bottom: 1px solid var(--border); }
+      .gridRow:last-child { border-bottom: 0; }
+      .gridRow .rowHead {
+        flex: none; display: flex; gap: 4px; align-items: center;
+        width: 320px; padding: 3px 6px; background: var(--panel);
+        position: sticky; left: 0; z-index: 2; border-right: 1px solid var(--border);
+      }
+      .rowHead .plabel { width: 62px; font-size: 11px; color: var(--text); border: 0; background: none; padding: 2px; }
+      .rowHead select { width: 128px; font-size: 11px; padding: 3px 4px; }
+      .rowHead input[type="number"] { width: 46px; font-size: 11px; padding: 3px 4px; }
+      .steps { display: flex; padding: 3px 6px; }
+      .stepCell {
+        width: 24px; height: 26px; flex: none; margin-right: 2px;
+        border: 1px solid var(--border); border-radius: 4px;
+        background: var(--elevated); cursor: pointer; position: relative;
+        font-size: 8px; color: #16100a; text-align: center; line-height: 26px;
+        user-select: none; overflow: hidden;
+      }
+      .stepCell.q4 { margin-left: 6px; }
+      .stepCell.bar { margin-left: 14px; }
+      .stepCell.on { border-color: var(--accent); font-weight: 700; }
+      .stepCell.play { outline: 2px solid var(--accent2); }
+      .stepIdx {
+        width: 24px; flex: none; margin-right: 2px; text-align: center;
+        color: var(--dim); font-size: 9px;
+      }
+      .stepIdx.q4 { margin-left: 6px; }
+      .stepIdx.bar { margin-left: 14px; }
+
+      .popover {
+        position: absolute; z-index: 50; background: var(--panel);
+        border: 1px solid var(--accent2); border-radius: 8px; padding: 10px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.6); width: 210px;
+      }
+      .popover label { display: block; color: var(--muted); font-size: 10px; margin: 6px 0 2px; }
+      .popover .row { display: flex; gap: 6px; margin-top: 8px; }
+
+      .poolList { max-height: 300px; overflow-y: auto; }
+      .poolList td { font-size: 11px; }
+      .dropMini {
+        border: 1px dashed var(--border); border-radius: 8px; text-align: center;
+        color: var(--dim); padding: 10px; cursor: pointer; font-size: 11px; margin-bottom: 8px;
+      }
+      .dropMini.drag { border-color: var(--accent); color: var(--text); }
+
+      /* ── Converter (unverändert) ───────────────────────────── */
+      .drop {
+        border: 2px dashed var(--border); border-radius: 12px; background: var(--panel);
+        padding: 36px 20px; text-align: center; cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .drop.drag { border-color: var(--accent); background: var(--elevated); }
+      .drop .big { font-size: 15px; font-weight: 600; }
+      .drop .hint { color: var(--dim); font-size: 12px; margin-top: 6px; }
+      .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+      .stat { background: var(--elevated); border-radius: 8px; padding: 7px 12px; min-width: 100px; }
+      .stat b { display: block; font-size: 16px; }
+      .stat span { color: var(--muted); font-size: 10px; }
+      .tableWrap { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
       .selRow { color: var(--muted); font-size: 12px; margin: 8px 0; }
       .selRow a { color: var(--accent2); cursor: pointer; margin-right: 10px; }
-      .hidden { display: none; }
-      footer { color: var(--dim); font-size: 11px; margin-top: 28px; }
+      .opts { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; margin-top: 12px; }
+      .opts label { display: block; color: var(--muted); font-size: 10px; margin-bottom: 3px; }
+      pre.mapping {
+        background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+        padding: 12px; max-height: 240px; overflow: auto; font-size: 11px; color: var(--muted);
+      }
+      footer { color: var(--dim); font-size: 11px; margin-top: 26px; }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>Tekk<span class="forge">Forge</span></h1>
+      <header class="top">
+        <h1>Tekk<span class="forge">Forge</span></h1>
+        <nav class="tabs">
+          <button id="tabEditor" class="active">Pattern-Editor</button>
+          <button id="tabConverter">ESX-Converter</button>
+        </nav>
+      </header>
       <p class="sub">
-        KORG ESX-1 Backup (<code>.esx</code>) → Electribe 2 Sampler Pattern-Bank
-        (<code>.e2sallpat</code>) + Sample-Bank (<code>.all</code>) — alles lokal im Browser,
-        keine Datei verlässt deinen Rechner.
+        Electribe-2-Sampler-Patterns am PC bauen (.e2spat / .e2sallpat / .all) und
+        ESX-1-Backups konvertieren — alles lokal, keine Datei verlässt den Rechner.
       </p>
 
-      <div id="drop" class="drop">
-        <div class="big">ESX-Datei hier ablegen</div>
-        <div class="hint">… oder klicken zum Auswählen (.esx / .ess, typ. 16–28 MB)</div>
-        <input id="file" type="file" accept=".esx,.ess,.ESX" class="hidden" />
-      </div>
+      <!-- ═══════════ EDITOR ═══════════ -->
+      <section id="viewEditor">
+        <div class="toolbar">
+          <button id="projNew" class="ghost">Neues Projekt</button>
+          <button id="projOpen" class="ghost">Projekt öffnen…</button>
+          <button id="projSave" class="ghost">Projekt speichern</button>
+          <input id="projFile" type="file" accept=".tekkforge,.json" class="hidden" />
+          <span style="flex:1"></span>
+          <button id="previewPlay" class="ghost">▶ Vorhören</button>
+          <button id="expPat" class="link">⬇ Pattern → .e2spat</button>
+          <button id="expBank" class="primary">⬇ Bank → .e2sallpat + .all</button>
+        </div>
 
-      <div id="loaded" class="card hidden">
-        <h2 id="loadedTitle">Geladen</h2>
-        <div class="stats" id="loadedStats"></div>
-        <div class="selRow">
-          <a id="selAll">Alle wählen</a><a id="selNone">Keine</a>
-          <span id="selCount"></span>
-        </div>
-        <div class="tableWrap">
-          <table>
-            <thead>
-              <tr><th></th><th>#</th><th>Name</th><th>BPM</th><th>Steps</th><th>Aktive Parts</th></tr>
-            </thead>
-            <tbody id="patRows"></tbody>
-          </table>
-        </div>
-        <div class="opts">
-          <div>
-            <label for="base">User-Sample-Basis</label>
-            <input id="base" type="number" value="501" min="1" max="999" />
+        <div class="edCols">
+          <div class="edSide card">
+            <h2>Patterns</h2>
+            <ul id="patList" class="patList"></ul>
+            <button id="patAdd" class="ghost" style="width:100%">+ Neu</button>
+            <div style="height:6px"></div>
+            <button id="patDup" class="ghost" style="width:100%">Duplizieren</button>
+            <div style="height:6px"></div>
+            <button id="patDel" class="ghost" style="width:100%">Löschen</button>
           </div>
-          <div>
-            <label for="cap">RAM-Deckel (Mono-Sek.)</label>
-            <input id="cap" type="number" value="260" min="10" max="270" />
-          </div>
-          <button id="convert" class="primary">Konvertieren →</button>
-        </div>
-      </div>
 
-      <div id="result" class="card hidden">
-        <h2>Ergebnis</h2>
-        <div class="stats" id="resultStats"></div>
-        <p id="resultWarn" class="warn hidden"></p>
-        <div id="downloads"></div>
-        <p class="sub" style="margin-top:10px">
-          Import am Gerät: beide Dateien auf die SD-Karte — erst die
-          <b>.all</b>-Sample-Bank importieren, dann die <b>.e2sallpat</b>-Pattern-Bank.
-        </p>
-        <details>
-          <summary style="cursor:pointer;color:var(--accent2)">Mapping-Report anzeigen</summary>
-          <pre id="mapping" class="mapping"></pre>
-        </details>
-      </div>
+          <div class="edMain">
+            <div class="card">
+              <div class="globals">
+                <div>
+                  <label for="gName">Name (max 16 ASCII)</label>
+                  <input id="gName" type="text" maxlength="16" style="width:180px" />
+                </div>
+                <div>
+                  <label for="gBpm">BPM (20–300)</label>
+                  <input id="gBpm" type="number" min="20" max="300" step="0.1" style="width:80px" />
+                </div>
+                <div>
+                  <label for="gLen">Länge</label>
+                  <select id="gLen">
+                    <option value="16">16 Steps (1 Takt)</option>
+                    <option value="32">32 Steps (2 Takte)</option>
+                    <option value="64">64 Steps (4 Takte)</option>
+                  </select>
+                </div>
+                <span class="sub" style="margin:0">
+                  Klick = Step an/aus · Rechtsklick = Note/Velocity/Gate
+                </span>
+              </div>
+            </div>
+            <div class="card" style="padding:8px">
+              <div id="grid" class="gridWrap"></div>
+            </div>
+            <p id="edWarn" class="warn hidden"></p>
+          </div>
+
+          <div class="edPool card">
+            <h2>Sample-Pool (ab #501)</h2>
+            <div id="poolDrop" class="dropMini">WAVs hier ablegen / klicken</div>
+            <input id="poolFile" type="file" accept=".wav,.WAV" multiple class="hidden" />
+            <div class="poolList">
+              <table>
+                <thead><tr><th>#</th><th>Name</th><th>s</th><th></th></tr></thead>
+                <tbody id="poolRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ CONVERTER ═══════════ -->
+      <section id="viewConverter" class="hidden">
+        <div id="drop" class="drop">
+          <div class="big">ESX-Datei hier ablegen</div>
+          <div class="hint">… oder klicken zum Auswählen (.esx / .ess, typ. 16–28 MB)</div>
+          <input id="file" type="file" accept=".esx,.ess,.ESX" class="hidden" />
+        </div>
+
+        <div id="loaded" class="card hidden">
+          <h2 id="loadedTitle">Geladen</h2>
+          <div class="stats" id="loadedStats"></div>
+          <div class="selRow">
+            <a id="selAll">Alle wählen</a><a id="selNone">Keine</a>
+            <span id="selCount"></span>
+          </div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr><th></th><th>#</th><th>Name</th><th>BPM</th><th>Steps</th><th>Aktive Parts</th></tr>
+              </thead>
+              <tbody id="patRows"></tbody>
+            </table>
+          </div>
+          <div class="opts">
+            <div>
+              <label for="base">User-Sample-Basis</label>
+              <input id="base" type="number" value="501" min="1" max="999" />
+            </div>
+            <div>
+              <label for="cap">RAM-Deckel (Mono-Sek.)</label>
+              <input id="cap" type="number" value="260" min="10" max="270" />
+            </div>
+            <button id="convert" class="primary">Konvertieren →</button>
+          </div>
+        </div>
+
+        <div id="result" class="card hidden">
+          <h2>Ergebnis</h2>
+          <div class="stats" id="resultStats"></div>
+          <p id="resultWarn" class="warn hidden"></p>
+          <div id="downloads"></div>
+          <p class="sub" style="margin-top:10px">
+            Import am Gerät: beide Dateien auf die SD-Karte — erst die
+            <b>.all</b>-Sample-Bank importieren, dann die <b>.e2sallpat</b>-Pattern-Bank.
+          </p>
+          <details>
+            <summary style="cursor:pointer;color:var(--accent2)">Mapping-Report anzeigen</summary>
+            <pre id="mapping" class="mapping"></pre>
+          </details>
+        </div>
+      </section>
 
       <footer>
-        TekkForge · Konverter-Kern hardware-verifiziert (byte-exakter Round-Trip gegen
-        Electribe-2-Geräte-Exporte) · Formate: ESX-1 All-Backup, e2sSample.all, .e2sallpat
+        TekkForge · Step-Layout verifiziert gegen KORG-Factory-Files (BodyTalk1, e2s-2016) +
+        hardware-getestete Hardtekk-Patterns · Import am Gerät: erst .all, dann .e2sallpat
       </footer>
     </div>
     <script type="module" src="/src/gui/main.ts"></script>

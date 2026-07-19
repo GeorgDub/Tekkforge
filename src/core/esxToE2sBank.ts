@@ -25,8 +25,10 @@ import type { E2PatternInput } from "./electribePatternBuilder";
 export const E2S_USER_SAMPLE_BASE = 501;
 /** Sicherer Mono-Sekunden-Deckel fürs Sample-RAM (Hardware ~270s mono). */
 export const E2S_SAMPLE_SECONDS_CAP = 260;
-/** MIDI-Note für "keine Tonhöhenänderung" (C5). */
-const E2_BASE_NOTE = 0x48;
+/** MIDI-Note für "keine Tonhöhenänderung" — C4 = 60 = Originaltonhöhe des
+ *  Samples (TekkForge-Korrektur: vorher 0x48/C5, was nach dem Step-Layout-Fix
+ *  alles +12 Halbtöne transponiert hätte). */
+const E2_BASE_NOTE = 0x3c;
 
 export interface EsxToE2sResult {
   /** .e2sallpat-Bytes (4 161 792). */
