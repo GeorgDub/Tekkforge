@@ -56,10 +56,13 @@ describe("editorModel — Pattern-Erstellung ohne ESX", () => {
     expect(rp.name).toBe("ROUNDTRIP");
     expect(rp.bpm).toBeCloseTo(165, 1);
     expect(rp.stepLength).toBe(32);
-    expect(rp.parts[0].sampleId).toBe(501);
+    // Rohwert IN DER DATEI liegt um eins unter der Geräte-/Bank-Nummer
+    // (am Gerät gemessen, siehe bankNumberToE2PatternRef). Ein Part, der das
+    // Sample 501 spielen soll, trägt in der Datei die 500.
+    expect(rp.parts[0].sampleId).toBe(500);
     expect(rp.parts[0].steps[0].active).toBe(true);
     expect(rp.parts[0].steps[1].active).toBe(false);
-    expect(rp.parts[8].sampleId).toBe(502);
+    expect(rp.parts[8].sampleId).toBe(501);
     expect(rp.parts[8].steps[3].active).toBe(true);
     expect(rp.parts[8].steps[3].velocity).toBe(80);
     expect(rp.parts[8].steps[3].gate).toBe(96);

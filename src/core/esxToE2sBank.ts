@@ -18,6 +18,8 @@
 
 import type { EsxBank, EsxPattern, EsxSample } from "./esxParser";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
+import { E2S_SLOT_INDEX_MAX } from "./constants";
+import { bankNumberToE2PatternRef } from "./e2sPatternSampleLink";
 import { buildE2AllPatFile } from "./e2sExport";
 import type { E2PatternInput } from "./electribePatternBuilder";
 
@@ -120,7 +122,10 @@ export function convertEsxToE2sBank(
   let nextSlot = 0;
   for (const s of esx.monoSamples as EsxSample[]) {
     if (!usedIndices.has(s.index)) continue;
-    if (nextSlot >= 250) {
+    // Deckel ist jetzt der Slot-INDEX (== Geräte-Nummer), nicht mehr eine
+    // Anzahl: oberhalb von E2S_SLOT_INDEX_MAX bietet das Gerät keinen
+    // wählbaren Sample-Platz mehr an.
+    if (base + nextSlot >= E2S_SLOT_INDEX_MAX) {
       droppedSamples++;
       continue;
     }
@@ -135,7 +140,11 @@ export function convertEsxToE2sBank(
     const hwNumber = base + nextSlot;
     sampleMap.set(s.index, { hwNumber, name });
     slots.push({
-      slotIndex: nextSlot,
+      // Der Tabellen-Index IST die Geräte-Nummer — nicht die Position in der
+      // Auswahl. Früher stand hier `nextSlot` (0,1,2,…), was zusammen mit dem
+      // damals falschen Tabellenstart 0x07E0 eine um eins fehlnummerierte Bank
+      // ergab (Omnitribe-Geometrie-Check: „Versatz: KONSTANT -1").
+      slotIndex: hwNumber,
       sampleNumber: hwNumber,
       category: 17, // "User"
       name,
@@ -168,7 +177,10 @@ export function convertEsxToE2sBank(
       return {
         volume: part.volume,
         pan: part.pan,
-        sampleId: mapped ? mapped.hwNumber : undefined,
+        // Bank-/Geräte-Nummer → Pattern-Referenz (−1, am Gerät gemessen).
+        sampleId: mapped
+          ? bankNumberToE2PatternRef(mapped.hwNumber)
+          : undefined,
         steps: part.steps.slice(0, stepLength).map((s, si) => ({
           active: si < usedSteps && !!s.active,
           velocity: typeof s.velocity === "number" && s.velocity > 0 ? s.velocity : undefined,

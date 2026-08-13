@@ -4,7 +4,8 @@
  * v3.272 — verifiziert die VALUE-basierte Verknüpfung von E2-Pattern-Parts mit
  * Samples einer separaten .all-Bank über die Geräte-Sample-Nummer (OSC_0index).
  *
- *   Pattern-Part.sampleId (+0x08, z.B. 501+)  ==  E2sSlot.sampleNumber (+0x08)
+ *   e2PatternRefToBankNumber(Pattern-Part.sampleId)  ==  E2sSlot.sampleNumber
+ *   (die Datei-Referenz liegt um eins unter der Bank-/Geraete-Nummer)
  *
  * Pure-Map-Test immer; Full-Chain gegen die generierten BOTTROP-Artefakte nur
  * wenn vorhanden (examples/e2s/).
@@ -14,7 +15,11 @@ import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { buildE2sSampleMap, countLinkableE2Parts } from "../src/core/e2sPatternSampleLink";
+import {
+  buildE2sSampleMap,
+  countLinkableE2Parts,
+  e2PatternRefToBankNumber,
+} from "../src/core/e2sPatternSampleLink";
 import { parseE2sBank } from "../src/core/e2sBankReader";
 import { parseElectribeAllPatBank } from "../src/core/electribeImport";
 
@@ -68,9 +73,10 @@ const AVAILABLE = (() => {
       for (const part of pat.parts) {
         if (!part.steps.some((s) => s.active)) continue;
         activeParts++;
-        const isUserRef = part.sampleId >= 501;
+        const bankNr = e2PatternRefToBankNumber(part.sampleId);
+        const isUserRef = bankNr >= 501;
         if (isUserRef) repointed++;
-        if (map.has(part.sampleId)) {
+        if (map.has(bankNr)) {
           linked++;
           if (isUserRef) repointedLinked++;
         }

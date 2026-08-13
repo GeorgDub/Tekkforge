@@ -75,6 +75,42 @@ Optionen für `convert`: `-o/--out <dir>`, `--base <n>` (erste Sample-Nr., Defau
 Überschreitet die Sample-Menge das Sample-RAM (~270 s mono), warnt die App und lässt
 überzählige Samples weg — so schlägt der Geräte-Import nicht fehl.
 
+## Sample-Nummerierung (geräteverifiziert)
+
+Zwei Regeln, die sich nur am Gerät bzw. über die Selbstkonsistenz echter Dateien
+belegen lassen — TekkForge hat beide bis 0.2.x verletzt und dadurch Bänke gebaut,
+die am Gerät um eins verschoben klangen. Beide Fehler waren unsichtbar, weil ein
+Versatz von *eins* immer ein plausibles Sample liefert, nur eben das falsche.
+
+**1. In der `.all` IST der Tabellen-Index die Geräte-Nummer.**
+
+Die Offset-Tabelle steht bei `0x0010` und hat **1020** LE32-Einträge (nicht 250 ab
+`0x07E0` — das sah nur so aus, weil das erste Werks-Sample bei Nr. 500 liegt und
+`0x0010 + 500*4 == 0x07E0` ergibt). Jedes Sample trägt seine Nummer ein zweites Mal
+im `korg/esli`-Chunk als `OSC_0index`, und beide müssen übereinstimmen:
+
+```
+Tabellen-Index == esli.OSC_0index == Anzeige am Gerät
+```
+
+Belegt über 47 reale Bänke; `parseE2sBank` prüft es bei jedem Einlesen selbst und
+meldet einen konstanten Versatz als `slotNumbering.kind === "constant-shift"`.
+
+**2. Die Pattern-Referenz liegt um eins darunter.**
+
+Am Gerät gemessen (dreifach unabhängig): Parts, die 584/586/588 referenzieren,
+spielen die Samples, die in der Bank auf 585/587/589 liegen.
+
+```
+Bank-Slot (OSC_0index) == Pattern-Referenz + 1
+```
+
+Umgesetzt in `e2PatternRefToBankNumber` / `bankNumberToE2PatternRef` — nie als
+nacktes `± 1` an der Fundstelle.
+
+Prüfen lässt sich eine gebaute Bank mit Omnitribes Geometrie-Check
+(`tools/formats/e2s_geometry_check.py`); erwartet wird `Versatz: OK`.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über

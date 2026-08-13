@@ -90,12 +90,45 @@ export const ESX1_SIZE_FILE_MIN = 0x00250010;
 export const ESX1_EMPTY_OFFSET = 0xffffffff;
 
 // ─── E2S device limits ────────────────────────────────────────────────────────
-// SoT: constants.py:65-74
-export const E2S_MAX_SLOTS = 250;
+/**
+ * Adressierbare Sample-Slots in einer `.all`. Die Offset-Tabelle füllt das
+ * Fenster `E2S_ALL_OFFSET_TABLE_START`..`E2S_ALL_SAMPLE_AREA_START` exakt aus:
+ * `0x0010 + 1020 * 4 === 0x1000`.
+ *
+ * Der Tabellen-Index IST die Geräte-Sample-Nummer: `i === esli.OSC_0index`
+ * (siehe `ESLI_OSC_INDEX_OFFSET`). Diese Redundanz ist die einzige Prüfung, die
+ * eine falsche Tabellen-Startadresse überhaupt auffliegen lässt — der Reader
+ * meldet Abweichungen, siehe `E2sSlotNumbering` in `e2sBankReader.ts`.
+ */
+export const E2S_MAX_SLOTS = 1020;
+/**
+ * Höchster Slot-Index, den das Geräte-UI als wählbaren Sample-Platz zeigt
+ * (exklusiv). Die restlichen Tabellen-Einträge bleiben reserviert.
+ */
+export const E2S_SLOT_INDEX_MAX = 1000;
 /** Maximum user-visible sample name length im Device-UI; on-disk speichert das
  *  korg-chunk nur 16 Bytes (ESLI_NAME_LEN). */
 export const E2S_NAME_MAX_CHARS = 24;
+/**
+ * Obergrenze für die Summe aller PCM-Daten einer Bank — reiner Schutz gegen
+ * Speicher-Explosion beim Bauen, NICHT das Gerätelimit. Bewusst weit: ein
+ * Absenken würde Bänke zurückweisen, die sich bisher bauen ließen. Das echte
+ * Gerätelimit wird stattdessen gewarnt, siehe `E2S_DEVICE_PCM_WARN_BYTES`.
+ */
 export const E2S_MAX_TOTAL_PCM_BYTES = 224 * 1024 * 1024; // ~224 MB
+/**
+ * Ab hier wird gewarnt, nicht abgelehnt: das reale Sample-Speicher-Limit des
+ * Geräts.
+ *
+ * Warum Warnung und nicht harte Grenze — beides wäre für sich falsch: bei
+ * 224 MB baut man stumm Bänke, die das Gerät nicht lädt; eine harte Absenkung
+ * auf 24 MB wäre eine Regression für bestehende Nutzung.
+ *
+ * Empirisch gestützt (Synthstudio, 2026-07-27, Bestand aus 47 realen Bänken):
+ * die größten liegen bei 24.037.610 B — knapp *unter* dieser Schwelle. Keine
+ * gemessene Gerätedatei überschreitet sie.
+ */
+export const E2S_DEVICE_PCM_WARN_BYTES = 24 * 1024 * 1024; // 24 MiB
 export const E2S_GLOBAL_SECTION_SIZE = 256;
 
 // ─── E2S `.all` container layout ──────────────────────────────────────────────
@@ -108,8 +141,41 @@ export const E2S_ALL_SIGNATURE = new Uint8Array([
   0x6c, 0x6c, 0x1a, 0x00, // "ll\x1a\0"
 ]);
 export const E2S_ALL_SIGNATURE_LEN = E2S_ALL_SIGNATURE.length; // 16
-export const E2S_ALL_OFFSET_TABLE_START = 0x07e0;
-export const E2S_ALL_OFFSET_TABLE_BYTES = E2S_MAX_SLOTS * 4; // 1000
+/**
+ * Startadresse der Offset-Tabelle in der `.all`. 1020 LE32-Einträge, endet
+ * exakt auf `E2S_ALL_SAMPLE_AREA_START`. Ein Eintrag 0 heißt: Slot leer.
+ *
+ * SoT: Oe2sSLE `e2s_sample_all.py` — `load()` liest 4080 Bytes ab `0x0010`,
+ * der Zeiger eines Samples ist `read_u32(0x10 + i * 4)`, und der Index i ist
+ * die 0-basierte Geräte-Sample-Nummer (`esli.OSC_0index`).
+ *
+ * ## Der verworfene Vorgängerwert `0x07E0` mit 250 Einträgen
+ *
+ * Er sah plausibel aus: die Werks-Referenzdatei hat ihr erstes Sample bei
+ * OSC_0index 500, und `0x0010 + 500 * 4 === 0x07E0`. Der erste *nicht-null*
+ * Eintrag stand also genau dort — die Tabelle schien da zu beginnen, und die
+ * 500 Nullen davor gingen als „reserved padding" durch. Eine Zwischenstufe
+ * `0x0058`/1002 war ebenfalls falsch; ein verschobener Tabellenstart liefert
+ * **dieselben Offset-Werte**, nur unter falschen Indizes.
+ *
+ * ## Was die Frage entscheidet
+ *
+ * Nicht die Fenstergröße — `0x0010 + 1020 * 4` und `0x0058 + 1002 * 4` ergeben
+ * beide exakt `0x1000`. Entscheidend ist allein `esli.OSC_0index`: die Datei
+ * trägt die Sample-Nummer ein zweites Mal, im korg-Chunk jedes Slots. Nur bei
+ * `0x0010` stimmen Tabellen-Index und OSC_0index überein.
+ *
+ * Belegt über 47 reale Bänke (Synthstudio/Omnitribe) und hier nachgemessen:
+ * `cm.all` 324/324, `666.all` 154/154 Treffer bei `0x0010`, 0/324 bzw. 0/154
+ * bei `0x07E0` und `0x0058`.
+ *
+ * Offen (bewusst nicht behauptet): ob die Slots 0..17 Factory-Plätze sind oder
+ * nur ungenutzt. Keine der konsistenten Bänke belegt sie — die Deutung
+ * „`0x0010` liest 18 Factory-Slots mit" ist empirisch unbelegt.
+ */
+export const E2S_ALL_OFFSET_TABLE_START = 0x0010;
+/** 1020 × LE32 = 4080 B. Füllt 0x0010..0x1000 exakt aus. */
+export const E2S_ALL_OFFSET_TABLE_BYTES = E2S_MAX_SLOTS * 4; // 4080
 export const E2S_ALL_SAMPLE_AREA_START = 0x1000;
 
 // ─── korg/esli sub-chunk inside each E2S RIFF/WAVE ───────────────────────────

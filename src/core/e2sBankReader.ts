@@ -6,7 +6,7 @@
  *
  * READ-ONLY-SCOPE für v3.3:
  *   - Magic-Check "e2s sample all\x1a\x00"
- *   - 250-Entry Offset-Table
+ *   - 1020-Entry Offset-Table @ 0x0010 (Oe2sSLE, Index == esli.OSC_0index)
  *   - Pro Slot: RIFF/WAVE-Header + fmt + data + korg/esli Sub-Chunk
  *   - PCM-Decode (16-bit LE → Float32 [-1,+1])
  *   - Korg-Metadata (name, category, loop, slices skeleton)
@@ -80,10 +80,11 @@ export interface E2sSlice {
  * interleaved L,R,L,R,... (gleiche Konvention wie EsxSample).
  */
 export interface E2sSlot {
-  /** Index in der 250-Entry-Offset-Table. */
+  /** Index in der 1020-Entry-Offset-Table (== esli.OSC_0index). */
   index: number;
   /** OSC_0index (esli +0x08) — vom Gerät angezeigte Sample-Nummer (z.B. 501+).
-   *  Link-Key für E2-Pattern-Part-Refs (die ebenfalls diese Nummer tragen). */
+   *  Link-Key für E2-Pattern-Part-Refs; die tragen die Nummer **um eins
+   *  niedriger**, siehe `e2PatternRefToBankNumber`. */
   sampleNumber: number;
   /** Decoded Name (max 16 Chars from on-disk korg-body). */
   name: string;
@@ -109,6 +110,8 @@ export interface E2sSlot {
   level: number;
   /** +12 dB Gain-Flag aus korg-body. */
   gain12db: boolean;
+  /** OSC_SampleTune (esli +0x55, i8). Oe2sSLE-Range -63..+63; 0 = kein Tune. */
+  sampleTune: number;
   /** Bis zu 64 Slice-Records (leere am Ende getrimmt). */
   slices: E2sSlice[];
   /** 64-Byte Step-Pattern für Slice-Trigger (rohe Bytes). */
@@ -129,10 +132,29 @@ export interface E2sSlot {
   rawRiff?: Uint8Array;
 }
 
+/**
+ * Ergebnis der Slot-Nummerierungs-Selbstprüfung — maschinenlesbar, damit die
+ * Oberfläche warnen kann, ohne Warntexte zu parsen.
+ *
+ * - `"ok"` — jeder belegte Slot trägt seine eigene Nummer.
+ * - `"constant-shift"` — **alle** belegten Slots liegen um `shift` daneben.
+ *   Die Bank ist fehlnummeriert und muss neu gebaut werden.
+ * - `"scattered"` — einzelne Slots inkonsistent; kein Geometriefehler.
+ */
+export interface E2sSlotNumbering {
+  kind: "ok" | "constant-shift" | "scattered";
+  /** Betrag des Versatzes (`OSC_0index − Index`), nur bei `constant-shift`. */
+  shift: number | null;
+  /** Anzahl betroffener Slots. */
+  affected: number;
+  /** Belegte Slots insgesamt. */
+  filled: number;
+}
+
 export interface E2sBank {
   /** Quelle (Filename oder "<bytes>"). */
   source: string;
-  /** Array Länge 250; null = leerer Slot. */
+  /** Array Länge E2S_MAX_SLOTS (1020); null = leerer Slot. */
   slots: Array<E2sSlot | null>;
   /** Rohe Offset-Table (für Diagnose / spätere Round-Trip-Writes). */
   offsetTable: Uint32Array;
@@ -140,6 +162,8 @@ export interface E2sBank {
   trailingBytes: number;
   /** Soft-Warnings. */
   warnings: string[];
+  /** Befund der Slot-Nummerierungs-Prüfung. */
+  slotNumbering: E2sSlotNumbering;
 }
 
 export class E2sParseError extends Error {
@@ -280,6 +304,8 @@ interface KorgMeta {
   category: number;
   level: number;
   gain12db: boolean;
+  /** OSC_SampleTune (esli +0x55, i8): Coarse-Tune, Oe2sSLE-Range -63..+63. */
+  sampleTune: number;
   loopType: LoopType;
   loopStart: number;
   loopEnd: number;
@@ -297,6 +323,7 @@ function defaultKorgMeta(): KorgMeta {
     category: 0,
     level: 100,
     gain12db: false,
+    sampleTune: 0,
     loopType: LOOP_TYPE_ONESHOT,
     loopStart: 0,
     loopEnd: 0,
@@ -375,7 +402,11 @@ function parseKorgBody(
   }
 
   if (body.length > ESLI_SAMPLE_TUNE_OFFSET) {
-    // i8 tune: nicht weiter genutzt aktuell, könnte später ins SlotModel
+    // OSC_SampleTune @ +0x55 (i8). Oe2sSLE schreibt/liest -63..+63 (Coarse-Tune,
+    // nicht Cents); wir dekodieren den vollen signed-Bereich und clampen erst
+    // beim Bauen, damit ein abweichender Gerätewert beim Round-Trip sichtbar
+    // bleibt statt still ersetzt zu werden.
+    meta.sampleTune = dv.getInt8(ESLI_SAMPLE_TUNE_OFFSET);
   }
 
   // Slice-Array (64 × 16B = 1024B)
@@ -519,6 +550,7 @@ function parseSlot(
         loopEnd: Math.max(0, Math.min(loopEndFrames, frames)),
         level: meta.level,
         gain12db: meta.gain12db,
+        sampleTune: meta.sampleTune,
         slices: meta.slices,
         sliceSteps: meta.sliceSteps,
         slicingNumSteps: meta.slicingNumSteps,
@@ -635,6 +667,77 @@ export function parseE2sBank(
     }
   }
 
+  // ── Selbstprüfung der Slot-Nummerierung ────────────────────────────────────
+  //
+  // Die Datei trägt die Sample-Nummer doppelt: einmal als Position in der
+  // Offset-Tabelle, einmal als `OSC_0index` im korg/esli-Chunk des Slots. Bei
+  // einer korrekt gebauten Bank sind beide gleich — das ist die einzige
+  // Prüfung, die eine falsche Tabellengeometrie überhaupt sichtbar macht.
+  //
+  // Deutung eines konstanten Versatzes: **diese BANK ist fehlnummeriert** und
+  // zeigt am Gerät falsche Sample-Nummern. Ältere Werkzeuge (TekkForge selbst
+  // bis zu diesem Stand) packen die Zeiger ab Index 0 bzw. um eins versetzt,
+  // während die Samples ihre gemeinte Gerätenummer behalten.
+  //
+  // Der Restwert der umgekehrten Deutung bleibt: wenn AUSNAHMSLOS JEDE geladene
+  // Bank denselben Versatz meldet, ist eher `E2S_ALL_OFFSET_TABLE_START` schuld
+  // als jede einzelne Datei.
+  const mismatches: number[] = [];
+  for (let i = 0; i < E2S_MAX_SLOTS; i++) {
+    const s = slots[i];
+    if (s === null) continue;
+    if (s.sampleNumber !== i) mismatches.push(i);
+  }
+  const filled = slots.reduce<number>((n, s) => (s === null ? n : n + 1), 0);
+  let slotNumbering: E2sSlotNumbering = {
+    kind: "ok",
+    shift: null,
+    affected: 0,
+    filled,
+  };
+
+  if (mismatches.length > 0) {
+    const shifts = new Set(
+      mismatches.map((i) => (slots[i] as E2sSlot).sampleNumber - i),
+    );
+    // Ein systematischer Baufehler verschiebt AUSNAHMSLOS jeden Slot um
+    // denselben Betrag. Zwei einzelne krumme Slots ergeben trivial auch einen
+    // "konstanten" Versatz — deshalb müssen alle belegten Slots betroffen sein,
+    // und es müssen mehr als einer sein.
+    if (shifts.size === 1 && mismatches.length === filled && filled > 1) {
+      const shift = [...shifts][0];
+      slotNumbering = {
+        kind: "constant-shift",
+        shift,
+        affected: mismatches.length,
+        filled,
+      };
+      warnings.push(
+        `Bank fehlnummeriert: alle ${mismatches.length} belegten Slots liegen ` +
+          `${shift > 0 ? "+" : ""}${shift} neben ihrer eigenen Sample-Nummer. ` +
+          `Am Gerät zeigt diese Bank verschobene Nummern, und Patterns treffen ` +
+          `die falschen Samples — sie muss neu gebaut werden (Slots so ` +
+          `speichern, wie die Samples sich selbst nummerieren). Nur falls JEDE ` +
+          `Bank denselben Versatz meldet, ist stattdessen ` +
+          `E2S_ALL_OFFSET_TABLE_START (0x${E2S_ALL_OFFSET_TABLE_START.toString(16)}) ` +
+          `um ${Math.abs(shift) * 4} Bytes zu prüfen.`,
+      );
+    } else {
+      slotNumbering = {
+        kind: "scattered",
+        shift: null,
+        affected: mismatches.length,
+        filled,
+      };
+      warnings.push(
+        `${mismatches.length} Slot(s) mit OSC_0index != Tabellen-Index ` +
+          `(z.B. Slot ${mismatches[0]} meldet ${(slots[mismatches[0]] as E2sSlot).sampleNumber}). ` +
+          `Kein konstanter Versatz — einzelne Slots wurden nachbearbeitet, ` +
+          `die Bank als Ganzes ist nicht verschoben.`,
+      );
+    }
+  }
+
   const trailingBytes = Math.max(0, buf.length - lastEnd);
   return {
     source,
@@ -642,6 +745,7 @@ export function parseE2sBank(
     offsetTable,
     trailingBytes,
     warnings,
+    slotNumbering,
   };
 }
 

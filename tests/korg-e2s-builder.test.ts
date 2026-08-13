@@ -9,7 +9,7 @@
  *     peakNormalize, convertToE2sSpec
  *   - e2sBankBuilder:
  *       * Magic-Signature
- *       * Offset-Table @ 0x07E0 mit 250 Einträgen
+ *       * Offset-Table @ 0x0010 mit 1020 Einträgen
  *       * Sample-Area beginnt bei 0x1000
  *       * Pro Slot: RIFF + fmt + data + korg-Chunks
  *       * korg-Chunk ist exakt 1180B
@@ -17,7 +17,7 @@
  *       * ESLI-Name 16B ASCII space-padded
  *       * Category-Enum-Clamp 0..17
  *       * Empty Slots haben Offset=0
- *       * Max 250 Slots enforced
+ *       * Slot-Index-Grenze (E2S_MAX_SLOTS) enforced
  *       * File-Size respektiert E2S_MAX_TOTAL_PCM_BYTES
  *
  *   - Round-Trip (THE killer test):

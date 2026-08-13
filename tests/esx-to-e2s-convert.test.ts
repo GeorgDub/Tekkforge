@@ -4,7 +4,10 @@ import { parseEsxBank } from "../src/core/esxParser";
 import { convertEsxToE2sBank } from "../src/core/esxToE2sBank";
 import { parseE2sBank } from "../src/core/e2sBankReader";
 import { parseElectribeAllPatBank } from "../src/core/electribeImport";
-import { buildE2sSampleMap } from "../src/core/e2sPatternSampleLink";
+import {
+  buildE2sSampleMap,
+  e2PatternRefToBankNumber,
+} from "../src/core/e2sPatternSampleLink";
 
 const P = "E:/esx/BOTTROP.ESX";
 (fs.existsSync(P) ? describe : describe.skip)("convertEsxToE2sBank (BOTTROP)", () => {
@@ -27,7 +30,10 @@ const P = "E:/esx/BOTTROP.ESX";
     let repointed = 0, linked = 0;
     for (const p of pat.patterns) for (const part of p.parts) {
       if (!part.steps.some((s) => s.active)) continue;
-      if (part.sampleId >= 501) { repointed++; if (map.has(part.sampleId)) linked++; }
+      // Datei-Referenz → Bank-Nummer (+1) VOR dem Nachschlagen; ohne die
+      // Umrechnung träfe jeder Part das nächsthöhere Sample.
+      const bankNr = e2PatternRefToBankNumber(part.sampleId);
+      if (bankNr >= 501) { repointed++; if (map.has(bankNr)) linked++; }
     }
     expect(repointed).toBeGreaterThan(0);
     expect(linked).toBe(repointed);

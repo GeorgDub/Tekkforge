@@ -31,6 +31,7 @@ import { parseEsxBank } from "../src/core/esxParser";
 import type { EsxPattern, EsxSample } from "../src/core/esxParser";
 import { buildE2sBank, type E2sSlotInput } from "../src/core/e2sBankBuilder";
 import { parseE2sBank } from "../src/core/e2sBankReader";
+import { bankNumberToE2PatternRef } from "../src/core/e2sPatternSampleLink";
 import { buildE2AllPatFile, E2S_ALLPAT_FILE_SIZE } from "../src/core/e2sExport";
 import type { E2PatternInput } from "../src/core/electribePatternBuilder";
 
@@ -108,10 +109,12 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
     const targetRate = s.sampleRate === 48000 ? 48000 : 44100;
     const pcm = resampleMono(s.pcmData, s.sampleRate, targetRate);
     const name = (s.name && s.name.trim()) || `BOTTROP ${s.index}`;
-    sampleMap.set(s.index, { allSlot: j, hwNumber: USER_SAMPLE_BASE + j, name });
+    const hwNumber = USER_SAMPLE_BASE + j;
+    sampleMap.set(s.index, { allSlot: hwNumber, hwNumber, name });
     return {
-      slotIndex: j,
-      sampleNumber: USER_SAMPLE_BASE + j, // device-displayed number (esli +0x08/+0x56)
+      // Tabellen-Index IST die Geraete-Nummer (index == esli.OSC_0index).
+      slotIndex: hwNumber,
+      sampleNumber: hwNumber, // device-displayed number (esli +0x08/+0x56)
       category: 17, // "User" — wie echte User-Sample-Bänke
       name,
       pcmData: pcm,
@@ -135,7 +138,10 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
       return {
         volume: part.volume,
         pan: part.pan,
-        sampleId: mapped ? mapped.hwNumber : undefined, // repoint to 501+ user sample
+        // Pattern-Referenz liegt um eins unter der Geraete-Nummer.
+        sampleId: mapped
+          ? bankNumberToE2PatternRef(mapped.hwNumber)
+          : undefined,
         steps,
       };
     });
@@ -185,7 +191,9 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
       src.parts.forEach((part, p) => {
         const mapped = sampleMap.get(part.sampleId);
         if (mapped) {
-          expect(readPartSample(i, p)).toBe(mapped.hwNumber);
+          expect(readPartSample(i, p)).toBe(
+            bankNumberToE2PatternRef(mapped.hwNumber),
+          );
           expect(mapped.hwNumber).toBeGreaterThanOrEqual(USER_SAMPLE_BASE);
           checked++;
         }
@@ -207,14 +215,15 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
     lines.push("");
     lines.push("## Annahme zur Sample-Nummerierung");
     lines.push(
-      "Die User-Samples beginnen am Gerät bei **501**. `.all`-Slot 0 → Sample **501**, " +
-        "Slot 1 → **502**, usw. Die Pattern-Parts referenzieren diese Nummern bereits. " +
-        "Falls dein Gerät User-Samples woanders einsortiert, verschiebt sich alles um denselben Offset.",
+      "Die User-Samples beginnen am Gerät bei **501**. Der `.all`-Slot-Index IST " +
+        "die Geräte-Nummer: Slot 501 → Sample **501**, Slot 502 → **502**, usw. " +
+        "In der Pattern-Datei steht die Referenz um eins niedriger (am Gerät " +
+        "gemessen) — die Parts treffen dadurch genau diese Nummern.",
     );
     lines.push("");
     lines.push("## Sample-Liste (.all-Slot → Geräte-Nummer → Name → ESX-Quelle)");
     lines.push("");
-    lines.push("| .all-Slot | Geräte-# | Name | ESX-Sample-Index |");
+    lines.push("| .all-Slot (= Geräte-#) | Geräte-# | Name | ESX-Sample-Index |");
     lines.push("|---:|---:|---|---:|");
     for (const [esxIdx, m] of [...sampleMap.entries()].sort((a, b) => a[1].allSlot - b[1].allSlot)) {
       lines.push(`| ${m.allSlot} | ${m.hwNumber} | ${m.name} | ${esxIdx} |`);

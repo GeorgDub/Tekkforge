@@ -5,18 +5,58 @@
  * Anders als ESX (Samples + Patterns in EINER Datei) liegen beim E2 Sampler die
  * Patterns (.e2sallpat) und die Samples (.all = e2sSample.all) in zwei Dateien.
  * Verknüpft werden sie über die GERÄTE-SAMPLE-NUMMER:
- *   - Pattern-Part trägt seine Sample-Ref bei esli/part +0x08 (z.B. 501+) →
- *     `ParsedPart.sampleId` bzw. `SynthstudioDrumPartImport.sampleId`.
- *   - .all-Sample trägt dieselbe Nummer als OSC_0index (esli +0x08) →
+ *   - Pattern-Part trägt seine Sample-Ref bei esli/part +0x08 →
+ *     `ParsedPart.sampleId`.
+ *   - .all-Sample trägt seine Nummer als OSC_0index (esli +0x08) →
  *     `E2sSlot.sampleNumber`.
- * Match per VALUE (Nummer), nicht per Offset-Tabellen-Position — robust auch bei
- * Lücken/Nicht-501-Basis (Position bzw. "id − 501" bräche bei realen Bänken).
+ *
+ * ⚠ Die beiden Zahlen sind NICHT dieselbe — es liegt genau eins dazwischen,
+ * siehe `e2PatternRefToBankNumber`. Match per VALUE (Nummer), nicht per
+ * Offset-Tabellen-Position — robust auch bei Lücken/Nicht-501-Basis.
  *
  * Dieser Helper ist rein (kein Audio/DOM). Das WAV-Encoding + Blob-URL bleibt
- * im Aufrufer (Seiteneffekt), analog zum ESX-Pfad (KorgBankModal).
+ * im Aufrufer (Seiteneffekt).
  */
 
 import type { E2sBank, E2sSlot } from "./e2sBankReader";
+
+/**
+ * Pattern-Referenz → Bank-Slot-Nummer. **Am Gerät gemessen** (echtes E2S,
+ * Omnitribe-Prüfprotokoll 2026-08-10):
+ *
+ *     Bank-Slot (OSC_0index) == Pattern-Referenz + 1
+ *
+ * Beleg (dreifach, unabhängig): die Parts 1–3 referenzieren 584/586/588, das
+ * Gerät spielt bei allen dreien `Jumpkick`; in der Bank liegt `Jumpkick` auf
+ * 585/587/589, während 584/586/588 `KICK9`/`L3oN_HaT`/`ZaHnI_ki` sind. Deckt
+ * sich mit der Anzeige-Regel `Anzeige = Pattern-Ref + 1` (2026-08-09) und
+ * schließt die dort offene Frage: **`esli` gleicht der Anzeige**, nicht der
+ * Pattern-Referenz.
+ *
+ * Der Fehler war schwer zu sehen, weil ein Versatz von eins **immer ein
+ * plausibles Sample** liefert — nur eben das falsche. Nichts bleibt leer,
+ * nichts schlägt fehl.
+ *
+ * 0 heißt „kein Sample" und bleibt 0 — sonst bände ein leerer Part an Slot 1.
+ */
+export function e2PatternRefToBankNumber(ref: number): number {
+  return ref > 0 ? ref + 1 : ref;
+}
+
+/**
+ * Umkehrung von `e2PatternRefToBankNumber` — Bank-Slot-Nummer → Pattern-Referenz.
+ *
+ * Beim SCHREIBEN eines Patterns gilt dieselbe Messung rückwärts: soll ein Part
+ * das Sample spielen, das am Gerät als Nummer `n` erscheint (= dessen
+ * OSC_0index/Tabellen-Index), muss im Pattern `n − 1` stehen. Ohne diese
+ * Umrechnung trifft jeder exportierte Part das jeweils nächsthöhere Sample.
+ *
+ * 0 bleibt 0 (kein Sample). Nummer 1 kann keine gültige Referenz erzeugen und
+ * wird ebenfalls zu 0 — besser „kein Sample" als der Wraparound auf -1.
+ */
+export function bankNumberToE2PatternRef(bankNumber: number): number {
+  return bankNumber > 1 ? bankNumber - 1 : 0;
+}
 
 /**
  * Baut eine Lookup-Map `Geräte-Sample-Nummer (OSC_0index) → E2sSlot`.

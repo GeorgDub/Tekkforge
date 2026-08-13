@@ -48,6 +48,7 @@ import {
   E2S_ALL_SIGNATURE_LEN,
   E2S_FILE_MAX_BYTES,
   E2S_MAX_SLOTS,
+  E2S_DEVICE_PCM_WARN_BYTES,
   E2S_MAX_TOTAL_PCM_BYTES,
   ESLI_CATEGORY_OFFSET,
   ESLI_END_OFFSET,
@@ -89,7 +90,13 @@ import { floatToInt16LeBytes, sanitizeE2sSlotName } from "./audioProcessor";
 
 /** Eingabe-Spec für einen einzelnen Slot in `buildE2sBank`. */
 export interface E2sSlotInput {
-  /** Slot-Index in der 250-Entry-Offset-Table (0..249). */
+  /**
+   * Position in der Offset-Tabelle (0..`E2S_MAX_SLOTS`-1) — und damit zugleich
+   * die Geräte-Sample-Nummer. Der Index IST die Nummer: eine korrekt gebaute
+   * Bank hält `slotIndex === sampleNumber` (der Reader prüft genau das, siehe
+   * `E2sSlotNumbering`). Für User-Sample-Bänke ab Geräte-Nr. 501 heißt das
+   * `slotIndex: 501, 502, …` — NICHT 0, 1, 2.
+   */
   slotIndex: number;
   /**
    * Sample-Nummer, wie sie das Gerät anzeigt (esli-Body @ +0x56, u16 LE).
@@ -270,6 +277,16 @@ export function buildE2sBank(
     );
   }
 
+  // Reales Gerätelimit: warnen statt ablehnen (siehe E2S_DEVICE_PCM_WARN_BYTES).
+  if (totalPcm > E2S_DEVICE_PCM_WARN_BYTES) {
+    const mb = (n: number) => (n / (1024 * 1024)).toFixed(1);
+    warnings.push(
+      `Sample-Daten ${mb(totalPcm)} MB überschreiten das Sample-RAM des Geräts ` +
+        `(~${mb(E2S_DEVICE_PCM_WARN_BYTES)} MB) — die Electribe wird diese Bank ` +
+        `voraussichtlich nicht vollständig laden. Datei wird trotzdem gebaut.`,
+    );
+  }
+
   // ── Stage 2 — Prelude (Signature + Offset-Table + Padding) ──────────────────
   const out = new Uint8Array(totalSize);
   // Signature
@@ -279,8 +296,8 @@ export function buildE2sBank(
   for (let i = 0; i < E2S_MAX_SLOTS; i++) {
     dv.setUint32(E2S_ALL_OFFSET_TABLE_START + i * 4, offsetTable[i], true);
   }
-  // (Bytes zwischen Signature 0x10..0x07E0, und zwischen Table-End 0x0BC8..0x1000
-  //  sind bereits 0 dank Uint8Array-Default — kein expliziter memset nötig.)
+  // (Die Tabelle füllt 0x0010..0x1000 exakt aus; leere Slots bleiben 0 dank
+  //  Uint8Array-Default — kein expliziter memset nötig.)
 
   // ── Stage 3 — RIFF-Chunks ───────────────────────────────────────────────────
   for (const p of pending) {
@@ -563,7 +580,14 @@ function buildKorgSubchunk(
 
   // Fixed-value fields the device expects (Oe2sSLE "_UFix"; verified constant
   // across real factory/user banks). Oe2sSLE warns if these differ → set them.
-  chunk[bodyOffset + 0x1d] = 0x02;
+  //
+  // +0x1D ist KEIN Fix-Byte, sondern das MSB von importNum (u16 @0x1C =
+  // sampleNumber + 50) — es wird oben bereits mitgeschrieben und darf hier
+  // NICHT überschrieben werden. In den Referenz-Bänken lagen alle importNums
+  // zufällig in 0x200..0x2FF, daher sah das Byte konstant 0x02 aus. Der frühere
+  // Hardcode `chunk[bodyOffset + 0x1d] = 0x02` hat ab sampleNumber 718
+  // (importNum >= 0x300) das MSB zerstört. Befund: Synthstudio v3.316 beim Bau
+  // einer 233-Slot-Bank mit Slots bis 733.
   chunk[bodyOffset + 0x21] = 0x7f;
   chunk[bodyOffset + 0x23] = 0x01;
   chunk[bodyOffset + 0x4b] = 0x01;
@@ -583,10 +607,13 @@ function buildKorgSubchunk(
   // Sampling-Freq @ 0x50 (u32 LE)
   dv.setUint32(bodyOffset + ESLI_SAMPLING_FREQ_OFFSET, slot.sampleRate >>> 0, true);
 
-  // SampleTune @ 0x55 (i8) — clamp [-99..+99]
+  // SampleTune @ 0x55 (i8) — Oe2sSLE „OSC_SampleTune" ist Coarse-Tune mit
+  // GUI-Range -63..+63 (nicht Cents, und nicht ±99). SoT: Oe2sSLE_GUI.py
+  // Tune-Spinbox. Wir clampen exakt darauf, damit gebaute Bänke im Geräte-Range
+  // bleiben.
   let tune = typeof slot.sampleTune === "number" ? Math.round(slot.sampleTune) : 0;
-  if (tune > 99) tune = 99;
-  if (tune < -99) tune = -99;
+  if (tune > 63) tune = 63;
+  if (tune < -63) tune = -63;
   // i8 sign-conversion
   chunk[bodyOffset + ESLI_SAMPLE_TUNE_OFFSET] = tune < 0 ? tune + 256 : tune;
 

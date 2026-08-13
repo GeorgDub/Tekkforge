@@ -24,6 +24,11 @@ import {
 } from "./electribeImport";
 import { readPartParamsFromBody } from "./partParams";
 import { parseE2sBank, type E2sBank } from "./e2sBankReader";
+import { E2S_SLOT_INDEX_MAX } from "./constants";
+import {
+  bankNumberToE2PatternRef,
+  e2PatternRefToBankNumber,
+} from "./e2sPatternSampleLink";
 
 export const EDITOR_PARTS = 16;
 export const EDITOR_MAX_STEPS = 64;
@@ -70,7 +75,11 @@ export interface EditorStep {
 
 export interface EditorPart {
   label: string;
-  /** Geräte-Sample-Nummer (501+) oder null = kein Sample zugewiesen. */
+  /**
+   * Geräte-/Bank-Sample-Nummer (501+, == esli.OSC_0index == Anzeige am Gerät)
+   * oder null = kein Sample zugewiesen. NICHT der Rohwert aus der Pattern-Datei
+   * — der liegt um eins niedriger (siehe `e2PatternRefToBankNumber`).
+   */
   sampleNumber: number | null;
   /** 0..127. */
   volume: number;
@@ -236,7 +245,13 @@ export function patternToE2Input(p: EditorPattern): E2PatternInput {
     parts: p.parts.map((part) => ({
       volume: part.volume,
       pan: part.pan,
-      sampleId: part.sampleNumber ?? undefined,
+      // `part.sampleNumber` ist die Geräte-/Bank-Nummer (OSC_0index). In der
+      // Pattern-Datei steht sie um eins niedriger — siehe
+      // `bankNumberToE2PatternRef` (am Gerät gemessen).
+      sampleId:
+        part.sampleNumber != null
+          ? bankNumberToE2PatternRef(part.sampleNumber)
+          : undefined,
       params: part.params,
       muted: part.muted ?? false,
       steps: part.steps.slice(0, p.stepLength).map((s) => ({
@@ -278,7 +293,9 @@ export function editorPatternFromParsed(p: ParsedPattern): EditorPattern {
     const src = p.parts[pi];
     const part = createPart(PART_LAYOUT_LABELS[pi] ?? `Part ${pi + 1}`);
     if (!src) return part;
-    part.sampleNumber = src.sampleId > 0 ? src.sampleId : null;
+    // Datei-Referenz → Bank-/Anzeige-Nummer (+1, am Gerät gemessen).
+    part.sampleNumber =
+      src.sampleId > 0 ? e2PatternRefToBankNumber(src.sampleId) : null;
     part.volume = clamp127(src.volume, 127);
     part.pan = clamp127(src.pan, 64);
     if (src.muted) part.muted = true;
@@ -484,14 +501,21 @@ export function buildBankFiles(project: EditorProject): BankBuildResult {
 
 /**
  * Baut nur die `.all`-Sample-Bank aus einer Sample-Liste (null wenn leer).
- * Samples werden nach Geräte-Nummer sortiert, max 250. Standalone nutzbar zum
+ * Samples werden nach Geräte-Nummer sortiert. Standalone nutzbar zum
  * `.all`-Bearbeiten/Exportieren (unabhängig von Patterns).
+ *
+ * Der Slot-Index IST die Geräte-Nummer — nicht die Position in der Liste.
+ * Stand vorher `slotIndex: i`, ergab das eine um ~501 fehlnummerierte Bank
+ * (Selbstprüfung beim Einlesen: `E2sSlotNumbering.kind === "constant-shift"`).
  */
 export function buildSampleBank(samples: readonly PoolSample[]): Uint8Array | null {
   if (samples.length === 0) return null;
-  const sorted = [...samples].sort((a, b) => a.number - b.number).slice(0, 250);
-  const slots: E2sSlotInput[] = sorted.map((s, i) => ({
-    slotIndex: i,
+  const sorted = [...samples]
+    .sort((a, b) => a.number - b.number)
+    .filter((s) => s.number > 0 && s.number < E2S_SLOT_INDEX_MAX);
+  if (sorted.length === 0) return null;
+  const slots: E2sSlotInput[] = sorted.map((s) => ({
+    slotIndex: s.number,
     sampleNumber: s.number,
     category: 17, // "User"
     name: s.name,
