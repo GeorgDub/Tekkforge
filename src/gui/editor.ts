@@ -46,6 +46,7 @@ import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams
 import { fxTypeDef, decodeFxEditBuffer } from "../core/e2FxParams";
 import { buildSetFxParam, fxSlotForPart } from "../core/hacktribeNrpn";
 import {
+  RAM_CMD,
   addressForSlot,
   buildRamReadRequest,
   findRamMapEntry,
@@ -502,13 +503,26 @@ function renderPartFxSection(
         const reply = await requestSysex(
           midi,
           buildRamReadRequest(addr, entry.size, midiOpts()),
-          (b) => parseRamResponse(b)?.kind === "data",
+          // NUR die Geräte-Antwort (cmd 0x54) akzeptieren, nicht auch 0x52.
+          // `parseRamResponse` lässt beide als "data" durch — defensiv beim
+          // Auswerten, aber als Filter ein Fehlannehmer: bei eingeschaltetem
+          // MIDI-Thru kommt die eigene 0x52-Anfrage am Eingang zurück, und die
+          // würde hier als Antwort gelten und beim Dekodieren Müll ergeben.
+          (b) => b[6] === RAM_CMD.writeData && parseRamResponse(b)?.kind === "data",
           2000,
         );
         const parsed = reply ? parseRamResponse(reply) : null;
         if (!parsed || parsed.kind !== "data") {
           status.textContent =
             "Keine Antwort. Läuft auf dem Gerät Hacktribe? Das Stock-Gerät kennt 0x52 nicht.";
+          return;
+        }
+        if (parsed.data.length < entry.size) {
+          // Ohne diese Prüfung liest der Dekoder über das Ende hinaus, bekommt
+          // `undefined ?? 0` und meldet eine „Abweichung" mit Wert 0 — eine
+          // abgeschnittene Antwort sähe wie ein falscher Wert aus.
+          status.textContent =
+            `Unvollständige Antwort: ${parsed.data.length} von ${entry.size} Bytes. Kein Vergleich möglich.`;
           return;
         }
         const buf = decodeFxEditBuffer(parsed.data, false);
