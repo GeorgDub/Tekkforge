@@ -145,6 +145,21 @@ pnpm check          # tsc --noEmit
   wirklich unter Electron und nicht im Browser?
 - **Treiber läuft in den Timeout, nachdem alle Kommandos durch sind** →
   `beforeunload`-Falle, siehe Gotchas.
+
+- **☠ Nach einem RAM-Write antwortet das Gerät auf nichts mehr → auf den
+  Geräte-Bildschirm schauen.** Zeigt er „Midi error", steht dort ein Dialog,
+  der mit **Exit** quittiert werden muss; solange er steht, verarbeitet das
+  Gerät kein SysEx, und jede folgende Leseanfrage läuft in den Timeout. Der
+  Host sieht davon nichts — die Meldung existiert nur am Gerät.
+
+  Ausgelöst wurde das dadurch, dass die Write-Frames ohne Pause und ohne
+  Warten auf das ACK (`0x21`) rausgingen. Der Ablauf muss pro Häppchen
+  `0x53` → Pause → `0x54` → **ACK abwarten** → Pause sein. Ein halb
+  angekommener Write hinterlässt ein zerschossenes Preset (real passiert:
+  IFX-Slot 0, Name weg, Nachbarslots intakt).
+
+  **Rettung:** der Bereich liegt im RAM. Gerät aus und wieder ein lädt aus dem
+  Flash nach. Deshalb gibt es für Flash bewusst keine Schreib-Builder.
 - **Geräte-Kommandos melden „keine Antwort", obwohl `#midiStatus` „verbunden"
   sagt → zuerst an einen belegten Port denken, nicht an die Firmware.**
   Der KORG-USB-Treiber ist unter Windows **Single-Client**: hält ein anderes

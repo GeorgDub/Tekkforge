@@ -174,6 +174,11 @@ Vorher-Lesen  ->  Bestaetigen  ->  paarweise schreiben  ->  Zuruecklesen  ->  Ve
 - **Laenge muss exakt passen.** Weicht die Hex-Eingabe von der gelesenen Laenge
   ab, wird abgelehnt — sonst landet ein zu kurzer Block an einer gueltigen
   Adresse, und das faellt erst nach dem Schreiben auf.
+- **Getaktet, nicht geflutet.** Pro Haeppchen `0x53` (Adresse) -> Pause ->
+  `0x54` (Daten) -> **auf das ACK `0x21` des Geraets warten** -> Pause. Ohne
+  das ACK zeigt die Electribe bei jedem Versuch „Midi error", der am Geraet
+  mit Exit quittiert werden muss — und solange der Dialog steht, verarbeitet
+  sie kein SysEx mehr.
 - **Jeder Write wird zurueckgelesen und verglichen.** Ein Write ohne
   Rueckleseprobe ist ein Write, von dem man nichts weiss.
 - **„Zurueckschreiben"** stellt den Vorher-Stand wieder her — ueber denselben

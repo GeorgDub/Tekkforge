@@ -50,13 +50,15 @@ import {
   RAM_CMD,
   addressForSlot,
   buildRamReadRequest,
-  buildRamWriteFrames,
+  buildRamWriteAddress,
+  buildRamWriteData,
   findRamMapEntry,
   formatHexDump,
   parseAddress,
   parseHexBytes,
   parseRamResponse,
   splitRamRead,
+  splitRamWrite,
   validateRamRange,
   verifyRamWrite,
 } from "../core/hacktribeRam";
@@ -1046,30 +1048,70 @@ function ramResetPending(): void {
   $("ramCommit").classList.add("hidden");
 }
 
-/** Schreibt `bytes` nach `addr` und liest zur Kontrolle zurück. */
+/** Pause zwischen den Frames eines Schreibvorgangs (Synthstudio-Referenzwert). */
+const RAM_CHUNK_DELAY_MS = 30;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Schreibt `bytes` nach `addr` und liest zur Kontrolle zurück.
+ *
+ * ☠ Der Ablauf ist getaktet, nicht geflutet. Jedes Häppchen ist
+ * `0x53` (Adresse) → Pause → `0x54` (Daten) → **auf ACK `0x21` warten** →
+ * Pause. Frühere Fassung hat alle Frames am Stück rausgeschickt und auf nichts
+ * gewartet — am Gerät zeigte der Bildschirm daraufhin bei JEDEM Versuch
+ * „Midi error", der erst mit Exit quittiert werden musste. Solange dieser
+ * Dialog steht, verarbeitet das Gerät kein SysEx mehr; die anschließende
+ * Rückleseprobe lief deshalb in den Timeout und meldete „Zustand UNBEKANNT",
+ * und ein halb angekommener Write hinterließ ein zerschossenes Preset.
+ *
+ * Das ACK ist damit kein Luxus: es ist das einzige Signal, dass das Gerät das
+ * Häppchen überhaupt angenommen hat.
+ */
 async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): Promise<void> {
-  const built = buildRamWriteFrames(addr, bytes, midiOpts());
-  if (!built.ok) {
-    setRamStatus(`${what} abgebrochen: ${built.reason}`);
+  const range = validateRamRange(addr, bytes.length);
+  if (!range.ok) {
+    setRamStatus(`${what} abgebrochen: ${range.reason}`);
     return;
   }
-  setRamStatus(`${what}: sende ${bytes.length} Bytes…`);
-  for (const f of built.frames) await midi.sendAsync(f);
+  const chunks = splitRamWrite(addr, bytes);
+  let written = 0;
 
-  // Das Gerät braucht nach einem Write einen Moment, bevor es wieder auf
-  // Leseanfragen antwortet. Am Gerät gemessen (2026-08-13): ein sofortiger
-  // Rücklesevorgang lieferte das erste Häppchen noch und lief beim zweiten
-  // (0xC00A81F0) in den Timeout — obwohl der Write angekommen war, wie ein
-  // späteres Lesen zeigte. Ohne diese Pause meldet die Prüfung „Zustand
-  // UNBEKANNT" für einen Write, der in Wahrheit sauber gelandet ist.
-  await new Promise((r) => setTimeout(r, 400));
+  for (const [i, chunk] of chunks.entries()) {
+    const nr = `${i + 1}/${chunks.length}`;
+    setRamStatus(`${what}: sende Häppchen ${nr} (${written}/${bytes.length} B)…`);
+    try {
+      await midi.sendAsync(buildRamWriteAddress(chunk.addr, chunk.bytes.length, midiOpts()));
+      await sleep(RAM_CHUNK_DELAY_MS);
+      // Auf die Bestätigung warten, statt weiterzusenden.
+      const reply = await requestSysex(
+        midi,
+        buildRamWriteData(chunk.bytes, midiOpts()),
+        (b) => parseRamResponse(b)?.kind === "ack",
+        4000,
+      );
+      if (parseRamResponse(reply)?.kind !== "ack") {
+        setRamStatus(
+          `${what} abgebrochen: Gerät hat Häppchen ${nr} nicht bestätigt (${written} B bereits geschrieben).`,
+        );
+        return;
+      }
+    } catch (e) {
+      setRamStatus(
+        `${what} abgebrochen bei Häppchen ${nr}: ${String(e)} — ${written} von ${bytes.length} B geschrieben, ` +
+          `Zustand im Gerät UNVOLLSTÄNDIG. Zeigt das Gerät „Midi error"? Dann mit Exit quittieren.`,
+      );
+      return;
+    }
+    written += chunk.bytes.length;
+    await sleep(RAM_CHUNK_DELAY_MS);
+  }
 
   let back = await ramReadBytes(addr, bytes.length);
   if (!back.ok) {
-    // Einmal nachfassen, bevor wir „unbekannt" melden — der häufigste Grund
-    // ist ein noch beschäftigtes Gerät, nicht ein misslungener Write.
+    // Einmal nachfassen, bevor wir „unbekannt" melden — das Gerät ist nach
+    // einem Write kurz beschäftigt.
     setRamStatus(`${what}: Rückleseprobe wird wiederholt…`);
-    await new Promise((r) => setTimeout(r, 1200));
+    await sleep(1200);
     back = await ramReadBytes(addr, bytes.length);
   }
   if (!back.ok) {
