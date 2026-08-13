@@ -971,7 +971,10 @@ async function ramReadBytes(
   const chunks = splitRamRead(addr, len);
   const out = new Uint8Array(len);
   let off = 0;
-  for (const c of chunks) {
+  for (const [i, c] of chunks.entries()) {
+    // Jedes Häppchen ist eine eigene Anfrage mit eigenem Timeout — ohne
+    // Rückmeldung sieht ein Mehrfach-Lesevorgang wie ein Hänger aus.
+    if (chunks.length > 1) setRamStatus(`Lese Häppchen ${i + 1}/${chunks.length}…`);
     let reply: Uint8Array;
     try {
       reply = await requestSysex(
@@ -1125,7 +1128,13 @@ function setupRamPanel(): void {
       ramSnapshot = { addr: inp.addr, bytes: before.bytes };
       ramPending = { addr: inp.addr, bytes: hex.bytes };
       $("ramCommit").classList.remove("hidden");
-      $("ramUndo").classList.remove("hidden");
+      // Der Undo-Knopf bleibt bewusst stehen, auch wenn danach Adresse oder
+      // Struktur geändert werden — er ist der Rückweg und soll nicht durch ein
+      // Antippen eines Feldes verschwinden. Damit er dann nicht heimlich woanders
+      // hinschreibt als das Panel anzeigt, trägt er sein Ziel im Text.
+      const undoBtn = $("ramUndo");
+      undoBtn.textContent = `↶ Zurückschreiben nach 0x${inp.addr.toString(16).toUpperCase()} (${before.bytes.length} B)`;
+      undoBtn.classList.remove("hidden");
       const v = verifyRamWrite(before.bytes, hex.bytes);
       setRamStatus(
         v.ok

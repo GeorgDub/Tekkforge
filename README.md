@@ -177,7 +177,12 @@ Vorher-Lesen  ->  Bestaetigen  ->  paarweise schreiben  ->  Zuruecklesen  ->  Ve
 - **Jeder Write wird zurueckgelesen und verglichen.** Ein Write ohne
   Rueckleseprobe ist ein Write, von dem man nichts weiss.
 - **„Zurueckschreiben"** stellt den Vorher-Stand wieder her — ueber denselben
-  Pfad inklusive Rueckleseprobe.
+  Pfad inklusive Rueckleseprobe. Der Knopf traegt seine Zieladresse im Text und
+  bleibt auch stehen, wenn danach Adresse oder Struktur geaendert werden: er ist
+  der Rueckweg und soll nicht durch ein Antippen verschwinden. Der Schnappschuss
+  gilt nur fuer den zuletzt vorbereiteten Write und liegt im Speicher — nach dem
+  Schliessen der App ist er weg. Wer an Presets herumprobiert, liest sie vorher
+  aus und sichert sie.
 - Struktur-Auswahl und Adressfeld koennen nicht auseinanderlaufen: eine
   Handeingabe der Adresse setzt die Struktur auf „frei" zurueck.
 
