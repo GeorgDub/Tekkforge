@@ -455,7 +455,11 @@ function renderPartFxSection(
     .join("");
   host.innerHTML = `
     <div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">
-      <b style="color:var(--accent2);font-size:11px">IFX: ${escapeHtml(def.name)}</b>
+      <b style="color:var(--accent2);font-size:11px">IFX-Algorithmus: ${escapeHtml(def.name)}</b>
+      <div style="color:var(--muted);font-size:10px">
+        Algorithmus-Name — das Gerätemenü zeigt den <b>Preset</b>-Namen, der anders
+        lautet (z.B. Preset „Bit Crusher" = Algorithmus „Decimator").
+      </div>
       <div class="warn" style="font-size:10px;margin:4px 0">
         ⚠ Live-Senden braucht <b>Hacktribe</b>-Firmware und ist in TekkForge nicht
         am Gerät erprobt. Ändert nur den Klang am Gerät, nicht das Pattern hier.

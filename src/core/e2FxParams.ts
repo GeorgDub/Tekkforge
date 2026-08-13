@@ -18,6 +18,30 @@
  * passende Parameterliste benennen, statt nur nackte Indizes anzuzeigen.
  */
 
+/**
+ * ⚠ Diese Namen sind **Algorithmen**, nicht die Bezeichnungen aus dem
+ * Gerätemenü. Am Gerät wählt man ein *Preset*, und das trägt einen eigenen
+ * Namen; geladen wird davon ein Algorithmus mit vorgegebenen Parametern.
+ *
+ * Am Gerät gegengeprüft (2026-08-13) — der Nutzer nannte die Presets, der
+ * FX-Edit-Puffer trug die Algorithmen:
+ *
+ * | Preset (Gerätemenü) | Algorithmus (diese Tabelle) |
+ * |---|---|
+ * | „Bit Crusher" (Slot 4)  | `0x09` Decimator   |
+ * | „Sustainer"   (Slot 6)  | `0x03` Cheap Comp  |
+ * | „Radio EQ"    (Slot 11) | `0x10` Acid Driver |
+ *
+ * Beides ist stimmig — ein Bit Crusher *ist* ein Decimator, ein Sustainer *ist*
+ * ein Kompressor. Aber wer die Oberfläche mit dem Geräte-Display vergleicht,
+ * hält die Abweichung fuer einen Lesefehler. Deshalb muss die UI diese Namen
+ * als Algorithmus ausweisen.
+ *
+ * Die Preset-Namen stehen im RAM: `E2_RAM_MAP.ifxPreset`, Name als ASCII ab
+ * Offset +1 des 524-B-Blobs. Im Bestand des Testgeräts waren 49 der 100 Slots
+ * belegt (0..48) — bestätigt durch zwei Zähler: `maxIfxIndex` (0xC0048F80) = 48
+ * und der `add_ifx`-Zähler (0xC003EFDC) = 49.
+ */
 export interface FxTypeDef {
   name: string;
   params: string[]; // params[k] = Name des Parameters mit DATA-MSB-Index k

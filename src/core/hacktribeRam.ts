@@ -130,7 +130,10 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     // 0xC00B4F30.
     count: 100,
     size: 0x20c,
-    note: "524 B pro Preset, Slot 0–99 (hacktribe e2sysex.py: idx < 100)",
+    // Der Preset-NAME steht als ASCII ab Offset +1 des Blobs (NUL-terminiert)
+    // — das ist die Bezeichnung, die das Gerätemenü zeigt. Sie ist NICHT der
+    // Algorithmus-Name aus `e2FxParams`; siehe dortigen Kopfkommentar.
+    note: "524 B pro Preset, Slot 0–99 (hacktribe e2sysex.py: idx < 100); Name ab +1",
   },
   {
     key: "mfxPreset",
@@ -168,6 +171,10 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     stride: 1,
     count: 1,
     size: 1,
+    // Am Gerät gegengeprüft (2026-08-13): dieser Zähler stand auf 48, der
+    // `add_ifx`-Zähler bei 0xC003EFDC auf 49 — und ein Byte-Scan über alle 100
+    // Preset-Slots fand genau 49 belegte (0..48). Drei unabhängige Quellen,
+    // dieselbe Zahl; die Adresse ist damit bestätigt.
     note: "1 Byte — zum Schreiben gehören 12 weitere Zähler, siehe Modul-Doku",
   },
 ] as const;
