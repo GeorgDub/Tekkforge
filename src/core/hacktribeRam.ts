@@ -313,6 +313,19 @@ export interface RamChunk {
 }
 
 /**
+ * Wie ein Schreibvorgang aufgeteilt wird.
+ *
+ * - `"halves"` (Vorgabe) — **wie die Urquelle**. hacktribes `set_ifx` teilt ein
+ *   524-B-Preset genau einmal: `[:0x100]` und `[0x100:]`, also 256 + 268 B.
+ *   Der Kommentar dort: „Writing in two halves fails less often". `write_cpu_ram`
+ *   chunkt selbst gar nicht — es schickt in EINEM `0x54`-Frame, was man ihm gibt.
+ * - `"fixed"` — feste Häppchen von `chunkSize`. Fuer 524 B ergibt das
+ *   256 + 256 + **12**, also ein sehr kurzes drittes Stück, das die Referenz nie
+ *   sendet. Bleibt fuer Vergleichsmessungen erhalten.
+ */
+export type RamWriteSplit = "halves" | "fixed";
+
+/**
  * Teilt einen Schreibvorgang in Häppchen mit je eigener Zieladresse.
  *
  * Jedes Häppchen wird als vollständiges Adresse-dann-Daten-Paar gesendet; das
@@ -323,9 +336,20 @@ export function splitRamWrite(
   addr: number,
   data: Uint8Array,
   chunkSize = RAM_WRITE_CHUNK,
+  mode: RamWriteSplit = "halves",
 ): RamChunk[] {
   const size = chunkSize > 0 ? chunkSize : RAM_WRITE_CHUNK;
   const out: RamChunk[] = [];
+  if (mode === "halves") {
+    // Genau wie hacktribes `set_ifx`: EINMAL bei `chunkSize` teilen, der Rest
+    // geht als ein Stück raus — auch wenn er größer als `chunkSize` ist.
+    // `write_cpu_ram` selbst chunkt gar nicht; es schickt, was man ihm gibt.
+    if (data.length <= size) return [{ addr, bytes: data }];
+    return [
+      { addr, bytes: data.subarray(0, size) },
+      { addr: addr + size, bytes: data.subarray(size) },
+    ];
+  }
   for (let off = 0; off < data.length; off += size) {
     out.push({
       addr: addr + off,

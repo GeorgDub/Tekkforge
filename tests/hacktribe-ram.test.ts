@@ -173,9 +173,26 @@ describe("Antwort-Auswertung", () => {
 });
 
 describe("Chunking und Write-Frames", () => {
-  it("gibt jedem Haeppchen seine eigene Adresse", () => {
+  it("teilt wie die Urquelle: einmal bei 0x100, Rest am Stueck", () => {
+    // hacktribe set_ifx: ifx[:0x100] + ifx[0x100:] -> 256 + 268 fuer 524 B.
+    const data = new Uint8Array(0x20c);
+    const chunks = splitRamWrite(0xc00a80f0, data);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].addr).toBe(0xc00a80f0);
+    expect(chunks[0].bytes.length).toBe(0x100);
+    expect(chunks[1].addr).toBe(0xc00a80f0 + 0x100);
+    expect(chunks[1].bytes.length).toBe(0x20c - 0x100); // 268, groesser als chunkSize
+  });
+
+  it("laesst kleine Schreibvorgaenge ungeteilt", () => {
+    const chunks = splitRamWrite(0xc03478a8, new Uint8Array(0x72));
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].bytes.length).toBe(0x72);
+  });
+
+  it("gibt im festen Modus jedem Haeppchen seine eigene Adresse", () => {
     const data = new Uint8Array(0x250);
-    const chunks = splitRamWrite(0xc0000000, data);
+    const chunks = splitRamWrite(0xc0000000, data, RAM_WRITE_CHUNK, "fixed");
     expect(chunks).toHaveLength(3);
     expect(chunks[0].addr).toBe(0xc0000000);
     expect(chunks[1].addr).toBe(0xc0000000 + RAM_WRITE_CHUNK);

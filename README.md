@@ -194,33 +194,33 @@ Vorher-Lesen  ->  Bestaetigen  ->  paarweise schreiben  ->  Zuruecklesen  ->  Ve
 ⚠ **Das Geraet darf waehrend des Schreibens nicht spielen** — RAM-Writes koennen
 mit der Wiedergabe kollidieren, und TekkForge kann das nicht pruefen.
 
-### Erprobungsstand — Schreiben wirkt derzeit nicht
+### Erprobungsstand — am Geraet belegt
 
-☠ Am Geraet gemessen (2026-08-13, E2 Sampler mit Hacktribe): **der Schreibweg
-laeuft protokollkonform durch und bleibt trotzdem wirkungslos.**
+Lesen **und** Schreiben sind gegen echte Hardware nachgewiesen (2026-08-13,
+E2 Sampler mit Hacktribe). Der Abnahmelauf an IFX-Preset-Slot 40:
 
-| Beobachtung | Befund |
-|---|---|
-| Frames | byte-genau korrekt — Mitschnitt gegen `syxEnc` nachgerechnet |
-| Geraet | bestaetigt jedes Haeppchen mit ACK `0x21` |
-| Speicher | unveraendert |
-| Geprueft an | IFX-Preset (`0xC00A80F0`, 524 B) und Live-FX-Puffer (`0xC03478A8`, 114 B) |
-| Rueckleseprobe | meldet beide Male exakt das geaenderte Byte als abweichend |
+```
+vorher:            00 4C 50 20 44 72 69 76 65   "LP Drive"
+Byte 1: 4C -> 4D
+SCHREIBEN: OK  524 Bytes geschrieben und zurueckgelesen — identisch
+danach:            00 4D 50 20 44 72 69 76 65   "MP Drive"
+UNDO:      OK  524 Bytes geschrieben und zurueckgelesen — identisch
+wiederhergestellt: 00 4C 50 20 44 72 69 76 65   "LP Drive"
+```
 
-Ein **ACK heisst also nur „Nachricht angekommen", nicht „geschrieben"**. Wer
-darauf baut, haelt einen wirkungslosen Write fuer erfolgreich — genau deshalb
-ist die Rueckleseprobe nicht optional.
+**Die Ursache, an der es vorher scheiterte, ist eine Lehre wert.** Der Write
+lief protokollkonform durch, das Geraet bestaetigte mit ACK `0x21` — und der
+Speicher aenderte sich nicht. Grund: die Antwort auf die **Adress-Setzung
+(`0x53`) wurde nicht abgeholt**. Das Warten nach dem Datenframe fing dann das
+verspaetete Adress-ACK ein und meldete Erfolg, waehrend der Datenframe
+unquittiert blieb. Im MIDI-Mitschnitt sieht beides identisch aus — ein ACK
+nach dem Datenframe —, weshalb das lange unsichtbar war. Die Urquelle
+(hacktribe `e2sysex.py`) holt die Antwort mit dem Kommentar „Ignore response
+for now" ab: Inhalt egal, aber sie muss vom Draht.
 
-Offene Spur: das Geraet antwortet auf ein `0x52` mit `54 52 00 <payload>`, also
-zwei Bytes zwischen Kommando und Nutzdaten. Unser `0x54`-Schreibframe hat
-diesen Vorspann nicht. Ob das Geraet ihn beim Schreiben erwartet, laesst sich
-nur gegen die hacktribe-Quelle klaeren.
-
-Was dagegen **belegt** ist: die ACK-Taktung (`0x53` -> Pause -> `0x54` -> ACK
-abwarten) hat den Fehler `Midi error` beseitigt, den das Geraetedisplay vorher
-bei *jedem* Schreibversuch zeigte und der mit Exit quittiert werden musste.
-Ungetaktetes Senden hat ausserdem real ein Preset zerschossen (IFX-Slot 0,
-Name weg) — behoben durch einen Power-Cycle, weil der Bereich im RAM liegt.
+Drei Fehlschlaege vorher, alle mit derselben Ursache: IFX-Preset 0 (aktiv),
+Live-FX-Puffer, IFX-Preset 40 — Zieladresse und Aktivzustand waren nie das
+Problem.
 
 **Erprobungsstand Lesen.** Der **Lesepfad ist am Geraet belegt**: an einem Electribe 2
 Sampler mit Hacktribe liefert `0xC00A80F0` / 524 B das IFX-Preset „Punch", und

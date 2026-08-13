@@ -35,6 +35,7 @@ import {
   buildSearchDevice,
   parseSearchReply,
   decodeDump,
+  isKorgSysex,
   parseAck,
   E2_ACK_OK,
   E2_ACK_ERROR,
@@ -1080,9 +1081,23 @@ async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): 
     const nr = `${i + 1}/${chunks.length}`;
     setRamStatus(`${what}: sende Häppchen ${nr} (${written}/${bytes.length} B)…`);
     try {
-      await midi.sendAsync(buildRamWriteAddress(chunk.addr, chunk.bytes.length, midiOpts()));
+      // ☠ Die Antwort auf die ADRESS-Setzung muss konsumiert werden, bevor der
+      // Datenframe rausgeht. Die Urquelle (hacktribe e2sysex.py
+      // `write_cpu_ram`) liest sie ausdrücklich — „Ignore response for now"
+      // heißt: Inhalt egal, aber sie wird abgeholt.
+      //
+      // Ohne das fängt das Warten nach `0x54` das VERSPÄTETE ACK der
+      // Adress-Setzung ein und meldet Erfolg, während der Datenframe
+      // unquittiert bleibt. Im MIDI-Mitschnitt sieht beides identisch aus —
+      // ein ACK nach dem Datenframe —, weshalb der Fehler lange unsichtbar war.
+      await requestSysex(
+        midi,
+        buildRamWriteAddress(chunk.addr, chunk.bytes.length, midiOpts()),
+        (b) => isKorgSysex(b),
+        4000,
+      ).catch(() => undefined); // manche Firmwarestände antworten hier nicht
       await sleep(RAM_CHUNK_DELAY_MS);
-      // Auf die Bestätigung warten, statt weiterzusenden.
+      // Jetzt erst die Daten — und auf DEREN Bestätigung warten.
       const reply = await requestSysex(
         midi,
         buildRamWriteData(chunk.bytes, midiOpts()),
