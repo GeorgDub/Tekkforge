@@ -76,10 +76,10 @@ IFX-Preset „Punch" (`C00A80F0  00 50 75 6E 63 68 …`).
 ⚠ **Ein vorhandener MIDI-Port heißt nicht, dass das Gerät antwortet.** Später
 in derselben Sitzung meldete `#midiStatus` unverändert
 „verbunden — Ausgang: electribe2 sampler", während dieselbe Leseanfrage
-reproduzierbar in den Timeout lief. Der Ablauf ist also nicht deterministisch —
-er hängt am Zustand des Geräts (an? Hacktribe? nicht in einem Menü, das SysEx
-ignoriert?). Der Fehlerpfad selbst verhält sich sauber: klare Meldung,
-kein Hänger, Exit-Code 0.
+reproduzierbar in den Timeout lief. Aufgeklärt: der KORG-Treiber ist
+Single-Client, und parallel lief ein anderes Programm am selben Port. Siehe
+Troubleshooting — das ist der erste Verdacht, nicht die Firmware. Der
+Fehlerpfad selbst verhält sich sauber: klare Meldung, kein Hänger, Exit 0.
 
 Alle **geräteunabhängigen** Kommandos oben sind dagegen jederzeit reproduzierbar.
 
@@ -145,12 +145,28 @@ pnpm check          # tsc --noEmit
   wirklich unter Electron und nicht im Browser?
 - **Treiber läuft in den Timeout, nachdem alle Kommandos durch sind** →
   `beforeunload`-Falle, siehe Gotchas.
-- **Geräte-Kommandos melden „keine Antwort"**, obwohl `#midiStatus`
-  „verbunden" sagt → der Port existiert, das Gerät antwortet trotzdem nicht.
-  Beobachtet: dieselbe Leseanfrage lief erst zweimal durch und danach
-  reproduzierbar in den Timeout, ohne dass sich am Port etwas änderte. Prüfen:
-  Gerät an? Hacktribe statt Stock-Firmware? (RAM-Lesen `0x52` kennt nur
-  Hacktribe.) Nicht in einem Menü, das SysEx ignoriert? Für Abläufe, die nicht
-  vom Gerät abhängen, ist das irrelevant — die laufen immer.
+- **Geräte-Kommandos melden „keine Antwort", obwohl `#midiStatus` „verbunden"
+  sagt → zuerst an einen belegten Port denken, nicht an die Firmware.**
+  Der KORG-USB-Treiber ist unter Windows **Single-Client**: hält ein anderes
+  Programm den Port (Synthstudio, ein Omnitribe-Werkzeug, eine DAW, eine
+  ältere TekkForge-Instanz), öffnet TekkForge ihn klaglos und empfängt
+  trotzdem nichts. Der Fall ist stumm und sieht aus wie ein totes Gerät.
+
+  So unterscheidet man es in zwei Schritten:
+
+  ```bash
+  node .claude/skills/run-tekkforge/driver.mjs --run "launch; ram-open; click #midiSearch; ms 4000; eval document.getElementById('midiMonitor').textContent.slice(0,200)"
+  ```
+
+  `#midiSearch` schickt den **Standard**-KORG-Suchbefehl (`f0 42 50 00 00 f7`),
+  den auch eine Serien-Firmware beantwortet. Im Monitor steht dann:
+
+  - nur `▶ OUT …`, kein `◀ IN` → es kommt gar nichts an. Port belegt (häufigst),
+    falscher Port, oder SysEx im Global-Menü des Geräts aus. **Keine
+    Hacktribe-Frage.**
+  - `◀ IN …` kommt, aber `0x52` (RAM) bleibt stumm → jetzt ist es eine
+    Firmware-Frage: RAM-Lesen kennt nur Hacktribe, nicht die Serien-Firmware.
+
+  Für Abläufe ohne Gerät ist beides irrelevant — die laufen immer.
 - **Ausgabe erscheint erst am Ende / wirkt hängend** → nicht durch `tail`
   pipen; der Batch-Modus schreibt fortlaufend, `tail` puffert bis Prozessende.

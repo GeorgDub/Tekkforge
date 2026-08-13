@@ -223,7 +223,22 @@ export function requestSysex(
       fn();
     };
     const timer = setTimeout(
-      () => finish(() => reject(new Error("Keine Antwort vom Gerät (Timeout)."))),
+      () =>
+        finish(() =>
+          reject(
+            new Error(
+              // Der häufigste Grund ist NICHT das Gerät, sondern ein belegter
+              // Port: der KORG-USB-Treiber ist unter Windows Single-Client.
+              // Hält eine andere Anwendung den Eingang, öffnet TekkForge ihn
+              // klaglos und empfängt trotzdem nichts — der Fall ist stumm und
+              // sieht wie ein totes Gerät aus.
+              "Keine Antwort vom Gerät (Timeout). Häufigste Ursache: der MIDI-Port " +
+                "ist von einem anderen Programm belegt (der KORG-Treiber lässt nur " +
+                "einen Zugriff gleichzeitig zu) — andere DAW/Editoren schließen. " +
+                "Sonst prüfen: Gerät an, SysEx im Global-Menü aktiviert, richtiger Port.",
+            ),
+          ),
+        ),
       timeoutMs,
     );
     io.onSysex = (bytes) => {

@@ -793,6 +793,8 @@ async function midiSearchDevice(): Promise<void> {
     const outName = midi.outputs().find((p) => p.id === midi.selectedOutput)?.label ?? "?";
     setMidiStatus(
       `keine Antwort. Ausgang = „${outName}" — muss „electribe2 sampler" sein (nicht GS Wavetable). ` +
+        `Kommt im Monitor gar nichts an, ist meist der Port belegt: der KORG-Treiber ` +
+        `lässt nur ein Programm gleichzeitig zu. ` +
         `Suche ist optional: „→ Gerät (Live)" geht auch mit Standard (Ch 1, Sampler).`,
     );
   }
@@ -986,7 +988,12 @@ async function ramReadBytes(
     } catch (e) {
       return {
         ok: false,
-        reason: `keine Antwort bei 0x${c.addr.toString(16).toUpperCase()} (${String(e)}). Läuft Hacktribe?`,
+        // Reihenfolge der Verdächtigen ist Absicht: der belegte Port kommt
+        // zuerst, weil er stumm ist und wie ein totes Gerät aussieht. Die
+        // Hacktribe-Frage stand hier mal vorn und hat die Fehlersuche prompt
+        // in die Firmware-Ecke geschickt, obwohl nur ein zweites Programm am
+        // selben Port hing.
+        reason: `keine Antwort bei 0x${c.addr.toString(16).toUpperCase()}. ${String(e)}`,
       };
     }
     const parsed = parseRamResponse(reply);
