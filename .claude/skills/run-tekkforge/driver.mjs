@@ -253,6 +253,26 @@ const COMMANDS = {
   },
 
   async quit() {
+    if (app && page) {
+      // ☠ NIE schliessen, solange ein Geraete-Schreibvorgang laeuft.
+      //
+      // Am 2026-08-13 real passiert: eine Wartebedingung griff zu frueh, das
+      // Skript lief weiter, und `destroy()` hat den Renderer mitten in einem
+      // 524-Byte-Write in drei Haeppchen gekappt. Ergebnis: IFX-Preset-Slot 0
+      // im Geraet halb ueberschrieben — Name weg, Nachbarslots intakt. Genau
+      // der "halb uebertragene Zustand", vor dem hacktribeRam.ts warnt.
+      //
+      // Deshalb hier warten, bis der Status kein laufender Vorgang mehr ist.
+      await page
+        .waitForFunction(
+          () => {
+            const t = document.getElementById("ramStatus")?.textContent ?? "";
+            return !/sende \d+ Bytes|Lese Häppchen|wird wiederholt/.test(t);
+          },
+          { timeout: 30_000 },
+        )
+        .catch(() => console.log("WARNUNG: Vorgang lief beim Schliessen noch — Geraetezustand pruefen!"));
+    }
     if (app) {
       // ☠ `app.close()` allein HÄNGT, sobald im Editor etwas geändert wurde:
       // editor.ts registriert einen `beforeunload`-Handler, der bei
@@ -297,12 +317,24 @@ async function run(line) {
 
 const argv = process.argv.slice(2);
 const runIdx = argv.indexOf("--run");
+const scriptIdx = argv.indexOf("--script");
 
-if (runIdx >= 0) {
-  // Batch: Kommandos mit ';' getrennt, sequenziell, mit echtem await.
-  const script = argv.slice(runIdx + 1).join(" ");
+if (runIdx >= 0 || scriptIdx >= 0) {
+  // Zwei Batch-Formen:
+  //   --run "a; b; c"    Kommandos mit ';' getrennt — kurz und bequem.
+  //   --script datei     ein Kommando pro Zeile — nötig, sobald ein `eval`
+  //                      selbst Semikolons enthält, die der ';'-Trenner sonst
+  //                      mitten im JS zerschneidet. '#' am Zeilenanfang ist
+  //                      Kommentar.
+  const lines =
+    scriptIdx >= 0
+      ? fs.readFileSync(argv[scriptIdx + 1], "utf8").split(/\r?\n/)
+      : argv
+          .slice(runIdx + 1)
+          .join(" ")
+          .split(";");
   let code = 0;
-  for (const part of script.split(";")) {
+  for (const part of lines) {
     if (!part.trim()) continue;
     try {
       await run(part);
