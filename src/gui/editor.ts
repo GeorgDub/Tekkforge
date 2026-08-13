@@ -731,9 +731,31 @@ function refreshMidiPorts(): void {
 }
 
 let midiMonitorLines: string[] = [];
+/** Anzahl unterdrückter Realtime-Bytes seit der letzten echten Zeile. */
+let midiClockSuppressed = 0;
+
 function pushMonitor(dir: "◀ IN" | "▶ OUT", bytes: number[]): void {
+  // MIDI-Clock (0xF8) und Active Sensing (0xFE) kommen im Sekundentakt
+  // dutzendfach. Ungefiltert schieben sie die 12 Zeilen sofort voll, und
+  // genau die Antwort, für die der Monitor da ist — der SysEx-Rückweg vom
+  // Gerät — ist verschwunden, bevor man sie lesen kann. Bei laufendem
+  // Sequencer war der Monitor dadurch praktisch nutzlos: gesucht wurde eine
+  // ausbleibende Geräteantwort, angezeigt wurden nur f8-Zeilen.
+  //
+  // Also nicht anzeigen, aber auch nicht verschweigen — der Zähler belegt,
+  // dass Daten hereinkommen. Das ist bei der Fehlersuche der entscheidende
+  // Unterschied: „Port stumm" oder „Port lebt, nur keine SysEx-Antwort".
+  const st = bytes[0];
+  if (bytes.length === 1 && (st === 0xf8 || st === 0xfe)) {
+    midiClockSuppressed++;
+    const head = `(${midiClockSuppressed}× Clock/Sensing ausgeblendet)`;
+    const rest = midiMonitorLines.filter((l) => !l.startsWith("(") || !l.includes("ausgeblendet"));
+    $("midiMonitor").textContent = [head, ...rest].join("\n");
+    return;
+  }
+  midiClockSuppressed = 0;
   const hex = bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ");
-  const kind = bytes[0] === 0xf0 ? "SysEx" : "MIDI";
+  const kind = st === 0xf0 ? "SysEx" : "MIDI";
   midiMonitorLines.unshift(
     `${dir} ${kind}[${bytes.length}]: ${hex.length > 160 ? hex.slice(0, 160) + " …" : hex}`,
   );
