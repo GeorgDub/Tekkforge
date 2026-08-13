@@ -9,118 +9,118 @@ Generiert aus `BOTTROP.ESX` (ESX-1) für die Electribe 2 Sampler.
 ## Annahme zur Sample-Nummerierung
 Die User-Samples beginnen am Gerät bei **501**. Der `.all`-Slot-Index IST die Geräte-Nummer: Slot 501 → Sample **501**, Slot 502 → **502**, usw. In der Pattern-Datei steht die Referenz um eins niedriger (am Gerät gemessen) — die Parts treffen dadurch genau diese Nummern.
 
-## Sample-Liste (.all-Slot → Geräte-Nummer → Name → ESX-Quelle)
+## Sample-Liste (Geräte-Nummer → Name → ESX-Quelle)
 
-| .all-Slot (= Geräte-#) | Geräte-# | Name | ESX-Sample-Index |
-|---:|---:|---|---:|
-| 501 | 501 | Die SeeL | 1 |
-| 502 | 502 | fx1 | 2 |
-| 503 | 503 | 2pacmelo | 7 |
-| 504 | 504 | KickAcer | 8 |
-| 505 | 505 | LuZZiFeR | 10 |
-| 506 | 506 | LuZZiFeR | 11 |
-| 507 | 507 | snare | 12 |
-| 508 | 508 | snare3 | 14 |
-| 509 | 509 | bushidom | 15 |
-| 510 | 510 | ZFb7 kic | 16 |
-| 511 | 511 | hat (40) | 17 |
-| 512 | 512 | S.008 - | 18 |
-| 513 | 513 | S.007 - | 19 |
-| 514 | 514 | S.005 - | 20 |
-| 515 | 515 | fx10-MON | 22 |
-| 516 | 516 | hat (71) | 23 |
-| 517 | 517 | LuZZiFeR | 25 |
-| 518 | 518 | WeichMac | 26 |
-| 519 | 519 | kick 6-M | 27 |
-| 520 | 520 | LS-HFX R | 28 |
-| 521 | 521 | #LieBeSR | 29 |
-| 522 | 522 | 053 - 11 | 31 |
-| 523 | 523 | wo.wav | 32 |
-| 524 | 524 | KKS HoRR | 33 |
-| 525 | 525 | #Neuer-B | 34 |
-| 526 | 526 | 113 - Ps | 35 |
-| 527 | 527 | LuZZiFeR | 36 |
-| 528 | 528 | 068 - op | 38 |
-| 529 | 529 | LuZZiFeR | 39 |
-| 530 | 530 | 091 - Sc | 40 |
-| 531 | 531 | hat (11) | 42 |
-| 532 | 532 | 003 - Te | 44 |
-| 533 | 533 | melo 2-M | 45 |
-| 534 | 534 | 023 - hi | 46 |
-| 535 | 535 | 025 - FI | 47 |
-| 536 | 536 | 033 - HH | 48 |
-| 537 | 537 | 034 - HH | 49 |
-| 538 | 538 | fx12-MON | 50 |
-| 539 | 539 | 047 - TO | 51 |
-| 540 | 540 | HuB MeLo | 52 |
-| 541 | 541 | 056 - SY | 54 |
-| 542 | 542 | 3ToooT-M | 55 |
-| 543 | 543 | fx14-MON | 57 |
-| 544 | 544 | fx20-MON | 59 |
-| 545 | 545 | PhilFX51 | 60 |
-| 546 | 546 | Hat (18) | 61 |
-| 547 | 547 | kick5-MO | 62 |
-| 548 | 548 | Kick (6) | 63 |
-| 549 | 549 | PhilFX87 | 64 |
-| 550 | 550 | hat (18) | 65 |
-| 551 | 551 | snarre-p | 66 |
-| 552 | 552 | Synth 00 | 67 |
-| 553 | 553 | !FuckOff | 68 |
-| 554 | 554 | Kick5-MO | 69 |
-| 555 | 555 | 076 - 13 | 71 |
-| 556 | 556 | HaimKind | 72 |
-| 557 | 557 | It bites | 73 |
-| 558 | 558 | bamf3-MO | 74 |
-| 559 | 559 | speta | 75 |
-| 560 | 560 | kick6-MO | 76 |
-| 561 | 561 | VEC2 Syn | 77 |
-| 562 | 562 | LuZZiFeR | 79 |
-| 563 | 563 | Ton (22) | 81 |
-| 564 | 564 | GOTTES K | 82 |
-| 565 | 565 | [ViNTeKk | 84 |
-| 566 | 566 | Hofi_Hor | 87 |
-| 567 | 567 | sido mel | 88 |
-| 568 | 568 | 120CHOIR | 89 |
-| 569 | 569 | 120CHOIR | 90 |
-| 570 | 570 | [EFN] EF | 91 |
-| 571 | 571 | Morbid_T | 92 |
-| 572 | 572 | Choir024 | 93 |
-| 573 | 573 | Choir025 | 94 |
-| 574 | 574 | ZaHnI_Ha | 95 |
-| 575 | 575 | ZaHnI_Ha | 96 |
-| 576 | 576 | ZaHnI_Ha | 97 |
-| 577 | 577 | EcHo_Ala | 98 |
-| 578 | 578 | Freddy L | 99 |
-| 579 | 579 | Freddy L | 100 |
-| 580 | 580 | fx4-MONO | 101 |
-| 581 | 581 | Peetsn H | 105 |
-| 582 | 582 | StamPfAc | 108 |
-| 583 | 583 | Tappi ?H | 109 |
-| 584 | 584 | techno t | 110 |
-| 585 | 585 | JetzT Gi | 112 |
-| 586 | 586 | melo1 | 113 |
-| 587 | 587 | allgear | 114 |
-| 588 | 588 | 000 - FX | 117 |
-| 589 | 589 | D0D0 [To | 119 |
-| 590 | 590 | S.029 - | 121 |
-| 591 | 591 | S.038 - | 122 |
-| 592 | 592 | S.051 - | 123 |
-| 593 | 593 | S.063 - | 127 |
-| 594 | 594 | S.064 - | 128 |
-| 595 | 595 | DaRu MeL | 132 |
-| 596 | 596 | [ViNTeKk | 133 |
-| 597 | 597 | 120CHOIR | 134 |
-| 598 | 598 | Peetsn H | 139 |
-| 599 | 599 | Peetsn H | 140 |
-| 600 | 600 | Elstergl | 141 |
-| 601 | 601 | TaNzzEn | 142 |
-| 602 | 602 | H010 | 143 |
-| 603 | 603 | 021 - 02 | 144 |
-| 604 | 604 | Bluezone | 145 |
-| 605 | 605 | THEWALKI | 146 |
-| 606 | 606 | vocals1- | 147 |
-| 607 | 607 | Teetoo_V | 149 |
-| 608 | 608 | KlaRo Pi | 150 |
+| Geräte-# (= .all-Slot) | Name | ESX-Sample-Index |
+|---:|---|---:|
+| 501 | Die SeeL | 1 |
+| 502 | fx1 | 2 |
+| 503 | 2pacmelo | 7 |
+| 504 | KickAcer | 8 |
+| 505 | LuZZiFeR | 10 |
+| 506 | LuZZiFeR | 11 |
+| 507 | snare | 12 |
+| 508 | snare3 | 14 |
+| 509 | bushidom | 15 |
+| 510 | ZFb7 kic | 16 |
+| 511 | hat (40) | 17 |
+| 512 | S.008 - | 18 |
+| 513 | S.007 - | 19 |
+| 514 | S.005 - | 20 |
+| 515 | fx10-MON | 22 |
+| 516 | hat (71) | 23 |
+| 517 | LuZZiFeR | 25 |
+| 518 | WeichMac | 26 |
+| 519 | kick 6-M | 27 |
+| 520 | LS-HFX R | 28 |
+| 521 | #LieBeSR | 29 |
+| 522 | 053 - 11 | 31 |
+| 523 | wo.wav | 32 |
+| 524 | KKS HoRR | 33 |
+| 525 | #Neuer-B | 34 |
+| 526 | 113 - Ps | 35 |
+| 527 | LuZZiFeR | 36 |
+| 528 | 068 - op | 38 |
+| 529 | LuZZiFeR | 39 |
+| 530 | 091 - Sc | 40 |
+| 531 | hat (11) | 42 |
+| 532 | 003 - Te | 44 |
+| 533 | melo 2-M | 45 |
+| 534 | 023 - hi | 46 |
+| 535 | 025 - FI | 47 |
+| 536 | 033 - HH | 48 |
+| 537 | 034 - HH | 49 |
+| 538 | fx12-MON | 50 |
+| 539 | 047 - TO | 51 |
+| 540 | HuB MeLo | 52 |
+| 541 | 056 - SY | 54 |
+| 542 | 3ToooT-M | 55 |
+| 543 | fx14-MON | 57 |
+| 544 | fx20-MON | 59 |
+| 545 | PhilFX51 | 60 |
+| 546 | Hat (18) | 61 |
+| 547 | kick5-MO | 62 |
+| 548 | Kick (6) | 63 |
+| 549 | PhilFX87 | 64 |
+| 550 | hat (18) | 65 |
+| 551 | snarre-p | 66 |
+| 552 | Synth 00 | 67 |
+| 553 | !FuckOff | 68 |
+| 554 | Kick5-MO | 69 |
+| 555 | 076 - 13 | 71 |
+| 556 | HaimKind | 72 |
+| 557 | It bites | 73 |
+| 558 | bamf3-MO | 74 |
+| 559 | speta | 75 |
+| 560 | kick6-MO | 76 |
+| 561 | VEC2 Syn | 77 |
+| 562 | LuZZiFeR | 79 |
+| 563 | Ton (22) | 81 |
+| 564 | GOTTES K | 82 |
+| 565 | [ViNTeKk | 84 |
+| 566 | Hofi_Hor | 87 |
+| 567 | sido mel | 88 |
+| 568 | 120CHOIR | 89 |
+| 569 | 120CHOIR | 90 |
+| 570 | [EFN] EF | 91 |
+| 571 | Morbid_T | 92 |
+| 572 | Choir024 | 93 |
+| 573 | Choir025 | 94 |
+| 574 | ZaHnI_Ha | 95 |
+| 575 | ZaHnI_Ha | 96 |
+| 576 | ZaHnI_Ha | 97 |
+| 577 | EcHo_Ala | 98 |
+| 578 | Freddy L | 99 |
+| 579 | Freddy L | 100 |
+| 580 | fx4-MONO | 101 |
+| 581 | Peetsn H | 105 |
+| 582 | StamPfAc | 108 |
+| 583 | Tappi ?H | 109 |
+| 584 | techno t | 110 |
+| 585 | JetzT Gi | 112 |
+| 586 | melo1 | 113 |
+| 587 | allgear | 114 |
+| 588 | 000 - FX | 117 |
+| 589 | D0D0 [To | 119 |
+| 590 | S.029 - | 121 |
+| 591 | S.038 - | 122 |
+| 592 | S.051 - | 123 |
+| 593 | S.063 - | 127 |
+| 594 | S.064 - | 128 |
+| 595 | DaRu MeL | 132 |
+| 596 | [ViNTeKk | 133 |
+| 597 | 120CHOIR | 134 |
+| 598 | Peetsn H | 139 |
+| 599 | Peetsn H | 140 |
+| 600 | Elstergl | 141 |
+| 601 | TaNzzEn | 142 |
+| 602 | H010 | 143 |
+| 603 | 021 - 02 | 144 |
+| 604 | Bluezone | 145 |
+| 605 | THEWALKI | 146 |
+| 606 | vocals1- | 147 |
+| 607 | Teetoo_V | 149 |
+| 608 | KlaRo Pi | 150 |
 
 ## Pattern → Part → Sample
 

@@ -221,12 +221,12 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
         "gemessen) — die Parts treffen dadurch genau diese Nummern.",
     );
     lines.push("");
-    lines.push("## Sample-Liste (.all-Slot → Geräte-Nummer → Name → ESX-Quelle)");
+    lines.push("## Sample-Liste (Geräte-Nummer → Name → ESX-Quelle)");
     lines.push("");
-    lines.push("| .all-Slot (= Geräte-#) | Geräte-# | Name | ESX-Sample-Index |");
-    lines.push("|---:|---:|---|---:|");
+    lines.push("| Geräte-# (= .all-Slot) | Name | ESX-Sample-Index |");
+    lines.push("|---:|---|---:|");
     for (const [esxIdx, m] of [...sampleMap.entries()].sort((a, b) => a[1].allSlot - b[1].allSlot)) {
-      lines.push(`| ${m.allSlot} | ${m.hwNumber} | ${m.name} | ${esxIdx} |`);
+      lines.push(`| ${m.hwNumber} | ${m.name} | ${esxIdx} |`);
     }
     lines.push("");
     lines.push("## Pattern → Part → Sample");
