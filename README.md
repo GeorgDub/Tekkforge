@@ -194,7 +194,35 @@ Vorher-Lesen  ->  Bestaetigen  ->  paarweise schreiben  ->  Zuruecklesen  ->  Ve
 ⚠ **Das Geraet darf waehrend des Schreibens nicht spielen** — RAM-Writes koennen
 mit der Wiedergabe kollidieren, und TekkForge kann das nicht pruefen.
 
-**Erprobungsstand.** Der **Lesepfad ist am Geraet belegt**: an einem Electribe 2
+### Erprobungsstand — Schreiben wirkt derzeit nicht
+
+☠ Am Geraet gemessen (2026-08-13, E2 Sampler mit Hacktribe): **der Schreibweg
+laeuft protokollkonform durch und bleibt trotzdem wirkungslos.**
+
+| Beobachtung | Befund |
+|---|---|
+| Frames | byte-genau korrekt — Mitschnitt gegen `syxEnc` nachgerechnet |
+| Geraet | bestaetigt jedes Haeppchen mit ACK `0x21` |
+| Speicher | unveraendert |
+| Geprueft an | IFX-Preset (`0xC00A80F0`, 524 B) und Live-FX-Puffer (`0xC03478A8`, 114 B) |
+| Rueckleseprobe | meldet beide Male exakt das geaenderte Byte als abweichend |
+
+Ein **ACK heisst also nur „Nachricht angekommen", nicht „geschrieben"**. Wer
+darauf baut, haelt einen wirkungslosen Write fuer erfolgreich — genau deshalb
+ist die Rueckleseprobe nicht optional.
+
+Offene Spur: das Geraet antwortet auf ein `0x52` mit `54 52 00 <payload>`, also
+zwei Bytes zwischen Kommando und Nutzdaten. Unser `0x54`-Schreibframe hat
+diesen Vorspann nicht. Ob das Geraet ihn beim Schreiben erwartet, laesst sich
+nur gegen die hacktribe-Quelle klaeren.
+
+Was dagegen **belegt** ist: die ACK-Taktung (`0x53` -> Pause -> `0x54` -> ACK
+abwarten) hat den Fehler `Midi error` beseitigt, den das Geraetedisplay vorher
+bei *jedem* Schreibversuch zeigte und der mit Exit quittiert werden musste.
+Ungetaktetes Senden hat ausserdem real ein Preset zerschossen (IFX-Slot 0,
+Name weg) — behoben durch einen Power-Cycle, weil der Bereich im RAM liegt.
+
+**Erprobungsstand Lesen.** Der **Lesepfad ist am Geraet belegt**: an einem Electribe 2
 Sampler mit Hacktribe liefert `0xC00A80F0` / 524 B das IFX-Preset „Punch", und
 die Kette Struktur-Auswahl -> Adresse -> Lesen -> Hex-Dump -> Vorher-Lesung ->
 Vergleich laeuft durch (die Vorbereitung meldet bei unveraenderter Eingabe

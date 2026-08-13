@@ -250,9 +250,15 @@
                   <b>Das Gerät darf während des Schreibens nicht spielen.</b> RAM-Writes
                   während der Wiedergabe können kollidieren; TekkForge kann das nicht prüfen.
                   <br />
-                  <b>Lesen</b> ist am Gerät erprobt (Electribe 2 Sampler mit Hacktribe).
-                  <b>Schreiben</b> ist es <b>nicht</b> — der erste echte Write ist deiner.
-                  Die Rückleseprobe sagt dir danach, ob er angekommen ist.
+                  <b>Lesen ist am Gerät erprobt</b> (Electribe 2 Sampler mit Hacktribe).
+                  <br />
+                  ☠ <b>Schreiben wirkt derzeit NICHT.</b> Am Gerät gemessen: die Frames
+                  sind protokollkonform, das Gerät bestätigt jedes Häppchen mit ACK
+                  <code>0x21</code> — und der Speicher ändert sich trotzdem nicht.
+                  Geprüft an zwei Strukturen (IFX-Preset und Live-FX-Puffer), beide Male
+                  meldet die Rückleseprobe genau das geänderte Byte als abweichend.
+                  Der Knopf bleibt, weil die Rückleseprobe das ehrlich anzeigt — aber
+                  erwarte keine Wirkung.
                 </div>
 
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
