@@ -189,6 +189,14 @@ Vorher-Lesen  ->  Bestaetigen  ->  paarweise schreiben  ->  Zuruecklesen  ->  Ve
 ⚠ **Das Geraet darf waehrend des Schreibens nicht spielen** — RAM-Writes koennen
 mit der Wiedergabe kollidieren, und TekkForge kann das nicht pruefen.
 
+**Erprobungsstand.** Der **Lesepfad ist am Geraet belegt**: an einem Electribe 2
+Sampler mit Hacktribe liefert `0xC00A80F0` / 524 B das IFX-Preset „Punch", und
+die Kette Struktur-Auswahl -> Adresse -> Lesen -> Hex-Dump -> Vorher-Lesung ->
+Vergleich laeuft durch (die Vorbereitung meldet bei unveraenderter Eingabe
+korrekt „identisch, ein Write aendert nichts"). Der **Schreibvorgang selbst ist
+nicht erprobt** — er wurde bewusst nicht ausgeloest. Die Rueckleseprobe ist das,
+was ihn beim ersten echten Versuch belegt oder widerlegt.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über
