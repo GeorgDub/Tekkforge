@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "description": "TekkForge — Electribe 2 Pattern-Editor & KORG ESX-1 Converter (Desktop)",
   "author": "Georg <dubrowskijgeorg@gmail.com>",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",

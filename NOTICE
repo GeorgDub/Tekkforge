@@ -1,0 +1,46 @@
+TekkForge — Electribe 2 Pattern-Editor & KORG ESX-1 Converter
+Copyright (C) 2026 GeorgDub
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See the file LICENSE for the full license text.
+
+
+Third-party origins
+===================
+
+src/core/e2sysex.ts
+-------------------
+The KORG Electribe 2 SysEx protocol implementation and the KORG 8-bit <-> 7-bit
+codec are ported from:
+
+    hacktribe / hacktribe-editor
+    Copyright (C) bangcorrupt
+    https://github.com/bangcorrupt/hacktribe
+    Licensed under the GNU General Public License v3.0
+
+Specifically, the message framing (F0 42 3g 00 01 <id> <msgId> ... F7), the
+message-ID table, the acknowledgement codes (ht_sysex_format) and the pattern
+dump/write byte order (e2pat2syx.py) follow that implementation. TekkForge is
+therefore distributed under the GPL-3.0-or-later as well.
+
+
+E2S / ESX-1 file-format knowledge
+---------------------------------
+The `.all` sample-bank layout (offset table at 0x0010, 1020 LE32 entries) and
+the korg/esli sub-chunk field offsets were verified against:
+
+    Oe2sSLE — Open e2sSample.all Editor
+    Copyright (C) Jonathan Taquet
+    https://github.com/JonathanTaquet/Oe2sSLE
+    Licensed under the GNU General Public License v2.0 or later
+
+No Oe2sSLE code is included; only the on-disk structure documented by that
+project was used, cross-checked against real device banks.
+
+
+Trademarks
+----------
+KORG, Electribe, electribe 2, ESX-1 and electribe·SX are trademarks of KORG
+Inc. This project is not affiliated with, endorsed by, or supported by KORG Inc.

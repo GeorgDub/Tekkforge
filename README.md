@@ -141,3 +141,15 @@ untergeekDE/electribe2-docs. Byte-Offsets hardware-verifiziert (siehe Kommentare
 - **M3:** Bank-Manager (umsortieren/ersetzen), Layout-Templates, Motion read-only,
   SysEx-Transfer, Hardware-Abnahme am Gerät
 ```
+
+## Lizenz
+
+**GPL-3.0-or-later** — siehe [LICENSE](LICENSE).
+
+`src/core/e2sysex.ts` ist eine Portierung des SysEx-Protokolls aus
+[bangcorrupt/hacktribe](https://github.com/bangcorrupt/hacktribe) (GPL-3.0); die
+`.all`-Struktur ist gegen [Oe2sSLE](https://github.com/JonathanTaquet/Oe2sSLE)
+(GPL-2.0+) verifiziert. Herkunft und Umfang stehen in [NOTICE](NOTICE).
+
+KORG, Electribe und ESX-1 sind Marken der KORG Inc. Dieses Projekt steht in
+keiner Verbindung zu KORG.

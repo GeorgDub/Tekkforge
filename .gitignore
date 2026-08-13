@@ -5,3 +5,4 @@ release*/
 *.log
 release-native/
 release2/
+.idea/
