@@ -454,7 +454,8 @@ function renderPartFxSection(
   host.querySelector<HTMLButtonElement>("#ppFxSend")!.addEventListener("click", () => {
     const idx = Number(host.querySelector<HTMLSelectElement>("#ppFxParam")!.value);
     const val = Math.max(0, Math.min(127, Number(host.querySelector<HTMLInputElement>("#ppFxVal")!.value)));
-    // Part 1..16 → IFX-A-Slot des Parts.
+    // Jeder Part hat zwei IFX-Slots; wir bedienen IFX-A. Part-Index ist
+    // 0-basiert, fxSlotForPart zählt 1..16 (EDITOR_PARTS === 16, passt exakt).
     const slot = fxSlotForPart(pi + 1, 0);
     const msgs = buildSetFxParam(midiChannel, slot, idx, val);
     status.textContent = "Sende…";
@@ -463,7 +464,7 @@ function renderPartFxSection(
     void (async () => {
       try {
         for (const m of msgs) await midi.sendAsync(Uint8Array.from(m));
-        status.textContent = `Gesendet: ${def.params[idx]} = ${val} (FX-Slot ${slot}, 4 CCs).`;
+        status.textContent = `Gesendet: ${def.params[idx]} = ${val} an IFX-A (FX-Slot ${slot}, 4 CCs).`;
       } catch (e) {
         status.textContent = `Senden fehlgeschlagen: ${String(e)}`;
       }
