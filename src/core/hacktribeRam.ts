@@ -119,19 +119,18 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     label: "IFX-Preset",
     base: 0xc00a80f0,
     stride: 0x20c,
-    // ⚠ Zwei Quellen widersprechen sich in der Slot-Anzahl, bei identischer
-    // Basis und Schrittweite:
-    //   96  — hacktribe_ram_and_formats.md §1 (Omnitribe), diese Tabelle
-    //   100 — IFX_MAX in Synthstudios e2Sysex.ts
-    // Offline nicht entscheidbar: 96 Slots enden bei 0xC00B4570, 100 bei
-    // 0xC00B4DA0, und der naechste Block (mfxPreset) beginnt erst bei
-    // 0xC00B4F30 — es kollidiert also weder das eine noch das andere.
-    // Wir nehmen die KLEINERE Zahl: `addressForSlot` klemmt auf `count - 1`,
-    // die kleinere ist damit die sichere Schranke. Wer Slot 96..99 braucht,
-    // muss das erst am Geraet belegen.
-    count: 96,
+    // Der Widerspruch 96 vs. 100 ist entschieden: **100**.
+    //
+    // Die Doku (hacktribe_ram_and_formats.md §1) sagte 96, Synthstudios
+    // IFX_MAX sagte 100. Die Urquelle entscheidet — bangcorrupt/hacktribe
+    // `e2sysex.py` prueft in `get_ifx` UND `set_ifx` identisch:
+    //     if ifx_idx > 99 or ifx_idx < 0: ... out of range - must be < 100
+    // Damit sind Slot 0..99 gueltig. Kollisionsfrei ist das ohnehin: 100 Slots
+    // enden bei 0xC00B4DA0, der naechste Block (mfxPreset) beginnt erst bei
+    // 0xC00B4F30.
+    count: 100,
     size: 0x20c,
-    note: "524 B pro Preset, Slot 0–95 (Obergrenze umstritten, s. Kommentar)",
+    note: "524 B pro Preset, Slot 0–99 (hacktribe e2sysex.py: idx < 100)",
   },
   {
     key: "mfxPreset",
