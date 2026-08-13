@@ -83,6 +83,34 @@ Fehlerpfad selbst verhält sich sauber: klare Meldung, kein Hänger, Exit 0.
 
 Alle **geräteunabhängigen** Kommandos oben sind dagegen jederzeit reproduzierbar.
 
+### Geräte-Schreibtest (Abnahme) — **braucht Hardware**
+
+```bash
+node .claude/skills/run-tekkforge/driver.mjs --script .claude/skills/run-tekkforge/write-test.txt
+```
+
+Schreibt ein Byte nach IFX-Preset-Slot 40, liest zurück, stellt per Undo wieder
+her. Am 2026-08-13 bestanden:
+
+```
+vorher:            00 4C 50 20 44 72 69 76 65   "LP Drive"
+Byte 1: 4C -> 4D
+SCHREIBEN: ✓ 524 Bytes geschrieben und zurückgelesen — identisch
+danach:            00 4D 50 20 44 72 69 76 65   "MP Drive"
+UNDO:      ✓ 524 Bytes geschrieben und zurückgelesen — identisch
+wiederhergestellt: 00 4C 50 20 44 72 69 76 65   "LP Drive"
+```
+
+☠ **So liest man das Ergebnis richtig — sonst hält man einen wirkungslosen
+Write für bestanden:**
+
+| Zeile | Bedeutung |
+|---|---|
+| `spielende Noten` | **muss 0 sein.** Sonst erst Stop am Gerät, dann neu. |
+| `SCHREIBEN: ✓` allein | **beweist nichts.** 523 der 524 Bytes wurden unverändert zurückgeschrieben — ein Write, der gar nichts tut, meldet hier genauso „identisch". |
+| `danach` ≠ `vorher` | **das ist der eigentliche Nachweis.** Nur wenn sich das geänderte Byte im Rücklesen zeigt, hat der Write gewirkt. |
+| `UNDO: ✓` | Gerät steht wieder auf dem Ausgangszustand. Immer mitlaufen lassen. |
+
 ## Run (Mensch)
 
 ```bash
@@ -118,6 +146,29 @@ pnpm check          # tsc --noEmit
   Klick. Vorgabe ist **abweisen**, weil die `confirm()`s an zerstörenden
   Aktionen hängen — wer eine davon auslösen will, schaltet vorher
   `dialogs accept`, sonst passiert stillschweigend nichts.
+
+- **☠ Ein ACK vom Gerät heißt „Nachricht angekommen", NICHT „geschrieben".**
+  Der RAM-Write lief über drei Messungen hinweg protokollkonform durch, das
+  Gerät bestätigte jedes Häppchen mit `0x21` — und der Speicher änderte sich
+  nicht. Ursache: die Antwort auf die **Adress-Setzung (`0x53`) wurde nicht
+  abgeholt**. Das Warten nach dem Datenframe fing dann das *verspätete*
+  Adress-ACK ein und meldete Erfolg, während der Datenframe unquittiert blieb.
+
+  Im MIDI-Mitschnitt sieht beides identisch aus — ein ACK nach dem Datenframe.
+  Deshalb überlebte der Fehler auch das byte-genaue Nachrechnen der Frames.
+
+  Die Urquelle macht es richtig, und ihr Kommentar führt in die Irre:
+  `hacktribe/e2sysex.py` `write_cpu_ram` liest nach `0x53` mit *„Ignore
+  response for now"*. Das heißt **Inhalt egal, aber sie muss vom Draht** — nicht
+  „die Zeile ist bedeutungslos". Genau so hatte ich sie beim ersten
+  Quellenvergleich gelesen.
+
+  Wer am Schreibpfad etwas ändert: erst `write-test.txt` laufen lassen und auf
+  `danach` ≠ `vorher` schauen, nicht auf den Haken.
+
+- **Nie schreiben, während das Gerät spielt.** Der Treiber zeigt es an
+  (`spielende Noten`), prüft es aber nicht selbst — das muss das Skript oder
+  der Mensch tun. RAM-Writes können mit der Wiedergabe kollidieren.
 
 - **`<details>` per `el.open = true` aufklappen**, nicht per Klick aufs
   `<summary>` — der Klick trifft je nach Layout daneben.

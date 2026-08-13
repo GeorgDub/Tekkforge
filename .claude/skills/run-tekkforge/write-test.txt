@@ -1,0 +1,34 @@
+# Abnahmetest fuer den RAM-Schreibpfad — braucht Hardware (Hacktribe).
+#
+#   node .claude/skills/run-tekkforge/driver.mjs --script .claude/skills/run-tekkforge/write-test.txt
+#
+# Ziel ist IFX-Preset-Slot 40, weil der im Normalfall nicht aktiv geladen ist.
+# Geaendert wird EIN Byte im Namen; danach stellt der Undo-Knopf den Zustand
+# wieder her. Alles im RAM — ein Power-Cycle laedt ohnehin aus dem Flash nach.
+#
+# Bestanden ist der Test NUR, wenn beide Zeilen mit einem Haken beginnen UND
+# sich "danach" von "vorher" unterscheidet. Siehe SKILL.md, Abschnitt
+# "Geraete-Schreibtest".
+launch
+ram-open
+# Das Geraet darf nicht spielen — sonst kollidiert der Write mit der Wiedergabe.
+ms 2500
+eval 'spielende Noten (muss 0 sein): ' + document.getElementById('midiMonitor').textContent.split('\n').filter(l=>/IN MIDI/.test(l)).length
+set #ramStruct=ifxPreset
+set #ramSlot=40
+click #ramRead
+wait-text #ramStatus (Bytes.gelesen|fehlgeschlagen)
+eval 'vorher: ' + document.getElementById('ramDump').textContent.split('\n')[0]
+# Erstes Namensbyte umschalten (4C <-> 4D). Ein einziges Byte, reines ASCII.
+eval (() => { const ta = document.getElementById('ramHex'); const t = ta.value.trim().split(/\s+/); const alt = t[1]; t[1] = (alt === '4C') ? '4D' : '4C'; ta.value = t.join(' '); ta.dispatchEvent(new Event('input', { bubbles: true })); return 'Byte 1: ' + alt + ' -> ' + t[1]; })()
+click #ramPrepare
+wait-text #ramStatus (Vorher-Stand|Nicht geschrieben|Abbruch)
+eval document.getElementById('ramStatus').textContent
+click #ramCommit
+wait-text #ramStatus [✓✗]
+eval 'SCHREIBEN: ' + document.getElementById('ramStatus').textContent
+eval 'danach: ' + document.getElementById('ramDump').textContent.split('\n')[0]
+click #ramUndo
+wait-text #ramStatus [✓✗]
+eval 'UNDO: ' + document.getElementById('ramStatus').textContent
+eval 'wiederhergestellt: ' + document.getElementById('ramDump').textContent.split('\n')[0]
