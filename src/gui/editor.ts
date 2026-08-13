@@ -46,12 +46,19 @@ import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams
 import { fxTypeDef, decodeFxEditBuffer } from "../core/e2FxParams";
 import { buildSetFxParam, fxSlotForPart } from "../core/hacktribeNrpn";
 import {
+  E2_RAM_MAP,
   RAM_CMD,
   addressForSlot,
   buildRamReadRequest,
+  buildRamWriteFrames,
   findRamMapEntry,
+  formatHexDump,
+  parseAddress,
+  parseHexBytes,
   parseRamResponse,
+  splitRamRead,
   validateRamRange,
+  verifyRamWrite,
 } from "../core/hacktribeRam";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
@@ -500,32 +507,14 @@ function renderPartFxSection(
     status.textContent = "Lese FX-Edit-Buffer…";
     void (async () => {
       try {
-        const reply = await requestSysex(
-          midi,
-          buildRamReadRequest(addr, entry.size, midiOpts()),
-          // NUR die Geräte-Antwort (cmd 0x54) akzeptieren, nicht auch 0x52.
-          // `parseRamResponse` lässt beide als "data" durch — defensiv beim
-          // Auswerten, aber als Filter ein Fehlannehmer: bei eingeschaltetem
-          // MIDI-Thru kommt die eigene 0x52-Anfrage am Eingang zurück, und die
-          // würde hier als Antwort gelten und beim Dekodieren Müll ergeben.
-          (b) => b[6] === RAM_CMD.writeData && parseRamResponse(b)?.kind === "data",
-          2000,
-        );
-        const parsed = reply ? parseRamResponse(reply) : null;
-        if (!parsed || parsed.kind !== "data") {
-          status.textContent =
-            "Keine Antwort. Läuft auf dem Gerät Hacktribe? Das Stock-Gerät kennt 0x52 nicht.";
+        // Bewusst über denselben Lesepfad wie das RAM-Panel: der Echo-Filter
+        // (nur cmd 0x54) und die Längenprüfung sollen an EINER Stelle leben.
+        const read = await ramReadBytes(addr, entry.size);
+        if (!read.ok) {
+          status.textContent = `Nicht gelesen: ${read.reason}`;
           return;
         }
-        if (parsed.data.length < entry.size) {
-          // Ohne diese Prüfung liest der Dekoder über das Ende hinaus, bekommt
-          // `undefined ?? 0` und meldet eine „Abweichung" mit Wert 0 — eine
-          // abgeschnittene Antwort sähe wie ein falscher Wert aus.
-          status.textContent =
-            `Unvollständige Antwort: ${parsed.data.length} von ${entry.size} Bytes. Kein Vergleich möglich.`;
-          return;
-        }
-        const buf = decodeFxEditBuffer(parsed.data, false);
+        const buf = decodeFxEditBuffer(read.bytes, false);
         const got = buf.params[idx];
         const fxNow = fxTypeDef(buf.device, false);
         if (got === undefined) {
@@ -943,12 +932,233 @@ async function midiGetPattern(): Promise<void> {
   }
 }
 
+// ─── Geräte-RAM (Hacktribe) ──────────────────────────────────────────────────
+//
+// Lesen ist harmlos, Schreiben trifft laufenden Code. Der Ablauf ist deshalb
+// fest verdrahtet und nicht abkürzbar:
+//
+//   Vorher-Lesen → Bestätigen → paarweise schreiben → Zurücklesen → Vergleich
+//
+// Ohne erfolgreiche Vorher-Lesung gibt es kein Undo, und ohne Undo wird nicht
+// geschrieben — das ist ein harter Abbruch, keine wegklickbare Warnung.
+
+/**
+ * Vorher-Stand des zuletzt geschriebenen Bereichs. Bewusst im Modul-Scope und
+ * nicht in einer Closure: der Schnappschuss muss einen fehlgeschlagenen Write
+ * und ein Neuzeichnen des Panels überleben, sonst ist er wertlos.
+ */
+let ramSnapshot: { addr: number; bytes: Uint8Array } | null = null;
+/** Was beim nächsten „Wirklich schreiben" rausgeht — erst nach Vorher-Lesung gesetzt. */
+let ramPending: { addr: number; bytes: Uint8Array } | null = null;
+
+function setRamStatus(text: string): void {
+  $("ramStatus").textContent = text;
+}
+
+/**
+ * Liest `len` Bytes ab `addr` vom Gerät.
+ *
+ * Prüft Bereich, filtert auf die echte Geräte-Antwort (cmd 0x54 — die eigene
+ * 0x52-Anfrage kommt bei aktivem MIDI-Thru am Eingang zurück) und besteht auf
+ * voller Länge: eine kurze Antwort ist ein Fehlschlag, keine Teilmenge.
+ */
+async function ramReadBytes(
+  addr: number,
+  len: number,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
+  const range = validateRamRange(addr, len);
+  if (!range.ok) return { ok: false, reason: range.reason };
+  const chunks = splitRamRead(addr, len);
+  const out = new Uint8Array(len);
+  let off = 0;
+  for (const c of chunks) {
+    let reply: Uint8Array;
+    try {
+      reply = await requestSysex(
+        midi,
+        buildRamReadRequest(c.addr, c.len, midiOpts()),
+        (b) => b[6] === RAM_CMD.writeData && parseRamResponse(b)?.kind === "data",
+        2500,
+      );
+    } catch (e) {
+      return {
+        ok: false,
+        reason: `keine Antwort bei 0x${c.addr.toString(16).toUpperCase()} (${String(e)}). Läuft Hacktribe?`,
+      };
+    }
+    const parsed = parseRamResponse(reply);
+    if (!parsed || parsed.kind !== "data" || parsed.data.length < c.len) {
+      return {
+        ok: false,
+        reason: `unvollständige Antwort bei 0x${c.addr.toString(16).toUpperCase()} (${parsed?.kind === "data" ? parsed.data.length : 0} von ${c.len} Bytes)`,
+      };
+    }
+    out.set(parsed.data.subarray(0, c.len), off);
+    off += c.len;
+  }
+  return { ok: true, bytes: out };
+}
+
+/** Adresse + Länge aus den Eingabefeldern (Adressfeld ist die einzige Quelle). */
+function ramInputs(): { ok: true; addr: number; len: number } | { ok: false; reason: string } {
+  const a = parseAddress($<HTMLInputElement>("ramAddr").value);
+  if (!a.ok) return { ok: false, reason: a.reason };
+  const len = Number($<HTMLInputElement>("ramLen").value);
+  if (!Number.isInteger(len) || len <= 0) return { ok: false, reason: "Länge muss positiv sein" };
+  return { ok: true, addr: a.addr, len };
+}
+
+/** Verbirgt Commit/Undo und verwirft den vorbereiteten Write. */
+function ramResetPending(): void {
+  ramPending = null;
+  $("ramCommit").classList.add("hidden");
+}
+
+/** Schreibt `bytes` nach `addr` und liest zur Kontrolle zurück. */
+async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): Promise<void> {
+  const built = buildRamWriteFrames(addr, bytes, midiOpts());
+  if (!built.ok) {
+    setRamStatus(`${what} abgebrochen: ${built.reason}`);
+    return;
+  }
+  setRamStatus(`${what}: sende ${bytes.length} Bytes…`);
+  for (const f of built.frames) await midi.sendAsync(f);
+
+  const back = await ramReadBytes(addr, bytes.length);
+  if (!back.ok) {
+    setRamStatus(
+      `${what}: gesendet, aber die Rückleseprobe schlug fehl (${back.reason}). Zustand im Gerät UNBEKANNT.`,
+    );
+    return;
+  }
+  const v = verifyRamWrite(bytes, back.bytes);
+  $("ramDump").textContent = formatHexDump(back.bytes, addr);
+  setRamStatus(
+    v.ok
+      ? `✓ ${what}: ${bytes.length} Bytes geschrieben und zurückgelesen — identisch.`
+      : `✗ ${what}: ${v.diffCount < 0 ? "Länge weicht ab" : `${v.diffCount} Byte(s) abweichend, erstes bei +${v.firstDiff}`}.`,
+  );
+}
+
+function setupRamPanel(): void {
+  const structSel = $<HTMLSelectElement>("ramStruct");
+  structSel.innerHTML =
+    `<option value="">(freie Adresse)</option>` +
+    E2_RAM_MAP.map((e) => `<option value="${e.key}">${escapeHtml(e.label)}</option>`).join("");
+
+  const addrIn = $<HTMLInputElement>("ramAddr");
+  const lenIn = $<HTMLInputElement>("ramLen");
+  const slotIn = $<HTMLInputElement>("ramSlot");
+
+  // Struktur/Slot berechnen die Adresse. Eine Handeingabe im Adressfeld setzt
+  // die Struktur auf „frei" zurück — sonst zeigte das Dropdown eine Struktur an,
+  // während die Adresse längst woanders hinzeigt. Beide Werte wären für sich
+  // gültig, und genau das fangen die Bereichsprüfungen nicht ab.
+  const applyStruct = () => {
+    const entry = findRamMapEntry(structSel.value);
+    if (!entry) {
+      $("ramNote").textContent = "";
+      return;
+    }
+    slotIn.max = String(entry.count - 1);
+    const slot = Math.max(0, Math.min(entry.count - 1, Number(slotIn.value) || 0));
+    slotIn.value = String(slot);
+    addrIn.value = `0x${addressForSlot(entry, slot).toString(16).toUpperCase()}`;
+    lenIn.value = String(entry.size);
+    $("ramNote").textContent = `${entry.label} — Slot 0–${entry.count - 1}${entry.note ? ` · ${entry.note}` : ""}`;
+    ramResetPending();
+  };
+  structSel.addEventListener("change", applyStruct);
+  slotIn.addEventListener("change", applyStruct);
+  addrIn.addEventListener("input", () => {
+    structSel.value = "";
+    $("ramNote").textContent = "freie Adresse — Struktur-Auswahl aufgehoben";
+    ramResetPending();
+  });
+  lenIn.addEventListener("input", ramResetPending);
+  $<HTMLTextAreaElement>("ramHex").addEventListener("input", ramResetPending);
+
+  $("ramRead").addEventListener("click", () => {
+    const inp = ramInputs();
+    if (!inp.ok) return setRamStatus(`Nicht gelesen: ${inp.reason}`);
+    setRamStatus("Lese…");
+    void (async () => {
+      const r = await ramReadBytes(inp.addr, inp.len);
+      if (!r.ok) return setRamStatus(`Lesen fehlgeschlagen: ${r.reason}`);
+      $("ramDump").textContent = formatHexDump(r.bytes, inp.addr);
+      $<HTMLTextAreaElement>("ramHex").value = formatHexDump(r.bytes, inp.addr)
+        .split("\n")
+        .map((l) => l.slice(10))
+        .join("\n");
+      ramResetPending();
+      setRamStatus(`${r.bytes.length} Bytes gelesen. Bearbeiten, dann „Schreiben vorbereiten".`);
+    })();
+  });
+
+  // Schritt 1: prüfen und Vorher-Stand sichern. Schreibt noch nichts.
+  $("ramPrepare").addEventListener("click", () => {
+    const inp = ramInputs();
+    if (!inp.ok) return setRamStatus(`Abbruch: ${inp.reason}`);
+    const hex = parseHexBytes($<HTMLTextAreaElement>("ramHex").value);
+    if (!hex.ok) return setRamStatus(`Abbruch: ${hex.reason}`);
+    if (hex.bytes.length !== inp.len) {
+      // Sonst landet ein zu kurzer Block an einer gültigen Adresse: Bereichs-
+      // prüfung besteht, und die Längenabweichung fiele erst NACH dem Schreiben
+      // beim Vergleich auf.
+      return setRamStatus(
+        `Abbruch: ${hex.bytes.length} Bytes eingegeben, ${inp.len} erwartet. Länge muss exakt passen.`,
+      );
+    }
+    const range = validateRamRange(inp.addr, inp.len);
+    if (!range.ok) return setRamStatus(`Abbruch: ${range.reason}`);
+
+    setRamStatus("Sichere Vorher-Stand…");
+    void (async () => {
+      const before = await ramReadBytes(inp.addr, inp.len);
+      if (!before.ok) {
+        // Harter Abbruch: kein Schnappschuss → kein Undo → nicht schreiben.
+        ramResetPending();
+        return setRamStatus(
+          `Nicht geschrieben: Vorher-Stand nicht lesbar (${before.reason}). Ohne Rückweg wird nichts geschrieben.`,
+        );
+      }
+      ramSnapshot = { addr: inp.addr, bytes: before.bytes };
+      ramPending = { addr: inp.addr, bytes: hex.bytes };
+      $("ramCommit").classList.remove("hidden");
+      $("ramUndo").classList.remove("hidden");
+      const v = verifyRamWrite(before.bytes, hex.bytes);
+      setRamStatus(
+        v.ok
+          ? `Vorher-Stand gesichert — die Eingabe ist mit dem Gerätestand identisch, ein Write ändert nichts.`
+          : `Vorher-Stand gesichert (${inp.len} B). ${v.diffCount} Byte(s) würden sich ändern, erstes bei +${v.firstDiff}. Gerät darf nicht spielen.`,
+      );
+    })();
+  });
+
+  // Schritt 2: die eigentliche Bestätigung — ein zweiter, bewusster Klick.
+  $("ramCommit").addEventListener("click", () => {
+    if (!ramPending) return setRamStatus("Nichts vorbereitet.");
+    const { addr, bytes } = ramPending;
+    ramResetPending();
+    void ramWriteVerified(addr, bytes, "Schreiben");
+  });
+
+  $("ramUndo").addEventListener("click", () => {
+    if (!ramSnapshot) return setRamStatus("Kein Vorher-Stand vorhanden.");
+    const { addr, bytes } = ramSnapshot;
+    // Bewusst über denselben Pfad inkl. Rückleseprobe: eine ungeprüfte
+    // Wiederherstellung hätte dasselbe Problem wie ein ungeprüfter Write.
+    void ramWriteVerified(addr, bytes, "Zurückschreiben");
+  });
+}
+
 function setupMidi(): void {
   if (!midi.available) {
     $("midiEnable").classList.add("hidden");
     $("midiUnavailable").classList.remove("hidden");
     return;
   }
+  setupRamPanel();
   $("midiEnable").addEventListener("click", () => void midiEnable());
   $<HTMLSelectElement>("midiOut").addEventListener("change", (e) =>
     midi.selectOutput((e.target as HTMLSelectElement).value),

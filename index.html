@@ -236,6 +236,65 @@
                 </div>
                 <pre id="midiMonitor" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;max-height:90px;overflow:auto;font-size:10px;color:var(--muted);margin:0">(noch nichts empfangen)</pre>
               </div>
+
+              <details id="ramPanel" style="margin-top:12px;border:1px solid var(--accent);border-radius:6px;padding:8px">
+                <summary style="cursor:pointer;color:var(--accent);font-weight:600">
+                  ⚠ Geräte-RAM lesen und schreiben (Hacktribe, gefährlich)
+                </summary>
+                <div class="warn" style="font-size:11px;margin:8px 0">
+                  <b>Nur mit Hacktribe-Firmware.</b> Schreibzugriffe treffen den laufenden
+                  Code des Geräts. TekkForge lässt nur den DDR2-Bereich
+                  <code>0xC0000000–0xCFFFFFFF</code> zu und weder Flash noch Execute — ein
+                  Fehlgriff hier ist also durch Aus- und Einschalten behebbar, nicht dauerhaft.
+                  <br />
+                  <b>Das Gerät darf während des Schreibens nicht spielen.</b> RAM-Writes
+                  während der Wiedergabe können kollidieren; TekkForge kann das nicht prüfen.
+                  <br />
+                  Dieser Pfad ist <b>nicht am Gerät erprobt</b>.
+                </div>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+                  <div>
+                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Struktur</label>
+                    <select id="ramStruct" style="min-width:190px"></select>
+                  </div>
+                  <div>
+                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Slot</label>
+                    <input id="ramSlot" type="number" min="0" value="0" style="width:70px" />
+                  </div>
+                  <div>
+                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Adresse</label>
+                    <input id="ramAddr" type="text" value="0xC00A80F0" style="width:110px" />
+                  </div>
+                  <div>
+                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Länge (Bytes)</label>
+                    <input id="ramLen" type="number" min="1" value="524" style="width:80px" />
+                  </div>
+                  <button id="ramRead" class="ghost">Lesen</button>
+                </div>
+                <div id="ramNote" class="sub" style="margin:4px 0 0"></div>
+
+                <div style="margin-top:8px">
+                  <div style="color:var(--muted);font-size:10px;margin-bottom:2px">
+                    Gelesene Bytes (Hex-Dump):
+                  </div>
+                  <pre id="ramDump" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;max-height:140px;overflow:auto;font-size:10px;color:var(--muted);margin:0">(noch nichts gelesen)</pre>
+                </div>
+
+                <div style="margin-top:8px">
+                  <div style="color:var(--muted);font-size:10px;margin-bottom:2px">
+                    Zu schreibende Bytes (Hex — Leerzeichen, Zeilenumbrüche und <code>0x</code> erlaubt):
+                  </div>
+                  <textarea id="ramHex" rows="3" style="width:100%;font-family:monospace;font-size:10px" placeholder="Erst „Lesen", dann hier bearbeiten — die Länge muss exakt der gelesenen entsprechen."></textarea>
+                </div>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+                  <button id="ramPrepare" class="ghost">Schreiben vorbereiten…</button>
+                  <button id="ramCommit" class="primary hidden">⚠ Wirklich schreiben</button>
+                  <button id="ramUndo" class="ghost hidden">↶ Vorherige Bytes zurückschreiben</button>
+                </div>
+                <div id="ramStatus" class="sub" style="margin-top:4px">bereit</div>
+              </details>
             </div>
             <button id="midiEnable" class="primary">MIDI aktivieren</button>
           </div>

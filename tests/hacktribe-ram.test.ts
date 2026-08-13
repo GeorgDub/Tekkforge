@@ -30,6 +30,7 @@ import {
   splitRamWrite,
   splitRamRead,
   parseHexBytes,
+  formatHexDump,
   parseAddress,
   verifyRamWrite,
   RAM_WRITE_CHUNK,
@@ -221,6 +222,31 @@ describe("Eingabe-Helfer", () => {
   it("meldet Nicht-Hex-Zeichen und leere Eingabe", () => {
     expect(parseHexBytes("DEADZZ").ok).toBe(false);
     expect(parseHexBytes("").ok).toBe(false);
+  });
+
+  it("ueberlebt den Round-Trip, den die Oberflaeche fuehrt", () => {
+    // Das RAM-Panel fuellt das Eingabefeld aus dem Hex-Dump, indem es die
+    // Adress-Spalte abschneidet (8 Stellen + 2 Leerzeichen). Kaeme dabei etwas
+    // anderes heraus als gelesen wurde, wuerde ein unveraenderter „Write"
+    // fremde Bytes ins Geraet schreiben — also genau hier festnageln.
+    const bytes = new Uint8Array(0x20c);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 7 + 3) & 0xff;
+    const dump = formatHexDump(bytes, 0xc00a80f0);
+    const editable = dump
+      .split("\n")
+      .map((l) => l.slice(10))
+      .join("\n");
+    const back = parseHexBytes(editable);
+    expect(back.ok).toBe(true);
+    if (back.ok) {
+      expect(back.bytes.length).toBe(bytes.length);
+      expect([...back.bytes]).toEqual([...bytes]);
+    }
+  });
+
+  it("schreibt die Adress-Spalte achtstellig und in Grossbuchstaben", () => {
+    const dump = formatHexDump(Uint8Array.from([0x0a, 0xff]), 0xc00a80f0);
+    expect(dump.split("\n")[0]).toBe("C00A80F0  0A FF");
   });
 
   it("parst Adressen hexadezimal und dezimal", () => {

@@ -159,8 +159,30 @@ Drei Leitlinien setzt das Modul durch:
    gibt Adresse und Daten nur paarweise heraus, damit die zweistufige
    Reihenfolge nicht vertauscht werden kann.
 
-⚠ Die Write-Bauer sind getestet, haben aber **bewusst keinen Knopf**: ein
-NRPN-Fehlgriff kostet einen Power-Cycle, ein RAM-Fehlgriff trifft laufenden Code.
+Das RAM-Panel im MIDI-Bereich (zugeklappt, rot umrandet) kann **lesen und
+schreiben**. Der Schreibweg ist bewusst nicht abkuerzbar:
+
+```
+Vorher-Lesen  ->  Bestaetigen  ->  paarweise schreiben  ->  Zuruecklesen  ->  Vergleich
+```
+
+- **Ohne erfolgreiche Vorher-Lesung wird nicht geschrieben.** Kein Schnappschuss
+  heisst kein Rueckweg — das ist ein harter Abbruch, keine wegklickbare Warnung.
+- **Zwei Klicks.** „Schreiben vorbereiten" prueft nur und sichert den Vorher-Stand
+  und sagt, wie viele Bytes sich aendern wuerden; erst „Wirklich schreiben"
+  sendet. Kein modaler Dialog, der die App blockieren koennte.
+- **Laenge muss exakt passen.** Weicht die Hex-Eingabe von der gelesenen Laenge
+  ab, wird abgelehnt — sonst landet ein zu kurzer Block an einer gueltigen
+  Adresse, und das faellt erst nach dem Schreiben auf.
+- **Jeder Write wird zurueckgelesen und verglichen.** Ein Write ohne
+  Rueckleseprobe ist ein Write, von dem man nichts weiss.
+- **„Zurueckschreiben"** stellt den Vorher-Stand wieder her — ueber denselben
+  Pfad inklusive Rueckleseprobe.
+- Struktur-Auswahl und Adressfeld koennen nicht auseinanderlaufen: eine
+  Handeingabe der Adresse setzt die Struktur auf „frei" zurueck.
+
+⚠ **Das Geraet darf waehrend des Schreibens nicht spielen** — RAM-Writes koennen
+mit der Wiedergabe kollidieren, und TekkForge kann das nicht pruefen.
 
 ## Step-Record-Layout (verifiziert)
 
