@@ -43,6 +43,8 @@ import {
 } from "../core/e2sysex";
 import { MidiIO, requestSysex, waitSysex } from "./midi";
 import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams";
+import { fxTypeDef } from "../core/e2FxParams";
+import { buildSetFxParam, fxSlotForPart } from "../core/hacktribeNrpn";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
 
@@ -374,12 +376,16 @@ function openPartParams(anchor: HTMLElement, pi: number): void {
       Werte bleiben erhalten.
     </div>
     <div style="max-height:340px;overflow-y:auto">${rows}</div>
+    <div id="ppFx"></div>
     <div class="row"><button id="ppClose" class="ghost" style="flex:1">Schließen</button></div>`;
   document.body.appendChild(pop);
   const r = anchor.getBoundingClientRect();
   pop.style.left = `${Math.min(window.innerWidth - 320, r.left + window.scrollX)}px`;
   pop.style.top = `${r.bottom + window.scrollY + 4}px`;
   popEl = pop;
+
+  const renderFxSection = () => renderPartFxSection(pop, pi, params);
+  renderFxSection();
 
   pop.querySelectorAll<HTMLInputElement>("input[data-key]").forEach((inp) => {
     inp.addEventListener("change", () => {
@@ -389,9 +395,80 @@ function openPartParams(anchor: HTMLElement, pi: number): void {
       params[key] = v;
       if (inp.type !== "checkbox") inp.value = String(v);
       markDirty();
+      // Der IFX-Typ bestimmt, welche Parameter der FX-Abschnitt anbietet.
+      if (key === "ifxType") renderFxSection();
     });
   });
   pop.querySelector<HTMLButtonElement>("#ppClose")!.addEventListener("click", closePopover);
+}
+
+/**
+ * IFX-Abschnitt des Part-Popovers: benennt den eingestellten Effekt und seine
+ * Parameter und erlaubt, einen davon live ans Gerät zu schicken.
+ *
+ * Der Part trägt seinen IFX-Typ im Pattern-Body (`ifxType`); `e2FxParams` macht
+ * daraus Effekt- und Parameternamen, statt nur nackte Indizes zu zeigen. Das
+ * Senden läuft über NRPN und setzt **Hacktribe-Firmware** voraus — ein
+ * Stock-Gerät ignoriert die Nachrichten stillschweigend.
+ */
+function renderPartFxSection(
+  pop: HTMLElement,
+  pi: number,
+  params: Record<string, number>,
+): void {
+  const host = pop.querySelector<HTMLElement>("#ppFx");
+  if (!host) return;
+  const ifxType = params["ifxType"] ?? 0;
+  const def = fxTypeDef(ifxType, false);
+
+  if (!def) {
+    host.innerHTML = `<div style="margin-top:8px;color:var(--muted);font-size:11px">
+      IFX-Typ ${ifxType} — kein Effektname bekannt.</div>`;
+    return;
+  }
+  if (def.params.length === 0) {
+    host.innerHTML = `<div style="margin-top:8px;color:var(--muted);font-size:11px">
+      IFX: <b>${escapeHtml(def.name)}</b> — keine Parameter.</div>`;
+    return;
+  }
+
+  const opts = def.params
+    .map((n, i) => `<option value="${i}">${i}: ${escapeHtml(n)}</option>`)
+    .join("");
+  host.innerHTML = `
+    <div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">
+      <b style="color:var(--accent2);font-size:11px">IFX: ${escapeHtml(def.name)}</b>
+      <div class="warn" style="font-size:10px;margin:4px 0">
+        ⚠ Live-Senden braucht <b>Hacktribe</b>-Firmware und ist in TekkForge nicht
+        am Gerät erprobt. Ändert nur den Klang am Gerät, nicht das Pattern hier.
+      </div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <select id="ppFxParam" style="flex:1;font-size:11px">${opts}</select>
+        <input id="ppFxVal" type="number" min="0" max="127" value="64" style="width:56px">
+        <button id="ppFxSend" class="ghost" style="font-size:11px">Senden</button>
+      </div>
+      <div id="ppFxStatus" style="color:var(--muted);font-size:10px;margin-top:3px"></div>
+    </div>`;
+
+  const status = host.querySelector<HTMLElement>("#ppFxStatus")!;
+  host.querySelector<HTMLButtonElement>("#ppFxSend")!.addEventListener("click", () => {
+    const idx = Number(host.querySelector<HTMLSelectElement>("#ppFxParam")!.value);
+    const val = Math.max(0, Math.min(127, Number(host.querySelector<HTMLInputElement>("#ppFxVal")!.value)));
+    // Part 1..16 → IFX-A-Slot des Parts.
+    const slot = fxSlotForPart(pi + 1, 0);
+    const msgs = buildSetFxParam(midiChannel, slot, idx, val);
+    status.textContent = "Sende…";
+    // Die vier CCs gehören zu EINER Nachricht und müssen in Reihenfolge und
+    // ohne Zwischenverkehr ankommen — deshalb streng nacheinander.
+    void (async () => {
+      try {
+        for (const m of msgs) await midi.sendAsync(Uint8Array.from(m));
+        status.textContent = `Gesendet: ${def.params[idx]} = ${val} (FX-Slot ${slot}, 4 CCs).`;
+      } catch (e) {
+        status.textContent = `Senden fehlgeschlagen: ${String(e)}`;
+      }
+    })();
+  });
 }
 
 // ─── Sample-Pool ─────────────────────────────────────────────────────────────

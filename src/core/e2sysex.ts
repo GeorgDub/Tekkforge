@@ -237,6 +237,58 @@ export interface ParsedDump {
   index: number | null;
 }
 
+/** Größe eines Pattern-Bodies (unkodiert). */
+export const E2_PATTERN_BODY_SIZE = 0x4000; // 16384
+
+/**
+ * Nutzbytes, zu denen ein 16384-B-Body 7-in-8-kodiert wird.
+ *
+ * ☠ NICHT `ceil(len / 7) * 8`. Das unterstellt, dass alle Gruppen acht Byte
+ * lang sind — die letzte ist kürzer: 16384 = 2340·7 + 4, also 2340 volle
+ * Gruppen plus eine Restgruppe aus 1 Kopfbyte + 4 Datenbytes.
+ *
+ *     2340·8 + 5 = 18725     (nicht 18728)
+ *
+ * Die falsche Rechnung verwirft JEDEN gültigen Dump und lässt die verfälschten
+ * durch. In Synthstudio ist das erst am Gerät aufgefallen, weil der Test
+ * dieselbe Formel benutzte wie die Produktion — deshalb rechnet der Test hier
+ * mit festen Zahlen gegen, nicht mit derselben Formel.
+ */
+const DUMP_PAYLOAD_LEN = (() => {
+  const full = Math.floor(E2_PATTERN_BODY_SIZE / 7);
+  const rest = E2_PATTERN_BODY_SIZE % 7;
+  return full * 8 + (rest > 0 ? 1 + rest : 0); // 18725
+})();
+
+/**
+ * Sollgröße eines vollständigen Dump-Frames (inkl. F0…F7), oder null wenn
+ * `msgId` kein Pattern-Dump ist.
+ *
+ * Header: 7 Bytes bis einschließlich msgId; Slot-Dumps tragen zusätzlich
+ * [lsb, msb] der Pattern-Nummer. Plus 1 Byte F7 am Ende.
+ */
+export function expectedDumpLength(msgId: number): number | null {
+  if (msgId === E2_MSG.currentPatternDump) return 7 + DUMP_PAYLOAD_LEN + 1; // 18733
+  if (msgId === E2_MSG.patternDump) return 9 + DUMP_PAYLOAD_LEN + 1; // 18735
+  return null;
+}
+
+/**
+ * `false`, wenn der Rahmen ein Pattern-Dump ist und die falsche Länge hat.
+ *
+ * Rahmen, die keine Dumps sind (ACK, Search-Reply, Global), gelten immer als
+ * maßhaltig — sonst würde die Prüfung den halben Protokollverkehr verwerfen.
+ *
+ * Die Länge ist die einzige Prüfung, die VOR dem Dekodieren greift: ein
+ * abgeschnittener Dump ergibt sonst klaglos einen zu kurzen Body, der dann als
+ * gültiges Pattern in den Editor läuft.
+ */
+export function isWellSizedDump(bytes: Uint8Array): boolean {
+  if (bytes.length < 8) return true;
+  const expected = expectedDumpLength(bytes[6]);
+  return expected === null || bytes.length === expected;
+}
+
 /**
  * Dekodiert einen empfangenen 0x40/0x4C-Dump zurück in den 0x4000-Body.
  * Header wird per msgId (Byte 6) entfernt: 0x40 → 7 Bytes, 0x4C → 9 Bytes.
@@ -244,6 +296,9 @@ export interface ParsedDump {
 export function decodeDump(bytes: Uint8Array): ParsedDump | null {
   if (bytes.length < 8 || bytes[0] !== SYSEX_START || bytes[1] !== KORG_MANUFACTURER_ID)
     return null;
+  // Längenprüfung VOR dem Dekodieren — sonst liefert ein abgeschnittener Dump
+  // einen zu kurzen Body, den nichts weiter beanstandet.
+  if (!isWellSizedDump(bytes)) return null;
   const msgId = bytes[6];
   const end = bytes[bytes.length - 1] === SYSEX_END ? bytes.length - 1 : bytes.length;
   if (msgId === E2_MSG.currentPatternDump) {

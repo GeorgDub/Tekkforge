@@ -111,6 +111,32 @@ nacktes `± 1` an der Fundstelle.
 Prüfen lässt sich eine gebaute Bank mit Omnitribes Geometrie-Check
 (`tools/formats/e2s_geometry_check.py`); erwartet wird `Versatz: OK`.
 
+## NRPN / Live-FX (Hacktribe, experimentell)
+
+Neben dem SysEx-Pattern-Transfer versteht die Hacktribe-Firmware **NRPN** —
+damit lassen sich einzelne FX-Parameter, das Bedienfeld und Motion-Steps live
+steuern, waehrend das Geraet spielt.
+
+Im Part-Popover zeigt TekkForge zum eingestellten `ifxType` den **Effektnamen und
+seine Parameterliste** (statt nur nackter Indizes) und kann einen Parameter per
+NRPN ans Geraet schicken.
+
+⚠ **Nur mit Hacktribe-Firmware.** Ein Stock-Geraet hat keine NRPN-Schicht und
+ignoriert die Nachrichten stillschweigend. Der Sendeweg ist in TekkForge **nicht
+am Geraet erprobt** — die Byte-Kodierung folgt den Messungen aus dem
+Omnitribe-Pruefprotokoll, ein Hardware-Abnahmelauf steht aus.
+
+Eine Falle, die im Code dokumentiert ist: fuer dieselben Bedienelemente gibt es
+**zwei** Kodierungen — `0x01`–`0x0A` beim NRPN-Senden (Live-RAM-Map) und
+`0x41`–`0x4A` im Preset-Blob der Flash-Presets. Beide sind am Geraet belegt; es
+sind zwei verschiedene Strukturen, keine konkurrierenden Deutungen. Wer nur die
+Preset-Doku liest, "korrigiert" `FX_SOURCE_CONTROL` auf `0x4x` und bricht damit
+das Senden.
+
+Nicht uebernommen: die NRPN-Flaeche der **OmniTribe**-Firmware
+(`nrpn_map.json`, ~126 Eintraege) und deren eigenes SysEx-Protokoll OTP
+(`F0 7D …`). Beides gilt fuer eine Firmware, mit der TekkForge nicht spricht.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über
