@@ -137,6 +137,31 @@ Nicht uebernommen: die NRPN-Flaeche der **OmniTribe**-Firmware
 (`nrpn_map.json`, ~126 Eintraege) und deren eigenes SysEx-Protokoll OTP
 (`F0 7D …`). Beides gilt fuer eine Firmware, mit der TekkForge nicht spricht.
 
+### RAM-Zugriff (Peek/Poke) — Lesepfad angebunden
+
+Hacktribe hat **kein** eigenes FX- oder Groove-SysEx; der Editor schreibt
+typisierte Bytes an feste Adressen im AM1808-Adressraum. `hacktribeRam.ts`
+bildet diese Kommandos ab (`0x52` lesen, `0x53`/`0x54` schreiben) samt
+Adresskarte fuer IFX-/MFX-Presets, FX-Edit-Buffer und Groove-Templates.
+
+Angebunden ist bislang nur das **Lesen**: nach einem NRPN-Send liest „Pruefen"
+den FX-Edit-Buffer aus dem Geraet zurueck und vergleicht den Wert. Damit wird
+aus „gesendet" ein pruefbares „angekommen" — MIDI quittiert von sich aus nichts.
+
+Drei Leitlinien setzt das Modul durch:
+
+1. **Nur DDR2** (`0xC0000000`–`0xCFFFFFFF`). Der On-Chip-RAM ab `0x80000000`
+   ist Boot-Loader-Gebiet; `validateRamRange` lehnt alles andere hart ab.
+2. **Kein Flash, kein Execute.** Fuer `0x55`/`0x56`/`0x57` gibt es absichtlich
+   keine Bauer. Flash ueberlebt den Power-Cycle — ein Fehler dort ist nicht
+   mehr durch Aus- und Einschalten zu beheben; bei RAM schon.
+3. **Chunking** mit eigener Adress-Setzung pro Haeppchen. `buildRamWriteFrames`
+   gibt Adresse und Daten nur paarweise heraus, damit die zweistufige
+   Reihenfolge nicht vertauscht werden kann.
+
+⚠ Die Write-Bauer sind getestet, haben aber **bewusst keinen Knopf**: ein
+NRPN-Fehlgriff kostet einen Power-Cycle, ein RAM-Fehlgriff trifft laufenden Code.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über

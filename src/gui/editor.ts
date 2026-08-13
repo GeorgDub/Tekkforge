@@ -43,8 +43,15 @@ import {
 } from "../core/e2sysex";
 import { MidiIO, requestSysex, waitSysex } from "./midi";
 import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams";
-import { fxTypeDef } from "../core/e2FxParams";
+import { fxTypeDef, decodeFxEditBuffer } from "../core/e2FxParams";
 import { buildSetFxParam, fxSlotForPart } from "../core/hacktribeNrpn";
+import {
+  addressForSlot,
+  buildRamReadRequest,
+  findRamMapEntry,
+  parseRamResponse,
+  validateRamRange,
+} from "../core/hacktribeRam";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
 
@@ -446,6 +453,7 @@ function renderPartFxSection(
         <select id="ppFxParam" style="flex:1;font-size:11px">${opts}</select>
         <input id="ppFxVal" type="number" min="0" max="127" value="64" style="width:56px">
         <button id="ppFxSend" class="ghost" style="font-size:11px">Senden</button>
+        <button id="ppFxRead" class="ghost" style="font-size:11px" title="FX-Edit-Buffer aus dem Geräte-RAM zurücklesen und vergleichen">Prüfen</button>
       </div>
       <div id="ppFxStatus" style="color:var(--muted);font-size:10px;margin-top:3px"></div>
     </div>`;
@@ -464,9 +472,57 @@ function renderPartFxSection(
     void (async () => {
       try {
         for (const m of msgs) await midi.sendAsync(Uint8Array.from(m));
-        status.textContent = `Gesendet: ${def.params[idx]} = ${val} an IFX-A (FX-Slot ${slot}, 4 CCs).`;
+        status.textContent = `Gesendet: ${def.params[idx]} = ${val} an IFX-A (FX-Slot ${slot}, 4 CCs). „Prüfen" liest zurück.`;
       } catch (e) {
         status.textContent = `Senden fehlgeschlagen: ${String(e)}`;
+      }
+    })();
+  });
+
+  // ── Rückleseprobe ──────────────────────────────────────────────────────────
+  // Ein NRPN-Send bleibt sonst unbelegt: MIDI quittiert nichts, und ob der Wert
+  // im Gerät gelandet ist, sieht man nirgends. Der FX-Edit-Buffer liegt im
+  // DDR2 und ist über Hacktribes RAM-Lesekommando (0x52) abrufbar — damit wird
+  // aus „gesendet" ein prüfbares „angekommen". Nur LESEN, kein RAM-Write.
+  host.querySelector<HTMLButtonElement>("#ppFxRead")!.addEventListener("click", () => {
+    const idx = Number(host.querySelector<HTMLSelectElement>("#ppFxParam")!.value);
+    const want = Number(host.querySelector<HTMLInputElement>("#ppFxVal")!.value);
+    const slot = fxSlotForPart(pi + 1, 0);
+    const entry = findRamMapEntry("fxEditBuffer");
+    if (!entry) return;
+    const addr = addressForSlot(entry, slot);
+    const range = validateRamRange(addr, entry.size);
+    if (!range.ok) {
+      status.textContent = `Nicht gelesen: ${range.reason}`;
+      return;
+    }
+    status.textContent = "Lese FX-Edit-Buffer…";
+    void (async () => {
+      try {
+        const reply = await requestSysex(
+          midi,
+          buildRamReadRequest(addr, entry.size, midiOpts()),
+          (b) => parseRamResponse(b)?.kind === "data",
+          2000,
+        );
+        const parsed = reply ? parseRamResponse(reply) : null;
+        if (!parsed || parsed.kind !== "data") {
+          status.textContent =
+            "Keine Antwort. Läuft auf dem Gerät Hacktribe? Das Stock-Gerät kennt 0x52 nicht.";
+          return;
+        }
+        const buf = decodeFxEditBuffer(parsed.data, false);
+        const got = buf.params[idx];
+        const fxNow = fxTypeDef(buf.device, false);
+        if (got === undefined) {
+          status.textContent = `Gelesen: FX „${fxNow?.name ?? buf.device}" hat keinen Parameter ${idx}.`;
+        } else if (got === want) {
+          status.textContent = `✓ Angekommen: ${def.params[idx]} = ${got} (FX „${fxNow?.name ?? buf.device}").`;
+        } else {
+          status.textContent = `✗ Abweichung: gesendet ${want}, im Gerät steht ${got} (FX „${fxNow?.name ?? buf.device}").`;
+        }
+      } catch (e) {
+        status.textContent = `Lesen fehlgeschlagen: ${String(e)}`;
       }
     })();
   });

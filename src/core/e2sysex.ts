@@ -78,6 +78,22 @@ function head(opts: E2SysexOptions = {}): number[] {
   return [SYSEX_START, KORG_MANUFACTURER_ID, 0x30 | ch, 0x00, 0x01, id];
 }
 
+/**
+ * Generischer Frame: Kopf + msgId + Body + F7.
+ *
+ * Für Kommandos, die keinen eigenen Builder haben (z.B. der RAM-Zugriff in
+ * `hacktribeRam.ts`). Der Body ist bereits fertig kodiert — dieser Bauer
+ * kodiert NICHT selbst, weil nicht jedes Kommando 7-in-8-kodierte Nutzdaten hat.
+ */
+export function buildFrame(
+  msgId: number,
+  body: Uint8Array | number[] = [],
+  opts?: E2SysexOptions,
+): Uint8Array {
+  const b = body instanceof Uint8Array ? body : Uint8Array.from(body);
+  return Uint8Array.from([...head(opts), msgId & 0x7f, ...b, SYSEX_END]);
+}
+
 // ─── KORG 8↔7-Bit-Codec ──────────────────────────────────────────────────────
 // Je 7 Datenbytes (8-bit) → 1 High-Bits-Byte + 7 Bytes (je 7-bit). Der Tail
 // (Länge kein Vielfaches von 7) wird über `lim` sauber abgeschlossen.

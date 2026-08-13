@@ -10,8 +10,9 @@ version. See the file LICENSE for the full license text.
 Third-party origins
 ===================
 
-src/core/e2sysex.ts, src/core/hacktribeNrpn.ts, src/core/e2FxParams.ts
----------------------------------------------------------------------
+src/core/e2sysex.ts, src/core/hacktribeNrpn.ts, src/core/e2FxParams.ts,
+src/core/hacktribeRam.ts
+----------------------------------------------------------------------
 The KORG Electribe 2 SysEx protocol implementation and the KORG 8-bit <-> 7-bit
 codec are ported from:
 
@@ -27,7 +28,9 @@ dump/write byte order (e2pat2syx.py) follow that implementation.
 The NRPN layer (hacktribeNrpn.ts) follows utils/ht_nrpn_format.py and the
 hacktribe wiki MIDI.md; the FX type and parameter tables (e2FxParams.ts) follow
 utils/ht_fx_ram_format.py and utils/ht_fx_preset_format.py. Both were taken via
-Synthstudio, which ported them from the same source.
+Synthstudio, which ported them from the same source. The RAM peek/poke layer
+(hacktribeRam.ts) follows utils/ht_sysex.py; its address map is documented in
+omnitribe/docs/reverse/hacktribe_ram_and_formats.md.
 
 TekkForge is therefore distributed under the GPL-3.0-or-later as well.
 
