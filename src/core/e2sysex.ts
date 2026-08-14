@@ -450,14 +450,25 @@ export const E2_GLOBAL_AUDIO_IN_THRU_OFF = 0x14;
 /**
  * Global-Offset von „Chain Mode" — `off` = 0, `on` = 1.
  *
- * ~ Einmal am Gerät beobachtet (2026-08-14): von „on" auf „off" gestellt, ging
- * `+0x1F` von 1 auf 0. Siehe aber die offene Frage unten.
+ * ✔ Am Gerät bestätigt (2026-08-14) über zwei getrennte Lesevorgänge:
  *
- * ⚠ OFFEN: in einem spaeteren Lesevorgang stand `+0x1F` wieder auf 1, ohne dass
- * Chain Mode absichtlich umgestellt worden waere — geaendert wurden in dem
- * Durchgang nur Metronom und Sync-Einheit. Entweder wurde der Schalter nebenbei
- * mitbedient, oder das Byte haengt an etwas anderem und die erste Zuordnung ist
- * falsch. Bis das geklaert ist, gilt die Zuordnung als nicht gesichert.
+ *     Chain Mode „on"  -> +0x1F = 1
+ *     auf „off"        -> +0x1F = 0
+ *     Chain Mode „on"  -> +0x1F = 1   (Stand am Gerät nachgeprüft)
+ *
+ * Beide Zustände sind damit jeweils belegt; bei zwei Zuständen ist die Liste
+ * vollständig.
+ *
+ * Zwischenzeitlich stand das Byte unerwartet wieder auf 1, obwohl in dem
+ * Durchgang nur Metronom und Sync-Einheit geändert worden waren. Die Nachfrage
+ * am Gerät ergab: Chain Mode stand tatsächlich wieder auf „on" — der Schalter
+ * war beim Navigieren nebenbei mitbedient worden. Das Byte folgte also korrekt.
+ *
+ * Der Umweg hat die Zuordnung eher gestärkt: statt einer einzelnen gerichteten
+ * Messung stehen jetzt zwei unabhängig nachgeprüfte Gerätezustände dahinter.
+ * Ein Byte, das sich unerklärt bewegt, ist trotzdem der richtige Anlass, eine
+ * Zuordnung zurückzustufen und nachzufragen, statt sie stillschweigend zu
+ * behalten — die Alternative wäre hier eine falsche Zuordnung gewesen.
  *
  * Liegt nicht bei den anderen Schaltern in `0x10`..`0x14`, sondern hinter dem
  * Block `0x1B`..`0x1E` (Velocity-Kurve, Knob-Modus, Trigger-Modus, Kontrast).
