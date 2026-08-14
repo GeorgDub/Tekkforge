@@ -550,12 +550,11 @@ const DEFAULT_NOTE = 0x3c; // C4 = 60 = Originaltonhöhe (Briefing §4.1 + Hardt
  * gesendet und zurueckgelesen — im Geraetespeicher stand wieder 96. Beide
  * Werte, 255 und 127, werden beim Laden ueber SysEx auf 96 begrenzt.
  *
- * Zur Belastbarkeit dieser Messung: sie entstand bei laufendem Sequencer, und
- * unter dieser Bedingung kommen Pattern-Dumps gelegentlich beschaedigt zurueck.
- * Der Wert 96 stammt aber aus zwei byteweise uebereinstimmenden Lesungen und
- * trat auf allen zwoelf betroffenen Steps gleich auf — eine Verfaelschung
- * saehe anders aus. Eine Wiederholung bei gestopptem Sequencer steht dennoch
- * aus.
+ * Die Messung ist bei gestopptem Sequencer wiederholt worden, und zwei
+ * Lesevorgaenge stimmten byteweise ueberein — kein einziges abweichendes Byte.
+ * Von zwoelf geschriebenen Ties trug danach keiner den Wert 127; alle zwoelf
+ * standen auf 96. Der Befund haengt also nicht am Lesefehler, den der laufende
+ * Sequencer verursacht hatte.
  *
  * Daraus folgt: **ein Tie laesst sich derzeit nicht per Pattern-Uebertragung
  * setzen.** Das Geraet legt zwar 127 ab, wenn man Tie im Step-Editor waehlt —
@@ -722,6 +721,13 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
       // bytes 8..11 remain as the template (zero) — never touched.
     }
   }
+
+  // Alternate-Paare: nur schreiben, wenn ausdruecklich angegeben — sonst bliebe
+  // die Vorlage nicht erhalten.
+  if (typeof input.alternate13_14 === "boolean")
+    body[PATTERN_ALT_13_14_OFF] = input.alternate13_14 ? 1 : 0;
+  if (typeof input.alternate15_16 === "boolean")
+    body[PATTERN_ALT_15_16_OFF] = input.alternate15_16 ? 1 : 0;
 
   writeMotionSlots(body, input.motionSlots);
 

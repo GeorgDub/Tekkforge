@@ -154,6 +154,12 @@ export interface E2PatternInput {
   /** Up to 8 motion slots. Missing slots are zero-filled (disabled). */
   motionSlots?: E2MotionSlot[];
   /**
+   * Alternate-Paare 13/14 und 15/16 — die einzigen beiden, die das Geraet
+   * kennt. Ohne Angabe bleibt der Wert der Vorlage stehen (dort: an).
+   */
+  alternate13_14?: boolean;
+  alternate15_16?: boolean;
+  /**
    * Optionaler 0x4000-Basis-Body: statt des Init-Templates wird dieser als
    * Ausgangspunkt genommen und nur gesetzte Felder überlagert. Bewahrt
    * Filter/Amp/IFX/Motion importierter Patterns. Muss 0x4000 lang sein.

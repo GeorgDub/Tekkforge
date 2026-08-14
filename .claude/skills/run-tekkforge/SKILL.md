@@ -148,9 +148,13 @@ Befund aus: sie meldete fehlende Steps und einen leeren Part, also genau das,
 wonach gerade gesucht wurde. Wer sie fuer bare Muenze nimmt, jagt Fehler, die
 es nicht gibt.
 
-Deshalb: **Sequencer stoppen, bevor gelesen wird.** Wenn das nicht sicher ist,
-dreimal lesen und die Mehrheit je Byte nehmen — zwei uebereinstimmende Lesungen
-sind belastbar, eine einzelne nicht.
+Deshalb: **Sequencer stoppen, bevor gelesen wird.** Bei gestopptem Sequencer
+kamen zwei aufeinanderfolgende 16-KB-Lesungen ohne ein einziges abweichendes
+Byte zurueck — die Uebertragung selbst ist also zuverlaessig.
+
+Wenn sich der Sequencer nicht stoppen laesst: dreimal lesen und je Byte die
+Mehrheit nehmen. Zwei uebereinstimmende Lesungen sind belastbar, eine einzelne
+nicht.
 
 ## Gotchas
 

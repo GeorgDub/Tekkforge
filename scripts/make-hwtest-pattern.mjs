@@ -193,7 +193,17 @@ const parts = PARTS.map((p) => {
 });
 
 const out = Buffer.from(
-  buildE2PatternFileV2({ name: "HWTEST", bpm: 160, stepLength: 64, parts, motionSlots }),
+  buildE2PatternFileV2({
+    name: "HWTEST",
+    bpm: 160,
+    stepLength: 64,
+    parts,
+    motionSlots,
+    // Beide Alternate-Paare aus — sonst spielen 13/14 und 15/16 abwechselnd,
+    // was die Zuordnung Part -> Klang beim Hoeren verwischt.
+    alternate13_14: false,
+    alternate15_16: false,
+  }),
 );
 fs.writeFileSync(ZIEL, out);
 
