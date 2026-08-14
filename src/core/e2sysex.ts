@@ -376,11 +376,23 @@ export const E2_GLOBAL_METRONOME_OFF = 0x10;
 /**
  * Global-Offset der Sync-Polarität — `hi` = 0, `lo` = 1.
  *
- * ✔ Am Gerät bestätigt (2026-08-14): auf „lo" gestellt, `+0x11` ging von 0 auf 1.
- * Bei nur zwei Zuständen ist die Liste damit vollständig gemessen — keine
- * Lücke, die aus einer Reihenfolge geschlossen werden müsste.
+ * ✔ Am Gerät bestätigt (2026-08-14), in BEIDE Richtungen gemessen:
+ * `0 -> 1` beim Umstellen auf „lo", `1 -> 0` beim Zurückstellen auf „hi".
+ * Bei nur zwei Zuständen ist die Liste damit vollständig — keine Lücke, die aus
+ * einer Reihenfolge geschlossen werden müsste.
  */
 export const E2_GLOBAL_SYNC_POLARITY_OFF = 0x11;
+
+/**
+ * Global-Offset der Sync-Einheit — `1 step` = 0, `2 steps` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „1 step" gestellt, `+0x12` ging von 1
+ * auf 0. Ebenfalls lückenlos, da nur zwei Zustände.
+ *
+ * Liegt direkt neben der Polarität — die Sync-Einstellungen des Global-Menüs
+ * stehen zusammen bei `0x11`/`0x12`.
+ */
+export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
 
 /**
  * Global-Offset des MIDI-Kanals — 0-basiert (Anzeige 1..16 → Byte 0..15).
