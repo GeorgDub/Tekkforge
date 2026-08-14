@@ -343,6 +343,51 @@ export const PATTERN_SWING_OFF = 0x24;
 
 export const PATTERN_LEVEL_OFF = 0x2a;
 
+/**
+ * Pattern-Kopf-Offset der „OSC Edit Motion".
+ *
+ * Am Geraet gemessen (2026-08-14), zwei Punkte:
+ *
+ *     Anzeige      Byte
+ *     23 % REV     113
+ *     90 % FWD      59
+ *
+ * Beim Umstellen aenderte sich im gesamten 16-KB-Pattern GENAU dieses eine
+ * Byte. Der Wert liegt damit im Pattern-Kopf, nicht im Part-Block und nicht im
+ * Step-Record — obwohl die Einstellung am Geraet im Step-Editor sitzt.
+ *
+ * ## Deutung der Skala (Modell, nicht bewiesen)
+ *
+ * Die Anzeige laeuft `Off`, dann `0 % … 98 % FWD`, dann `98 % … 0 % REV` —
+ * also eine einzige durchlaufende Leiter, die in der Mitte umklappt. Ein
+ * Modell, das BEIDE Messpunkte exakt trifft:
+ *
+ *     Off        0
+ *     FWD    1..64    Prozent = round((v - 1)   * 98 / 63)
+ *     REV   65..128   Prozent = round((128 - v) * 98 / 63)
+ *
+ * Es liefert saubere Raender (1 = 0 % FWD, 64 = 98 % FWD, 65 = 98 % REV,
+ * 128 = 0 % REV) und zwei gleich grosse Haelften zu je 64 Werten.
+ *
+ * ⚠ Zwei Messpunkte und drei freie Parameter — das Modell ist angepasst, nicht
+ * bestaetigt. Es macht aber eine pruefbare Vorhersage: `98 % FWD` muss 64
+ * ergeben und `98 % REV` genau 65. Diese beiden Nachbarwerte liegen am
+ * Umklapppunkt und sind die einzige Stelle, an der ein falsches Modell
+ * auffliegen muss.
+ *
+ * ⚠ Offen ist ausserdem, ob das Byte fuer den GANZEN Part gilt oder nur fuer
+ * Step 1. Beide Lesarten passen zur Messung: bei einer Ablage pro Step waeren
+ * die Bytes der uebrigen 63 Steps schlicht 0 (= Off), und `0x131`..`0x16F` sind
+ * tatsaechlich durchgehend null. Ein zweiter Step mit einem Wert klaert es.
+ *
+ * Auffaellig ist die Nachbarschaft: im Kopfbereich `0x40`..`0x7FF` sind nur
+ * vier Bytes ueberhaupt belegt — `0x40`, `0x100`, `0x118` und `0x130`. Die
+ * letzten drei liegen mit 0x18 Abstand gleichmaessig auseinander, was auf eine
+ * Tabelle mit 24-Byte-Schritt hindeutet. Was in den ersten beiden Eintraegen
+ * steht (1 bzw. 4), ist unbekannt.
+ */
+export const PATTERN_OSC_EDIT_MOTION_OFF = 0x130;
+
 export const PATTERN_CHAIN_TO_OFF = 0x3b00;
 export const PATTERN_CHAIN_REPEAT_OFF = 0x3b02;
 export const PATTERN_SCALE_OFF = 0x28;
