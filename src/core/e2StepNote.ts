@@ -30,6 +30,20 @@
  *    und G9 als höchste Note landet genau auf 128. Damit ist die Verschiebung
  *    auf +1 festgenagelt, nicht bloß auf „irgendeine".
  *
+ * ## Vorhergesagt, dann gemessen
+ *
+ * Anschliessend wurden elf weitere Noten am Geraet gesetzt — ein
+ * zusammenhaengender Lauf `C-1 D-1 E-1 F-1 G-1 A-1 B-1 C0 D#0` sowie `G#4` und
+ * `G#8`, also ueber zwei Oktavgrenzen hinweg und einmal quer durch die Mitte
+ * des Bereichs. Alle elf Bytes wurden vorher aus dieser Kodierung berechnet und
+ * trafen zu:
+ *
+ *     1  3  5  6  8  10  12  13  16  69  117
+ *
+ * Damit ist die Verschiebung nicht mehr nur an den Raendern belegt, sondern
+ * ueber den ganzen Bereich — und jede einzelne dieser elf Vorhersagen haette
+ * scheitern koennen.
+ *
  * ## C4 liegt auf 61 — durch eine Nicht-Aenderung belegt
  *
  * Auf einen Step mit dem Notenbyte 61 wurden am Geraet zwei Noten gelegt, `C4`

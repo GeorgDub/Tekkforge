@@ -70,10 +70,11 @@
  *       Step stumm — das ist nicht haltbar, hoerbare Geraete-Steps tragen dort
  *       auch 0. Zwei Deutungen wurden geprueft und BEIDE widerlegt:
  *
- *         „0 heisst vier Noten" — passte zu allen fuenf Geraetemessungen
- *         (1/2/3 Noten -> 1, 4 Noten -> 0), scheitert aber an BodyTalk1: dort
+ *         „0 heisst vier Noten" — passte zunaechst zu allen Geraetemessungen
+ *         (1/2/3 Noten -> 1, 4 Noten -> 0) und scheiterte an BodyTalk1: dort
  *         tragen 105 Steps eine 0, obwohl die Datei ueberhaupt keinen Step mit
- *         mehr als einer Note enthaelt.
+ *         mehr als einer Note enthaelt. Inzwischen widerlegt sie auch das
+ *         Geraet selbst — ein neu gesetzter Step mit genau EINER Note trug 0.
  *
  *         „0 heisst Motion auf diesem Step" — passte ebenfalls zu allen
  *         Geraetemessungen, scheitert aber an der Factory-Bank: unter den
@@ -84,6 +85,13 @@
  *       gepasst — die Factory-Bank hat sie erledigt. Ein Byte, dessen Deutung
  *       an fuenf Messpunkten haelt, ist eben noch lange nicht verstanden.
  *       Der Schreibpfad setzt weiter 1 und bleibt unangetastet.
+ *
+ *       Auffaellig, aber nicht mehr als das: in einer Messreihe trugen genau
+ *       die Steps eine 0, die der Nutzer im Step-Editor neu aktiviert hatte,
+ *       waehrend die schon im Pattern vorhandenen Steps eine 1 trugen — und
+ *       zwar unabhaengig von der Notenzahl. Das koennte auf eine Herkunfts-
+ *       oder Bearbeitungsmarkierung deuten. Als Deutung taugt es noch nicht;
+ *       es steht hier, damit die Beobachtung nicht verlorengeht.
  *
  *       Bekannt ist immerhin, woran es NICHT haengt: ein am Geraet
  *       abgeschalteter Step behielt Flag 1 samt Gate, Velocity und Note. Das

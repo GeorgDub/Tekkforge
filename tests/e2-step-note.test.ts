@@ -27,6 +27,17 @@ const GEMESSEN: Array<[string, number, number]> = [
   ["C-1", 0, 1],
   ["F-1", 5, 6],
   ["C4", 60, 61], // belegt durch eine ausbleibende Aenderung, siehe Modul-Doku
+  // Zusammenhaengender Lauf ueber zwei Oktavgrenzen — alle elf Bytes wurden
+  // vorher aus der Kodierung berechnet und danach am Geraet abgelesen.
+  ["D-1", 2, 3],
+  ["E-1", 4, 5],
+  ["G-1", 7, 8],
+  ["A-1", 9, 10],
+  ["B-1", 11, 12],
+  ["C0", 12, 13],
+  ["D#0", 15, 16],
+  ["G#4", 68, 69],
+  ["G#8", 116, 117],
 ];
 
 describe("E2-Step-Noten", () => {
