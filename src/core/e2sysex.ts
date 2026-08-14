@@ -351,17 +351,6 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  * hier einen Parameter sucht, braucht ihn nicht im ganzen Puffer zu suchen —
  * es kommen nur die ersten 48 Bytes in Frage.
  *
- * ### Nicht im Block: Auto Power Off
- *
- * Am Gerät von „disable" auf „4 hours" gestellt — im gesamten 256-B-Block
- * änderte sich **kein einziges Byte**. Der Befund ist belastbar, weil dieselbe
- * Messung eine gleichzeitig vorgenommene zweite Änderung (Batterietyp, `+0x20`)
- * korrekt erfasst hat: es lag nicht am Lesen.
- *
- * Nicht jede Einstellung des Global-Menüs steht also im Global-Dump. Wo Auto
- * Power Off liegt, ist offen — denkbar sind ein separater Einstellungsbereich
- * oder eine Übernahme erst beim Speichern/Neustart.
- *
  * ### Bekannte Felder
  *
  * `+0x10` **Metronom** — 0-basierter Index der fünf Zustände:
@@ -452,6 +441,26 @@ export const E2_GLOBAL_AUDIO_IN_THRU_OFF = 0x14;
  * keiner „belegt"-Zaehlung auftauchte; siehe Hinweis bei `TEMPO_LOCK`.)
  */
 export const E2_GLOBAL_BATTERY_TYPE_OFF = 0x20;
+
+/**
+ * Global-Offset von „Auto Power Off" — `disable` = 0, `4 hours` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „4 hours" gestellt, `+0x21` ging von 0
+ * auf 1. Liegt direkt neben dem Batterietyp — die Stromversorgungs-Einstellungen
+ * stehen bei `0x20`/`0x21` beieinander.
+ *
+ * ⚠ Der erste Versuch ergab hier KEINE Aenderung, woraufhin ich notierte, das
+ * Feld stehe nicht im Global-Block. Das war falsch: die Einstellung war am Geraet
+ * gar nicht uebernommen worden, es gab schlicht nichts zu finden.
+ *
+ * Bemerkenswert ist, dass die uebliche Absicherung nicht gegriffen hat — im
+ * selben Durchgang lag eine Kontrolländerung (Batterietyp), und die wurde
+ * korrekt erfasst. Sie beweist aber nur, dass GELESEN wurde, nicht dass die
+ * fragliche Einstellung ueberhaupt gesetzt war. Ein ausbleibender Unterschied
+ * hat immer zwei Erklaerungen: das Feld liegt woanders — oder es wurde nie
+ * veraendert.
+ */
+export const E2_GLOBAL_AUTO_POWER_OFF_OFF = 0x21;
 
 export const E2_GLOBAL_TEMPO_LOCK_OFF = 0x24;
 
