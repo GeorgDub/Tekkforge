@@ -45,6 +45,13 @@ const N = 64;
  * Sechzehntel dann unter 80 ms liegt.
  */
 const BPM = Number(process.argv[4]) || 160;
+/**
+ * Klangvariante (argv[5], Default A). Gleiche Komposition, anderes
+ * Sample-Paket — zum Durchhoeren am Geraet, welche Melos/Drums besser
+ * tragen. Pattern-Namen tragen den Variantenbuchstaben als Praefix
+ * (ausser A), damit am Geraet sichtbar ist, welche Fassung geladen ist.
+ */
+const VARIANTE = (process.argv[5] ?? "A").toUpperCase();
 
 const MONO1 = 0, MONO2 = 1, POLY2 = 3;
 
@@ -75,6 +82,56 @@ const BELEGUNG = [
   ["Analog", "Bassdrum-01fd"], ["Analog", "Unison_Bass_C3"], ["PCM", 0], ["PCM", 4],
   ["PCM", 8], ["PCM", 12], ["Phrase", 0], ["FX", 0],
 ];
+
+/**
+ * Varianten: Tausch je Part-Index (0-basiert) gegen die Stammbelegung A.
+ * Rhythmusgruppe und die beiden am Geraet fuer gut befundenen Baesse bleiben
+ * ueberall gleich — getauscht wird das Melodie-Paket (Parts 11–14 + Pad 15),
+ * in D zusaetzlich die Drums. So vergleicht man Klangpakete, nicht Sets.
+ */
+const VARIANTEN = {
+  A: { titel: "Stamm (HaMMeR/SYNTHHS3/R0binS/melo neu)", tausch: {} },
+  B: {
+    titel: "Melo-Paket B (T-Mello/Genetikk/PsyChoTanZ/Krieger)",
+    tausch: {
+      10: ["PCM", "T-Mello"],
+      11: ["PCM", "Genetikk"],
+      12: ["PCM", "PsyChoTanZ"],
+      13: ["PCM", "Krieger-MeLo"],
+      14: ["Phrase", "Killa Bees"],
+    },
+  },
+  C: {
+    titel: "Melo-Paket C (Rad MeLo/Tau-MeLo/PaRa/CrystaL)",
+    tausch: {
+      10: ["PCM", "Rad MeLo"],
+      11: ["PCM", "Tau-MeLo"],
+      12: ["PCM", "HBsChE PaRa"],
+      13: ["PCM", "Auf CrystaL"],
+      14: ["Phrase", "Strings of Wisdo"],
+    },
+  },
+  D: {
+    titel: "Melo-Paket D + Drums B (Bluezone/Synthbeat/Arp/melo neu 2)",
+    tausch: {
+      2: ["Snare", "BAHRE_Snare_2"],
+      3: ["Clap", "SZ_Clap"],
+      4: ["HiHat", "TeKK_HaT2"],
+      5: ["HiHat", "DuUB HaT"],
+      6: ["Perc.", "Digital_Conga_01"],
+      7: ["Perc.", "Digital_Shake_01"],
+      10: ["PCM", "Bluezone"],
+      11: ["PCM", "DL_Synthbeat"],
+      12: ["PCM", "SynthArpSample3"],
+      13: ["PCM", "melo neu 2"],
+      14: ["Phrase", "PAD_ResoChor"],
+    },
+  },
+};
+
+const V = VARIANTEN[VARIANTE];
+if (!V) throw new Error(`Unbekannte Variante "${VARIANTE}" (kenne ${Object.keys(VARIANTEN).join(", ")})`);
+for (const [idx, wahl] of Object.entries(V.tausch)) BELEGUNG[Number(idx)] = wahl;
 const VOLUME = [127, 108, 105, 92, 84, 88, 80, 78, 118, 104, 100, 95, 95, 92, 68, 88];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, POLY2, POLY2, POLY2, MONO1, POLY2, POLY2];
@@ -235,13 +292,14 @@ for (const [kat, wahl] of BELEGUNG) {
   SAMPLES.push(oscToDisplayNumber(s.sampleNumber));
   NAMEN.push(s.name.trim());
 }
-console.log(`Bank: ${BANK.split(/[\/]/).pop()} — ${belegt.length} Samples`);
+console.log(`Bank: ${BANK.split(/[\/]/).pop()} — ${belegt.length} Samples · Variante ${VARIANTE}: ${V.titel}`);
 BELEGUNG.forEach(([kat], i) =>
   console.log(`  Part ${String(i + 1).padStart(2)}  ${kat.padEnd(7)} #${SAMPLES[i]} ${NAMEN[i]}`),
 );
 
 const patterns = PLAN.map(([name, intens, thema, kick, wdh], i) => ({
-  name,
+  // Variantenbuchstabe im Namen, damit am Geraet sichtbar ist, was geladen ist.
+  name: VARIANTE === "A" ? name : `${VARIANTE} ${name}`,
   bpm: BPM,
   stepLength: 64,
   parts: partsFuer(intens, thema, kick),
