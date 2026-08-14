@@ -445,8 +445,8 @@ export const E2_GLOBAL_BATTERY_TYPE_OFF = 0x20;
 /**
  * Global-Offset von „Auto Power Off" — `disable` = 0, `4 hours` = 1.
  *
- * ✔ Am Gerät bestätigt (2026-08-14): auf „4 hours" gestellt, `+0x21` ging von 0
- * auf 1. Liegt direkt neben dem Batterietyp — die Stromversorgungs-Einstellungen
+ * ✔ Am Gerät bestätigt (2026-08-14), in beide Richtungen: `0 -> 1` auf
+ * „4 hours", `1 -> 0` zurueck auf „disable". Liegt direkt neben dem Batterietyp — die Stromversorgungs-Einstellungen
  * stehen bei `0x20`/`0x21` beieinander.
  *
  * ⚠ Der erste Versuch ergab hier KEINE Aenderung, woraufhin ich notierte, das
@@ -479,6 +479,23 @@ export const E2_GLOBAL_TEMPO_LOCK_OFF = 0x24;
  * den Wert um eins falsch gedeutet. Auch eine Regel, die siebenmal gehalten hat,
  * ersetzt die Messung nicht.
  */
+/**
+ * Global-Offset des Energiesparmodus — 0-basierter Listenindex.
+ *
+ * | Anzeige | Byte |                     |
+ * |---------|------|---------------------|
+ * | disable | 0    | gemessen (Ausgang)  |
+ * | auto    | 1    | aus der Reihenfolge |
+ * | enable  | 2    | gemessen            |
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „enable" gestellt, `+0x25` ging von 0
+ * auf 2.
+ *
+ * Schliesst die Luecke zwischen Tempo Lock (`0x24`) und Touch-Scale-Umfang
+ * (`0x26`) — der Bereich `0x24`..`0x26` ist damit lueckenlos belegt.
+ */
+export const E2_GLOBAL_POWER_SAVE_OFF = 0x25;
+
 export const E2_GLOBAL_TOUCH_SCALE_RANGE_OFF = 0x26;
 
 export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
