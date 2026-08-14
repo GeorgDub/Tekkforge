@@ -380,6 +380,21 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  *     Ausgangsstand    1     (= rec 0)
  *     auf „on"         4
  *     zurück auf „off" 0
+ *     auf „rec 2"      3
+ *
+ * Damit sind vier der fünf Stufen einzeln gemessen:
+ *
+ * | Anzeige | Byte |          |
+ * |---------|------|----------|
+ * | off     | 0    | gemessen |
+ * | rec 0   | 1    | gemessen |
+ * | rec 1   | 2    | erschlossen — eingeschlossen zwischen zwei Messpunkten |
+ * | rec 2   | 3    | gemessen |
+ * | on      | 4    | gemessen |
+ *
+ * `rec 1` ist der einzige nicht direkt gemessene Wert, liegt aber zwischen zwei
+ * gemessenen Nachbarn auf derselben lückenlosen Skala. Ein anderer Wert ist
+ * dort nicht mehr unterzubringen.
  *
  * Im gesamten Global-Block bewegte sich dabei jedes Mal genau dieses eine Byte.
  *
@@ -405,8 +420,8 @@ export const E2_GLOBAL_SYNC_POLARITY_OFF = 0x11;
 /**
  * Global-Offset der Sync-Einheit — `1 step` = 0, `2 steps` = 1.
  *
- * ✔ Am Gerät bestätigt (2026-08-14): auf „1 step" gestellt, `+0x12` ging von 1
- * auf 0. Ebenfalls lückenlos, da nur zwei Zustände.
+ * ✔ Am Gerät bestätigt (2026-08-14), in beide Richtungen gemessen: auf „1 step"
+ * ging `+0x12` von 1 auf 0, zurück auf „2 steps" wieder von 0 auf 1.
  *
  * Liegt direkt neben der Polarität — die Sync-Einstellungen des Global-Menüs
  * stehen zusammen bei `0x11`/`0x12`.
@@ -435,8 +450,14 @@ export const E2_GLOBAL_AUDIO_IN_THRU_OFF = 0x14;
 /**
  * Global-Offset von „Chain Mode" — `off` = 0, `on` = 1.
  *
- * ✔ Am Gerät bestätigt (2026-08-14): von „on" auf „off" gestellt, `+0x1F` ging
- * von 1 auf 0. Zwei Zustände, damit lückenlos.
+ * ~ Einmal am Gerät beobachtet (2026-08-14): von „on" auf „off" gestellt, ging
+ * `+0x1F` von 1 auf 0. Siehe aber die offene Frage unten.
+ *
+ * ⚠ OFFEN: in einem spaeteren Lesevorgang stand `+0x1F` wieder auf 1, ohne dass
+ * Chain Mode absichtlich umgestellt worden waere — geaendert wurden in dem
+ * Durchgang nur Metronom und Sync-Einheit. Entweder wurde der Schalter nebenbei
+ * mitbedient, oder das Byte haengt an etwas anderem und die erste Zuordnung ist
+ * falsch. Bis das geklaert ist, gilt die Zuordnung als nicht gesichert.
  *
  * Liegt nicht bei den anderen Schaltern in `0x10`..`0x14`, sondern hinter dem
  * Block `0x1B`..`0x1E` (Velocity-Kurve, Knob-Modus, Trigger-Modus, Kontrast).
