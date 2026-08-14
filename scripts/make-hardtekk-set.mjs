@@ -36,7 +36,12 @@ import { bankNumberToE2PatternRef } from "../src/core/e2sPatternSampleLink.ts";
 const BANK = process.argv[3] ?? "C:/Users/admin/Desktop/omnitribe-hwtest-kit/luknkicks.all";
 const ZIEL = process.argv[2] ?? "examples/e2s/HARDTEKK_SET.e2sallpat";
 const N = 64;
-const BPM = 160;
+/**
+ * Tempo. Als drittes Argument uebergebbar — dieselbe Komposition traegt 150
+ * bis 190; darueber wird der Vorschlag der Tekk-Figur zum Flattern, weil ein
+ * Sechzehntel dann unter 80 ms liegt.
+ */
+const BPM = Number(process.argv[4]) || 160;
 
 const MONO1 = 0, MONO2 = 1, POLY2 = 3;
 
@@ -139,8 +144,16 @@ const KICK = {
   kein: () => leer(),
   vier: () => baue((s) => (s % 4 === 0 ? hit([60], 112, 40) : null)),
   // Tekk: Vier auf den Boden plus ein Vorschlag vor der Drei.
+  // Bei hohem Tempo faellt der Vorschlag weg: bei 180 BPM liegt ein Sechzehntel
+  // bei 83 ms, und Kick plus Vorschlag verschmieren zu einem Doppelschlag.
   tekk: () =>
-    baue((s) => (s % 4 === 0 || imTakt(s) === 7 ? hit([60], 112, imTakt(s) === 7 ? 22 : 40) : null)),
+    baue((s) =>
+      s % 4 === 0
+        ? hit([60], 112, 40)
+        : BPM < 175 && imTakt(s) === 7
+          ? hit([60], 112, 22)
+          : null,
+    ),
   // Rollend: durchgehende Achtel im letzten Takt.
   roll: () =>
     baue((s) => (s % 4 === 0 || (takt(s) === 3 && s % 2 === 0) ? hit([60], 112, 30) : null)),
