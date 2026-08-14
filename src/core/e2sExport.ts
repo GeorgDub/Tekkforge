@@ -351,6 +351,7 @@ export const PATTERN_LEVEL_OFF = 0x2a;
  *     Anzeige      Byte
  *     23 % REV     113
  *     90 % FWD      59
+ *     98 % FWD      64   <- vorhergesagt, dann gemessen
  *
  * Beim Umstellen aenderte sich im gesamten 16-KB-Pattern GENAU dieses eine
  * Byte. Der Wert liegt damit im Pattern-Kopf, nicht im Part-Block und nicht im
@@ -369,11 +370,15 @@ export const PATTERN_LEVEL_OFF = 0x2a;
  * Es liefert saubere Raender (1 = 0 % FWD, 64 = 98 % FWD, 65 = 98 % REV,
  * 128 = 0 % REV) und zwei gleich grosse Haelften zu je 64 Werten.
  *
- * ⚠ Zwei Messpunkte und drei freie Parameter — das Modell ist angepasst, nicht
- * bestaetigt. Es macht aber eine pruefbare Vorhersage: `98 % FWD` muss 64
- * ergeben und `98 % REV` genau 65. Diese beiden Nachbarwerte liegen am
- * Umklapppunkt und sind die einzige Stelle, an der ein falsches Modell
- * auffliegen muss.
+ * ✔ Die FWD-Haelfte ist damit bestaetigt — und zwar richtig herum: der Wert 64
+ * fuer `98 % FWD` wurde aus dem Modell VORHERGESAGT und danach gemessen. Ein
+ * Modell, das nur die Punkte trifft, aus denen es gebaut wurde, zeigt gar
+ * nichts; dieses hat einen Punkt getroffen, den es nicht kannte, und haette
+ * dabei scheitern koennen.
+ *
+ * ⚠ Die REV-Haelfte steht noch aus. Sie ruht weiterhin auf einem einzigen
+ * Messpunkt (23 % REV). Vorhersage: `98 % REV` muss genau 65 ergeben, also den
+ * direkten Nachbarn von 64. Am Umklapppunkt muss ein falsches Modell auffliegen.
  *
  * ⚠ Offen ist ausserdem, ob das Byte fuer den GANZEN Part gilt oder nur fuer
  * Step 1. Beide Lesarten passen zur Messung: bei einer Ablage pro Step waeren
