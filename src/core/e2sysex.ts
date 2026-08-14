@@ -350,7 +350,16 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  * Der Block ist also beidseitig markiert und zum allergrößten Teil leer. Wer
  * hier einen Parameter sucht, braucht ihn nicht im ganzen Puffer zu suchen —
  * es kommen nur die ersten 48 Bytes in Frage.
+ *
+ * ### Bekannte Felder
+ *
+ * `+0x10` **Metronom** — 0-basierter Index der fünf Zustände:
+ * `0` = aus, `1` = rec 0, `2` = rec 1, `3` = rec 2, `4` = on.
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „on" gestellt, das Byte ging von 1
+ * (rec 0) auf 4. Im gesamten Global-Block bewegte sich sonst nichts.
  */
+/** Global-Offset des Metronom-Zustands (0=aus … 4=on). */
+export const E2_GLOBAL_METRONOME_OFF = 0x10;
 export function decodeGlobalDump(bytes: Uint8Array): Uint8Array | null {
   if (bytes.length < 8 || bytes[0] !== SYSEX_START || bytes[1] !== KORG_MANUFACTURER_ID)
     return null;
