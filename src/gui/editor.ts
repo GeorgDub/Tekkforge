@@ -44,6 +44,7 @@ import {
   E2_PRODUCT_ID_SAMPLER,
   type E2SysexOptions,
 } from "../core/e2sysex";
+import { resolveStepNotes } from "../core/e2StepNote";
 import { MidiIO, requestSysex, waitSysex } from "./midi";
 import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams";
 import { fxTypeDef, decodeFxEditBuffer } from "../core/e2FxParams";
@@ -147,8 +148,26 @@ function renderGlobals(): void {
 
 // ─── Grid ────────────────────────────────────────────────────────────────────
 
+/** Alle Töne eines Steps, erster zuerst. */
+function stepNotes(s: EditorStep): number[] {
+  return resolveStepNotes(s.notes, s.note);
+}
+
 function stepTitle(s: EditorStep): string {
-  return `Note ${noteName(s.note)} · Vel ${s.velocity} · Gate ${s.gate === EDITOR_GATE_MAX ? "Tie" : s.gate}`;
+  const n = stepNotes(s);
+  const noten = n.length > 1 ? `Noten ${n.map(noteName).join(" ")}` : `Note ${noteName(s.note)}`;
+  return `${noten} · Vel ${s.velocity} · Gate ${s.gate === EDITOR_GATE_MAX ? "Tie" : s.gate}`;
+}
+
+/**
+ * Beschriftung einer Rasterzelle. Bei einem Akkord ist kein Platz für alle
+ * Töne — deshalb der erste plus die Zahl der weiteren. Die vollständige Liste
+ * steht im Tooltip.
+ */
+function stepLabel(s: EditorStep): string {
+  const n = stepNotes(s);
+  if (n.length > 1) return `${noteName(n[0])}+${n.length - 1}`;
+  return s.note === EDITOR_DEFAULT_NOTE ? "" : noteName(s.note);
 }
 
 function velColor(v: number): string {
@@ -276,11 +295,12 @@ function renderGrid(): void {
       cell.dataset.step = String(s);
       if (st.on) {
         cell.style.background = velColor(st.velocity);
-        cell.textContent = st.note === EDITOR_DEFAULT_NOTE ? "" : noteName(st.note);
+        cell.textContent = stepLabel(st);
+        if (stepNotes(st).length > 1) cell.classList.add("chord");
         cell.title = stepTitle(st);
       } else {
         cell.style.background = "";
-        cell.title = "Klick: Step an · Rechtsklick: Details";
+        cell.title = "Klick: Step an · Rechtsklick: Noten, Velocity, Gate";
       }
       cell.addEventListener("click", () => {
         st.on = !st.on;
@@ -315,14 +335,26 @@ function openStepPopover(anchor: HTMLElement, pi: number, si: number): void {
 
   const pop = document.createElement("div");
   pop.className = "popover";
-  const noteOpts = Array.from({ length: 128 }, (_, n) => {
-    const label = n === EDITOR_DEFAULT_NOTE ? `${noteName(n)} (Original)` : noteName(n);
-    return `<option value="${n}" ${st.note === n ? "selected" : ""}>${label}</option>`;
-  }).join("");
+  const vorhanden = stepNotes(st);
+  const noteOpts = (sel: number | null, leer: boolean) =>
+    (leer ? `<option value="">—</option>` : "") +
+    Array.from({ length: 128 }, (_, n) => {
+      const label = n === EDITOR_DEFAULT_NOTE ? `${noteName(n)} (Original)` : noteName(n);
+      return `<option value="${n}" ${sel === n ? "selected" : ""}>${label}</option>`;
+    }).join("");
+  // Das Geraet bietet vier Notenplaetze je Step. Platz 1 ist der Grundton und
+  // immer belegt; die drei weiteren duerfen leer bleiben.
+  const zusatz = [1, 2, 3]
+    .map(
+      (i) => `<select id="ppNote${i}" class="chordSlot">${noteOpts(vorhanden[i] ?? null, true)}</select>`,
+    )
+    .join("");
   pop.innerHTML = `
     <b>Part ${pi + 1} · Step ${si + 1}</b>
     <label>Note</label>
-    <select id="ppNote" style="width:100%">${noteOpts}</select>
+    <select id="ppNote" style="width:100%">${noteOpts(st.note, false)}</select>
+    <label>Weitere Töne (Akkord, optional)</label>
+    <div class="chordRow">${zusatz}</div>
     <label>Velocity (1–127)</label>
     <input id="ppVel" type="number" min="1" max="127" value="${st.velocity}" style="width:100%" />
     <label>Gate (1–96, 96 = Tie)</label>
@@ -339,7 +371,18 @@ function openStepPopover(anchor: HTMLElement, pi: number, si: number): void {
 
   pop.querySelector<HTMLButtonElement>("#ppOk")!.addEventListener("click", () => {
     st.on = true;
-    st.note = Number(pop.querySelector<HTMLSelectElement>("#ppNote")!.value);
+    const gewaehlt = [
+      Number(pop.querySelector<HTMLSelectElement>("#ppNote")!.value),
+      ...[1, 2, 3]
+        .map((i) => pop.querySelector<HTMLSelectElement>(`#ppNote${i}`)!.value)
+        .filter((v) => v !== "")
+        .map(Number),
+    ];
+    // resolveStepNotes wirft Dubletten raus und begrenzt auf vier — dieselbe
+    // Regel wie beim Schreiben, damit die Anzeige zum Export passt.
+    const noten = resolveStepNotes(gewaehlt, EDITOR_DEFAULT_NOTE);
+    st.note = noten[0];
+    st.notes = noten.length > 1 ? noten : undefined;
     st.velocity = Math.min(127, Math.max(1, Number(pop.querySelector<HTMLInputElement>("#ppVel")!.value) || 96));
     st.gate = Math.min(EDITOR_GATE_MAX, Math.max(1, Number(pop.querySelector<HTMLInputElement>("#ppGate")!.value) || 72));
     lastNote.set(pi, st.note);
