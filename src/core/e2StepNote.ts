@@ -18,6 +18,7 @@
  *     F# 9      126    127
  *     E  9      124    125
  *     C -1        0      1
+ *     F -1        5      6
  *
  * Zwei unabhängige Belege stecken darin:
  *
@@ -28,6 +29,22 @@
  *    sind zwei (127→125). Die Skala ist also chromatisch mit Schrittweite 1,
  *    und G9 als höchste Note landet genau auf 128. Damit ist die Verschiebung
  *    auf +1 festgenagelt, nicht bloß auf „irgendeine".
+ *
+ * ## C4 liegt auf 61 — durch eine Nicht-Aenderung belegt
+ *
+ * Auf einen Step mit dem Notenbyte 61 wurden am Geraet zwei Noten gelegt, `C4`
+ * und `F-1`. Im ganzen Pattern bewegte sich nur ein Byte: der zweite Notenplatz
+ * bekam die 6 (= F-1). Fuer `C4` entstand kein Eintrag — die Note war bereits
+ * vorhanden, naemlich als die 61 auf dem ersten Platz.
+ *
+ * Das belegt zweierlei. Erstens ist 61 tatsaechlich C4, unabhaengig von der
+ * Haeufigkeitsrechnung weiter unten. Zweitens verhalten sich die vier Plaetze
+ * wie eine Menge: eine schon vorhandene Note wird nicht ein zweites Mal
+ * abgelegt.
+ *
+ * Ein Messpunkt, der aus einer ausbleibenden Aenderung besteht, ist selten so
+ * eindeutig — hier ist er es, weil im uebrigen Pattern nachweislich gar nichts
+ * passierte.
  *
  * ## Gegenprobe an der Factory-Bank
  *

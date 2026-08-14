@@ -25,6 +25,8 @@ const GEMESSEN: Array<[string, number, number]> = [
   ["F#9", 126, 127],
   ["E9", 124, 125],
   ["C-1", 0, 1],
+  ["F-1", 5, 6],
+  ["C4", 60, 61], // belegt durch eine ausbleibende Aenderung, siehe Modul-Doku
 ];
 
 describe("E2-Step-Noten", () => {
