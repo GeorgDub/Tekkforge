@@ -122,9 +122,23 @@ seine Parameterliste** (statt nur nackter Indizes) und kann einen Parameter per
 NRPN ans Geraet schicken.
 
 ⚠ **Nur mit Hacktribe-Firmware.** Ein Stock-Geraet hat keine NRPN-Schicht und
-ignoriert die Nachrichten stillschweigend. Der Sendeweg ist in TekkForge **nicht
-am Geraet erprobt** — die Byte-Kodierung folgt den Messungen aus dem
-Omnitribe-Pruefprotokoll, ein Hardware-Abnahmelauf steht aus.
+ignoriert die Nachrichten stillschweigend.
+
+**Am Geraet belegt (2026-08-14).** `bit_depth` und `sample_freq` eines
+Decimators auf Part 3 per NRPN veraendert — die Klangaenderung war hoerbar, in
+drei aufeinanderfolgenden Zyklen reproduzierbar. Damit sind Kodierung,
+MIDI-Kanal, Empfang und die Slot-Rechnung bestaetigt: gesendet wurde auf
+FX-Slot 4, geaendert hat sich **Part 3** — genau `(3-1)*2`. Ein Off-by-one
+haette Part 2 oder 4 getroffen, und die trugen andere Effekte.
+
+☠ **Der FX-Puffer taugt NICHT als Gegenprobe.** `FX_EDIT_BUFFER_BASE`
+(`0xC03478A8`) spiegelt Live-Aenderungen nicht — nach einem NRPN-Send blieben
+alle 3746 Bytes unveraendert, und nach einem Knopfdreh **am Geraet selbst**
+ebenfalls. Der Bereich zeigt offenbar den Stand beim Pattern-Laden. Ein
+Vergleich dagegen meldet immer „Abweichung" und laesst einen funktionierenden
+Sendeweg kaputt aussehen — genau dieser Fehlschluss ist hier passiert und hat
+mehrere Messungen gekostet. Ein NRPN-Send ist derzeit **nur akustisch**
+pruefbar.
 
 Eine Falle, die im Code dokumentiert ist: fuer dieselben Bedienelemente gibt es
 **zwei** Kodierungen — `0x01`–`0x0A` beim NRPN-Senden (Live-RAM-Map) und

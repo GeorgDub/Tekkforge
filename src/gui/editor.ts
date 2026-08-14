@@ -468,7 +468,7 @@ function renderPartFxSection(
         <select id="ppFxParam" style="flex:1;font-size:11px">${opts}</select>
         <input id="ppFxVal" type="number" min="0" max="127" value="64" style="width:56px">
         <button id="ppFxSend" class="ghost" style="font-size:11px">Senden</button>
-        <button id="ppFxRead" class="ghost" style="font-size:11px" title="FX-Edit-Buffer aus dem Geräte-RAM zurücklesen und vergleichen">Prüfen</button>
+        <button id="ppFxRead" class="ghost" style="font-size:11px" title="FX-Puffer aus dem Geraete-RAM lesen — zeigt den Pattern-Stand, NICHT den Live-Wert">Puffer lesen</button>
       </div>
       <div id="ppFxStatus" style="color:var(--muted);font-size:10px;margin-top:3px"></div>
     </div>`;
@@ -487,21 +487,29 @@ function renderPartFxSection(
     void (async () => {
       try {
         for (const m of msgs) await midi.sendAsync(Uint8Array.from(m));
-        status.textContent = `Gesendet: ${def.params[idx]} = ${val} an IFX-A (FX-Slot ${slot}, 4 CCs). „Prüfen" liest zurück.`;
+        status.textContent = `Gesendet: ${def.params[idx]} = ${val} an IFX-A (FX-Slot ${slot}, 4 CCs). Wirkung nur hoerbar pruefbar.`;
       } catch (e) {
         status.textContent = `Senden fehlgeschlagen: ${String(e)}`;
       }
     })();
   });
 
-  // ── Rückleseprobe ──────────────────────────────────────────────────────────
-  // Ein NRPN-Send bleibt sonst unbelegt: MIDI quittiert nichts, und ob der Wert
-  // im Gerät gelandet ist, sieht man nirgends. Der FX-Edit-Buffer liegt im
-  // DDR2 und ist über Hacktribes RAM-Lesekommando (0x52) abrufbar — damit wird
-  // aus „gesendet" ein prüfbares „angekommen". Nur LESEN, kein RAM-Write.
+  // ── FX-Puffer lesen (KEINE Rückleseprobe für NRPN!) ────────────────────────
+  //
+  // ⚠ Dieser Knopf hieß mal „Prüfen" und verglich den gesendeten Wert mit dem
+  // Puffer. Das ist am Gerät widerlegt (2026-08-14): der Puffer bei
+  // `FX_EDIT_BUFFER_BASE` spiegelt LIVE-Änderungen nicht — weder NRPN noch ein
+  // Knopfdreh am Gerät selbst. Nachgemessen: nach beidem änderte sich im
+  // gesamten 3746-B-Bereich kein einziges Byte, während der NRPN hörbar wirkte.
+  //
+  // Ein Vergleich hätte also IMMER „Abweichung" gemeldet und einen
+  // funktionierenden Sendeweg als kaputt dargestellt. Genau darauf bin ich
+  // selbst hereingefallen. Der Knopf zeigt jetzt nur noch, was im Puffer steht,
+  // und sagt dazu, dass das der Pattern-Stand ist.
+  //
+  // Belegt wird ein NRPN-Send derzeit nur akustisch.
   host.querySelector<HTMLButtonElement>("#ppFxRead")!.addEventListener("click", () => {
     const idx = Number(host.querySelector<HTMLSelectElement>("#ppFxParam")!.value);
-    const want = Number(host.querySelector<HTMLInputElement>("#ppFxVal")!.value);
     const slot = fxSlotForPart(pi + 1, 0);
     const entry = findRamMapEntry("fxEditBuffer");
     if (!entry) return;
@@ -524,13 +532,12 @@ function renderPartFxSection(
         const buf = decodeFxEditBuffer(read.bytes, false);
         const got = buf.params[idx];
         const fxNow = fxTypeDef(buf.device, false);
-        if (got === undefined) {
-          status.textContent = `Gelesen: FX „${fxNow?.name ?? buf.device}" hat keinen Parameter ${idx}.`;
-        } else if (got === want) {
-          status.textContent = `✓ Angekommen: ${def.params[idx]} = ${got} (FX „${fxNow?.name ?? buf.device}").`;
-        } else {
-          status.textContent = `✗ Abweichung: gesendet ${want}, im Gerät steht ${got} (FX „${fxNow?.name ?? buf.device}").`;
-        }
+        const wer = `Algorithmus „${fxNow?.name ?? buf.device}"`;
+        status.textContent =
+          got === undefined
+            ? `Pattern-Stand: ${wer} hat keinen Parameter ${idx}.`
+            : `Pattern-Stand: ${def.params[idx]} = ${got} (${wer}). ` +
+              `Das ist NICHT der Live-Wert — gesendete Änderungen erscheinen hier nicht.`;
       } catch (e) {
         status.textContent = `Lesen fehlgeschlagen: ${String(e)}`;
       }

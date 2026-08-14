@@ -146,7 +146,18 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
   },
   {
     key: "fxEditBuffer",
-    label: "FX-Edit-Buffer (live)",
+    // ⚠ NICHT "live". Am Gerät widerlegt (2026-08-14): der Nutzer hat einen
+    // FX-Parameter am Gerät von Hand gedreht — im gesamten 3746-B-Bereich
+    // änderte sich KEIN einziges Byte. Ebenso wenig nach einem NRPN-Send, der
+    // hörbar gewirkt hat.
+    //
+    // Der Bereich enthält echte FX-Daten (die Typ-Bytes passen exakt zur
+    // Part-Belegung), spiegelt aber offenbar den Stand beim **Pattern-Laden**,
+    // nicht die laufende Bearbeitung. Er taugt deshalb NICHT als Gegenprobe
+    // für Live-Änderungen — weder für NRPN noch für RAM-Writes. Wer das
+    // uebersieht, haelt einen funktionierenden Sendeweg fuer kaputt; genau das
+    // ist hier passiert.
+    label: "FX-Puffer (Pattern-Stand, nicht live)",
     // Adressen NICHT doppelt pflegen — sie stehen in e2FxParams, wo auch der
     // Dekoder für die Struktur liegt. Zwei Quellen für dieselbe Adresse driften.
     base: FX_EDIT_BUFFER_BASE,
