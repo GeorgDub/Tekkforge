@@ -35,6 +35,8 @@ import {
   buildSearchDevice,
   parseSearchReply,
   decodeDump,
+  decodeGlobalDump,
+  buildGlobalRequest,
   isKorgSysex,
   parseAck,
   E2_ACK_OK,
@@ -1273,6 +1275,37 @@ function setupRamPanel(): void {
   });
 }
 
+/**
+ * Holt den Global-Datenblock (256 B) vom Geraet und legt ihn als Hex in das
+ * RAM-Panel — dort steht schon ein Hex-Dump-Feld, und Globals sind genau wie
+ * RAM-Inhalte etwas, das man liest und vergleicht.
+ */
+async function midiGetGlobal(): Promise<void> {
+  setMidiStatus("hole Global-Block…");
+  try {
+    const reply = await requestSysex(
+      midi,
+      buildGlobalRequest(midiOpts()),
+      (b) => decodeGlobalDump(b) !== null,
+      4000,
+    );
+    const g = decodeGlobalDump(reply);
+    if (!g) {
+      setMidiStatus("Antwort war kein Global-Block (Magic GLST fehlt).");
+      return;
+    }
+    $("ramDump").textContent = formatHexDump(g, 0);
+    $<HTMLTextAreaElement>("ramHex").value = formatHexDump(g, 0)
+      .split(/\r?\n/)
+      .map((l) => l.slice(10))
+      .join("\n");
+    $("ramPanel").setAttribute("open", "");
+    setMidiStatus(`Global-Block geholt: ${g.length} Bytes — steht im RAM-Panel.`);
+  } catch (err) {
+    setMidiStatus(`Global holen fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
 function setupMidi(): void {
   if (!midi.available) {
     $("midiEnable").classList.add("hidden");
@@ -1292,6 +1325,7 @@ function setupMidi(): void {
   $("midiSendSlot").addEventListener("click", midiSendSlot);
   $("midiSendAll").addEventListener("click", () => void midiSendAll());
   $("midiGet").addEventListener("click", () => void midiGetPattern());
+  $("midiGlobal").addEventListener("click", () => void midiGetGlobal());
 }
 
 /**

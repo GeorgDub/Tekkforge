@@ -172,9 +172,14 @@ export interface PartParam {
  *
  *     0x02  0 1 2 3 | 1 1 1 1 1 1 1 1 1 1 1 1
  *
- * Die Chord-Set- und Gate-Arp-Werte stehen **weder im 816-B-Part-Block noch im
- * PTST-Kopf** (beide gezielt danach abgesucht). Sie liegen also woanders —
- * moeglicherweise in einer eigenen Struktur oder anders kodiert. `0x02` ist
+ * Die Chord-Set- und Gate-Arp-Werte stehen **nirgends in der Pattern-Struktur**.
+ * Abgesucht wurde die vollstaendige PTST von 16 KB (Kopf, alle 16 Part-Bloecke
+ * und die 1280 Bytes dahinter), sowohl nach den zusammenhaengenden Wertfolgen
+ * als auch nach Einzelbytes: kein einziges Byte mit dem Wert 50 ausserhalb des
+ * Part-Blocks, und der Bereich hinter den Parts ist komplett Null.
+ *
+ * Daraus folgt: diese Einstellungen sind **nicht Teil des Patterns**. Am
+ * wahrscheinlichsten sind sie global. `0x02` ist
  * deshalb bewusst NICHT als Parameter aufgenommen: ein Feld, dessen Wertebereich
  * man nur zu einem Viertel kennt, gehoert nicht in eine Editier-Tabelle.
  *

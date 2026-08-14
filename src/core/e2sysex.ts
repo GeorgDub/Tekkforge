@@ -328,6 +328,41 @@ export function decodeDump(bytes: Uint8Array): ParsedDump | null {
   return null;
 }
 
+/** Größe des Global-Datenblocks (unkodiert). */
+export const E2_GLOBAL_SIZE = 0x100; // 256
+
+/**
+ * Dekodiert einen Global-Dump (`0x51`) zurück in die 256 Nutzbytes.
+ *
+ * Rahmen: `F0 42 3g 00 01 id 51 <syxEnc(256 B)> F7` — am Gerät 301 B lang
+ * (256 → 293 kodiert + 7 Kopf + 1 Ende). Die Nutzdaten beginnen mit dem Magic
+ * `GLST`; ohne das ist es kein Global-Block und wir geben null zurück, statt
+ * etwas zu liefern, das nur zufällig die richtige Länge hat.
+ *
+ * Struktur, am Gerät gelesen (E2 Sampler, 2026-08-14):
+ *
+ * ```
+ * +0x00  47 4C 53 54  "GLST"   Anfangsmarke
+ * +0x04 … +0x2F        die einzigen belegten Bytes (17 von 256)
+ * +0xFC  47 4C 45 44  "GLED"   Endmarke
+ * ```
+ *
+ * Der Block ist also beidseitig markiert und zum allergrößten Teil leer. Wer
+ * hier einen Parameter sucht, braucht ihn nicht im ganzen Puffer zu suchen —
+ * es kommen nur die ersten 48 Bytes in Frage.
+ */
+export function decodeGlobalDump(bytes: Uint8Array): Uint8Array | null {
+  if (bytes.length < 8 || bytes[0] !== SYSEX_START || bytes[1] !== KORG_MANUFACTURER_ID)
+    return null;
+  if (bytes[6] !== E2_MSG.globalDump) return null;
+  const end = bytes[bytes.length - 1] === SYSEX_END ? bytes.length - 1 : bytes.length;
+  const body = syxDec(bytes.subarray(7, end));
+  if (body.length < 4) return null;
+  const magic = String.fromCharCode(body[0], body[1], body[2], body[3]);
+  if (magic !== "GLST") return null;
+  return body.subarray(0, E2_GLOBAL_SIZE);
+}
+
 /** True, wenn `bytes` ein vollständiger KORG-SysEx-Frame ist (F0…F7). */
 export function isKorgSysex(bytes: Uint8Array): boolean {
   return (
