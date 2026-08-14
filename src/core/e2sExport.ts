@@ -550,6 +550,13 @@ const DEFAULT_NOTE = 0x3c; // C4 = 60 = Originaltonhöhe (Briefing §4.1 + Hardt
  * gesendet und zurueckgelesen — im Geraetespeicher stand wieder 96. Beide
  * Werte, 255 und 127, werden beim Laden ueber SysEx auf 96 begrenzt.
  *
+ * Zur Belastbarkeit dieser Messung: sie entstand bei laufendem Sequencer, und
+ * unter dieser Bedingung kommen Pattern-Dumps gelegentlich beschaedigt zurueck.
+ * Der Wert 96 stammt aber aus zwei byteweise uebereinstimmenden Lesungen und
+ * trat auf allen zwoelf betroffenen Steps gleich auf — eine Verfaelschung
+ * saehe anders aus. Eine Wiederholung bei gestopptem Sequencer steht dennoch
+ * aus.
+ *
  * Daraus folgt: **ein Tie laesst sich derzeit nicht per Pattern-Uebertragung
  * setzen.** Das Geraet legt zwar 127 ab, wenn man Tie im Step-Editor waehlt —
  * es uebernimmt diesen Wert aber nicht aus einem eingehenden Pattern. Beide

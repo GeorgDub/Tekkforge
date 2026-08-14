@@ -136,6 +136,22 @@ node .claude/skills/run-tekkforge/driver.mjs --run   "launch; files #importFile 
 Der Pfad ist relativ zum Projektverzeichnis. Fehlt die Datei, bricht das
 Kommando ab, statt still nichts zu tun.
 
+## RAM-Zugriff nur bei gestopptem Sequencer
+
+Das gilt nicht nur fuers Schreiben, sondern auch fuers Lesen. Bei laufendem
+Sequencer kamen 16-KB-Pattern-Dumps beschaedigt zurueck — einmal um 202, einmal
+um 40 Bytes, und zwar **stumm**: Laenge und Magic stimmten, nur die
+Step-Records waren ab der Mitte verschoben.
+
+Das ist die gefaehrliche Sorte Fehler. Eine solche Lesung sieht nach einem
+Befund aus: sie meldete fehlende Steps und einen leeren Part, also genau das,
+wonach gerade gesucht wurde. Wer sie fuer bare Muenze nimmt, jagt Fehler, die
+es nicht gibt.
+
+Deshalb: **Sequencer stoppen, bevor gelesen wird.** Wenn das nicht sicher ist,
+dreimal lesen und die Mehrheit je Byte nehmen — zwei uebereinstimmende Lesungen
+sind belastbar, eine einzelne nicht.
+
 ## Gotchas
 
 - **`#midiEnable` ist da, aber unsichtbar.** Es liegt im zugeklappten
