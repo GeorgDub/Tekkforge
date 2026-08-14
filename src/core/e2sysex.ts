@@ -374,6 +374,15 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
 export const E2_GLOBAL_METRONOME_OFF = 0x10;
 
 /**
+ * Global-Offset der Sync-Polarität — `hi` = 0, `lo` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „lo" gestellt, `+0x11` ging von 0 auf 1.
+ * Bei nur zwei Zuständen ist die Liste damit vollständig gemessen — keine
+ * Lücke, die aus einer Reihenfolge geschlossen werden müsste.
+ */
+export const E2_GLOBAL_SYNC_POLARITY_OFF = 0x11;
+
+/**
  * Global-Offset des MIDI-Kanals — 0-basiert (Anzeige 1..16 → Byte 0..15).
  *
  * ✔ Am Gerät bestätigt (2026-08-14): Kanal von 1 auf 5 gestellt, `+0x29` ging
