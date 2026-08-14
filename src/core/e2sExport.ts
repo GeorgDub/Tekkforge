@@ -492,6 +492,18 @@ export function encodeOscEditMotion(
   return direction === "fwd" ? 1 + d : 128 - d;
 }
 
+/**
+ * Kette — Folgepattern und Wiederholungen, je 16 Bit LE im Tail.
+ *
+ * `chainTo` ist die **1-basierte Pattern-Nummer**, 0 = keine Kette.
+ *
+ * ✔ Zwei unabhaengige Belege. Am Geraet auf „6 ESX Pattern" mit 64
+ * Wiederholungen gestellt — im Speicher standen 6 und 64, also die angezeigten
+ * Zahlen unveraendert. Und in der Werksbank kettet Slot 1 auf 2, Slot 2 auf 3,
+ * Slot 4 auf 5, Slot 5 auf 6, Slot 6 auf 7: durchgehend die eigene Nummer plus
+ * eins, was nur bei 1-basierter Zaehlung aufgeht. Slot 3 traegt 0 und ist damit
+ * das Ende einer Kette.
+ */
 export const PATTERN_CHAIN_TO_OFF = 0x3b00;
 export const PATTERN_CHAIN_REPEAT_OFF = 0x3b02;
 export const PATTERN_SCALE_OFF = 0x28;
@@ -743,6 +755,11 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
     body[PATTERN_ALT_13_14_OFF] = input.alternate13_14 ? 1 : 0;
   if (typeof input.alternate15_16 === "boolean")
     body[PATTERN_ALT_15_16_OFF] = input.alternate15_16 ? 1 : 0;
+
+  if (typeof input.chainTo === "number")
+    view.setUint16(PATTERN_CHAIN_TO_OFF, clampInt(input.chainTo, 0, 250, 0), true);
+  if (typeof input.chainRepeat === "number")
+    view.setUint16(PATTERN_CHAIN_REPEAT_OFF, clampInt(input.chainRepeat, 0, 64, 0), true);
 
   writeMotionSlots(body, input.motionSlots);
 

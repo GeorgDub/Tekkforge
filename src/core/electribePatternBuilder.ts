@@ -160,6 +160,12 @@ export interface E2PatternInput {
   alternate13_14?: boolean;
   alternate15_16?: boolean;
   /**
+   * Kette: Nummer des Folgepatterns, **1-basiert**; 0 = keine Kette.
+   * `chainRepeat` gibt an, wie oft dieses Pattern vorher wiederholt wird.
+   */
+  chainTo?: number;
+  chainRepeat?: number;
+  /**
    * Optionaler 0x4000-Basis-Body: statt des Init-Templates wird dieser als
    * Ausgangspunkt genommen und nur gesetzte Felder überlagert. Bewahrt
    * Filter/Amp/IFX/Motion importierter Patterns. Muss 0x4000 lang sein.
