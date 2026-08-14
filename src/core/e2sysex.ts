@@ -406,6 +406,22 @@ export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
  * eine unbeabsichtigte, aber willkommene Gegenprobe für dessen 0-Basis.
  */
 export const E2_GLOBAL_TRIGGER_MODE_OFF = 0x1d;
+
+/**
+ * Global-Offset der Velocity-Kurve — 0-basierter Listenindex.
+ *
+ * | Anzeige  | Byte |                     |
+ * |----------|------|---------------------|
+ * | heavy    | 0    | gemessen (Ausgang)  |
+ * | normal   | 1    | aus der Reihenfolge |
+ * | light    | 2    | aus der Reihenfolge |
+ * | const96  | 3    | gemessen            |
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „const96" gestellt, `+0x1B` ging von 0
+ * auf 3. Beide Enden der Liste sind damit gemessen; die beiden mittleren Werte
+ * liegen dazwischen und folgen aus der Reihenfolge am Gerät.
+ */
+export const E2_GLOBAL_VELOCITY_CURVE_OFF = 0x1b;
 export function decodeGlobalDump(bytes: Uint8Array): Uint8Array | null {
   if (bytes.length < 8 || bytes[0] !== SYSEX_START || bytes[1] !== KORG_MANUFACTURER_ID)
     return null;
