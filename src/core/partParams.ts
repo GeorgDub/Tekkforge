@@ -77,6 +77,8 @@ export interface PartParam {
  * |--------|------------|---------------------------------------------|
  * | `0x0C` | filterType | 16 verschiedene Werte (1..16)               |
  * | `0x0D` | cutoff     | Rampe `0 10 20 … 100 105 … 120 127`         |
+ * | `0x0E` | resonance  | aufsteigende Rampe                          |
+ * | `0x0F` | egInt      | absteigend `+63 … 0 … -63` — **signed**     |
  * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
  * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
  *
@@ -89,6 +91,23 @@ export interface PartParam {
  * `0 10 20 30 40 50 60 70 80 90 100 105 110 115 120 127` — und war die
  * **einzige streng aufsteigende Spalte** im gesamten 816-B-Part-Block. Kein
  * zweiter Kandidat, also keine Verwechslungsmoeglichkeit.
+ *
+ * ### Resonanz und EG-Int in einem Durchgang
+ *
+ * Zwei Parameter gleichzeitig, mit gegenlaeufigen Mustern — die stoeren sich
+ * nicht, weil die Suche nach auf- und absteigend getrennt laeuft:
+ *
+ *     0x0E  0 10 19 30 40 50 60 70 [0] 80 90 100 110 120 127 125   (aufsteigend)
+ *     0x0F  63 53 43 33 23 13 3 0 -3 -13 -23 -33 -43 -53 -63 -60   (absteigend)
+ *
+ * Unter den noch nicht zugeordneten Spalten gab es je genau einen Kandidaten.
+ *
+ * `0x0F` ist der wichtigere Fund: die Rampe laeuft ins NEGATIVE. Damit ist die
+ * bipolare Deutung, die oben nur aus der Werksbank erschlossen war, am Geraet
+ * unabhaengig bestaetigt — als `u8` gelesen stuenden dort 253, 243, 233 …
+ *
+ * (Die Ausreisser — Resonanz 0 bei Part 9, Endwerte 125/-60 — stammen aus dem
+ * Testpattern selbst und tun der Zuordnung nichts.)
  *
  * ### Gegenprobe mit Vorhersage
  *
@@ -124,8 +143,8 @@ export interface PartParam {
 export const PART_PARAMS: PartParam[] = [
   { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt; Testpattern zeigte 1..16
   { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
-  { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" },
-  { key: "egInt", label: "EG-Int", offset: 0x0f, min: -63, max: 63, kind: "i8", group: "Filter" }, // bipolar, Stock -49..+63
+  { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
+  { key: "egInt", label: "EG-Int", offset: 0x0f, min: -63, max: 63, kind: "i8", group: "Filter" }, // ✔ geraetebestaetigt bipolar (+63…-63 gemessen)
   { key: "modType", label: "Mod-Typ", offset: 0x10, min: 0, max: 255, kind: "u8", group: "Mod" }, // Stock bis 71; Obergrenze unbekannt
   { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" },
   { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" },
