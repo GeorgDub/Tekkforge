@@ -83,10 +83,14 @@ export interface PartParam {
  * | `0x11` | modSpeed   | Rampe `0 8 16 … 72`, Parts 11-16 unberuehrt |
  * | `0x12` | modDepth   | per Ausschluss (Paar mit 0x11)              |
  * | `0x14` | egAttack   | Rampe `127 117 106 … 37`                    |
+ * | `0x15` | egDecay    | Rampe `127 118 … 37`                        |
+ * | `0x1A` | ampEgOn    | `0 1 0 1 …` — gegenlaeufig zu 0x1B          |
+ * | `0x1B` | mfxSend    | `1 0 1 0 …` — Schalter, nicht Pegel         |
  * | `0x1C` | grooveType | `0..7` dann `61..54` (Anzeige 1..8 / 62..55) |
  * | `0x1D` | grooveDepth| Rampe `0 10 … 120 122 124 127` — exakt      |
  * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
  * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
+ * | `0x22` | ifxEdit    | Rampe `0 7 17 … 97`                         |
  *
  * Das alternierende Bit bei `0x20` ist der staerkste Einzelbeleg: ein solches
  * Muster entsteht nicht zufaellig, es war die Vorgabe des Testpatterns.
@@ -172,6 +176,28 @@ export interface PartParam {
  * deshalb bewusst NICHT als Parameter aufgenommen: ein Feld, dessen Wertebereich
  * man nur zu einem Viertel kennt, gehoert nicht in eine Editier-Tabelle.
  *
+ * ### Amp/IFX-Block — das gegenlaeufige Paar
+ *
+ * Decay absteigend, IFX-Edit aufsteigend, und Amp-EG/MFX-Send abwechselnd
+ * **gegeneinander** (Part 1: MFX an, Amp aus; Part 2 umgekehrt):
+ *
+ *     0x15  127 118 107 97 87 77 66 57 47 37 | 127 …   egDecay
+ *     0x1A  0 1 0 1 0 1 0 1 0 1 | 0 0 0 0 0 0        ampEgOn
+ *     0x1B  1 0 1 0 1 0 1 0 1 0 | 1 1 1 1 1 1        mfxSend
+ *     0x22  0 7 17 27 37 47 67 77 87 97 | 64 …        ifxEdit
+ *
+ * `0x1A` und `0x1B` sind ueber alle 16 Parts **exakt invers**. Dass zwei
+ * unabhaengige Spalten das zufaellig sind, ist ausgeschlossen — und es ist
+ * genau die Vorgabe des Testpatterns. Ein Paar gegenlaeufig zu setzen ist
+ * deshalb ein staerkeres Pruefmittel als zwei getrennte Rampen.
+ *
+ * **Korrektur an `mfxSend`:** das Feld traegt nur 0/1, ist also ein SCHALTER
+ * und kein Pegel. Zwei unabhaengige Belege — die KORG-Werksbank zeigte ueber
+ * 4000 Parts ebenfalls nur die Werte 0 und 1, was mir dort noch nicht
+ * aufgefallen war, weil 0..1 im angenommenen Bereich 0..127 liegt und die
+ * Pruefung nur Verletzungen meldet. Eine Bereichspruefung findet eben nur
+ * Werte, die zu GROSS sind, nie einen zu weiten Bereich.
+ *
  * ### Gegenprobe mit Vorhersage
  *
  * Der Nutzer hat das Muster anschliessend auf `1 0 1 0 …` ab Part 1 umgestellt
@@ -212,14 +238,14 @@ export const PART_PARAMS: PartParam[] = [
   { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" }, // ✔ geraetebestaetigt (8er-Rampe)
   { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" }, // ✔ per Ausschluss (Paar mit 0x11)
   { key: "egAttack", label: "Amp Attack", offset: 0x14, min: 0, max: 127, kind: "u8", group: "Amp/EG" }, // ✔ geraetebestaetigt (absteigende Rampe)
-  { key: "egDecay", label: "Amp Decay", offset: 0x15, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
-  { key: "ampEgOn", label: "Amp-EG an", offset: 0x1a, min: 0, max: 1, kind: "bool", group: "Amp/EG" },
-  { key: "mfxSend", label: "MFX-Send", offset: 0x1b, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
+  { key: "egDecay", label: "Amp Decay", offset: 0x15, min: 0, max: 127, kind: "u8", group: "Amp/EG" }, // ✔ geraetebestaetigt (absteigende Rampe)
+  { key: "ampEgOn", label: "Amp-EG an", offset: 0x1a, min: 0, max: 1, kind: "bool", group: "Amp/EG" }, // ✔ geraetebestaetigt (gegenlaeufig zu 0x1B)
+  { key: "mfxSend", label: "MFX-Send", offset: 0x1b, min: 0, max: 1, kind: "bool", group: "Amp/EG" }, // ✔ geraetebestaetigt: SCHALTER, nicht Pegel
   { key: "grooveType", label: "Groove-Typ", offset: 0x1c, min: 0, max: 255, kind: "u8", group: "Groove" }, // ✔ geraetebestaetigt; Speicher 0-basiert
   { key: "grooveDepth", label: "Groove-Depth", offset: 0x1d, min: 0, max: 127, kind: "u8", group: "Groove" }, // ✔ geraetebestaetigt (exakte Rampe)
   { key: "ifxOn", label: "IFX an", offset: 0x20, min: 0, max: 1, kind: "bool", group: "IFX" }, // ✔ geraetebestaetigt (alternierendes Testpattern)
   { key: "ifxType", label: "IFX-Typ", offset: 0x21, min: 0, max: 255, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt; Testpattern zeigte bis 48
-  { key: "ifxEdit", label: "IFX-Edit", offset: 0x22, min: 0, max: 127, kind: "u8", group: "IFX" },
+  { key: "ifxEdit", label: "IFX-Edit", offset: 0x22, min: 0, max: 127, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "oscPitch", label: "Pitch", offset: 0x24, min: -63, max: 63, kind: "i8", group: "Osc" }, // bipolar, exakt +-63
   { key: "oscGlide", label: "Glide", offset: 0x25, min: 0, max: 127, kind: "u8", group: "Osc" },
 ];
