@@ -203,14 +203,21 @@ export const PART_LAST_STEP_OFF = 0x00;
  * ✔ Am Geraet bestaetigt (2026-08-14) mit einer Einzeländerung auf „32": im
  * gesamten Pattern-Kopf bewegte sich genau ein Byte, `+0x26` von 3 auf 1.
  *
- * Belegt ist damit die STELLE, aber erst ein Punkt der Werteliste:
+ * Die Werteliste ist der Listenindex in der Reihenfolge des Geraets:
  *
- *     Beat 32  ->  1
+ * | Anzeige | Byte |                          |
+ * |---------|------|--------------------------|
+ * | 16      | 0    | gemessen                 |
+ * | 32      | 1    | gemessen                 |
+ * | 8 Tri   | 2    | aus der Reihenfolge      |
+ * | 16 Tri  | 3    | gemessen (Ausgangsstand) |
  *
- * Welche Einstellung die vorherige 3 war, ist nicht bekannt. Die Liste enthaelt
- * laut Geraet auch Triolen-Varianten („8 Tri", „16 Tri"). Wer sie vollstaendig
- * braucht, schaltet sie am Geraet der Reihe nach durch und liest jedes Mal
- * dieses eine Byte — mehr ist nicht noetig, die Adresse steht ja fest.
+ * Drei der vier Werte sind direkt gemessen. Die 2 folgt aus der vom Nutzer
+ * genannten Reihenfolge und ist die einzige Luecke — sie liegt zwischen zwei
+ * gemessenen Punkten, kann also nicht gross danebenliegen.
+ *
+ * Der letzte Schritt war eine Gegenprobe mit Vorhersage: nach „Beat 32 -> 1"
+ * stand fest, dass „16" eine 0 ergeben muss. Genau das kam heraus.
  */
 export const PATTERN_BEAT_OFF = 0x26;
 
