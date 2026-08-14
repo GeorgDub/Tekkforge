@@ -211,22 +211,23 @@ for (const s of belegt) {
   nachKategorie.get(s.categoryName).push(s);
 }
 /**
- * Versatz zwischen unserer Slot-Nummer und der Anzeige am Gerät.
+ * Kein Versatz zwischen unserer Slot-Nummer und der Anzeige am Gerät.
  *
- * ✔ Am Gerät gemessen (2026-08-14): das Sample auf Tabellenplatz 500 — von
- * unserem Leser als #501 geführt — wird am Gerät als **502** angezeigt, und
- * davor steht nichts. Unsere Zählung liegt also durchgehend eins zu niedrig.
+ * Die Anzeige folgt dem Tabellenplatz: Platz 500 wird als 501 angezeigt. Belegt
+ * durch die Geräte-Bank `luknkicks.all`, die ihr erstes Sample auf Platz 500
+ * hat und am Gerät bei 501 („mello ca") beginnt.
  *
- * Das Set muss die Nummern referenzieren, die das Gerät benutzt, sonst greift
- * jeder Part eine Nummer daneben — beim ersten Sample ins Leere, weil es die
- * Nummer davor gar nicht gibt. Genau daran trug Part 1 kein Sample.
+ * Eine frühere Fassung dieser Bank legte das erste Sample versehentlich auf
+ * Platz 501 — am Gerät erschien es als 502, Platz 501 blieb leer, und ein
+ * Pattern das auf #501 zeigte fand nichts. Das war der Fehler, nicht die
+ * Referenz.
  *
- * Der Versatz sitzt hier und nicht im Leser: dieselbe Verschiebung steckt auch
- * in `esxToE2sBank.ts` und `editorModel.ts`, und sie zusammen zu korrigieren
- * gehört hinter eine Bestätigung am Gerät. Zwei Erklärungen davor waren falsch;
- * diese hier ist gemessen, aber die Korrektur im Kern ist es noch nicht.
+ * Ein byteweiser Vergleich der esli-Blöcke beider Bänke zeigt keinerlei
+ * Nummernfeld: sie unterscheiden sich nur in Name, Kategorie und Sample-Länge.
+ * Das Gerät kann sie also gar nicht unterschiedlich nummerieren — die Anzeige
+ * hängt allein am Platz.
  */
-const GERAETE_VERSATZ = 1;
+const GERAETE_VERSATZ = 0;
 
 const SAMPLES = [], NAMEN = [];
 for (const [kat, idx] of BELEGUNG) {
