@@ -91,11 +91,24 @@ import { floatToInt16LeBytes, sanitizeE2sSlotName } from "./audioProcessor";
 /** Eingabe-Spec für einen einzelnen Slot in `buildE2sBank`. */
 export interface E2sSlotInput {
   /**
-   * Position in der Offset-Tabelle (0..`E2S_MAX_SLOTS`-1) — und damit zugleich
-   * die Geräte-Sample-Nummer. Der Index IST die Nummer: eine korrekt gebaute
-   * Bank hält `slotIndex === sampleNumber` (der Reader prüft genau das, siehe
-   * `E2sSlotNumbering`). Für User-Sample-Bänke ab Geräte-Nr. 501 heißt das
-   * `slotIndex: 501, 502, …` — NICHT 0, 1, 2.
+   * Position in der Offset-Tabelle (0..`E2S_MAX_SLOTS`-1).
+   *
+   * ⚠ **Der Index ist die Anzeigenummer MINUS EINS.** Für Geräte-Nr. 501 gehört
+   * das Sample auf `slotIndex: 500`.
+   *
+   * ✔ Am Gerät gemessen (2026-08-14): eine Bank mit `slotIndex === sampleNumber`
+   * zeigte am Gerät Nummern **ab 502** statt ab 501, und Platz 501 blieb leer —
+   * der erste Part eines Patterns, das auf #501 zeigt, trug deshalb gar kein
+   * Sample. Eine vom Gerät selbst erzeugte Bank legt #501 auf Index 500.
+   *
+   * Die beiden Bänke unterscheiden sich NUR im Index; das Nummernfeld (+0x56)
+   * stand in beiden auf 501. Das Gerät zählt also nach der Tabellenposition,
+   * nicht nach dem gespeicherten Feld.
+   *
+   * ⚠ Bis dahin stand hier das Gegenteil, und der Reader bestätigte es: er
+   * meldet `slotIndex === sampleNumber` als „ok" und den korrekten Versatz als
+   * `constant-shift`, also als Auffälligkeit. Beides ist falsch herum — siehe
+   * `E2sSlotNumbering`.
    */
   slotIndex: number;
   /**

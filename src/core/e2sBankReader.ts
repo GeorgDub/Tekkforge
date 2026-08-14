@@ -141,6 +141,24 @@ export interface E2sSlot {
  *   Die Bank ist fehlnummeriert und muss neu gebaut werden.
  * - `"scattered"` — einzelne Slots inkonsistent; kein Geometriefehler.
  */
+/**
+ * Befund der Slot-Nummerierungs-Prüfung.
+ *
+ * ⚠ Die Bedeutung der Werte ist derzeit IRREFÜHREND. `kind: "ok"` meint
+ * `slotIndex === sampleNumber` — und genau das ist am Gerät falsch: eine solche
+ * Bank zeigt ihre Samples eine Nummer zu hoch, der erste Platz bleibt leer.
+ * Vom Gerät erzeugte, funktionierende Bänke melden hier `constant-shift` mit
+ * `shift: 1`, also den Normalfall als Auffälligkeit.
+ *
+ * ✔ Am Gerät gemessen (2026-08-14), siehe `E2sSlotInput.slotIndex`.
+ *
+ * Die Prüfung ist absichtlich noch nicht umgedreht: sie hängt an den Aufrufern
+ * `esxToE2sBank.ts` (`slotIndex: hwNumber`) und `editorModel.ts`
+ * (`slotIndex: s.number`), die beide denselben Versatz haben. Das zusammen zu
+ * ändern ist richtig, aber es gehört hinter eine Bestätigung am Gerät und nicht
+ * nebenbei — ein Fehler in die andere Richtung verschiebt jede erzeugte Bank
+ * genauso, nur unbemerkt in die Gegenrichtung.
+ */
 export interface E2sSlotNumbering {
   kind: "ok" | "constant-shift" | "scattered";
   /** Betrag des Versatzes (`OSC_0index − Index`), nur bei `constant-shift`. */

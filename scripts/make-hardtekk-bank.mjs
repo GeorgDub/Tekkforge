@@ -164,7 +164,12 @@ for (const g of gewaehlt) {
   if (bytes + b > BUDGET_MB * 1024 * 1024) continue;
   bytes += b;
   slots.push({
-    slotIndex: nr, sampleNumber: nr, name: kurz(g.p) || `S${nr}`,
+    // Der Tabellenplatz ist die Anzeigenummer MINUS EINS. Das Geraet zaehlt
+    // nach der Position in der Offset-Tabelle, nicht nach dem gespeicherten
+    // Nummernfeld: eine Bank mit Platz 501 zeigte am Geraet 502, und Platz 500
+    // blieb leer — deshalb trug Part 1 kein Sample. Die vom Geraet selbst
+    // erzeugte Bank legt #501 ebenfalls auf Platz 500.
+    slotIndex: nr - 1, sampleNumber: nr, name: kurz(g.p) || `S${nr}`,
     category: g.kategorie.kat, pcmData: pcm, sampleRate: wav.sampleRate, channels: 1,
     _kat: g.kategorie.name, _ms: Math.round(wav.frames / wav.sampleRate * 1000),
   });
