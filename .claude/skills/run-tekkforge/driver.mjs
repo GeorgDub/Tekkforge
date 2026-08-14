@@ -142,6 +142,24 @@ const COMMANDS = {
    * Klick über das DOM, nicht über Koordinaten. Playwrights locator.click()
    * rechnet Fensterkoordinaten aus und trifft bei Overlays die falsche Ebene.
    */
+  /**
+   * Legt eine Datei in ein <input type="file">. Ueber die Oberflaeche geht das
+   * nicht: der Import-Knopf oeffnet einen nativen Dialog, den Playwright nicht
+   * bedienen kann, und `input.files` ist aus JS heraus nicht setzbar.
+   *
+   *   files #importFile examples/e2s/CHORDTEST.e2spat
+   */
+  async files(arg) {
+    const p = need();
+    const i = arg.indexOf(" ");
+    if (i < 0) throw new Error("files <selector> <pfad>");
+    const sel = arg.slice(0, i).trim();
+    const datei = path.resolve(APP_DIR, arg.slice(i + 1).trim());
+    if (!fs.existsSync(datei)) throw new Error("Datei fehlt: " + datei);
+    await p.setInputFiles(sel, datei);
+    console.log("files", sel, "->", path.basename(datei));
+  },
+
   async click(sel) {
     const p = need();
     console.log(

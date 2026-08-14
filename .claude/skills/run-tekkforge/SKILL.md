@@ -124,6 +124,18 @@ pnpm test           # vitest — 288 passed, 5 skipped
 pnpm check          # tsc --noEmit
 ```
 
+## Datei in ein Datei-Feld legen
+
+Der Import-Knopf oeffnet einen nativen Dialog, den Playwright nicht bedienen
+kann, und `input.files` laesst sich aus JS nicht setzen. Dafuer gibt es `files`:
+
+```bash
+node .claude/skills/run-tekkforge/driver.mjs --run   "launch; files #importFile examples/e2s/CHORDTEST.e2spat; ms 1500; eval document.querySelectorAll('#patList li').length"
+```
+
+Der Pfad ist relativ zum Projektverzeichnis. Fehlt die Datei, bricht das
+Kommando ab, statt still nichts zu tun.
+
 ## Gotchas
 
 - **`#midiEnable` ist da, aber unsichtbar.** Es liegt im zugeklappten
