@@ -593,16 +593,24 @@ export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
  *     Send Filter    „short+program"  ->  +0x2A ging von 0 auf 2
  *     Receive Filter „short"          ->  +0x2B ging von 0 auf 1
  *
- * Dass die beiden Einstellungen verschiedene Werte bekamen, ist hier der ganze
- * Trick: bei gleichem Wert waere nicht zu entscheiden, welches Byte zu welchem
- * Filter gehoert. So ordnet sich jedes Byte eindeutig zu — vorausgesetzt, beide
- * Felder benutzen dieselbe 0-basierte Liste, was bei zwei gleichartigen
- * Nachbarfeldern die bei weitem naheliegendste Annahme ist.
+ * Dass die beiden Einstellungen verschiedene Werte bekamen, war hier der erste
+ * Trick: bei gleichem Wert waere nicht zu entscheiden gewesen, welches Byte zu
+ * welchem Filter gehoert.
  *
- * ⚠ Streng genommen bleibt genau diese Annahme ungeprüft: theoretisch koennten
- * die Zuordnungen vertauscht sein und die beiden Felder unterschiedlich
- * kodieren. Ein Durchgang, in dem sich nur EIN Filter aendert, wuerde das
- * endgueltig klaeren.
+ * ✔ Die Zuordnung ist danach einzeln nachgeprueft worden — nur das Receive
+ * Filter wurde auf „off" gestellt, sonst nichts:
+ *
+ *     Receive Filter „off"  ->  +0x2B ging von 1 auf 0
+ *                               +0x2A blieb unveraendert auf 2
+ *
+ * Damit haengt `+0x2B` nachweislich am Receive Filter, und `+0x2A` gehoert zum
+ * Send Filter. Die urspruengliche Annahme, beide Felder benutzten dieselbe
+ * 0-basierte Liste, war also richtig — sie stand aber zurecht als Vorbehalt da,
+ * bis diese Einzelmessung sie ersetzt hat.
+ *
+ * Beim Send Filter sind `off` (0) und `short+program` (2) gemessen; `short` (1)
+ * ist erschlossen und liegt zwischen beiden auf derselben Skala — dieselbe Lage
+ * wie `rec 1` beim Metronom.
  *
  * Die Reihenfolge im Speicher ist Send vor Receive — im Menue erscheint
  * Receive zuerst. Wie schon bei Chain Mode folgt die Speicherlage nicht der
