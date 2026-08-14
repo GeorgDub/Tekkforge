@@ -1,5 +1,5 @@
 /**
- * partParams.ts — EXPERIMENTELLE Part-Klangparameter (Filter/Amp/IFX/Mod…).
+ * partParams.ts — Part-Klangparameter (Filter/Amp/IFX/Mod/Osc).
  *
  * Offsets gem. elecmidi-C-Struct + Briefing §4.1 (2026-07-19 per Histogramm
  * über die e2s-2016-Factory-Bank abgeglichen: 0x18=ampLevel, 0x19=ampPan
@@ -91,6 +91,8 @@ export interface PartParam {
  * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
  * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
  * | `0x22` | ifxEdit    | Rampe `0 7 17 … 97`                         |
+ * | `0x24` | oscPitch   | `+63 … 3, -3 … -63`, Part 14 = 0 — **signed** |
+ * | `0x0B` | oscEdit    | Rampe `0 10 30 … 127`                       |
  *
  * Das alternierende Bit bei `0x20` ist der staerkste Einzelbeleg: ein solches
  * Muster entsteht nicht zufaellig, es war die Vorgabe des Testpatterns.
@@ -198,6 +200,26 @@ export interface PartParam {
  * Pruefung nur Verletzungen meldet. Eine Bereichspruefung findet eben nur
  * Werte, die zu GROSS sind, nie einen zu weiten Bereich.
  *
+ * ### Osc-Block — und ein Offset, den es so nicht gibt
+ *
+ * Pitch absteigend von +63 durch die Null, „Edit" aufsteigend:
+ *
+ *     0x24  63 53 33 23 13 3 -3 -13 -23 -33 -43 -53 -63 0 0 0   (signed)
+ *     0x0B  0 10 30 40 50 60 70 80 90 100 100 110 120 127 0 0
+ *
+ * `0x24` laeuft durch die Null ins Negative — damit ist die bipolare Speicherung
+ * auch am Geraet belegt, nicht nur aus der Werksbank erschlossen.
+ *
+ * ⚠ **`oscGlide` bei `0x25` wurde entfernt.** Der Nutzer weist darauf hin, dass
+ * Pitch und Glide am Geraet EIN Regler sind — es gibt also gar keinen zweiten,
+ * separat einstellbaren Wert. Passend dazu hat sich `0x25` in der gesamten
+ * Messreihe (sieben Testpattern) **kein einziges Mal** bewegt. Der Eintrag war
+ * eine Annahme ohne Grundlage, und ein editierbares Feld auf einem unbekannten
+ * Byte laedt dazu ein, etwas zu ueberschreiben, das man nicht versteht.
+ *
+ * An seine Stelle tritt `oscEdit` bei `0x0B` — der Wert, den der Nutzer als
+ * „Edit" gesetzt hat und der dort exakt als Rampe erscheint.
+ *
  * ### Gegenprobe mit Vorhersage
  *
  * Der Nutzer hat das Muster anschliessend auf `1 0 1 0 …` ab Part 1 umgestellt
@@ -246,14 +268,14 @@ export const PART_PARAMS: PartParam[] = [
   { key: "ifxOn", label: "IFX an", offset: 0x20, min: 0, max: 1, kind: "bool", group: "IFX" }, // ✔ geraetebestaetigt (alternierendes Testpattern)
   { key: "ifxType", label: "IFX-Typ", offset: 0x21, min: 0, max: 255, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt; Testpattern zeigte bis 48
   { key: "ifxEdit", label: "IFX-Edit", offset: 0x22, min: 0, max: 127, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
-  { key: "oscPitch", label: "Pitch", offset: 0x24, min: -63, max: 63, kind: "i8", group: "Osc" }, // bipolar, exakt +-63
-  { key: "oscGlide", label: "Glide", offset: 0x25, min: 0, max: 127, kind: "u8", group: "Osc" },
+  { key: "oscPitch", label: "Pitch", offset: 0x24, min: -63, max: 63, kind: "i8", group: "Osc" }, // ✔ geraetebestaetigt bipolar (durch die Null gemessen)
+  { key: "oscEdit", label: "Osc-Edit", offset: 0x0b, min: 0, max: 127, kind: "u8", group: "Osc" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
 ];
 
 const BY_KEY = new Map(PART_PARAMS.map((p) => [p.key, p]));
 
 /**
- * Clampt eine USER-Eingabe auf den (experimentellen) Anzeigebereich des
+ * Clampt eine USER-Eingabe auf den Anzeigebereich des
  * Parameters. NUR für UI-Eingaben — Import/Export arbeiten roh (byte-genau),
  * damit Original-Werte (auch außerhalb des vermuteten Bereichs) erhalten
  * bleiben und nicht durch ein falsches Range-Raten zerstört werden.

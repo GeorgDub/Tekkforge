@@ -251,7 +251,7 @@ function renderGrid(): void {
     const fxBtn = document.createElement("button");
     fxBtn.className = "ghost";
     fxBtn.textContent = "⚙";
-    fxBtn.title = "Klangparameter (experimentell): Filter/Amp/IFX/Mod…";
+    fxBtn.title = "Klangparameter: Filter/Amp/IFX/Mod/Osc (Offsets am Geraet bestaetigt)";
     fxBtn.style.cssText = "padding:2px 6px;font-size:11px";
     fxBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -357,7 +357,7 @@ document.addEventListener("click", (e) => {
   if (popEl && !popEl.contains(e.target as Node)) closePopover();
 });
 
-// ─── Part-Klangparameter (EXPERIMENTELL) ─────────────────────────────────────
+// ─── Part-Klangparameter ─────────────────────────────────────────────────────
 
 function openPartParams(anchor: HTMLElement, pi: number): void {
   closePopover();
@@ -390,8 +390,8 @@ function openPartParams(anchor: HTMLElement, pi: number): void {
   pop.innerHTML = `
     <b>Part ${pi + 1} „${escapeHtml(part.label)}" — Klangparameter</b>
     <div class="warn" style="font-size:10px;margin:4px 0">
-      ⚠ EXPERIMENTELL — Byte-Offsets unbestätigt, am Gerät prüfen. Nicht editierte
-      Werte bleiben erhalten.
+      Byte-Offsets am Gerät bestätigt (Testpattern-Messreihe 2026-08-14).
+      Nicht editierte Werte bleiben unverändert erhalten.
     </div>
     <div style="max-height:340px;overflow-y:auto">${rows}</div>
     <div id="ppFx"></div>
