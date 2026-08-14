@@ -395,6 +395,14 @@ export const E2_GLOBAL_SYNC_POLARITY_OFF = 0x11;
 export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
 
 /**
+ * Global-Offset von „Audio In Thru" — `off` = 0, `on` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „off" gestellt, `+0x14` ging von 1
+ * auf 0. Zwei Zustände, damit lückenlos.
+ */
+export const E2_GLOBAL_AUDIO_IN_THRU_OFF = 0x14;
+
+/**
  * Global-Offset des MIDI-Kanals — 0-basiert (Anzeige 1..16 → Byte 0..15).
  *
  * ✔ Am Gerät bestätigt (2026-08-14): Kanal von 1 auf 5 gestellt, `+0x29` ging
@@ -479,10 +487,11 @@ export const E2_GLOBAL_KNOB_MODE_OFF = 0x1c;
 /**
  * Global-Offset des LCD-Kontrasts — **Anzeige + 17**.
  *
- * ✔ Am Gerät bestätigt (2026-08-14) mit zwei bekannten Werten:
+ * ✔ Am Gerät bestätigt (2026-08-14), in beide Richtungen gemessen:
  *
  *     Anzeige 17  ->  +0x1E = 34      17 + 17 = 34
  *     Anzeige 25  ->  +0x1E = 42      25 + 17 = 42
+ *     zurück auf 17 -> wieder 34
  *
  * Der Anzeigebereich 1..25 liegt damit als 18..42 im Speicher — 25 Werte, die
  * Zahl stimmt.
