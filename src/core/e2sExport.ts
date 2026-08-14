@@ -219,6 +219,29 @@ export const PART_LAST_STEP_OFF = 0x00;
  * Der letzte Schritt war eine Gegenprobe mit Vorhersage: nach „Beat 32 -> 1"
  * stand fest, dass „16" eine 0 ergeben muss. Genau das kam heraus.
  */
+/**
+ * Alternate — **ein Byte pro Part-Paar**, nicht eine Bitmaske.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14). Paar 13-14 auf „an" und 15-16 auf „aus"
+ * gestellt; im Pattern-Kopf bewegten sich genau zwei Bytes, je um ein Bit und
+ * gegenlaeufig:
+ *
+ *     +0x44  0 -> 1     Paar 13-14
+ *     +0x45  1 -> 0     Paar 15-16
+ *
+ * Das widerlegt die naheliegende Erwartung einer Bitmaske: acht Paare in einem
+ * Byte haetten EIN Byte mit zwei gekippten Bits ergeben, nicht zwei Bytes mit
+ * je einem.
+ *
+ * ⚠ Wo das Feld ANFAENGT, ist offen. Ein Array von acht Paar-Bytes muesste bei
+ * `0x3E` beginnen — dort stehen aber 54 und 58, also keine Schalterwerte.
+ * Belegt sind nur diese beiden Offsets; `0x40` traegt zwar ebenfalls eine 1,
+ * aber welchem Paar sie gehoert, ist ungeprueft. Wer es braucht: die uebrigen
+ * Paare einzeln umschalten und jeweils das reagierende Byte ablesen.
+ */
+export const PATTERN_ALT_13_14_OFF = 0x44;
+export const PATTERN_ALT_15_16_OFF = 0x45;
+
 export const PATTERN_BEAT_OFF = 0x26;
 
 export const PATTERN_SWING_OFF = 0x24;
