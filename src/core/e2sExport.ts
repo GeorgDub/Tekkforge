@@ -86,18 +86,28 @@
  *       an fuenf Messpunkten haelt, ist eben noch lange nicht verstanden.
  *       Der Schreibpfad setzt weiter 1 und bleibt unangetastet.
  *
- *       Auffaellig, aber nicht mehr als das: in einer Messreihe trugen genau
- *       die Steps eine 0, die der Nutzer im Step-Editor neu aktiviert hatte,
- *       waehrend die schon im Pattern vorhandenen Steps eine 1 trugen — und
- *       zwar unabhaengig von der Notenzahl. Das koennte auf eine Herkunfts-
- *       oder Bearbeitungsmarkierung deuten. Als Deutung taugt es noch nicht;
- *       es steht hier, damit die Beobachtung nicht verlorengeht.
+ *       Auffaellig, aber nicht mehr als das: quer durch alle Messungen trugen
+ *       genau die Steps eine 0, die der Nutzer im Step-Editor neu aktiviert
+ *       hatte, waehrend die schon im Pattern vorhandenen Steps eine 1 trugen —
+ *       unabhaengig von Notenzahl, Gate und Velocity. Eine naheliegende
+ *       Nebendeutung („1 heisst eigene Gate-/Velocity-Werte") scheitert daran,
+ *       dass neu gesetzte Steps mit Gate 60 / Velocity 52 trotzdem 0 tragen.
  *
- *       Bekannt ist immerhin, woran es NICHT haengt: ein am Geraet
- *       abgeschalteter Step behielt Flag 1 samt Gate, Velocity und Note. Das
- *       Flag folgt dem Trigger also nicht. Dass der Trigger ueberhaupt umsprang,
- *       war eine getrennte Bedienung und keine Folge des Gate-Aenderns — eine
- *       spaetere Gate-Aenderung an einem aktiven Step bewegte nur das Gate-Byte.
+ *       Das deutet auf eine Herkunfts- oder Bearbeitungsmarkierung. Als Deutung
+ *       taugt es nicht: sie sagt nichts darueber, was das Geraet damit tut, und
+ *       von aussen laesst sich das auch nicht pruefen. Es steht hier, damit die
+ *       Beobachtung nicht verlorengeht — nach vier erledigten Deutungen ist eine
+ *       fuenfte, die nur passt, keine Grundlage fuer Code.
+ *
+ *       Das Flag ist ausserdem bestaendig: ein Ein-/Ausschalten des Steps laesst
+ *       es unberuehrt, und zwar in beiden Auspraegungen (ein Step mit 1 behielt
+ *       die 1, einer mit 0 die 0). Es haengt also am Step, nicht am Zustand.
+ *
+ *       Ein am Geraet abgeschalteter Step behaelt Gate, Velocity und Noten;
+ *       nur das Trigger-Byte faellt auf 0. Dass der Trigger bei einer frueheren
+ *       Messung ueberhaupt umsprang, war eine getrennte Bedienung und keine
+ *       Folge des Gate-Aenderns — eine spaetere Gate-Aenderung an einem aktiven
+ *       Step bewegte nur das Gate-Byte.
  *
  *       Daran haengt auch ein Unterschied zum Schreibpfad: das Geraet laesst
  *       einem stillgelegten Step seine Werte, waehrend TekkForge ihn auf den
