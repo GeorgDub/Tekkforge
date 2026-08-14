@@ -400,6 +400,16 @@ export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
  * ✔ Am Gerät bestätigt (2026-08-14): auf „off" gestellt, `+0x14` ging von 1
  * auf 0. Zwei Zustände, damit lückenlos.
  */
+/**
+ * Global-Offset von „Pattern Change Lock" — `off` = 0, `on` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): eingeschaltet, `+0x13` ging von 0 auf 1.
+ *
+ * Damit ist `0x10`..`0x14` lueckenlos belegt: Metronom, Sync-Polaritaet,
+ * Sync-Einheit, Pattern Change Lock, Audio In Thru.
+ */
+export const E2_GLOBAL_PTN_CHANGE_LOCK_OFF = 0x13;
+
 export const E2_GLOBAL_AUDIO_IN_THRU_OFF = 0x14;
 
 /**
@@ -488,8 +498,8 @@ export const E2_GLOBAL_TEMPO_LOCK_OFF = 0x24;
  * | auto    | 1    | aus der Reihenfolge |
  * | enable  | 2    | gemessen            |
  *
- * ✔ Am Gerät bestätigt (2026-08-14): auf „enable" gestellt, `+0x25` ging von 0
- * auf 2.
+ * ✔ Am Gerät bestätigt (2026-08-14), in beide Richtungen: `0 -> 2` auf
+ * „enable", `2 -> 0` zurueck auf „disable".
  *
  * Schliesst die Luecke zwischen Tempo Lock (`0x24`) und Touch-Scale-Umfang
  * (`0x26`) — der Bereich `0x24`..`0x26` ist damit lueckenlos belegt.
