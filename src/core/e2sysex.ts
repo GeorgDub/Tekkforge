@@ -429,6 +429,19 @@ export const E2_GLOBAL_AUDIO_IN_THRU_OFF = 0x14;
  * ist von unbenutztem Speicher nicht zu unterscheiden.** Wer die Belegung ueber
  * Nicht-Null-Bytes abschaetzt, unterschaetzt sie systematisch.
  */
+/**
+ * Global-Offset des Batterietyps — `Ni-MH` = 0, `Alkali` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „Alkali" gestellt, `+0x20` ging von 0
+ * auf 1. Zwei Zustände, damit lückenlos.
+ *
+ * Fachlich belanglos für einen Pattern-Editor — aber ein dokumentiertes Feld
+ * muss niemand ein zweites Mal suchen, und die Lücke im Block waere sonst
+ * offen geblieben. (Wieder ein Byte, das vorher auf 0 stand und deshalb in
+ * keiner „belegt"-Zaehlung auftauchte; siehe Hinweis bei `TEMPO_LOCK`.)
+ */
+export const E2_GLOBAL_BATTERY_TYPE_OFF = 0x20;
+
 export const E2_GLOBAL_TEMPO_LOCK_OFF = 0x24;
 
 /**
