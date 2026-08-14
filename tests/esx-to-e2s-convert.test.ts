@@ -38,5 +38,14 @@ const P = "E:/esx/BOTTROP.ESX";
     expect(repointed).toBeGreaterThan(0);
     expect(linked).toBe(repointed);
     expect(r.mapping).toContain("Geräte-Nr.");
+    // Filter/Mod der Quelle wird berichtet, aber NICHT in die Pattern-Bytes
+    // geschrieben — die E2-Offsets dafuer sind unbestaetigt.
+    expect(r.mapping).toContain("Filter/Mod der ESX-Quelle");
+    expect(r.mapping).toMatch(/\| (LPF|HPF|BPF|BPF\+) \|/);
+    const filterZeilen = r.mapping
+      .split(/\r?\n/)
+      .filter((l) => /^\| .* \| \d+ \| (LPF|HPF|BPF)/.test(l));
+    expect(filterZeilen.length).toBeGreaterThan(0);
+    console.log("[filter] Berichtszeilen:", filterZeilen.length);
   });
 });

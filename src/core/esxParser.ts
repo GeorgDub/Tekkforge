@@ -212,6 +212,35 @@ export interface EsxStepEvent {
  *   - `steps` enthaelt immer ESX1_MAX_STEPS (128) Eintraege; `lengthSteps`
  *     des Patterns bestimmt den genutzten Teil.
  */
+/**
+ * Per-Part Filter/Modulation eines ESX-1-Parts.
+ *
+ * Offsets verifiziert gegen open-electribe-editor v1.2.0
+ * (`PartDrumImpl`/`PartKeyboardImpl`/`PartStretchSliceImpl.init()`); über
+ * Synthstudio (v3.293) übernommen.
+ *
+ * Alle Werte roh 0..127, wie sie im Gerät stehen — die Editor-Quelle klemmt
+ * sie nicht, die 0..127-Semantik stammt aus Korgs MIDI-Implementation.
+ */
+export interface EsxPartFilter {
+  /** 0=LPF, 1=HPF, 2=BPF, 3=BPF+ (FilterType.java). */
+  filterType: number;
+  /** 0..127 (roh). */
+  cutoff: number;
+  /** 0..127 (roh). */
+  resonance: number;
+  /** 0..127 (roh) — Filter-EG-Intensität. */
+  egIntensity: number;
+  /** 0=Saw, 1=Square, 2=Tri, 3=S&H, 4=Env. */
+  modType: number;
+  /** 0=Pitch, 1=Cutoff, 2=Amp, 3=Pan. */
+  modDest: number;
+  /** 0..127 (roh). */
+  modSpeed: number;
+  /** 0..127 (roh). */
+  modDepth: number;
+}
+
 export interface EsxPart {
   partIndex: number;
   /** 0..255 — ESX-1 Sample-Slot-Index. 0 wenn unbelegt. */
@@ -224,6 +253,8 @@ export interface EsxPart {
   pitch: number;
   /** 0..127. */
   fxAmount: number;
+  /** Filter-/Mod-Block des Parts (siehe {@link EsxPartFilter}). */
+  filter?: EsxPartFilter;
   /** Trigger-Steps, Laenge === ESX1_MAX_STEPS (128). */
   steps: EsxStepEvent[];
   /** Reserviert fuer Motion-Sequencer (stets undefined). */
@@ -668,7 +699,57 @@ interface DecodedEsxPart {
   pan: number;
   pitch: number;
   fxAmount: number;
+  filter?: EsxPartFilter;
   steps: EsxStepEvent[];
+}
+
+/**
+ * Byte-Offsets des Filter/Mod-Blocks INNERHALB eines Parts, je Part-Typ.
+ *
+ * Drum und Keyboard teilen sich Level/Pan/Fx/Mod; Keyboard schiebt nur den
+ * Filter-Sub-Block um +1 (dort steht bei 4 das Glide), Stretch/Slice den
+ * ganzen Block um −2 (kein sliceNumber/reserved).
+ */
+interface EsxFilterLayout {
+  filterType: number;
+  cutoff: number;
+  resonance: number;
+  egIntensity: number;
+  modByte: number;
+  modSpeed: number;
+  modDepth: number;
+}
+const ESX_FILTER_LAYOUT_DRUM: EsxFilterLayout = {
+  filterType: 4, cutoff: 5, resonance: 6, egIntensity: 7,
+  modByte: 14, modSpeed: 15, modDepth: 16,
+};
+const ESX_FILTER_LAYOUT_KEYBOARD: EsxFilterLayout = {
+  filterType: 5, cutoff: 6, resonance: 7, egIntensity: 8,
+  modByte: 14, modSpeed: 15, modDepth: 16,
+};
+const ESX_FILTER_LAYOUT_STRETCHSLICE: EsxFilterLayout = {
+  filterType: 2, cutoff: 3, resonance: 4, egIntensity: 5,
+  modByte: 12, modSpeed: 13, modDepth: 14,
+};
+
+/** Liest den Filter/Mod-Block eines Parts. */
+function decodeEsxFilter(
+  raw: Uint8Array,
+  partOff: number,
+  o: EsxFilterLayout,
+): EsxPartFilter {
+  const b = (i: number) => Math.max(0, Math.min(127, raw[partOff + i] ?? 0));
+  const modRaw = raw[partOff + o.modByte] ?? 0;
+  return {
+    filterType: (raw[partOff + o.filterType] ?? 0) & 0x03,
+    cutoff: b(o.cutoff),
+    resonance: b(o.resonance),
+    egIntensity: b(o.egIntensity),
+    modDest: modRaw & 0x07, // Bits 0-2
+    modType: (modRaw >> 4) & 0x07, // Bits 4-6
+    modSpeed: b(o.modSpeed),
+    modDepth: b(o.modDepth),
+  };
 }
 
 /** Sample-Pointer u16BE: Bit15 = OFF; sonst Slot-Index 0..383. */
@@ -694,7 +775,8 @@ function decodeDrumPart(
   const pan = Math.max(0, Math.min(127, raw[partOff + 10] || 64));
   const fxAmount = Math.max(0, Math.min(127, raw[partOff + 13] ?? 0));
   const bits = decodeStepBits(raw, partOff + ESX1_DRUM_HEADER_BYTES);
-  return { sampleId, volume, pan, pitch, fxAmount, steps: stepsFromBits(bits, accentBits) };
+  const filter = decodeEsxFilter(raw, partOff, ESX_FILTER_LAYOUT_DRUM);
+  return { sampleId, volume, pan, pitch, fxAmount, filter, steps: stepsFromBits(bits, accentBits) };
 }
 
 /** TABLE7: Keyboard-Part 0..1 (274B: Header 18 + 128 Noten + 128 Gates). */
@@ -728,7 +810,8 @@ function decodeKeyboardPart(
       };
     }
   }
-  return { sampleId, volume, pan, pitch: 0, fxAmount: 0, steps };
+  const filter = decodeEsxFilter(raw, partOff, ESX_FILTER_LAYOUT_KEYBOARD);
+  return { sampleId, volume, pan, pitch: 0, fxAmount: 0, filter, steps };
 }
 
 /** TABLE8: Stretch/Slice-Part 0..2 (32B: Header 16 + 16B Step-Bits). */
@@ -747,7 +830,8 @@ function decodeStretchSlicePart(
   const pan = Math.max(0, Math.min(127, raw[partOff + 8] || 64));
   const fxAmount = Math.max(0, Math.min(127, raw[partOff + 11] ?? 0));
   const bits = decodeStepBits(raw, partOff + ESX1_STRETCHSLICE_HEADER_BYTES);
-  return { sampleId, volume, pan, pitch, fxAmount, steps: stepsFromBits(bits, accentBits) };
+  const filter = decodeEsxFilter(raw, partOff, ESX_FILTER_LAYOUT_STRETCHSLICE);
+  return { sampleId, volume, pan, pitch, fxAmount, filter, steps: stepsFromBits(bits, accentBits) };
 }
 
 /** TABLE9: AudioIn-Part (156B: Header 12 + 16B Step-Bits + 128 Gates). */

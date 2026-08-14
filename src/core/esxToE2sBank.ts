@@ -226,6 +226,45 @@ export function convertEsxToE2sBank(
   for (const [esxIdx, m] of [...sampleMap.entries()].sort((a, b) => a[1].hwNumber - b[1].hwNumber)) {
     lines.push(`| ${m.hwNumber} | ${m.name} | ${esxIdx} |`);
   }
+
+  // Filter-/Mod-Einstellungen der Quelle dokumentieren.
+  //
+  // Bewusst NUR als Bericht und NICHT in die Pattern-Bytes geschrieben: die
+  // ESX-Seite ist verifiziert (open-electribe-editor), die E2-Zielseite aber
+  // nicht — `partParams.ts` nennt seine Offsets ausdrücklich experimentell.
+  // Unbestätigte Offsets in einen funktionierenden Konvertierungspfad zu
+  // schreiben würde eine belegte Funktion gegen eine unbelegte eintauschen.
+  // So sieht man wenigstens, was am Gerät eingestellt war, und kann es von
+  // Hand nachziehen.
+  const FILTER_NAMES = ["LPF", "HPF", "BPF", "BPF+"];
+  const MOD_TYPES = ["Saw", "Square", "Tri", "S&H", "Env"];
+  const MOD_DESTS = ["Pitch", "Cutoff", "Amp", "Pan"];
+  const mitFilter = selected
+    .flatMap((p: EsxPattern) =>
+      p.parts.map((part, pi) => ({ p, pi, f: part.filter })),
+    )
+    .filter((x) => x.f && (x.f.cutoff !== 0 || x.f.resonance !== 0 || x.f.modDepth !== 0));
+  if (mitFilter.length > 0) {
+    lines.push("");
+    lines.push("## Filter/Mod der ESX-Quelle (nur Bericht — nicht übertragen)");
+    lines.push("");
+    lines.push(
+      "Diese Werte stehen im ESX-Pattern und werden **nicht** in die E2-Datei " +
+        "geschrieben; die E2-Byte-Offsets dafür sind unbestätigt. Wer den Klang " +
+        "nachbauen will, stellt sie am Gerät von Hand ein.",
+    );
+    lines.push("");
+    lines.push("| Pattern | Part | Filter | Cutoff | Reso | EG-Int | Mod | → Ziel | Speed | Depth |");
+    lines.push("|---|---:|---|---:|---:|---:|---|---|---:|---:|");
+    for (const { p, pi, f } of mitFilter) {
+      if (!f) continue;
+      lines.push(
+        `| ${p.name || p.index + 1} | ${pi + 1} | ${FILTER_NAMES[f.filterType] ?? f.filterType} | ` +
+          `${f.cutoff} | ${f.resonance} | ${f.egIntensity} | ${MOD_TYPES[f.modType] ?? f.modType} | ` +
+          `${MOD_DESTS[f.modDest] ?? f.modDest} | ${f.modSpeed} | ${f.modDepth} |`,
+      );
+    }
+  }
   const mapping = lines.join("\n") + "\n";
 
   return {
