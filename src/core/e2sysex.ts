@@ -412,8 +412,8 @@ export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
 /**
  * Global-Offset von „Tempo Lock" — `off` = 0, `on` = 1.
  *
- * ✔ Am Gerät bestätigt (2026-08-14): eingeschaltet, `+0x24` ging von 0 auf 1.
- * Beide Zustände gemessen.
+ * ✔ Am Gerät bestätigt (2026-08-14), in beide Richtungen: `0 -> 1` beim
+ * Einschalten, `1 -> 0` beim Zurückstellen.
  *
  * ⚠ Lehrreich für die Suche: `0x24` stand vorher auf 0 und tauchte deshalb in
  * der Liste der „belegten" Bytes nicht auf. Der Block enthält also mehr Felder
@@ -441,6 +441,23 @@ export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
  * eine unbeabsichtigte, aber willkommene Gegenprobe für dessen 0-Basis.
  */
 export const E2_GLOBAL_TRIGGER_MODE_OFF = 0x1d;
+
+/**
+ * Global-Offset des Knob-Modus — 0-basierter Listenindex.
+ *
+ * | Anzeige     | Byte |                     |
+ * |-------------|------|---------------------|
+ * | jump        | 0    | gemessen (Ausgang)  |
+ * | catch       | 1    | aus der Reihenfolge |
+ * | value scale | 2    | gemessen            |
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „value scale" gestellt, `+0x1C` ging
+ * von 0 auf 2.
+ *
+ * Liegt zwischen Velocity-Kurve (`0x1B`) und Trigger-Modus (`0x1D`) — die drei
+ * Felder zum Bedienverhalten stehen lückenlos beieinander.
+ */
+export const E2_GLOBAL_KNOB_MODE_OFF = 0x1c;
 
 /**
  * Global-Offset der Velocity-Kurve — 0-basierter Listenindex.
