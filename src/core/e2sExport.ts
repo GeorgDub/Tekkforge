@@ -98,6 +98,9 @@ const PART_SAMPLE_OFF = 0x08;
 // Die früheren Offsets 0x15/0x22 waren EGDecay bzw. IFXEdit (deren Defaults
 // 127 bzw. 64 die Histogramme täuschend ähnlich aussehen ließen).
 const PART_MUTE_OFF = 0x01;
+// ✔ Am Geraet bestaetigt (2026-08-14): Testpattern mit aufsteigendem Level
+// ueber die Parts 1-10 las hier exakt 0 10 20 30 40 50 60 70 80 90, Parts
+// 11-16 unberuehrt. Der Offset stammte bis dahin nur aus der Format-Doku.
 const PART_VOLUME_OFF = 0x18;
 const PART_PAN_OFF = 0x19;
 const PART_STEPS_OFF = 0x30;

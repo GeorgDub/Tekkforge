@@ -80,6 +80,9 @@ export interface PartParam {
  * | `0x0E` | resonance  | aufsteigende Rampe                          |
  * | `0x0F` | egInt      | absteigend `+63 … 0 … -63` — **signed**     |
  * | `0x10` | modType    | V-Muster `0..7` dann `71..64`               |
+ * | `0x11` | modSpeed   | Rampe `0 8 16 … 72`, Parts 11-16 unberuehrt |
+ * | `0x12` | modDepth   | per Ausschluss (Paar mit 0x11)              |
+ * | `0x14` | egAttack   | Rampe `127 117 106 … 37`                    |
  * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
  * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
  *
@@ -126,9 +129,23 @@ export interface PartParam {
  * genau drei Parameter wurden angefasst. Damit ist `{0x11, 0x12}` sicher
  * `{modSpeed, modDepth}`.
  *
- * ⚠ WELCHE von beiden welche ist, ist damit NICHT entschieden. Die Zuordnung
- * unten folgt der Format-Doku, nicht einer Messung. Wer sie klaeren will:
- * NUR Speed als Rampe setzen, Depth unangetastet lassen.
+ * **Aufgeloest** durch genau diesen Versuch: Speed wurde als saubere Rampe in
+ * 8er-Schritten gesetzt, Depth unangetastet gelassen. `0x11` las danach exakt
+ * `0 8 16 24 32 40 48 56 64 72` (nur Parts 1-10 waren angefasst, 11-16 blieben
+ * unveraendert). Damit ist `0x11 = modSpeed` belegt und `0x12 = modDepth`
+ * folgt per Ausschluss aus dem bereits belegten Paar.
+ *
+ * ### Level und Attack — und eine Bestaetigung ausserhalb dieser Tabelle
+ *
+ * Im selben Durchgang Level aufsteigend und Attack absteigend, wieder nur ueber
+ * die Parts 1-10:
+ *
+ *     0x14  127 117 106 97 87 77 67 57 47 37  (egAttack)
+ *     0x18    0  10  20 30 40 50 60 70 80 90  (Part-Level)
+ *
+ * `0x18` steht nicht in dieser Tabelle — es ist der Part-Lautstaerkewert, den
+ * `e2sExport.ts` als `PART_VOLUME_OFF` schreibt. Der Offset stammte dort aus
+ * der Format-Doku und ist mit dieser Messung erstmals am Geraet belegt.
  *
  * ### Gegenprobe mit Vorhersage
  *
@@ -167,9 +184,9 @@ export const PART_PARAMS: PartParam[] = [
   { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "egInt", label: "EG-Int", offset: 0x0f, min: -63, max: 63, kind: "i8", group: "Filter" }, // ✔ geraetebestaetigt bipolar (+63…-63 gemessen)
   { key: "modType", label: "Mod-Typ", offset: 0x10, min: 0, max: 255, kind: "u8", group: "Mod" }, // ✔ geraetebestaetigt (V-Muster); Speicher 0-basiert, Anzeige 1-basiert
-  { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" }, // Paar {0x11,0x12} belegt; Zuordnung aus der Doku
-  { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" }, // Paar {0x11,0x12} belegt; Zuordnung aus der Doku
-  { key: "egAttack", label: "Amp Attack", offset: 0x14, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
+  { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" }, // ✔ geraetebestaetigt (8er-Rampe)
+  { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" }, // ✔ per Ausschluss (Paar mit 0x11)
+  { key: "egAttack", label: "Amp Attack", offset: 0x14, min: 0, max: 127, kind: "u8", group: "Amp/EG" }, // ✔ geraetebestaetigt (absteigende Rampe)
   { key: "egDecay", label: "Amp Decay", offset: 0x15, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
   { key: "ampEgOn", label: "Amp-EG an", offset: 0x1a, min: 0, max: 1, kind: "bool", group: "Amp/EG" },
   { key: "mfxSend", label: "MFX-Send", offset: 0x1b, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
