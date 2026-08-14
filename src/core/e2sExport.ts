@@ -47,8 +47,13 @@
  *       part +0x30  64×12B step records:
  *         byte 0      trigger  (1 = aktiv, 0 = aus)
  *         byte 1      Gate-Zeit (Anzeige = Byte, 0..96; 0x48 = 72 Vorgabe).
- *                     TIE ist am Geraet 127; Factory-Dateien fuehren daneben
- *                     sehr haeufig 255 — siehe ELECTRIBE_REAL_GATE_TIE_ALT.
+ *                     ✔ Am Geraet gemessen: 32, 47, 60 und 86 kamen jeweils
+ *                     unveraendert an. Der Wert 96 ist eine regulaere Gate-Zeit
+ *                     und keine Sonderform — ein Step mit 96 liess sich auf 86
+ *                     herunterstellen, blieb also auf derselben Leiter.
+ *                     TIE ist am Geraet 127 und sitzt als Sentinel darueber;
+ *                     Factory-Dateien fuehren daneben sehr haeufig 255 —
+ *                     siehe ELECTRIBE_REAL_GATE_TIE_ALT.
  *         byte 2      Velocity  (Anzeige = Byte; 0x60 = 96 Vorgabe)
  *         byte 3      Flag — Bedeutung offen, siehe unten
  *         bytes 4..7  bis zu VIER Noten, je MIDI+1 (0 = leer)
@@ -76,6 +81,16 @@
  *       gepasst — die Factory-Bank hat sie erledigt. Ein Byte, dessen Deutung
  *       an fuenf Messpunkten haelt, ist eben noch lange nicht verstanden.
  *       Der Schreibpfad setzt weiter 1 und bleibt unangetastet.
+ *
+ *       Bekannt ist immerhin, woran es NICHT haengt: ein am Geraet
+ *       abgeschalteter Step behielt Flag 1 samt Gate, Velocity und Note. Das
+ *       Flag folgt dem Trigger also nicht.
+ *
+ *       Daran haengt auch ein Unterschied zum Schreibpfad: das Geraet laesst
+ *       einem stillgelegten Step seine Werte, waehrend TekkForge ihn auf den
+ *       kanonischen Leerstand 00 48 60 00 00 zuruecksetzt. Hoerbar ist das
+ *       nicht — der Trigger entscheidet —, aber beim erneuten Einschalten am
+ *       Geraet sind die alten Werte weg.
  *
  *       ⚠ Nur Notenplatz 1 wird geschrieben. Die Factory-Bank belegt alle vier
  *       (53202 / 5065 / 4096 / 3719 Vorkommen), Akkorde gehen also verloren.
