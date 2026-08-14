@@ -31,9 +31,12 @@
 import * as fs from "node:fs";
 import { buildE2AllPatFile } from "../src/core/e2sExport.ts";
 import { parseE2sBank } from "../src/core/e2sBankReader.ts";
-import { bankNumberToE2PatternRef } from "../src/core/e2sPatternSampleLink.ts";
+import {
+  bankNumberToE2PatternRef,
+  oscToDisplayNumber,
+} from "../src/core/e2sPatternSampleLink.ts";
 
-const BANK = process.argv[3] ?? "C:/Users/admin/Desktop/omnitribe-hwtest-kit/luknkicks.all";
+const BANK = process.argv[3] ?? "examples/e2s/HARDTEKK.all";
 const ZIEL = process.argv[2] ?? "examples/e2s/HARDTEKK_SET.e2sallpat";
 const N = 64;
 /**
@@ -61,12 +64,15 @@ const THEMA = {
  * sondern aus der Bank nach Kategorie geholt — sonst zeigt das Set nach einem
  * Bankwechsel auf ganz andere Klaenge, ohne dass irgendetwas auffaellt.
  *
- * Je Part: [Kategorie-Name, wievieltes Sample dieser Kategorie].
+ * Je Part: [Kategorie-Name, Position ODER Namens-Anfang]. Ein String pinnt
+ * das Sample per Name — fuer Klaenge, die am Geraet durchgehoert und fuer gut
+ * befunden wurden (2026-08-15): Part 9 "Bassdrum-01fd" und Part 10
+ * "Unison_Bass_C3" ueberleben so auch Umsortierungen der Bank.
  */
 const BELEGUNG = [
   ["Kick", 0], ["Kick", 3], ["Snare", 0], ["Clap", 0],
   ["HiHat", 0], ["HiHat", 5], ["Perc.", 0], ["Perc.", 3],
-  ["Analog", 0], ["Analog", 2], ["PCM", 0], ["PCM", 4],
+  ["Analog", "Bassdrum-01fd"], ["Analog", "Unison_Bass_C3"], ["PCM", 0], ["PCM", 4],
   ["PCM", 8], ["PCM", 12], ["Phrase", 0], ["FX", 0],
 ];
 const VOLUME = [127, 108, 105, 92, 84, 88, 80, 78, 118, 104, 100, 95, 95, 92, 68, 88];
@@ -210,31 +216,23 @@ for (const s of belegt) {
   if (!nachKategorie.has(s.categoryName)) nachKategorie.set(s.categoryName, []);
   nachKategorie.get(s.categoryName).push(s);
 }
-/**
- * Kein Versatz zwischen unserer Slot-Nummer und der Anzeige am Gerät.
- *
- * Die Anzeige folgt dem Tabellenplatz: Platz 500 wird als 501 angezeigt. Belegt
- * durch die Geräte-Bank `luknkicks.all`, die ihr erstes Sample auf Platz 500
- * hat und am Gerät bei 501 („mello ca") beginnt.
- *
- * Eine frühere Fassung dieser Bank legte das erste Sample versehentlich auf
- * Platz 501 — am Gerät erschien es als 502, Platz 501 blieb leer, und ein
- * Pattern das auf #501 zeigte fand nichts. Das war der Fehler, nicht die
- * Referenz.
- *
- * Ein byteweiser Vergleich der esli-Blöcke beider Bänke zeigt keinerlei
- * Nummernfeld: sie unterscheiden sich nur in Name, Kategorie und Sample-Länge.
- * Das Gerät kann sie also gar nicht unterschiedlich nummerieren — die Anzeige
- * hängt allein am Platz.
- */
-const GERAETE_VERSATZ = 0;
+// Anzeige am Geraet = Nummernfeld (OSC_0index) + 1 — am Geraet gemessen mit
+// der entkoppelten Probe SLOTNUM2.all (2026-08-15); der Tabellenplatz ist fuer
+// die Anzeige irrelevant. `sampleNumber` aus dem Reader IST das Nummernfeld,
+// also uebersetzt oscToDisplayNumber in die Nummern, die Geraet und Set meinen.
+// (Der fruehere GERAETE_VERSATZ=0 stammte aus der Zeit, als unsere Baenke die
+// Anzeigenummer direkt ins Feld schrieben.)
 
 const SAMPLES = [], NAMEN = [];
-for (const [kat, idx] of BELEGUNG) {
+for (const [kat, wahl] of BELEGUNG) {
   const liste = nachKategorie.get(kat) ?? [];
   if (!liste.length) throw new Error(`Bank enthaelt keine Kategorie "${kat}"`);
-  const s = liste[Math.min(idx, liste.length - 1)];
-  SAMPLES.push(s.sampleNumber + GERAETE_VERSATZ);
+  const s =
+    typeof wahl === "string"
+      ? liste.find((x) => x.name.trim().toLowerCase().startsWith(wahl.toLowerCase()))
+      : liste[Math.min(wahl, liste.length - 1)];
+  if (!s) throw new Error(`Kategorie "${kat}": kein Sample beginnt mit "${wahl}"`);
+  SAMPLES.push(oscToDisplayNumber(s.sampleNumber));
   NAMEN.push(s.name.trim());
 }
 console.log(`Bank: ${BANK.split(/[\/]/).pop()} — ${belegt.length} Samples`);

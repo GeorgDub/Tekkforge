@@ -4,18 +4,18 @@
 504	Kick	exKicK-10	509ms
 505	Kick	ABI0-NEUER-KICK1	507ms
 506	Kick	PENGkick-MONO-15	513ms
-507	Kick	22inKickPowStrC_	512ms
-508	Kick	PaPPi KicK 1	505ms
-509	Kick	Mega-kick1	513ms
-510	Kick	Mega-kick10	513ms
-511	Kick	mein kick2	503ms
-512	Kick	TiTTeNsPriTzEr K	501ms
-513	Kick	808_LNG_KICK	501ms
-514	Kick	LS-HKI Basic Har	519ms
-515	Kick	W+chterKicK 1	500ms
-516	Kick	Hardcore extrem	518ms
-517	Kick	FPC_Kick_Yam_001	518ms
-518	Kick	HardKick17 - Kop	520ms
+507	Kick	PaPPi KicK 1	505ms
+508	Kick	Mega-kick1	513ms
+509	Kick	Mega-kick10	513ms
+510	Kick	mein kick2	503ms
+511	Kick	808_LNG_KICK	501ms
+512	Kick	LS-HKI Basic Har	519ms
+513	Kick	W+chterKicK 1	500ms
+514	Kick	Hardcore extrem	518ms
+515	Kick	FPC_Kick_Yam_001	518ms
+516	Kick	HardKick17 - Kop	520ms
+517	Kick	kick jerk 2	520ms
+518	Kick	OverH_Kick_002d	521ms
 519	Snare	snare-rush	390ms
 520	Snare	Kore Snare_6	386ms
 521	Snare	GMSnare1_02	385ms
@@ -56,16 +56,16 @@
 556	Perc	Digital_Rimshot_	472ms
 557	Perc	Digital_Shake_02	472ms
 558	Bass	Bx BassShoot PLO	1263ms
-559	Bass	Der BasS MusS Fi	1401ms
-560	Bass	Unison_Bass_C3	1220ms
-561	Bass	S53vesterbass	1215ms
-562	Bass	Kick The Bass 2	1215ms
-563	Bass	25955__walter-od	1450ms
-564	Bass	Bassdrum-02lkjhg	1461ms
-565	Bass	Bassdrum-01fd	1461ms
-566	Bass	hardbassdrumz_05	1184ms
-567	Bass	Marvibestbasssss	1182ms
-568	Bass	Bass3-MO-MONO-01	1518ms
+559	Bass	Unison_Bass_C3	1220ms
+560	Bass	S53vesterbass	1215ms
+561	Bass	Kick The Bass 2	1215ms
+562	Bass	Bassdrum-02lkjhg	1461ms
+563	Bass	Bassdrum-01fd	1461ms
+564	Bass	Marvibestbasssss	1182ms
+565	Bass	Bass3-MO-MONO-01	1518ms
+566	Bass	AP - Future Bass	1124ms
+567	Bass	basslin35_SNAKE	1567ms
+568	Bass	BASS_03_F#_128bp	1071ms
 569	Lead	HaMMeR MeLo	4222ms
 570	Lead	T-Mello	4260ms
 571	Lead	Genetikk - MeLo	4117ms
@@ -94,11 +94,11 @@
 594	Pad	PAD_ResoChor	5089ms
 595	Pad	Killa Bees Pad.w	10080ms
 596	Pad	ED19_Pad	3746ms
-597	FX	Haus-alarm1	3076ms
-598	FX	TeRR5Rt FX 1!	2912ms
-599	FX	flying_saucer_al	3318ms
-600	FX	Riser 6 4 Bars 1	2846ms
-601	FX	Haus-alarm5_Hall	3372ms
-602	FX	Down Rise Fx	2786ms
-603	FX	HBsche Alarm MeL	2764ms
-604	FX	04 Fx-MONO-002-E	2667ms
+597	FX	TeRR5Rt FX 1!	2912ms
+598	FX	flying_saucer_al	3318ms
+599	FX	Riser 6 4 Bars 1	2846ms
+600	FX	Down Rise Fx	2786ms
+601	FX	HBsche Alarm MeL	2764ms
+602	FX	04 Fx-MONO-002-E	2667ms
+603	FX	Growl sweep	2596ms
+604	FX	Alarm 17 sChAlL	2569ms

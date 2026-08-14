@@ -56,6 +56,26 @@ const KATEGORIEN = [
   { name: "FX",     kat: 11, anzahl: 8,  dauer: [200, 6000],  muster: /\bfx\b|sweep|riser|impact|noise|alarm/i },
 ];
 
+/**
+ * Am Gerät durchgehört und aussortiert (2026-08-15). Die Auswahl nach
+ * Dateiname/Dauer ist eine Heuristik — diese sieben haben die Ohrprobe nicht
+ * bestanden. Muster treffen den Datei-BASISNAMEN; ihre Plätze füllt die
+ * Auswahl automatisch mit den nächstbesten Kandidaten derselben Kategorie.
+ *
+ *   #507 22inKickPowStrC…   #512 TiTTeNsPriTzEr…   #559 Der BasS MusS Fi…
+ *   #563 25955__walter-od…  #566 hardbassdrumz_05  #597 Haus-alarm1
+ *   #601 Haus-alarm5_Hall             (Nummern der Bank vom 2026-08-15)
+ */
+const SPERRLISTE = [
+  /^22inKickPowStrC/i,
+  /^tittenspritzer/i,
+  /^Der BasS MusS Fi/i,
+  /^25955__walter/i,
+  /^hardbassdrumz_05/i,
+  /^Haus-alarm1\./i,
+  /^Haus-alarm5_Hall/i,
+];
+
 // ─── Dateien einsammeln ──────────────────────────────────────────────────────
 
 function sammle(wurzel, treffer, gesehen) {
@@ -126,6 +146,7 @@ for (const k of KATEGORIEN) {
     const datei = path.basename(p);
     if (belegt.has(p) || !k.muster.test(datei)) continue;
     if (k.ausser?.test(datei)) continue;
+    if (SPERRLISTE.some((rx) => rx.test(datei))) continue; // Ohrprobe nicht bestanden
     // Namensfamilien begrenzen: „BaSsKlaTsche55/57/59/64" ist viermal dasselbe.
     // Ziffern und Trennzeichen weg, dann zählt der Stamm.
     const stamm = datei.toLowerCase().replace(/[\d_\-. ]+/g, "").slice(0, 10);
