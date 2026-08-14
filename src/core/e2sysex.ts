@@ -409,6 +409,20 @@ export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
  * kanalunabhängig und liefert den aktuellen Kanal in der Antwort mit. Sie ist
  * damit das Mittel der Wahl, wenn die Verbindung plötzlich tot wirkt.
  */
+/**
+ * Global-Offset von „Tempo Lock" — `off` = 0, `on` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): eingeschaltet, `+0x24` ging von 0 auf 1.
+ * Beide Zustände gemessen.
+ *
+ * ⚠ Lehrreich für die Suche: `0x24` stand vorher auf 0 und tauchte deshalb in
+ * der Liste der „belegten" Bytes nicht auf. Der Block enthält also mehr Felder
+ * als die 17 Nicht-Null-Bytes vermuten lassen — **ein Schalter im Aus-Zustand
+ * ist von unbenutztem Speicher nicht zu unterscheiden.** Wer die Belegung ueber
+ * Nicht-Null-Bytes abschaetzt, unterschaetzt sie systematisch.
+ */
+export const E2_GLOBAL_TEMPO_LOCK_OFF = 0x24;
+
 export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
 
 /**
