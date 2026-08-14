@@ -372,6 +372,23 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  */
 /** Global-Offset des Metronom-Zustands (0=aus … 4=on). */
 export const E2_GLOBAL_METRONOME_OFF = 0x10;
+
+/**
+ * Global-Offset des MIDI-Kanals — 0-basiert (Anzeige 1..16 → Byte 0..15).
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): Kanal von 1 auf 5 gestellt, `+0x29` ging
+ * von 0 auf 4. Einziges verändertes Byte im Block.
+ *
+ * ☠ Praktische Folge, die beim Messen auffiel: **danach antwortet das Gerät auf
+ * gar nichts mehr.** Der Global-Kanal steckt im SysEx-Kopf (`F0 42 0x3g …`), und
+ * das Gerät ignoriert Anfragen auf dem falschen Kanal — stumm, ohne Fehler. Wer
+ * den Kanal am Gerät verstellt, muss ihn im Host nachziehen.
+ *
+ * Die Gerätesuche (`F0 42 50 00 00 F7`) ist davon ausgenommen: sie läuft
+ * kanalunabhängig und liefert den aktuellen Kanal in der Antwort mit. Sie ist
+ * damit das Mittel der Wahl, wenn die Verbindung plötzlich tot wirkt.
+ */
+export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
 export function decodeGlobalDump(bytes: Uint8Array): Uint8Array | null {
   if (bytes.length < 8 || bytes[0] !== SYSEX_START || bytes[1] !== KORG_MANUFACTURER_ID)
     return null;

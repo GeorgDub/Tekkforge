@@ -232,9 +232,14 @@ export function requestSysex(
               // Hält eine andere Anwendung den Eingang, öffnet TekkForge ihn
               // klaglos und empfängt trotzdem nichts — der Fall ist stumm und
               // sieht wie ein totes Gerät aus.
-              "Keine Antwort vom Gerät (Timeout). Häufigste Ursache: der MIDI-Port " +
-                "ist von einem anderen Programm belegt (der KORG-Treiber lässt nur " +
-                "einen Zugriff gleichzeitig zu) — andere DAW/Editoren schließen. " +
+              "Keine Antwort vom Gerät (Timeout). Zwei häufige Ursachen, beide " +
+                "stumm: (1) der MIDI-Port ist von einem anderen Programm belegt — " +
+                "der KORG-Treiber lässt nur einen Zugriff gleichzeitig zu, also " +
+                "andere DAW/Editoren schließen. (2) der Global-MIDI-Kanal des " +
+                "Geräts wurde geändert — er steckt im SysEx-Kopf, und das Gerät " +
+                "ignoriert Anfragen auf dem falschen Kanal. Dagegen hilft " +
+                "'Geraet suchen': die Suche laeuft kanalunabhaengig und stellt " +
+                "den richtigen Kanal automatisch ein. " +
                 "Sonst prüfen: Gerät an, SysEx im Global-Menü aktiviert, richtiger Port.",
             ),
           ),
