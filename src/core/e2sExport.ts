@@ -412,6 +412,17 @@ export function motionValueOffset(lane: number, step: number): number {
  * Umklapppunkts, also genau dort, wo eine falsch herum gedachte oder anders
  * skalierte Leiter zwangslaeufig auffliegen muesste.
  *
+ * Der Wert 64 ist zusaetzlich gegengeprueft: er tauchte spaeter unerwartet
+ * wieder auf, ohne dass Step 1 absichtlich angefasst worden waere. Die Nachfrage
+ * am Geraet ergab, dass dort tatsaechlich `98 % FWD` stand — die Einstellung war
+ * beim Navigieren mitbedient worden, und das Byte war ihr korrekt gefolgt.
+ *
+ * Das ist der dritte solche Fall (nach Chain Mode und dem MIDI-Send-Filter), und
+ * jedes Mal stimmte die Zuordnung. Das Nachfragen bleibt trotzdem richtig: es
+ * kostet eine Rueckfrage, waehrend die stille Alternative eine falsche Zuordnung
+ * waere, die niemand mehr findet. Dass es dreimal gutging, sagt etwas ueber die
+ * Zuverlaessigkeit der Zuordnungen — nichts darueber, ob man haette raten duerfen.
+ *
  * Das obere Ende (128 = 0 % REV) ist nicht direkt gemessen, folgt aber aus den
  * beiden REV-Punkten: 65 -> 98 % und 113 -> 23 % ergeben eine Steigung von
  * 1,5625 je Schritt und damit den Nullpunkt bei 127,7 — gerundet 128. Die
