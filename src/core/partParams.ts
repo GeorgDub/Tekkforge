@@ -82,6 +82,22 @@ export interface PartParam {
  * Das alternierende Bit bei `0x20` ist der staerkste Einzelbeleg: ein solches
  * Muster entsteht nicht zufaellig, es war die Vorgabe des Testpatterns.
  *
+ * ### Gegenprobe mit Vorhersage
+ *
+ * Der Nutzer hat das Muster anschliessend auf `1 0 1 0 …` ab Part 1 umgestellt
+ * (vorher begann es mit `0 0 1 …`). Die Vorhersage stand VOR der Messung fest
+ * und haette scheitern koennen — `0x20` las danach exakt
+ * `1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0`.
+ *
+ * Noch aussagekraeftiger ist der Spaltenvergleich beider Faelle: unter ALLEN
+ * Part-Parametern hat sich **nur `0x20`** geaendert. Damit ist die Zuordnung
+ * nicht bloss korreliert, sondern isoliert.
+ *
+ * Die uebrigen Aenderungen lagen bei `0x30, 0x3C, 0x60, 0x6C, 0x90, 0x9C,
+ * 0xC0, 0xCC` — exakt das Raster `0x30 + k * 0x0C`, also der Step-Block (der
+ * Nutzer hat beim Ueberarbeiten auch Steps gesetzt). Das bestaetigt nebenbei
+ * unabhaengig, dass die Sequenz bei 0x30 beginnt und 12 Byte pro Step belegt.
+ *
  * Nebenbefund zur Filterliste: die Werte laufen bis 16, waehrend die Werksbank
  * nur {0,1,7,12} nutzt. Das bestaetigt die Warnung oben — der Stock-Umfang ist
  * eine Untergrenze, und die Obergrenze haette man daraus nicht erraten.
