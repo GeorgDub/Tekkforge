@@ -24,8 +24,8 @@
 524	Snare	snarehhj	395ms
 525	Snare	Snare 001	308ms
 526	Snare	Snare 002	107ms
-527	Snare	BAHRE_Snare_2	358ms
-528	Snare	MaschinenMafia_K	359ms
+527	Snare	MaschinenMafia_K	359ms
+528	Snare	dirty kick no sn	416ms
 529	Clap	Clap1.wa-MONO-04	328ms
 530	Clap	Clap 10_2 - Kopi	322ms
 531	Clap	GM1Clap_01	367ms

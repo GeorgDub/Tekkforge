@@ -76,11 +76,15 @@ const THEMA = {
  * befunden wurden (2026-08-15): Part 9 "Bassdrum-01fd" und Part 10
  * "Unison_Bass_C3" ueberleben so auch Umsortierungen der Bank.
  */
+// Stammbelegung = FINALE Fassung nach dem Varianten-Durchhoeren am Geraet
+// (2026-08-15): Melos aus Paket C, Pad aus A (Padseq~1), Snare am Geraet
+// gewaehlt — snare-rush fiel durch ("klingt furchtbar"), "Snare 001" (#525)
+// ist der vom Nutzer bestimmte Ersatz.
 const BELEGUNG = [
-  ["Kick", 0], ["Kick", 3], ["Snare", 0], ["Clap", 0],
+  ["Kick", 0], ["Kick", 3], ["Snare", "Snare 001"], ["Clap", 0],
   ["HiHat", 0], ["HiHat", 5], ["Perc.", 0], ["Perc.", 3],
-  ["Analog", "Bassdrum-01fd"], ["Analog", "Unison_Bass_C3"], ["PCM", 0], ["PCM", 4],
-  ["PCM", 8], ["PCM", 12], ["Phrase", 0], ["FX", 0],
+  ["Analog", "Bassdrum-01fd"], ["Analog", "Unison_Bass_C3"], ["PCM", "Rad MeLo"], ["PCM", "Tau-MeLo"],
+  ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"], ["Phrase", "Padseq~1"], ["FX", 0],
 ];
 
 /**
@@ -90,7 +94,7 @@ const BELEGUNG = [
  * in D zusaetzlich die Drums. So vergleicht man Klangpakete, nicht Sets.
  */
 const VARIANTEN = {
-  A: { titel: "Stamm (HaMMeR/SYNTHHS3/R0binS/melo neu)", tausch: {} },
+  A: { titel: "Final (Melos C · Pad A · Snare 001)", tausch: {} },
   B: {
     titel: "Melo-Paket B (T-Mello/Genetikk/PsyChoTanZ/Krieger)",
     tausch: {
@@ -114,7 +118,7 @@ const VARIANTEN = {
   D: {
     titel: "Melo-Paket D + Drums B (Bluezone/Synthbeat/Arp/melo neu 2)",
     tausch: {
-      2: ["Snare", "BAHRE_Snare_2"],
+      2: ["Snare", "MaschinenMafia_K"], // BAHRE_Snare_2 flog aus der Bank (Ohrprobe)
       3: ["Clap", "SZ_Clap"],
       4: ["HiHat", "TeKK_HaT2"],
       5: ["HiHat", "DuUB HaT"],
@@ -138,32 +142,36 @@ const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
 
 // ─── Dramaturgie: 50 Patterns ────────────────────────────────────────────────
 // [Name, Intensität, Thema, Kick-Figur, Wiederholungen in der Kette]
+//
+// Wiederholungen maximal 2× — die urspruenglichen 4×-Bloecke klangen am
+// Geraet zu monoton (Feedback 2026-08-15). Dynamik kommt aus dem Wechsel,
+// nicht aus dem Stehenbleiben.
 const PLAN = [
-  ["INTRO 1",    0, "A", "vier",   4],
-  ["INTRO 2",    1, "A", "vier",   4],
-  ["INTRO 3",    1, "A", "vier",   4],
-  ["ROLLEN 1",   2, "A", "vier",   4],
-  ["ROLLEN 2",   2, "A", "vier",   4],
-  ["ROLLEN 3",   3, "A", "vier",   4],
+  ["INTRO 1",    0, "A", "vier",   2],
+  ["INTRO 2",    1, "A", "vier",   2],
+  ["INTRO 3",    1, "A", "vier",   2],
+  ["ROLLEN 1",   2, "A", "vier",   2],
+  ["ROLLEN 2",   2, "A", "vier",   2],
+  ["ROLLEN 3",   3, "A", "vier",   2],
   ["THEMA A 1",  3, "A", "vier",   2],
   ["THEMA A 2",  4, "A", "vier",   2],
   ["THEMA A 3",  4, "A", "vier",   2],
   ["AUFBAU 1",   4, "A", "vier",   2],
-  ["DROP 1 A",   5, "A", "tekk",   4],
-  ["DROP 1 B",   5, "A", "tekk",   4],
+  ["DROP 1 A",   5, "A", "tekk",   2],
+  ["DROP 1 B",   5, "A", "tekk",   2],
   ["DROP 1 C",   5, "A", "roll",   2],
   ["DROP 1 D",   5, "A", "tekk",   2],
   ["ABZUG 1",    3, "A", "vier",   2],
   ["ABZUG 2",    2, "A", "vier",   2],
-  ["BREAK 1",   -1, "A", "kein",   4],
-  ["BREAK 2",   -1, "A", "kein",   4],
+  ["BREAK 1",   -1, "A", "kein",   2],
+  ["BREAK 2",   -1, "A", "kein",   2],
   ["BREAK 3",   -1, "B", "kein",   2],
   ["AUFBAU 2",   1, "B", "vier",   2],
   ["AUFBAU 3",   2, "B", "vier",   2],
   ["AUFBAU 4",   3, "B", "vier",   2],
   ["AUFBAU 5",   4, "B", "roll",   1],
-  ["DROP 2 A",   5, "B", "tekk",   4],
-  ["DROP 2 B",   5, "B", "tekk",   4],
+  ["DROP 2 A",   5, "B", "tekk",   2],
+  ["DROP 2 B",   5, "B", "tekk",   2],
   ["DROP 2 C",   5, "B", "roll",   2],
   ["DROP 2 D",   5, "B", "tekk",   2],
   ["DROP 2 E",   5, "B", "roll",   2],
@@ -176,19 +184,19 @@ const PLAN = [
   ["AUFBAU 6",   4, "A", "roll",   2],
   ["AUFBAU 7",   5, "A", "roll",   1],
   ["AUFBAU 8",   5, "A", "roll",   1],
-  ["DROP 3 A",   5, "A", "tekk",   4],
-  ["DROP 3 B",   5, "A", "tekk",   4],
+  ["DROP 3 A",   5, "A", "tekk",   2],
+  ["DROP 3 B",   5, "A", "tekk",   2],
   ["DROP 3 C",   5, "A", "roll",   2],
   ["DROP 3 D",   5, "A", "tekk",   2],
   ["DROP 3 E",   5, "B", "tekk",   2],
-  ["BREAK 4",   -1, "B", "kein",   4],
-  ["BREAK 5",   -1, "A", "kein",   4],
+  ["BREAK 4",   -1, "B", "kein",   2],
+  ["BREAK 5",   -1, "A", "kein",   2],
   ["FINALE 1",   4, "A", "vier",   2],
-  ["FINALE 2",   5, "A", "tekk",   4],
-  ["FINALE 3",   5, "A", "tekk",   4],
+  ["FINALE 2",   5, "A", "tekk",   2],
+  ["FINALE 3",   5, "A", "tekk",   2],
   ["AUSKLANG 1", 3, "A", "vier",   2],
   ["AUSKLANG 2", 1, "A", "vier",   2],
-  ["AUSKLANG 3", 0, "A", "vier",   4],
+  ["AUSKLANG 3", 0, "A", "vier",   2],
 ];
 
 // ─── Bausteine ───────────────────────────────────────────────────────────────

@@ -67,6 +67,7 @@ const KATEGORIEN = [
  *   #601 Haus-alarm5_Hall             (Nummern der Bank vom 2026-08-15)
  */
 const SPERRLISTE = [
+  /^BAHRE_Snare_2/i, // #527 der Bank vom 2026-08-15, zweite Hoerrunde
   /^22inKickPowStrC/i,
   /^tittenspritzer/i,
   /^Der BasS MusS Fi/i,
