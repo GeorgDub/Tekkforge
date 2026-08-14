@@ -197,6 +197,23 @@ export const PART_LAST_STEP_OFF = 0x00;
  *
  * (Swing ist NICHT pro Part, auch wenn das Geraet ihn im Part-Kontext anbietet.)
  */
+/**
+ * Beat (Aufloesung des Patterns) — pro Pattern, als Listenindex.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14) mit einer Einzeländerung auf „32": im
+ * gesamten Pattern-Kopf bewegte sich genau ein Byte, `+0x26` von 3 auf 1.
+ *
+ * Belegt ist damit die STELLE, aber erst ein Punkt der Werteliste:
+ *
+ *     Beat 32  ->  1
+ *
+ * Welche Einstellung die vorherige 3 war, ist nicht bekannt. Die Liste enthaelt
+ * laut Geraet auch Triolen-Varianten („8 Tri", „16 Tri"). Wer sie vollstaendig
+ * braucht, schaltet sie am Geraet der Reihe nach durch und liest jedes Mal
+ * dieses eine Byte — mehr ist nicht noetig, die Adresse steht ja fest.
+ */
+export const PATTERN_BEAT_OFF = 0x26;
+
 export const PATTERN_SWING_OFF = 0x24;
 
 export const PATTERN_LEVEL_OFF = 0x2a;
