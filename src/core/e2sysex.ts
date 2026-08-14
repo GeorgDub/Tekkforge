@@ -576,6 +576,28 @@ export const E2_GLOBAL_POWER_SAVE_OFF = 0x25;
 
 export const E2_GLOBAL_TOUCH_SCALE_RANGE_OFF = 0x26;
 
+/**
+ * Global-Offset der Clock-Quelle — 0-basierter Listenindex.
+ *
+ * | Anzeige       | Byte |                                        |
+ * |---------------|------|----------------------------------------|
+ * | internal      | 0    | erschlossen (Listenanfang)             |
+ * | auto          | 1    | gemessen (Ausgangsstand)               |
+ * | external usb  | 2    | gemessen                               |
+ * | external midi | 3    | erschlossen — aus der Reihenfolge      |
+ * | external sync | 4    | erschlossen — aus der Reihenfolge      |
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „external usb" gestellt, `+0x28` ging
+ * von 1 auf 2.
+ *
+ * Dieses Byte war das einzige unbelegte im MIDI-Bereich und stand auf 1 —
+ * daraus liess sich vorhersagen, dass es auf 2 springen muss, wenn Clock Source
+ * vorher auf `auto` (Listenplatz 1) stand. Die Vorhersage hat gehalten, was die
+ * Zuordnung staerker macht als ein nachtraeglich passend gelesener Wert: sie
+ * haette scheitern koennen und tat es nicht.
+ */
+export const E2_GLOBAL_CLOCK_SOURCE_OFF = 0x28;
+
 export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
 
 /**
@@ -607,6 +629,12 @@ export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
  * Send Filter. Die urspruengliche Annahme, beide Felder benutzten dieselbe
  * 0-basierte Liste, war also richtig — sie stand aber zurecht als Vorbehalt da,
  * bis diese Einzelmessung sie ersetzt hat.
+ *
+ * ⚠ OFFEN beim Send Filter: in einem spaeteren Lesevorgang fiel `+0x2A` von 2
+ * auf 0 zurueck, obwohl in dem Durchgang nur die Clock-Quelle geaendert wurde.
+ * Derselbe Verlauf wie seinerzeit bei Chain Mode — dort war der Schalter beim
+ * Navigieren nebenbei mitbedient worden. Solange der Stand am Geraet nicht
+ * nachgeprueft ist, bleibt offen, ob es auch hier so war.
  *
  * Beim Send Filter sind `off` (0) und `short+program` (2) gemessen; `short` (1)
  * ist erschlossen und liegt zwischen beiden auf derselben Skala — dieselbe Lage
