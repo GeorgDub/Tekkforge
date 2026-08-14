@@ -292,8 +292,32 @@ export const PART_MOTION_SEQ_OFF = 0x03;
  */
 export const PART_TRG_VELOCITY_OFF = 0x04;
 
+/**
+ * Part-Priority — Schalter, 0 = normal, 1 = high.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14). Parts 1-5 auf normal/high/high/normal/
+ * high gestellt, `+0x06` las danach `0 1 1 0 1 0 0 …` — Muster und Stellen
+ * decken sich exakt.
+ */
+export const PART_PRIORITY_OFF = 0x06;
+
 export const PATTERN_ALT_13_14_OFF = 0x44;
 export const PATTERN_ALT_15_16_OFF = 0x45;
+
+/**
+ * Pattern-Laenge (Takte) — 0-basiert gespeichert.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14): Laenge von 3 auf 2 gestellt, `0x25` ging
+ * von 2 auf 1. Also Byte = Anzeige − 1, dieselbe Regel wie bei Key, Scale,
+ * modType und grooveType.
+ *
+ * Anmerkung zur Methode: nach der Sammelmessung stand hier eine 2 bei Laenge 3,
+ * und ich hatte „0x25 koennte die Laenge sein" als Vermutung notiert — aber
+ * bewusst NICHT ins Repo geschrieben, weil ungetestet. Die Einzelmessung hat
+ * sie jetzt bestaetigt. Haette sie das Gegenteil ergeben, waere nichts zu
+ * widerrufen gewesen.
+ */
+export const PATTERN_LENGTH_OFF = 0x25;
 
 export const PATTERN_BEAT_OFF = 0x26;
 
