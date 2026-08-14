@@ -351,6 +351,19 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  * hier einen Parameter sucht, braucht ihn nicht im ganzen Puffer zu suchen —
  * es kommen nur die ersten 48 Bytes in Frage.
  *
+ * ### Nicht im Block: Master-Volume und Input-Level
+ *
+ * Beide am Gerät verstellt (Master auf Maximum, Input auf Minimum) — im
+ * gesamten 256-B-Block änderte sich **kein Byte**. Im selben Durchgang wurden
+ * zwei andere Änderungen (`0x13`, `0x25`) korrekt erfasst, gelesen wurde also.
+ *
+ * Dieser Negativbefund ist stärker als der frühere Fehlalarm bei Auto Power
+ * Off: dort war die Menü-Einstellung gar nicht übernommen worden. Ein Regler
+ * dagegen ist mit dem Drehen gesetzt — er kann nicht „nicht angekommen" sein.
+ *
+ * Naheliegende Erklärung (erschlossen, nicht gemessen): es sind Bedienelemente,
+ * deren Stellung live abgegriffen und nicht als Einstellung gespeichert wird.
+ *
  * ### Bekannte Felder
  *
  * `+0x10` **Metronom** — 0-basierter Index der fünf Zustände:
