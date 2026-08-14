@@ -630,15 +630,22 @@ export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
  * 0-basierte Liste, war also richtig — sie stand aber zurecht als Vorbehalt da,
  * bis diese Einzelmessung sie ersetzt hat.
  *
- * ⚠ OFFEN beim Send Filter: in einem spaeteren Lesevorgang fiel `+0x2A` von 2
- * auf 0 zurueck, obwohl in dem Durchgang nur die Clock-Quelle geaendert wurde.
- * Derselbe Verlauf wie seinerzeit bei Chain Mode — dort war der Schalter beim
- * Navigieren nebenbei mitbedient worden. Solange der Stand am Geraet nicht
- * nachgeprueft ist, bleibt offen, ob es auch hier so war.
+ * ✔ Auch das Send Filter ist inzwischen in zwei Zuständen belegt: `+0x2A` fiel
+ * spaeter von 2 auf 0 zurueck; die Nachfrage ergab, dass das Filter am Geraet
+ * tatsaechlich auf „off" stand — es war im selben Zug mit umgestellt worden.
  *
- * Beim Send Filter sind `off` (0) und `short+program` (2) gemessen; `short` (1)
- * ist erschlossen und liegt zwischen beiden auf derselben Skala — dieselbe Lage
- * wie `rec 1` beim Metronom.
+ * Zum zweiten Mal ist damit ein unerklaert gewandertes Byte am Ende doch das
+ * richtige gewesen (nach Chain Mode). Beide Male hat das Nachfragen die
+ * Zuordnung nicht widerlegt, sondern zusaetzlich abgesichert. Der Aufwand
+ * lohnt sich trotzdem: der Ausgang steht vorher nicht fest, und eine still
+ * uebernommene Fehlzuordnung waere spaeter nicht mehr aufgefallen.
+ *
+ * Beim Send Filter sind `off` (0, zweimal) und `short+program` (2) gemessen;
+ * `short` (1) ist erschlossen und liegt zwischen beiden auf derselben Skala —
+ * dieselbe Lage wie `rec 1` beim Metronom.
+ *
+ * Damit ist `0x28`..`0x2B` lückenlos: Clock-Quelle, MIDI-Kanal, Send Filter,
+ * Receive Filter.
  *
  * Die Reihenfolge im Speicher ist Send vor Receive — im Menue erscheint
  * Receive zuerst. Wie schon bei Chain Mode folgt die Speicherlage nicht der
