@@ -352,12 +352,13 @@ export const PATTERN_LEVEL_OFF = 0x2a;
  *     23 % REV     113
  *     90 % FWD      59
  *     98 % FWD      64   <- vorhergesagt, dann gemessen
+ *     98 % REV      65   <- vorhergesagt, dann gemessen
  *
  * Beim Umstellen aenderte sich im gesamten 16-KB-Pattern GENAU dieses eine
  * Byte. Der Wert liegt damit im Pattern-Kopf, nicht im Part-Block und nicht im
  * Step-Record — obwohl die Einstellung am Geraet im Step-Editor sitzt.
  *
- * ## Deutung der Skala (Modell, nicht bewiesen)
+ * ## Die Skala
  *
  * Die Anzeige laeuft `Off`, dann `0 % … 98 % FWD`, dann `98 % … 0 % REV` —
  * also eine einzige durchlaufende Leiter, die in der Mitte umklappt. Ein
@@ -367,18 +368,21 @@ export const PATTERN_LEVEL_OFF = 0x2a;
  *     FWD    1..64    Prozent = round((v - 1)   * 98 / 63)
  *     REV   65..128   Prozent = round((128 - v) * 98 / 63)
  *
- * Es liefert saubere Raender (1 = 0 % FWD, 64 = 98 % FWD, 65 = 98 % REV,
- * 128 = 0 % REV) und zwei gleich grosse Haelften zu je 64 Werten.
+ * Zwei gleich grosse Haelften zu je 64 Werten, Raender 1 = 0 % FWD,
+ * 64 = 98 % FWD, 65 = 98 % REV, 128 = 0 % REV.
  *
- * ✔ Die FWD-Haelfte ist damit bestaetigt — und zwar richtig herum: der Wert 64
- * fuer `98 % FWD` wurde aus dem Modell VORHERGESAGT und danach gemessen. Ein
- * Modell, das nur die Punkte trifft, aus denen es gebaut wurde, zeigt gar
- * nichts; dieses hat einen Punkt getroffen, den es nicht kannte, und haette
- * dabei scheitern koennen.
+ * ✔ Beide Haelften sind per VORHERSAGE bestaetigt: 64 und 65 wurden aus dem
+ * Modell berechnet und danach gemessen — und zwar die beiden Nachbarn genau am
+ * Umklapppunkt, also dort, wo ein falsch herum gedachtes oder anders skaliertes
+ * Modell zwangslaeufig auffliegen muss. Ein Modell, das nur die Punkte trifft,
+ * aus denen es gebaut wurde, zeigt gar nichts; dieses hat zweimal einen Punkt
+ * getroffen, den es nicht kannte.
  *
- * ⚠ Die REV-Haelfte steht noch aus. Sie ruht weiterhin auf einem einzigen
- * Messpunkt (23 % REV). Vorhersage: `98 % REV` muss genau 65 ergeben, also den
- * direkten Nachbarn von 64. Am Umklapppunkt muss ein falsches Modell auffliegen.
+ * Das obere Ende (128 = 0 % REV) ist nicht direkt gemessen, folgt aber aus den
+ * beiden REV-Punkten: 65 -> 98 % und 113 -> 23 % ergeben eine Steigung von
+ * 1,5625 je Schritt und damit den Nullpunkt bei 127,7 — gerundet 128. Die
+ * naheliegende Alternative, REV ende bei 127, ist ausgeschlossen: sie wuerde
+ * fuer Byte 113 eine Anzeige von 22 % verlangen, gemessen sind aber 23 %.
  *
  * ⚠ Offen ist ausserdem, ob das Byte fuer den GANZEN Part gilt oder nur fuer
  * Step 1. Beide Lesarten passen zur Messung: bei einer Ablage pro Step waeren
@@ -392,6 +396,36 @@ export const PATTERN_LEVEL_OFF = 0x2a;
  * steht (1 bzw. 4), ist unbekannt.
  */
 export const PATTERN_OSC_EDIT_MOTION_OFF = 0x130;
+
+/** Byte-Wert fuer „Motion aus". */
+export const OSC_EDIT_MOTION_OFF_VALUE = 0;
+/** Hoechstes Byte der Leiter (= 0 % REV). */
+export const OSC_EDIT_MOTION_MAX_VALUE = 128;
+
+/** Richtung der OSC-Edit-Motion. */
+export type OscEditMotionDirection = "fwd" | "rev";
+
+/** Byte → Anzeige. `null` = „Off". */
+export function decodeOscEditMotion(
+  byte: number,
+): { percent: number; direction: OscEditMotionDirection } | null {
+  if (!Number.isFinite(byte) || byte <= 0 || byte > OSC_EDIT_MOTION_MAX_VALUE) return null;
+  const v = Math.round(byte);
+  return v <= 64
+    ? { percent: Math.round(((v - 1) * 98) / 63), direction: "fwd" }
+    : { percent: Math.round(((128 - v) * 98) / 63), direction: "rev" };
+}
+
+/** Anzeige → Byte. Prozent ausserhalb 0..98 wird begrenzt. */
+export function encodeOscEditMotion(
+  percent: number,
+  direction: OscEditMotionDirection,
+): number {
+  if (!Number.isFinite(percent)) return OSC_EDIT_MOTION_OFF_VALUE;
+  const p = Math.max(0, Math.min(98, percent));
+  const d = Math.round((p * 63) / 98);
+  return direction === "fwd" ? 1 + d : 128 - d;
+}
 
 export const PATTERN_CHAIN_TO_OFF = 0x3b00;
 export const PATTERN_CHAIN_REPEAT_OFF = 0x3b02;
