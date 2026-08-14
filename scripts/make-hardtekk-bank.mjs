@@ -164,12 +164,24 @@ for (const g of gewaehlt) {
   if (bytes + b > BUDGET_MB * 1024 * 1024) continue;
   bytes += b;
   slots.push({
-    // Der Tabellenplatz ist die Anzeigenummer MINUS EINS. Das Geraet zaehlt
-    // nach der Position in der Offset-Tabelle, nicht nach dem gespeicherten
-    // Nummernfeld: eine Bank mit Platz 501 zeigte am Geraet 502, und Platz 500
-    // blieb leer — deshalb trug Part 1 kein Sample. Die vom Geraet selbst
-    // erzeugte Bank legt #501 ebenfalls auf Platz 500.
-    slotIndex: nr - 1, sampleNumber: nr, name: kurz(g.p) || `S${nr}`,
+    // Der Tabellenplatz ist die Anzeigenummer MINUS ZWEI.
+    //
+    // ✔ Am Geraet abgelesen (2026-08-14) mit einer Minimalbank, die drei Toene
+    // auf die Plaetze 498/499/500 legte und sie danach benannte:
+    //
+    //     Platz 498  ->  faellt auf Anzeige 500 und erscheint gar nicht
+    //     Platz 499  ->  Anzeige 501
+    //     Platz 500  ->  Anzeige 502
+    //
+    // Unterhalb von 501 gibt es keine User-Slots; was dorthin faellt, ist weg.
+    // Genau daran trug Part 1 kein Sample: die Bank lag auf 500..603 und
+    // erschien als 502..605, waehrend das Set auf 501 zeigte.
+    //
+    // ⚠ Ungeklaert bleibt luknkicks.all: dieselbe Struktur, erstes Sample
+    // ebenfalls auf Platz 500, laut Nutzer aber ab 501 sichtbar. Der Vergleich
+    // der esli-Bloecke zeigt nur Name, Kategorie und Laenge als Unterschied.
+    // Solange das offen ist, gilt die gemessene Regel — nicht die Analogie.
+    slotIndex: nr - 2, sampleNumber: nr, name: kurz(g.p) || `S${nr}`,
     category: g.kategorie.kat, pcmData: pcm, sampleRate: wav.sampleRate, channels: 1,
     _kat: g.kategorie.name, _ms: Math.round(wav.frames / wav.sampleRate * 1000),
   });
