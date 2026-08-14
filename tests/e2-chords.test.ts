@@ -85,3 +85,31 @@ describe("resolveStepNotes", () => {
     expect(resolveStepNotes([64], 60)).toEqual([64]);
   });
 });
+
+/**
+ * Motion-Spuren: das Feld `motionSlots` wurde vom Export lange entgegengenommen
+ * und stillschweigend verworfen. Aufgefallen ist das erst beim Zurücklesen aus
+ * dem Gerät — im erzeugten Pattern waren die Kopftabellen durchgehend null.
+ */
+describe("Motion-Spuren im Export", () => {
+  const mitMotion = () =>
+    buildE2PatternBody({
+      ...(baseInput([{ active: true, note: 60 }]) as any),
+      motionSlots: [{ paramId: 4, targetPart: 10, values: Array.from({ length: 64 }, (_, i) => i + 1) }],
+    });
+
+  it("schreibt Ziel, Parameter und Werte an die gemessenen Offsets", () => {
+    const body = mitMotion();
+    expect(body[0x100]).toBe(11); // Ziel ist 1-basiert: Part-Index 10 -> 11
+    expect(body[0x118]).toBe(4); // Osc Edit
+    expect(body[0x130]).toBe(1);
+    expect(body[0x130 + 63]).toBe(64);
+  });
+
+  it("laesst die Tabellen leer, wenn keine Spuren angegeben sind", () => {
+    const body = buildE2PatternBody(baseInput([{ active: true, note: 60 }]));
+    expect(body[0x100]).toBe(0);
+    expect(body[0x118]).toBe(0);
+    expect(body[0x130]).toBe(0);
+  });
+});

@@ -133,6 +133,14 @@ import {
 } from "./e2StepNote";
 import { E2S_INIT_BODY_B64, E2S_GLST_BLOCK_B64 } from "./e2sExportAssets";
 import type { E2PatternInput } from "./electribePatternBuilder";
+import {
+  ELECTRIBE_MOTION_DATA_TABLE_OFFSET,
+  ELECTRIBE_MOTION_PARAM_TABLE_OFFSET,
+  ELECTRIBE_MOTION_SLOTS_PER_PATTERN,
+  ELECTRIBE_MOTION_SLOT_STRIDE,
+  ELECTRIBE_MOTION_TARGET_TABLE_OFFSET,
+  ELECTRIBE_MOTION_VALUES_PER_SLOT,
+} from "./electribeImport";
 import { writePartParamsToBody } from "./partParams";
 
 // ─── Layout constants (verified against real KORG files) ─────────────────────
@@ -527,7 +535,40 @@ const STEP_NOTE = 4;
 const DEFAULT_GATE = 0x48; // 72 — häufigster Gate-Wert realer Files
 const DEFAULT_VELOCITY = 0x60; // 96
 const DEFAULT_NOTE = 0x3c; // C4 = 60 = Originaltonhöhe (Briefing §4.1 + Hardtekk)
-const GATE_TIE = 0xff; // Factory-Sentinel für Tie/unendlich
+/**
+ * Gate-Sentinel fuer „Tie".
+ *
+ * ✔ Am Geraet gemessen (2026-08-14): ein Pattern mit Gate 0xFF wurde gesendet
+ * und aus dem Geraetespeicher zurueckgelesen — dort stand 96, nicht 0xFF. Das
+ * Geraet uebernimmt die 255 also NICHT als Tie, sondern begrenzt sie auf die
+ * hoechste regulaere Gate-Zeit. Ein so geschriebenes Tie war schlicht keins.
+ *
+ * Der Wert, den das Geraet selbst fuer Tie ablegt, ist 127 (im Step-Editor
+ * gemessen). Geschrieben wird deshalb 127.
+ *
+ * ⚠ ABER: auch mit 127 kommt kein Tie an. Ein Pattern mit Gate 127 wurde
+ * gesendet und zurueckgelesen — im Geraetespeicher stand wieder 96. Beide
+ * Werte, 255 und 127, werden beim Laden ueber SysEx auf 96 begrenzt.
+ *
+ * Daraus folgt: **ein Tie laesst sich derzeit nicht per Pattern-Uebertragung
+ * setzen.** Das Geraet legt zwar 127 ab, wenn man Tie im Step-Editor waehlt —
+ * es uebernimmt diesen Wert aber nicht aus einem eingehenden Pattern. Beide
+ * Beobachtungen stehen nebeneinander und widersprechen sich nicht: die eine
+ * betrifft den Editor, die andere den Ladeweg.
+ *
+ * Geschrieben wird trotzdem 127, weil das der einzige Wert ist, dem eine
+ * gemessene Bedeutung („Tie") zukommt. Ob der Ladeweg ueber SD-Karte sich
+ * anders verhaelt als der ueber SysEx, ist NICHT geprueft — das waere die
+ * naechste Messung, und sie wuerde auch erklaeren, warum Factory-Dateien an
+ * dieser Stelle so haeufig 255 fuehren.
+ *
+ * Auf der Lesesite gelten weiter beide Werte als Tie
+ * (siehe ELECTRIBE_REAL_GATE_TIE_ALT).
+ */
+const GATE_TIE_DEVICE = 127;
+/** Wird als Eingabe weiterhin als „Tie" akzeptiert (aeltere Aufrufer, Factory-Dateien). */
+const GATE_TIE_LEGACY = 0xff;
+const isTie = (g: unknown): boolean => g === GATE_TIE_DEVICE || g === GATE_TIE_LEGACY;
 const GATE_MAX = 96;
 
 const STEP_LENGTH_CODE: Record<number, number> = { 16: 0, 32: 1, 64: 3 };
@@ -653,7 +694,7 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
       if (step && step.active) {
         body[so + STEP_TRIGGER] = 0x01;
         body[so + STEP_GATE] =
-          step.gate === GATE_TIE ? GATE_TIE : clampInt(step.gate, 0, GATE_MAX, DEFAULT_GATE);
+          isTie(step.gate) ? GATE_TIE_DEVICE : clampInt(step.gate, 0, GATE_MAX, DEFAULT_GATE);
         body[so + STEP_VELOCITY] = clampInt(step.velocity, 0, 127, DEFAULT_VELOCITY);
         body[so + STEP_FLAG] = 0x01; // Factory-Konvention für aktive Steps
         // Bis zu vier Noten, je MIDI+1 (0 = leer) — siehe e2StepNote.ts. Freie
@@ -675,7 +716,39 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
     }
   }
 
+  writeMotionSlots(body, input.motionSlots);
+
   return body;
+}
+
+/**
+ * Schreibt die Motion-Spuren in den Pattern-Kopf.
+ *
+ * Vorher nahm `buildE2PatternBody` das Feld `motionSlots` zwar entgegen, warf es
+ * aber weg — ein erzeugtes Pattern kam ohne Motion am Geraet an, ohne dass
+ * irgendwo ein Hinweis darauf aufgetaucht waere. Aufgefallen ist es erst, als
+ * ein Testpattern nach dem Senden zurueckgelesen wurde: die Tabellen im Kopf
+ * waren durchgehend null.
+ *
+ * Layout und Beleg dafuer, welche Tabelle welche ist, stehen in
+ * `electribeImport.ts`. Die Werte gehen 0..128 (siehe Osc-Edit-Werteleiter).
+ */
+function writeMotionSlots(body: Uint8Array, slots: E2PatternInput["motionSlots"]): void {
+  if (!Array.isArray(slots)) return;
+  for (let i = 0; i < Math.min(slots.length, ELECTRIBE_MOTION_SLOTS_PER_PATTERN); i++) {
+    const slot = slots[i];
+    if (!slot || !slot.paramId) continue;
+    // Ziel-Byte ist 1-basiert; 0 heisst „kein Part".
+    const ziel =
+      typeof slot.targetPart === "number" && slot.targetPart >= 0 ? slot.targetPart + 1 : 0;
+    body[ELECTRIBE_MOTION_TARGET_TABLE_OFFSET + i] = ziel & 0xff;
+    body[ELECTRIBE_MOTION_PARAM_TABLE_OFFSET + i] = slot.paramId & 0xff;
+    const werte = Array.isArray(slot.values) ? slot.values : [];
+    const basis = ELECTRIBE_MOTION_DATA_TABLE_OFFSET + i * ELECTRIBE_MOTION_SLOT_STRIDE;
+    for (let s = 0; s < ELECTRIBE_MOTION_VALUES_PER_SLOT; s++) {
+      body[basis + s] = clampInt(werte[s], 0, 128, 0);
+    }
+  }
 }
 
 // ─── Single pattern (.e2spat) ──────────────────────────────────────────────────

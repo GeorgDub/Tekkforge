@@ -2,6 +2,30 @@
  * partParams.ts — Part-Klangparameter (Filter/Amp/IFX/Mod/Osc).
  *
  * Offsets gem. elecmidi-C-Struct + Briefing §4.1 (2026-07-19 per Histogramm
+ * ## Voice Assign — Part-Offset 0x02
+ *
+ * | Anzeige | Byte |
+ * |---------|------|
+ * | Mono 1  | 0    |
+ * | Mono 2  | 1    |
+ * | Poly 1  | 2    |
+ * | Poly 2  | 3    |
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14), auf zwei Wegen. In einem aelteren
+ * Testpattern, in dem die Parts 1..4 ausdruecklich auf Mono 1, Mono 2, Poly 1
+ * und Poly 2 gestellt waren, traegt die Spalte genau `0,1,2,3`. Und beim
+ * Akkord-Test wurde Part 11 von Hand auf Poly gestellt — das Byte sprang von 1
+ * auf 3, und erst danach war der Vierklang hoerbar.
+ *
+ * Der zweite Beleg ist der staerkere: er verbindet den Byte-Wert mit einer
+ * hoerbaren Wirkung, nicht nur mit einer Anzeige. Ohne Poly speichert das Geraet
+ * alle vier Noten brav und spielt trotzdem nur eine — ein Fehler, der sich im
+ * Speicher nicht zeigt.
+ *
+ * ⚠ Das Geraet bietet auf manchen Parts weitere Modi (Chord Set 1..7, Gate
+ * Arp). Ob die auf derselben Leiter weiterzaehlen, ist NICHT geprueft: in den
+ * vorhandenen Dumps stehen die betroffenen Parts durchgehend auf 1.
+ *
  * über die e2s-2016-Factory-Bank abgeglichen: 0x18=ampLevel, 0x19=ampPan
  * signed, 0x1A=EGOnOff 0/1, 0x14=EGAttack ~0 — Layout konsistent).
  * ⚠ Einzelne Wertebereiche sind weiterhin nicht am Gerät verifiziert.
@@ -282,6 +306,7 @@ export interface PartParam {
  * ausserhalb des vermuteten Bereichs erhalten bleiben.
  */
 export const PART_PARAMS: PartParam[] = [
+  { key: "voiceAssign", label: "Voice Assign", offset: 0x02, min: 0, max: 3, kind: "u8", group: "Osc" }, // ✔ geraetebestaetigt, s. Kommentar unten
   { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt; Testpattern zeigte 1..16
   { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)

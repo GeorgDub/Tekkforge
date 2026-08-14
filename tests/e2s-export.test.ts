@@ -154,14 +154,16 @@ describe("e2sExport — template-overlay fidelity", () => {
       steps: [
         { active: true }, // default gate
         { active: true, gate: 999 }, // clamp → 96
-        { active: true, gate: 0xff }, // tie sentinel
+        { active: true, gate: 0xff }, // Alt-Eingabe, gilt weiter als Tie
       ],
     };
     const body = buildE2PatternBody({ ...NEUTRAL_INPUT, parts });
     const so = 0x800 + 0x30;
     expect(body[so + 1]).toBe(0x48);
     expect(body[so + 12 + 1]).toBe(96);
-    expect(body[so + 24 + 1]).toBe(0xff);
+    // Geschrieben wird 127: das Geraet macht aus einer 0xFF beim Laden 96,
+    // ein so abgelegtes Tie waere also keins. Siehe GATE_TIE_DEVICE.
+    expect(body[so + 24 + 1]).toBe(127);
     // Vorgabe-Note aktiver Steps ist MIDI 60 (C4 = Originaltonhoehe); das
     // Geraet legt sie als 0x3D ab, nicht als 0x3C — siehe e2StepNote.ts.
     expect(body[so + 4]).toBe(0x3d);
