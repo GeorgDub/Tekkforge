@@ -159,6 +159,7 @@ export const PART_LAST_STEP_OFF = 0x00;
  * | Modulo (16 → 0)        | Last Step                                     |
  * | direkt                 | Chain To, Chain Repeat                        |
  * | invertiert (127 − x)   | Pattern-Level                                 |
+ * | signed, direkt         | Swing, egInt, oscPitch                        |
  *
  * Eine 0 in diesem Format kann also „aus", „erster Eintrag" ODER „Maximum"
  * bedeuten. Wer ein neues Feld deutet, muss die Regel mitmessen — sie laesst
@@ -183,6 +184,21 @@ export const PART_LAST_STEP_OFF = 0x00;
  * (Zwei Messpunkte legen die Gerade fest; Steigung -1 und Achsenabschnitt 127
  * sind damit belegt, nicht geraten.)
  */
+/**
+ * Swing — **pro Pattern**, vorzeichenbehaftet, direkt in Prozent.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14) mit einer Einzeländerung auf -45 %. Im
+ * gesamten Pattern-Kopf bewegte sich genau ein Byte:
+ *
+ *     +0x24  48 -> 211     als i8:  +48 -> -45
+ *
+ * Der Bereich ist -50 … +50 %, gespeichert als signed byte ohne Umrechnung —
+ * dieselbe Konvention wie `egInt` und `oscPitch` im Part-Block.
+ *
+ * (Swing ist NICHT pro Part, auch wenn das Geraet ihn im Part-Kontext anbietet.)
+ */
+export const PATTERN_SWING_OFF = 0x24;
+
 export const PATTERN_LEVEL_OFF = 0x2a;
 
 export const PATTERN_CHAIN_TO_OFF = 0x3b00;
