@@ -210,12 +210,30 @@ for (const s of belegt) {
   if (!nachKategorie.has(s.categoryName)) nachKategorie.set(s.categoryName, []);
   nachKategorie.get(s.categoryName).push(s);
 }
+/**
+ * Versatz zwischen unserer Slot-Nummer und der Anzeige am Gerät.
+ *
+ * ✔ Am Gerät gemessen (2026-08-14): das Sample auf Tabellenplatz 500 — von
+ * unserem Leser als #501 geführt — wird am Gerät als **502** angezeigt, und
+ * davor steht nichts. Unsere Zählung liegt also durchgehend eins zu niedrig.
+ *
+ * Das Set muss die Nummern referenzieren, die das Gerät benutzt, sonst greift
+ * jeder Part eine Nummer daneben — beim ersten Sample ins Leere, weil es die
+ * Nummer davor gar nicht gibt. Genau daran trug Part 1 kein Sample.
+ *
+ * Der Versatz sitzt hier und nicht im Leser: dieselbe Verschiebung steckt auch
+ * in `esxToE2sBank.ts` und `editorModel.ts`, und sie zusammen zu korrigieren
+ * gehört hinter eine Bestätigung am Gerät. Zwei Erklärungen davor waren falsch;
+ * diese hier ist gemessen, aber die Korrektur im Kern ist es noch nicht.
+ */
+const GERAETE_VERSATZ = 1;
+
 const SAMPLES = [], NAMEN = [];
 for (const [kat, idx] of BELEGUNG) {
   const liste = nachKategorie.get(kat) ?? [];
   if (!liste.length) throw new Error(`Bank enthaelt keine Kategorie "${kat}"`);
   const s = liste[Math.min(idx, liste.length - 1)];
-  SAMPLES.push(s.sampleNumber);
+  SAMPLES.push(s.sampleNumber + GERAETE_VERSATZ);
   NAMEN.push(s.name.trim());
 }
 console.log(`Bank: ${BANK.split(/[\/]/).pop()} — ${belegt.length} Samples`);
