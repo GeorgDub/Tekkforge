@@ -477,6 +477,27 @@ export const E2_GLOBAL_TRIGGER_MODE_OFF = 0x1d;
 export const E2_GLOBAL_KNOB_MODE_OFF = 0x1c;
 
 /**
+ * Global-Offset des LCD-Kontrasts — **Anzeige + 17**.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14) mit zwei bekannten Werten:
+ *
+ *     Anzeige 17  ->  +0x1E = 34      17 + 17 = 34
+ *     Anzeige 25  ->  +0x1E = 42      25 + 17 = 42
+ *
+ * Der Anzeigebereich 1..25 liegt damit als 18..42 im Speicher — 25 Werte, die
+ * Zahl stimmt.
+ *
+ * ⚠ Ein konstanter Versatz von 17 ist nichts, worauf man ohne zwei bekannte
+ * Werte käme: mit nur einem Messpunkt (42 bei „25") haette man ebenso gut auf
+ * einen Faktor oder eine ganz andere Skala schliessen koennen. Dass der Nutzer
+ * den Normalwert mitgeliefert hat, hat die Deutung erst moeglich gemacht.
+ *
+ * Sechste Kodierungsform in diesem Geraet — neben 0-basiert, Modulo, direkt,
+ * invertiert (127-x) und signed.
+ */
+export const E2_GLOBAL_LCD_CONTRAST_OFF = 0x1e;
+
+/**
  * Global-Offset der Velocity-Kurve — 0-basierter Listenindex.
  *
  * | Anzeige  | Byte |                     |
