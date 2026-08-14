@@ -158,11 +158,33 @@ export const PART_LAST_STEP_OFF = 0x00;
  * | 0-basiert (Anzeige −1) | modType, grooveType, Key, Scale, MFX-Typ      |
  * | Modulo (16 → 0)        | Last Step                                     |
  * | direkt                 | Chain To, Chain Repeat                        |
+ * | invertiert (127 − x)   | Pattern-Level                                 |
  *
  * Eine 0 in diesem Format kann also „aus", „erster Eintrag" ODER „Maximum"
  * bedeuten. Wer ein neues Feld deutet, muss die Regel mitmessen — sie laesst
  * sich nicht aus dem Wert allein ablesen.
  */
+/**
+ * Pattern-Level — als **Daempfung** gespeichert, nicht als Pegel.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14) mit einer Einzeländerung: Level 101 -> 103.
+ * Im gesamten Pattern-Kopf bewegte sich GENAU EIN Byte, und zwar gegenlaeufig:
+ *
+ *     Level 101  ->  +0x2A = 26      101 + 26 = 127
+ *     Level 103  ->  +0x2A = 24      103 + 24 = 127
+ *
+ * ⇒ `Byte = 127 - Level`. Die 0 ist volle Lautstaerke, 127 ist still.
+ *
+ * Das erklaert, warum die fruehere Suche nach der Zahl 101 im Kopf ins Leere
+ * lief: der eingestellte Wert steht dort gar nicht. Wer ein Feld ueber seinen
+ * Anzeigewert sucht, findet nur die Felder, die ihn auch speichern — und das
+ * ist in diesem Format eher die Ausnahme.
+ *
+ * (Zwei Messpunkte legen die Gerade fest; Steigung -1 und Achsenabschnitt 127
+ * sind damit belegt, nicht geraten.)
+ */
+export const PATTERN_LEVEL_OFF = 0x2a;
+
 export const PATTERN_CHAIN_TO_OFF = 0x3b00;
 export const PATTERN_CHAIN_REPEAT_OFF = 0x3b02;
 export const PATTERN_SCALE_OFF = 0x28;
