@@ -423,6 +423,23 @@ export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
  */
 export const E2_GLOBAL_TEMPO_LOCK_OFF = 0x24;
 
+/**
+ * Global-Offset des Touch-Scale-Umfangs — **direkt** in Oktaven (1..4).
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „4 oct" gestellt, `+0x26` ging von 1
+ * auf 4. Ausgangswert war „1 oct" = 1, also beide Enden gemessen.
+ *
+ * ⚠ **Die erste Ausnahme im Global-Block.** Alle bis dahin gemessenen
+ * Global-Felder (Metronom, Sync-Polarität, Sync-Einheit, Velocity-Kurve,
+ * Knob-Modus, Trigger-Modus, MIDI-Kanal) speichern 0-basiert. Dieses nicht —
+ * hier steht die Oktavzahl unverändert.
+ *
+ * Wer der bis dahin ausnahmslosen Regel gefolgt wäre, hätte eine 3 erwartet und
+ * den Wert um eins falsch gedeutet. Auch eine Regel, die siebenmal gehalten hat,
+ * ersetzt die Messung nicht.
+ */
+export const E2_GLOBAL_TOUCH_SCALE_RANGE_OFF = 0x26;
+
 export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
 
 /**
