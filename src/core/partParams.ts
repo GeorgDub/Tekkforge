@@ -66,18 +66,39 @@ export interface PartParam {
  * Kommentar daneben. Geklemmt wird nur, was sicher eine Wertebereichsgrenze
  * ist (die bipolaren Felder).
  *
- * Die Offsets selbst bleiben unbestaetigt — die Messung zeigt, dass die dort
- * stehenden Bytes plausible, strukturierte Werte tragen, aber nicht, dass die
- * Zuordnung Feld -> Offset stimmt. `filterType` mit nur vier Werten (0/1/7/12)
- * sieht z.B. enum-artig aus, passt aber zu keiner sauberen 0..n-Nummerierung;
- * moeglich, dass dort etwas anderes steht.
+ * ## Drei Offsets sind am Geraet BESTAETIGT (2026-08-14)
+ *
+ * Der Nutzer hat ein Testpattern gebaut: auf jedem Part ein anderer Filter, auf
+ * jedem Part ein anderes IFX, und IFX abwechselnd an/aus. Der PTST-Block wurde
+ * live aus dem Geraete-RAM gelesen (`0xC06B279C` + 0x800, 16 x 816 B) und
+ * spaltenweise ueber die Parts ausgewertet:
+ *
+ * | Offset | Feld       | Beobachtung ueber die 16 Parts              |
+ * |--------|------------|---------------------------------------------|
+ * | `0x0C` | filterType | 16 verschiedene Werte (1..16)               |
+ * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
+ * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
+ *
+ * Das alternierende Bit bei `0x20` ist der staerkste Einzelbeleg: ein solches
+ * Muster entsteht nicht zufaellig, es war die Vorgabe des Testpatterns.
+ *
+ * Nebenbefund zur Filterliste: die Werte laufen bis 16, waehrend die Werksbank
+ * nur {0,1,7,12} nutzt. Das bestaetigt die Warnung oben — der Stock-Umfang ist
+ * eine Untergrenze, und die Obergrenze haette man daraus nicht erraten.
+ *
+ * ## Die uebrigen Offsets bleiben unbestaetigt
+ *
+ * Fuer sie gilt weiterhin: die Messung zeigt strukturierte, plausible Bytes,
+ * aber nicht, dass die Zuordnung Feld -> Offset stimmt. Wer den naechsten
+ * klaeren will, baut ein Testpattern, das genau diesen Parameter ueber die
+ * Parts variiert, und sucht die Spalte, die sich entsprechend verhaelt.
  *
  * Wichtig: die Bereiche wirken NUR beim Klemmen von UI-Eingaben
  * (`clampParamValue`). Import und Export arbeiten roh, damit Geraetewerte
  * ausserhalb des vermuteten Bereichs erhalten bleiben.
  */
 export const PART_PARAMS: PartParam[] = [
-  { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter" }, // Stock nutzt {0,1,7,12}; Hacktribe ergaenzt Filter -> offen
+  { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt; Testpattern zeigte 1..16
   { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" },
   { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" },
   { key: "egInt", label: "EG-Int", offset: 0x0f, min: -63, max: 63, kind: "i8", group: "Filter" }, // bipolar, Stock -49..+63
@@ -90,8 +111,8 @@ export const PART_PARAMS: PartParam[] = [
   { key: "mfxSend", label: "MFX-Send", offset: 0x1b, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
   { key: "grooveType", label: "Groove-Typ", offset: 0x1c, min: 0, max: 255, kind: "u8", group: "Groove" }, // Stock bis 23; Obergrenze unbekannt
   { key: "grooveDepth", label: "Groove-Depth", offset: 0x1d, min: 0, max: 127, kind: "u8", group: "Groove" },
-  { key: "ifxOn", label: "IFX an", offset: 0x20, min: 0, max: 1, kind: "bool", group: "IFX" },
-  { key: "ifxType", label: "IFX-Typ", offset: 0x21, min: 0, max: 255, kind: "u8", group: "IFX" }, // Stock bis 37; Hacktribe-FX-Liste laenger
+  { key: "ifxOn", label: "IFX an", offset: 0x20, min: 0, max: 1, kind: "bool", group: "IFX" }, // ✔ geraetebestaetigt (alternierendes Testpattern)
+  { key: "ifxType", label: "IFX-Typ", offset: 0x21, min: 0, max: 255, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt; Testpattern zeigte bis 48
   { key: "ifxEdit", label: "IFX-Edit", offset: 0x22, min: 0, max: 127, kind: "u8", group: "IFX" },
   { key: "oscPitch", label: "Pitch", offset: 0x24, min: -63, max: 63, kind: "i8", group: "Osc" }, // bipolar, exakt +-63
   { key: "oscGlide", label: "Glide", offset: 0x25, min: 0, max: 127, kind: "u8", group: "Osc" },
