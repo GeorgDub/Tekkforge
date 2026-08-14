@@ -83,7 +83,26 @@ const GLST_OFFSET = 0x100;
 
 // body-relative field offsets
 const NAME_OFF = 0x10;
+// ✔ Am Geraet bestaetigt (2026-08-14): Tempo von 120 auf 135 geaendert — im
+// gesamten 2-KB-Pattern-Kopf bewegten sich GENAU diese zwei Bytes
+// (176,4 -> 70,5 = LE 1200 -> 1350). Der Global-Block blieb unveraendert,
+// Tempo gehoert also zum Pattern.
 const BPM_OFF = 0x22;
+
+// ─── Weitere Pattern-Kopf-Felder, am Geraet bestaetigt ───────────────────────
+//
+// Aus derselben Messreihe. Alle drei speichern 0-basiert, waehrend das Geraet
+// 1-basiert anzeigt — dieselbe Verschiebung wie bei modType und grooveType.
+//
+//   +0x27  Key        G# eingestellt -> 8   (Halbton ab C: C=0 … G#=8)
+//   +0x28  Scale      70 angezeigt   -> 69
+//   +0x3D  MFX-Typ    32 angezeigt   -> 31  (Tube Drive)
+//
+// TekkForge schreibt diese Felder derzeit NICHT — sie sind hier nur
+// dokumentiert, damit die naechste Erweiterung nicht wieder suchen muss.
+export const PATTERN_KEY_OFF = 0x27;
+export const PATTERN_SCALE_OFF = 0x28;
+export const PATTERN_MFX_TYPE_OFF = 0x3d;
 const STEPLEN_OFF = 0x25;
 const PARTS_OFF = 0x800;
 const PART_STRIDE = 816; // 0x330
