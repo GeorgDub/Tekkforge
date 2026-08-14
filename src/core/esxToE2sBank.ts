@@ -16,7 +16,7 @@
  * überzähligen weggelassen (Report) — das verhindert den "Import-Fehler".
  */
 
-import type { EsxBank, EsxPattern, EsxSample } from "./esxParser";
+import type { EsxBank, EsxPart, EsxPattern, EsxSample } from "./esxParser";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { E2S_SLOT_INDEX_MAX } from "./constants";
 import { bankNumberToE2PatternRef } from "./e2sPatternSampleLink";
@@ -89,6 +89,46 @@ function resampleMono(pcm: Float32Array, fromRate: number, toRate: number): Floa
 /**
  * Konvertiert ein geparstes ESX-1-Backup in E2S-Bank-Dateien.
  */
+/**
+ * ESX-Filter/Mod → E2-Part-Parameter.
+ *
+ * Beide Enden sind belegt: die ESX-Offsets gegen open-electribe-editor, die
+ * E2-Offsets am Geraet (Messreihe 2026-08-14). Uebertragen wird trotzdem NUR,
+ * was in beiden Formaten dieselbe Bedeutung hat.
+ *
+ * **Uebernommen** — durchgehende 0..127-Werte, gleiche Bedeutung auf beiden
+ * Geraeten: Cutoff, Resonanz, Mod-Speed, Mod-Depth.
+ *
+ * **Bewusst NICHT uebernommen:**
+ *
+ * - `filterType`. Die Enums sind verschieden: ESX kennt vier Typen
+ *   (0=LPF, 1=HPF, 2=BPF, 3=BPF+), das E2-Feld trug im Testpattern Werte bis
+ *   16. Eine Zuordnung 0..3 -> 0..3 waere geraten, und ein falscher Filtertyp
+ *   klingt nicht „etwas anders", sondern falsch.
+ * - `modType`/`modDest`. Dasselbe Problem: ESX hat 0=Saw…4=Env plus ein
+ *   getrenntes Ziel-Feld, das E2-Byte lief bis 71 und packt moeglicherweise
+ *   mehrere Felder. Ohne Zuordnungstabelle bliebe es Raten.
+ * - `egIntensity`. Auf dem E2 ist das Feld **bipolar** (-63..+63, am Geraet
+ *   gemessen); die ESX-Seite lesen wir als 0..127. Welcher ESX-Wert der Null
+ *   entspricht, ist nicht belegt — ein direkter Uebertrag koennte aus „keine
+ *   Modulation" eine volle negative Huellkurve machen.
+ *
+ * Was nicht uebertragen wird, steht weiterhin im Mapping-Bericht und laesst
+ * sich von Hand nachziehen.
+ */
+function esxFilterToE2Params(
+  f: EsxPart["filter"],
+): Record<string, number> | undefined {
+  if (!f) return undefined;
+  const b = (v: number) => Math.max(0, Math.min(127, Math.round(v)));
+  return {
+    cutoff: b(f.cutoff),
+    resonance: b(f.resonance),
+    modSpeed: b(f.modSpeed),
+    modDepth: b(f.modDepth),
+  };
+}
+
 export function convertEsxToE2sBank(
   esx: EsxBank,
   opts: EsxToE2sOptions = {},
@@ -181,6 +221,7 @@ export function convertEsxToE2sBank(
         sampleId: mapped
           ? bankNumberToE2PatternRef(mapped.hwNumber)
           : undefined,
+        params: esxFilterToE2Params(part.filter),
         steps: part.steps.slice(0, stepLength).map((s, si) => ({
           active: si < usedSteps && !!s.active,
           velocity: typeof s.velocity === "number" && s.velocity > 0 ? s.velocity : undefined,
@@ -236,6 +277,9 @@ export function convertEsxToE2sBank(
   // schreiben würde eine belegte Funktion gegen eine unbelegte eintauschen.
   // So sieht man wenigstens, was am Gerät eingestellt war, und kann es von
   // Hand nachziehen.
+  // Cutoff/Resonanz/Mod-Speed/Mod-Depth werden inzwischen ins Pattern
+  // geschrieben (siehe esxFilterToE2Params); der Bericht bleibt fuer die
+  // Felder, die bewusst NICHT uebertragen werden.
   const FILTER_NAMES = ["LPF", "HPF", "BPF", "BPF+"];
   const MOD_TYPES = ["Saw", "Square", "Tri", "S&H", "Env"];
   const MOD_DESTS = ["Pitch", "Cutoff", "Amp", "Pan"];
@@ -249,9 +293,12 @@ export function convertEsxToE2sBank(
     lines.push("## Filter/Mod der ESX-Quelle (nur Bericht — nicht übertragen)");
     lines.push("");
     lines.push(
-      "Diese Werte stehen im ESX-Pattern und werden **nicht** in die E2-Datei " +
-        "geschrieben; die E2-Byte-Offsets dafür sind unbestätigt. Wer den Klang " +
-        "nachbauen will, stellt sie am Gerät von Hand ein.",
+      "**Cutoff, Resonanz, Mod-Speed und Mod-Depth werden übertragen** — beide " +
+        "Byte-Offsets sind belegt (ESX gegen open-electribe-editor, E2 am Gerät). " +
+        "**Filter-Typ, Mod-Typ/-Ziel und EG-Intensität werden NICHT übertragen**: " +
+        "die Enums unterscheiden sich zwischen den Geräten, und EG-Int ist auf " +
+        "der E2 bipolar, auf der ESX nicht. Diese Spalten sind zum Nachstellen " +
+        "von Hand da.",
     );
     lines.push("");
     lines.push("| Pattern | Part | Filter | Cutoff | Reso | EG-Int | Mod | → Ziel | Speed | Depth |");
