@@ -355,8 +355,20 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  *
  * `+0x10` **Metronom** — 0-basierter Index der fünf Zustände:
  * `0` = aus, `1` = rec 0, `2` = rec 1, `3` = rec 2, `4` = on.
- * ✔ Am Gerät bestätigt (2026-08-14): auf „on" gestellt, das Byte ging von 1
- * (rec 0) auf 4. Im gesamten Global-Block bewegte sich sonst nichts.
+ * ✔ Am Gerät bestätigt (2026-08-14). Beide Endpunkte sind direkt gemessen, was
+ * die Fünferliste festlegt:
+ *
+ *     Ausgangsstand    1     (= rec 0)
+ *     auf „on"         4
+ *     zurück auf „off" 0
+ *
+ * Im gesamten Global-Block bewegte sich dabei jedes Mal genau dieses eine Byte.
+ *
+ * Die Zwischenstufe war lehrreich: der Ausgangswert 1 wurde zunächst für „off"
+ * gehalten. Erst das ausdrückliche Zurückstellen auf „off" zeigte die 0 — das
+ * Gerät stand vorher schon auf „rec 0". Ein einzelner Messpunkt sagt eben nur,
+ * WELCHER Wert gespeichert ist, nicht welcher Zustand gemeint war; dafür braucht
+ * es einen bekannten Ausgangszustand.
  */
 /** Global-Offset des Metronom-Zustands (0=aus … 4=on). */
 export const E2_GLOBAL_METRONOME_OFF = 0x10;
