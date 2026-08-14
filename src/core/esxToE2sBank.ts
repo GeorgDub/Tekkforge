@@ -101,10 +101,16 @@ function resampleMono(pcm: Float32Array, fromRate: number, toRate: number): Floa
  *
  * **Bewusst NICHT uebernommen:**
  *
- * - `filterType`. Die Enums sind verschieden: ESX kennt vier Typen
- *   (0=LPF, 1=HPF, 2=BPF, 3=BPF+), das E2-Feld trug im Testpattern Werte bis
- *   16. Eine Zuordnung 0..3 -> 0..3 waere geraten, und ein falscher Filtertyp
- *   klingt nicht „etwas anders", sondern falsch.
+ * - `filterType`. Beide Geraete kennen genau vier Stock-Typen, aber es sind
+ *   NICHT dieselben vier:
+ *
+ *       ESX-1 : 0=LPF, 1=HPF, 2=BPF, 3=BPF+     (kein „off")
+ *       E2S   : 0=off, 1=LPF,  7=HPF, 12=BPF    (kein „BPF+")
+ *
+ *   Ein direkter Uebertrag 0..3 waere gleich doppelt falsch: aus dem ESX-LPF
+ *   (0) wuerde auf der E2S „Filter aus" (0), und BPF+ hat drueben gar keine
+ *   Entsprechung. Genau deshalb bleibt dieses Feld ausgespart — hier haette
+ *   „sieht passend aus" den Klang zuverlaessig zerstoert.
  * - `modType`/`modDest`. Dasselbe Problem: ESX hat 0=Saw…4=Env plus ein
  *   getrenntes Ziel-Feld, das E2-Byte lief bis 71 und packt moeglicherweise
  *   mehrere Felder. Ohne Zuordnungstabelle bliebe es Raten.

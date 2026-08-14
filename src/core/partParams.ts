@@ -241,9 +241,34 @@ export interface PartParam {
  * Nutzer hat beim Ueberarbeiten auch Steps gesetzt). Das bestaetigt nebenbei
  * unabhaengig, dass die Sequenz bei 0x30 beginnt und 12 Byte pro Step belegt.
  *
- * Nebenbefund zur Filterliste: die Werte laufen bis 16, waehrend die Werksbank
- * nur {0,1,7,12} nutzt. Das bestaetigt die Warnung oben — der Stock-Umfang ist
- * eine Untergrenze, und die Obergrenze haette man daraus nicht erraten.
+ * ### Die Struktur der Filterliste
+ *
+ * Zwei Messungen und eine Auskunft des Nutzers ergeben zusammen ein Bild:
+ *
+ * - **Gemessen:** die KORG-Werksbank nutzt ueber 4000 Parts genau VIER Werte —
+ *   `{0, 1, 7, 12}`.
+ * - **Gemessen:** das Hacktribe-Geraet nimmt im Testpattern `1..16` an.
+ * - **Vom Nutzer:** Stock kennt genau vier Einstellungen — *off*, *electribe
+ *   LPF*, *electribe HPF*, *electribe BPF*. Hacktribe ergaenzt je Typ weitere
+ *   Modelle (MS20, MG, P5, OB, Acid).
+ *
+ * Daraus die naheliegende Deutung — die vier Stock-Werte sind die Basis jeder
+ * Familie, die Luecken dazwischen fuellt Hacktribe:
+ *
+ * ```
+ * 0        off
+ * 1  … 6   LPF-Familie   (1 = electribe LPF, 2..6 = Hacktribe-Modelle)
+ * 7  … 11  HPF-Familie   (7 = electribe HPF)
+ * 12 … 16  BPF-Familie   (12 = electribe BPF)
+ * ```
+ *
+ * Das erklaert `{0,1,7,12}` exakt und passt zum gemessenen Bereich bis 16. Die
+ * Familiengrenzen selbst sind allerdings ERSCHLOSSEN, nicht gemessen — belegt
+ * sind nur die vier Stock-Werte und die Obergrenze 16.
+ *
+ * Und es bestaetigt die Warnung oben: der Stock-Umfang ist eine Untergrenze.
+ * Haette ich auf `{0,1,7,12}` geklemmt, waeren zwoelf Hacktribe-Filter
+ * unerreichbar gewesen.
  *
  * ## Die uebrigen Offsets bleiben unbestaetigt
  *
