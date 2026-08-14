@@ -351,6 +351,17 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  * hier einen Parameter sucht, braucht ihn nicht im ganzen Puffer zu suchen —
  * es kommen nur die ersten 48 Bytes in Frage.
  *
+ * ### Nicht im Block: Auto Power Off
+ *
+ * Am Gerät von „disable" auf „4 hours" gestellt — im gesamten 256-B-Block
+ * änderte sich **kein einziges Byte**. Der Befund ist belastbar, weil dieselbe
+ * Messung eine gleichzeitig vorgenommene zweite Änderung (Batterietyp, `+0x20`)
+ * korrekt erfasst hat: es lag nicht am Lesen.
+ *
+ * Nicht jede Einstellung des Global-Menüs steht also im Global-Dump. Wo Auto
+ * Power Off liegt, ist offen — denkbar sind ein separater Einstellungsbereich
+ * oder eine Übernahme erst beim Speichern/Neustart.
+ *
  * ### Bekannte Felder
  *
  * `+0x10` **Metronom** — 0-basierter Index der fünf Zustände:
