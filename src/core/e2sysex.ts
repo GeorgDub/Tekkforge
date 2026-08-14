@@ -351,6 +351,23 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  * hier einen Parameter sucht, braucht ihn nicht im ganzen Puffer zu suchen —
  * es kommen nur die ersten 48 Bytes in Frage.
  *
+ * ### Nicht im Block: Tempo — und warum `+0x18` trotzdem 100 zeigt
+ *
+ * `+0x18` steht auf 100 und hat sich in 26 aufeinanderfolgenden Lesevorgängen
+ * kein einziges Mal bewegt — auch nicht, während das Tempo von 120 über 135 auf
+ * 100 geändert wurde.
+ *
+ * Als das Tempo dann auf genau 100 stand, sah `+0x18 = 100` nach einem Treffer
+ * aus. Es ist keiner: das Byte stand schon auf 100, als das Tempo 135 war. Ein
+ * einzelner uebereinstimmender Lesevorgang haette hier zu einer falschen
+ * Zuordnung gefuehrt — die Vorgeschichte widerlegt sie.
+ *
+ * Das Tempo gehoert zum Pattern, nicht zu den Globals: es liegt im Pattern-Kopf
+ * bei `0x22` als 16-Bit-LE mal zehn (siehe `BPM_OFF` in `e2sExport.ts`, dort am
+ * Geraet gemessen). Der Global-Block blieb bei jener Messung unveraendert.
+ *
+ * Was `+0x18` ist, bleibt offen. Bekannt ist nur, was es nicht ist.
+ *
  * ### Nicht im Block: Master-Volume und Input-Level
  *
  * Zweimal am Gerät verstellt, beim zweiten Mal in die jeweils entgegengesetzte
