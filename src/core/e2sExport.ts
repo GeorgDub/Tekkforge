@@ -233,12 +233,35 @@ export const PART_LAST_STEP_OFF = 0x00;
  * Byte haetten EIN Byte mit zwei gekippten Bits ergeben, nicht zwei Bytes mit
  * je einem.
  *
- * ⚠ Wo das Feld ANFAENGT, ist offen. Ein Array von acht Paar-Bytes muesste bei
- * `0x3E` beginnen — dort stehen aber 54 und 58, also keine Schalterwerte.
- * Belegt sind nur diese beiden Offsets; `0x40` traegt zwar ebenfalls eine 1,
- * aber welchem Paar sie gehoert, ist ungeprueft. Wer es braucht: die uebrigen
- * Paare einzeln umschalten und jeweils das reagierende Byte ablesen.
+ * Diese beiden Offsets sind die VOLLSTAENDIGE Menge: das Geraet kennt nur die
+ * Paare 13-14 und 15-16, kein Alternate fuer die uebrigen Parts. Meine
+ * Ueberlegung, hier koennte ein Array von acht Paar-Bytes liegen, war damit
+ * gegenstandslos — sie stuetzte sich auf die Annahme, alle 16 Parts haetten
+ * Alternate-Partner.
  */
+/**
+ * Gate Arp — pro Pattern, 0-basiert gespeichert.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14): auf den Maximalwert 50 gestellt, `0x31`
+ * las danach 49. Bereich am Geraet 1..50, im Speicher also 0..49.
+ *
+ * Der Wert stand die ganze Messreihe ueber sichtbar im Kopf (als 19 = Anzeige
+ * 20) — er liess sich nur keiner Einstellung zuordnen, weil er nie allein
+ * geaendert wurde. Das loest den frueheren Negativbefund auf: die Suche nach
+ * den Gate-Arp-Werten 1/50/40/30/20 schlug fehl, weil ich sie als PER-PART-
+ * Werte gesucht habe. Gate Arp ist ein Pattern-Wert.
+ */
+export const PATTERN_GATE_ARP_OFF = 0x31;
+
+/**
+ * Scale Mode — **pro Part**, Schalter.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14): eingeschaltet, woraufhin im gesamten
+ * 16-KB-PTST genau ein Part-Byte reagierte — Part 2 bei `+0x05`, 0 -> 1.
+ * (Part 2 war der am Geraet gewaehlte.)
+ */
+export const PART_SCALE_MODE_OFF = 0x05;
+
 export const PATTERN_ALT_13_14_OFF = 0x44;
 export const PATTERN_ALT_15_16_OFF = 0x45;
 
