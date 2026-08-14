@@ -49,8 +49,11 @@
  *         byte 1      Gate-Zeit (Anzeige = Byte, 0..96; 0x48 = 72 Vorgabe).
  *                     ✔ Am Geraet gemessen: 32, 47, 60 und 86 kamen jeweils
  *                     unveraendert an. Der Wert 96 ist eine regulaere Gate-Zeit
- *                     und keine Sonderform — ein Step mit 96 liess sich auf 86
- *                     herunterstellen, blieb also auf derselben Leiter.
+ *                     und keine Sonderform — ein AKTIVER Step mit 96 liess sich
+ *                     auf 86 herunterstellen, wobei sich im ganzen Pattern nur
+ *                     dieses eine Byte bewegte. Der Trigger blieb unberuehrt;
+ *                     das Aendern der Gate-Zeit schaltet einen Step also nicht
+ *                     ab.
  *                     TIE ist am Geraet 127 und sitzt als Sentinel darueber;
  *                     Factory-Dateien fuehren daneben sehr haeufig 255 —
  *                     siehe ELECTRIBE_REAL_GATE_TIE_ALT.
@@ -84,7 +87,9 @@
  *
  *       Bekannt ist immerhin, woran es NICHT haengt: ein am Geraet
  *       abgeschalteter Step behielt Flag 1 samt Gate, Velocity und Note. Das
- *       Flag folgt dem Trigger also nicht.
+ *       Flag folgt dem Trigger also nicht. Dass der Trigger ueberhaupt umsprang,
+ *       war eine getrennte Bedienung und keine Folge des Gate-Aenderns — eine
+ *       spaetere Gate-Aenderung an einem aktiven Step bewegte nur das Gate-Byte.
  *
  *       Daran haengt auch ein Unterschied zum Schreibpfad: das Geraet laesst
  *       einem stillgelegten Step seine Werte, waehrend TekkForge ihn auf den
