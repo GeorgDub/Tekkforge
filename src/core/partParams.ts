@@ -83,6 +83,8 @@ export interface PartParam {
  * | `0x11` | modSpeed   | Rampe `0 8 16 … 72`, Parts 11-16 unberuehrt |
  * | `0x12` | modDepth   | per Ausschluss (Paar mit 0x11)              |
  * | `0x14` | egAttack   | Rampe `127 117 106 … 37`                    |
+ * | `0x1C` | grooveType | `0..7` dann `61..54` (Anzeige 1..8 / 62..55) |
+ * | `0x1D` | grooveDepth| Rampe `0 10 … 120 122 124 127` — exakt      |
  * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
  * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
  *
@@ -147,6 +149,29 @@ export interface PartParam {
  * `e2sExport.ts` als `PART_VOLUME_OFF` schreibt. Der Offset stammte dort aus
  * der Format-Doku und ist mit dieser Messung erstmals am Geraet belegt.
  *
+ * ### Groove — und ein Feld, das hier NICHT hingehoert
+ *
+ * Groove-Depth als Rampe, Groove-Typ als V-Muster:
+ *
+ *     0x1D  0 10 20 … 120 122 124 127        exakt wie eingestellt
+ *     0x1C  0 1 2 3 4 5 6 7 | 61 60 … 54     eingestellt war 1..8 / 62..55
+ *
+ * `0x1C` bestaetigt die 0-basierte Speicherung ein zweites Mal — dieselbe
+ * Verschiebung wie bei `modType`. Damit ist das kein Einzelfall, sondern das
+ * Muster des Formats: **Anzeige 1-basiert, Speicher 0-basiert.**
+ *
+ * ⚠ Im selben Durchgang wurde „Voice Assign" gesetzt: Parts 1-4 mono1..poly2,
+ * Parts 5-11 Chord-Set 1-7, Parts 12-16 Gate-Arp mit Werten 1/50/40/30/20.
+ * Reagiert hat davon nur `0x02`, und nur fuer die ersten vier Parts:
+ *
+ *     0x02  0 1 2 3 | 1 1 1 1 1 1 1 1 1 1 1 1
+ *
+ * Die Chord-Set- und Gate-Arp-Werte stehen **weder im 816-B-Part-Block noch im
+ * PTST-Kopf** (beide gezielt danach abgesucht). Sie liegen also woanders —
+ * moeglicherweise in einer eigenen Struktur oder anders kodiert. `0x02` ist
+ * deshalb bewusst NICHT als Parameter aufgenommen: ein Feld, dessen Wertebereich
+ * man nur zu einem Viertel kennt, gehoert nicht in eine Editier-Tabelle.
+ *
  * ### Gegenprobe mit Vorhersage
  *
  * Der Nutzer hat das Muster anschliessend auf `1 0 1 0 …` ab Part 1 umgestellt
@@ -190,8 +215,8 @@ export const PART_PARAMS: PartParam[] = [
   { key: "egDecay", label: "Amp Decay", offset: 0x15, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
   { key: "ampEgOn", label: "Amp-EG an", offset: 0x1a, min: 0, max: 1, kind: "bool", group: "Amp/EG" },
   { key: "mfxSend", label: "MFX-Send", offset: 0x1b, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
-  { key: "grooveType", label: "Groove-Typ", offset: 0x1c, min: 0, max: 255, kind: "u8", group: "Groove" }, // Stock bis 23; Obergrenze unbekannt
-  { key: "grooveDepth", label: "Groove-Depth", offset: 0x1d, min: 0, max: 127, kind: "u8", group: "Groove" },
+  { key: "grooveType", label: "Groove-Typ", offset: 0x1c, min: 0, max: 255, kind: "u8", group: "Groove" }, // ✔ geraetebestaetigt; Speicher 0-basiert
+  { key: "grooveDepth", label: "Groove-Depth", offset: 0x1d, min: 0, max: 127, kind: "u8", group: "Groove" }, // ✔ geraetebestaetigt (exakte Rampe)
   { key: "ifxOn", label: "IFX an", offset: 0x20, min: 0, max: 1, kind: "bool", group: "IFX" }, // ✔ geraetebestaetigt (alternierendes Testpattern)
   { key: "ifxType", label: "IFX-Typ", offset: 0x21, min: 0, max: 255, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt; Testpattern zeigte bis 48
   { key: "ifxEdit", label: "IFX-Edit", offset: 0x22, min: 0, max: 127, kind: "u8", group: "IFX" },
