@@ -79,6 +79,7 @@ export interface PartParam {
  * | `0x0D` | cutoff     | Rampe `0 10 20 … 100 105 … 120 127`         |
  * | `0x0E` | resonance  | aufsteigende Rampe                          |
  * | `0x0F` | egInt      | absteigend `+63 … 0 … -63` — **signed**     |
+ * | `0x10` | modType    | V-Muster `0..7` dann `71..64`               |
  * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
  * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
  *
@@ -108,6 +109,26 @@ export interface PartParam {
  *
  * (Die Ausreisser — Resonanz 0 bei Part 9, Endwerte 125/-60 — stammen aus dem
  * Testpattern selbst und tun der Zuordnung nichts.)
+ *
+ * ### Mod-Block: V-Muster und Differenzvergleich
+ *
+ * Testpattern: Mod-Typ in den Parts 1-8 aufsteigend, 9-16 absteigend.
+ *
+ *     0x10  0 1 2 3 4 5 6 7 | 71 70 69 68 67 66 65 64
+ *
+ * Am Geraet eingestellt waren `1..8` und `72..65` — gespeichert ist also
+ * **eins weniger**: die Anzeige ist 1-basiert, der Speicher 0-basiert. Ohne die
+ * Angabe des Nutzers waere diese Verschiebung nicht aufgefallen.
+ *
+ * Speed und Depth wurden im selben Durchgang verstellt, aber nicht als Rampe.
+ * Sie sind trotzdem eingegrenzt: gegenueber dem vorigen Test haben sich im
+ * Part-Header **genau drei** Spalten geaendert — `0x10`, `0x11`, `0x12` — und
+ * genau drei Parameter wurden angefasst. Damit ist `{0x11, 0x12}` sicher
+ * `{modSpeed, modDepth}`.
+ *
+ * ⚠ WELCHE von beiden welche ist, ist damit NICHT entschieden. Die Zuordnung
+ * unten folgt der Format-Doku, nicht einer Messung. Wer sie klaeren will:
+ * NUR Speed als Rampe setzen, Depth unangetastet lassen.
  *
  * ### Gegenprobe mit Vorhersage
  *
@@ -145,9 +166,9 @@ export const PART_PARAMS: PartParam[] = [
   { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "egInt", label: "EG-Int", offset: 0x0f, min: -63, max: 63, kind: "i8", group: "Filter" }, // ✔ geraetebestaetigt bipolar (+63…-63 gemessen)
-  { key: "modType", label: "Mod-Typ", offset: 0x10, min: 0, max: 255, kind: "u8", group: "Mod" }, // Stock bis 71; Obergrenze unbekannt
-  { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" },
-  { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" },
+  { key: "modType", label: "Mod-Typ", offset: 0x10, min: 0, max: 255, kind: "u8", group: "Mod" }, // ✔ geraetebestaetigt (V-Muster); Speicher 0-basiert, Anzeige 1-basiert
+  { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" }, // Paar {0x11,0x12} belegt; Zuordnung aus der Doku
+  { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" }, // Paar {0x11,0x12} belegt; Zuordnung aus der Doku
   { key: "egAttack", label: "Amp Attack", offset: 0x14, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
   { key: "egDecay", label: "Amp Decay", offset: 0x15, min: 0, max: 127, kind: "u8", group: "Amp/EG" },
   { key: "ampEgOn", label: "Amp-EG an", offset: 0x1a, min: 0, max: 1, kind: "bool", group: "Amp/EG" },
