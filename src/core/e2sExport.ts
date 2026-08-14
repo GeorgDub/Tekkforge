@@ -396,47 +396,15 @@ export const PATTERN_SWING_OFF = 0x24;
 export const PATTERN_LEVEL_OFF = 0x2a;
 
 /**
- * ## Motion-Spuren im Pattern-Kopf
+ * ## Motion-Spuren
  *
- * Der Kopfbereich ab `0x100` haelt bis zu 24 Motion-Spuren. Eine Spur bindet
- * einen Parameter an einen Part und legt fuer jeden der 64 Steps einen Wert ab.
- * Die Spur `i` besteht aus drei Teilen, die in drei parallelen Tabellen liegen:
+ * Die Tabellen im Pattern-Kopf (Ziel, Parameter, Werte je Step) sind in
+ * `electribeImport.ts` beschrieben — dort stehen die Offsets, die Slot-Anzahl
+ * und der am Geraet gemessene Beleg dafuer, welche Tabelle welche ist.
  *
- *     0x100 + i            Part-Nummer, 1-basiert (0 = Spur unbenutzt)
- *     0x118 + i            Parameter-Kennung (4 = Osc Edit)
- *     0x130 + i*64 + step  Wert je Step
- *
- * ✔ Am Geraet hergeleitet und geprueft (2026-08-14). Zunaechst war nur eine
- * Motion gesetzt, und im ganzen 16-KB-Pattern waren ausserhalb der Parts nur
- * vier Bytes belegt: `0x40`, `0x100`, `0x118` und `0x130`. Der gleichmaessige
- * Abstand von 0x18 sah nach drei Tabellen zu je 24 Eintraegen aus — mehr als
- * eine Vermutung war es nicht.
- *
- * Die zweite Motion (Part 2, Step 2) hat sie bestaetigt, und zwar an einer
- * Stelle, die sich nicht raten liess: der Wert landete auf `0x171`. Das ist
- * `0x130 + 1*64 + 1` — Spur 1, Step 2. Zugleich erschienen `0x101 = 2` (Part 2)
- * und `0x119 = 4` (derselbe Parameter). Alle drei Tabellen zeigten also
- * gleichzeitig auf denselben neuen Eintrag.
- *
- * Bei 24 Spuren endet der Wertebereich auf `0x730`; dahinter bis `0x800` ist
- * nichts belegt. Die Zahl 24 stammt aus dem Tabellenabstand, nicht aus einer
- * Messung — sie ist der einzige geratene Teil dieser Struktur.
- *
- * ⚠ Die Parameter-Kennung ist nur fuer Osc Edit bekannt (4). Welche Nummer die
- * uebrigen motion-faehigen Regler tragen, ist offen.
+ * Hier steht nur, was die Motion-WERTE bedeuten, denn das haengt am Parameter.
+ * Bislang ist genau einer gemessen: Osc Edit (Kennung 4).
  */
-export const PATTERN_MOTION_PART_OFF = 0x100;
-export const PATTERN_MOTION_PARAM_OFF = 0x118;
-export const PATTERN_MOTION_VALUES_OFF = 0x130;
-export const PATTERN_MOTION_LANES = 24;
-export const PATTERN_MOTION_STEPS = 64;
-/** Parameter-Kennung fuer „Osc Edit" — am Geraet gemessen. */
-export const MOTION_PARAM_OSC_EDIT = 4;
-
-/** Byte-Offset des Motion-Werts einer Spur fuer einen Step. */
-export function motionValueOffset(lane: number, step: number): number {
-  return PATTERN_MOTION_VALUES_OFF + lane * PATTERN_MOTION_STEPS + step;
-}
 
 /**
  * ## Werteleiter der Osc-Edit-Motion

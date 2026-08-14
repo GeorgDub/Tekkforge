@@ -9,14 +9,14 @@ import { describe, expect, it } from "vitest";
 import {
   decodeOscEditMotion,
   encodeOscEditMotion,
-  motionValueOffset,
   OSC_EDIT_MOTION_MAX_VALUE,
-  PATTERN_MOTION_LANES,
-  PATTERN_MOTION_PARAM_OFF,
-  PATTERN_MOTION_PART_OFF,
-  PATTERN_MOTION_STEPS,
-  PATTERN_MOTION_VALUES_OFF,
 } from "../src/core/e2sExport";
+import {
+  ELECTRIBE_MOTION_DATA_TABLE_OFFSET,
+  ELECTRIBE_MOTION_PARAM_TABLE_OFFSET,
+  ELECTRIBE_MOTION_SLOT_STRIDE,
+  ELECTRIBE_MOTION_TARGET_TABLE_OFFSET,
+} from "../src/core/electribeImport";
 
 /** Byte → Anzeige, wie am Gerät abgelesen (2026-08-14). */
 const GEMESSEN: Array<[number, number, "fwd" | "rev"]> = [
@@ -68,20 +68,21 @@ describe("OSC-Edit-Motion", () => {
     }
   });
 
-  it("legt die Motion-Spuren dorthin, wo sie am Geraet gemessen wurden", () => {
-    // Spur 0, Step 1 — die erste gesetzte Motion.
-    expect(motionValueOffset(0, 0)).toBe(0x130);
-    // Spur 1, Step 2 — dieser Offset liess sich nicht raten und hat die
+  it("legt die Motion-Werte dorthin, wo sie am Geraet gemessen wurden", () => {
+    const off = (slot: number, step: number) =>
+      ELECTRIBE_MOTION_DATA_TABLE_OFFSET + slot * ELECTRIBE_MOTION_SLOT_STRIDE + step;
+    // Slot 0, Step 1 — die erste gesetzte Motion.
+    expect(off(0, 0)).toBe(0x130);
+    // Slot 1, Step 2 — dieser Offset liess sich nicht raten und hat die
     // Tabellenstruktur bestaetigt.
-    expect(motionValueOffset(1, 1)).toBe(0x171);
+    expect(off(1, 1)).toBe(0x171);
   });
 
-  it("passt mit 24 Spuren genau in den Kopfbereich vor 0x800", () => {
-    const ende = PATTERN_MOTION_VALUES_OFF + PATTERN_MOTION_LANES * PATTERN_MOTION_STEPS;
-    expect(ende).toBe(0x730);
-    expect(ende).toBeLessThanOrEqual(0x800);
-    // Die beiden Kopftabellen liegen davor und ueberlappen einander nicht.
-    expect(PATTERN_MOTION_PARAM_OFF - PATTERN_MOTION_PART_OFF).toBe(PATTERN_MOTION_LANES);
-    expect(PATTERN_MOTION_VALUES_OFF - PATTERN_MOTION_PARAM_OFF).toBe(PATTERN_MOTION_LANES);
+  it("liest das Ziel vor der Parameter-Kennung", () => {
+    // Am Geraet gemessen: derselbe Parameter auf zwei Parts ergab in 0x100
+    // verschiedene Werte und in 0x118 denselben. Die Tabellen waren frueher
+    // vertauscht dokumentiert.
+    expect(ELECTRIBE_MOTION_TARGET_TABLE_OFFSET).toBe(0x100);
+    expect(ELECTRIBE_MOTION_PARAM_TABLE_OFFSET).toBe(0x118);
   });
 });

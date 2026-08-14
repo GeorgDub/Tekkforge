@@ -313,18 +313,41 @@ export const ELECTRIBE_REAL_STEP_LENGTH_CODES: Record<number, 16 | 32 | 64> = {
 };
 
 /**
- * v3.15.0: Pattern-level Motion-Sequencer-Layout (PTST-relativ).
+ * Pattern-level Motion-Sequencer-Layout (PTST-relativ).
  *
- * Verified gegen e2s-2016.e2sallpat Stock-Bank (250 Patterns × 8 Slots).
+ *   PTST+0x100  Ziel[]      1 Byte je Slot — Part 1..16, 17 = kein Part
+ *   PTST+0x118  ParamID[]   1 Byte je Slot — Parameter (4 = Osc Edit)
+ *   PTST+0x130  Slot-Daten  64 Bytes je Slot, ein Wert je Step (0..128)
  *
- *   PTST+0x100  8B   ParamID[8]      (1 Byte pro Slot, 0=unused, 1..17 = param)
- *   PTST+0x108..0x118 unused (16B Reserved, alle bytes 0x00 verifiziert)
- *   PTST+0x118  8B   TargetPart[8]   (1 Byte pro Slot, 1..19 = ziel-Part)
- *   PTST+0x120..0x130 unused (16B Reserved, alle bytes 0x00 verifiziert)
- *   PTST+0x130  512B Slot-Data       (8 Slots × 64 Bytes Werte, 0..128)
+ * ## Die beiden Tabellen waren vertauscht
+ *
+ * Bis 2026-08-14 stand hier `0x100 = ParamID` und `0x118 = TargetPart`. Das war
+ * falsch herum, und weil Lese- UND Schreibpfad dieselben Konstanten benutzen,
+ * war es nicht bloss eine Beschriftung: von TekkForge geschriebene Motion-Slots
+ * trugen Ziel und Parameter vertauscht: in sich stimmig, am Geraet unsinnig.
+ *
+ * ✔ Am Geraet gemessen: derselbe Parameter (Osc Edit) auf zwei verschiedenen
+ * Parts ergab `0x100 = 1` bzw. `0x101 = 2`, waehrend `0x118`/`0x119` beide auf 4
+ * standen. Waere `0x100` die ParamID, muesste ein und dieselbe Einstellung zwei
+ * verschiedene Kennungen tragen.
+ *
+ * Zwei unabhaengige Gegenproben an der Stock-Bank (250 Patterns):
+ *
+ * 1. `0x118` nimmt nie den Wert 1 an. Waere es der Ziel-Part, haette Part 1 in
+ *    der gesamten Werksbank keine einzige Motion — unglaubwuerdig. Als
+ *    Parameter-Kennung ist eine ungenutzte 1 dagegen belanglos.
+ * 2. `0x100` deckt 1..17 lueckenlos ab, und die Werte 1..16 zeigen zu 90 % auf
+ *    Parts, die tatsaechlich belegte Steps haben. Nur die 17 faellt heraus —
+ *    81-mal, also haeufiger als jeder Part. Das passt zu einem globalen Ziel
+ *    (vermutlich Master-FX), nicht zu einem 17. Part.
+ *
+ * ⚠ Die Slot-Anzahl ist NICHT gemessen. In der Stock-Bank sind hoechstens 6
+ * Slots je Pattern belegt; ab Index 6 ist alles null. Die 8 unten ist der
+ * bisherige Wert und wird beibehalten, weil ihr nichts widerspricht — bewiesen
+ * ist sie nicht. Der Tabellenabstand von 0x18 laesst bis zu 24 Slots zu.
  */
-export const ELECTRIBE_MOTION_PARAM_TABLE_OFFSET  = 0x100; // PTST-relativ
-export const ELECTRIBE_MOTION_TARGET_TABLE_OFFSET = 0x118; // PTST-relativ
+export const ELECTRIBE_MOTION_TARGET_TABLE_OFFSET = 0x100; // PTST-relativ
+export const ELECTRIBE_MOTION_PARAM_TABLE_OFFSET  = 0x118; // PTST-relativ
 export const ELECTRIBE_MOTION_DATA_TABLE_OFFSET   = 0x130; // PTST-relativ
 export const ELECTRIBE_MOTION_SLOTS_PER_PATTERN   = 8;
 export const ELECTRIBE_MOTION_VALUES_PER_SLOT     = 64;
@@ -334,9 +357,12 @@ export const ELECTRIBE_MOTION_SLOT_STRIDE         = 64; // = ELECTRIBE_MOTION_VA
  * Mapping Motion-ParamID → Heuristisches Label. Hardware-Spec NICHT public,
  * Labels best-effort aus Param-ID-Distribution + e2s-Hardware-Doku abgeleitet.
  *
- * 17 unique IDs beobachtet (1..17). Beobachtete Frequenz (Top-5):
- *   0x11 (17): 81× — vermutlich Volume oder Filter Cutoff (am haeufigsten)
- *   0x01 (1):  34× | 0x02 (2): 26× | 0x0d (13): 18× | 0x05 (5): 14×
+ * In der Stock-Bank kommen 17 verschiedene Kennungen vor, im Bereich 2..19;
+ * die 1 und die 12 fehlen. Haeufigste: 5 (45×), 15 und 16 (je 29×), 17 (25×),
+ * 13 und 19 (je 23×).
+ *
+ * Die frueher hier notierte Frequenzliste (17 als haeufigste Kennung) stammte
+ * aus der falschen Tabelle — sie beschrieb die Ziel-Parts, nicht die Parameter.
  *
  * Diese Labels sind STARK heuristisch und sollten in UI als
  * "Param 0x11 (Param-Slot)" angezeigt werden, nicht als verifiziert.
@@ -345,7 +371,7 @@ export const ELECTRIBE_PATTERN_MOTION_PARAM_NAMES: Record<number, string> = {
   1:  "Param 01",
   2:  "Param 02",
   3:  "Param 03",
-  4:  "Param 04",
+  4:  "Osc Edit", // ✔ am Geraet gemessen
   5:  "Param 05",
   6:  "Param 06",
   7:  "Param 07",
