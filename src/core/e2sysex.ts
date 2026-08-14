@@ -353,9 +353,15 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  *
  * ### Nicht im Block: Master-Volume und Input-Level
  *
- * Beide am Gerät verstellt (Master auf Maximum, Input auf Minimum) — im
- * gesamten 256-B-Block änderte sich **kein Byte**. Im selben Durchgang wurden
- * zwei andere Änderungen (`0x13`, `0x25`) korrekt erfasst, gelesen wurde also.
+ * Zweimal am Gerät verstellt, beim zweiten Mal in die jeweils entgegengesetzte
+ * Richtung (Master erst Maximum, dann Minimum; Input erst Minimum, dann
+ * Maximum) — im gesamten 256-B-Block änderte sich beide Male **kein Byte**.
+ * In beiden Durchgängen wurden andere Änderungen desselben Lesevorgangs
+ * korrekt erfasst (`0x13`/`0x25` bzw. `0x13`/`0x1F`), gelesen wurde also.
+ *
+ * Der Gegenrichtungs-Test schliesst den Fall aus, dass die Regler zufaellig
+ * schon auf dem gespeicherten Wert standen: bei vier Stellungen an zwei
+ * Reglern muesste sich sonst irgendetwas bewegt haben.
  *
  * Dieser Negativbefund ist stärker als der frühere Fehlalarm bei Auto Power
  * Off: dort war die Menü-Einstellung gar nicht übernommen worden. Ein Regler
@@ -416,7 +422,8 @@ export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
 /**
  * Global-Offset von „Pattern Change Lock" — `off` = 0, `on` = 1.
  *
- * ✔ Am Gerät bestätigt (2026-08-14): eingeschaltet, `+0x13` ging von 0 auf 1.
+ * ✔ Am Gerät bestätigt (2026-08-14), in beide Richtungen: eingeschaltet ging
+ * `+0x13` von 0 auf 1, wieder ausgeschaltet zurück auf 0.
  *
  * Damit ist `0x10`..`0x14` lueckenlos belegt: Metronom, Sync-Polaritaet,
  * Sync-Einheit, Pattern Change Lock, Audio In Thru.
@@ -424,6 +431,19 @@ export const E2_GLOBAL_SYNC_UNIT_OFF = 0x12;
 export const E2_GLOBAL_PTN_CHANGE_LOCK_OFF = 0x13;
 
 export const E2_GLOBAL_AUDIO_IN_THRU_OFF = 0x14;
+
+/**
+ * Global-Offset von „Chain Mode" — `off` = 0, `on` = 1.
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): von „on" auf „off" gestellt, `+0x1F` ging
+ * von 1 auf 0. Zwei Zustände, damit lückenlos.
+ *
+ * Liegt nicht bei den anderen Schaltern in `0x10`..`0x14`, sondern hinter dem
+ * Block `0x1B`..`0x1E` (Velocity-Kurve, Knob-Modus, Trigger-Modus, Kontrast).
+ * Die Anordnung im Speicher folgt also nicht der Reihenfolge im Global-Menü —
+ * ein Grund, benachbarte unbekannte Bytes nicht aus der Menüfolge zu raten.
+ */
+export const E2_GLOBAL_CHAIN_MODE_OFF = 0x1f;
 
 /**
  * Global-Offset des MIDI-Kanals — 0-basiert (Anzeige 1..16 → Byte 0..15).
