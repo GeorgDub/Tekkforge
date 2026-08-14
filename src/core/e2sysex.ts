@@ -363,6 +363,9 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  * schon auf dem gespeicherten Wert standen: bei vier Stellungen an zwei
  * Reglern muesste sich sonst irgendetwas bewegt haben.
  *
+ * Ein dritter Durchgang mit beiden Reglern in Mittelstellung bestaetigte das
+ * erneut — auch eine Stellung zwischen den Anschlaegen bewegt kein Byte.
+ *
  * Dieser Negativbefund ist stärker als der frühere Fehlalarm bei Auto Power
  * Off: dort war die Menü-Einstellung gar nicht übernommen worden. Ein Regler
  * dagegen ist mit dem Drehen gesetzt — er kann nicht „nicht angekommen" sein.
@@ -574,6 +577,39 @@ export const E2_GLOBAL_POWER_SAVE_OFF = 0x25;
 export const E2_GLOBAL_TOUCH_SCALE_RANGE_OFF = 0x26;
 
 export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
+
+/**
+ * Global-Offsets der beiden MIDI-Filter — 0-basierter Listenindex.
+ *
+ * | Anzeige        | Byte |
+ * |----------------|------|
+ * | off            | 0    |
+ * | short          | 1    |
+ * | short+program  | 2    |
+ *
+ * ✔ Am Gerät gemessen (2026-08-14), beide Filter in einem Durchgang auf
+ * UNTERSCHIEDLICHE Werte gestellt:
+ *
+ *     Send Filter    „short+program"  ->  +0x2A ging von 0 auf 2
+ *     Receive Filter „short"          ->  +0x2B ging von 0 auf 1
+ *
+ * Dass die beiden Einstellungen verschiedene Werte bekamen, ist hier der ganze
+ * Trick: bei gleichem Wert waere nicht zu entscheiden, welches Byte zu welchem
+ * Filter gehoert. So ordnet sich jedes Byte eindeutig zu — vorausgesetzt, beide
+ * Felder benutzen dieselbe 0-basierte Liste, was bei zwei gleichartigen
+ * Nachbarfeldern die bei weitem naheliegendste Annahme ist.
+ *
+ * ⚠ Streng genommen bleibt genau diese Annahme ungeprüft: theoretisch koennten
+ * die Zuordnungen vertauscht sein und die beiden Felder unterschiedlich
+ * kodieren. Ein Durchgang, in dem sich nur EIN Filter aendert, wuerde das
+ * endgueltig klaeren.
+ *
+ * Die Reihenfolge im Speicher ist Send vor Receive — im Menue erscheint
+ * Receive zuerst. Wie schon bei Chain Mode folgt die Speicherlage nicht der
+ * Menuefolge.
+ */
+export const E2_GLOBAL_MIDI_SEND_FILTER_OFF = 0x2a;
+export const E2_GLOBAL_MIDI_RECEIVE_FILTER_OFF = 0x2b;
 
 /**
  * Global-Offset des Trigger-Modus — 0-basierter Listenindex.
