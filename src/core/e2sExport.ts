@@ -262,6 +262,36 @@ export const PATTERN_GATE_ARP_OFF = 0x31;
  */
 export const PART_SCALE_MODE_OFF = 0x05;
 
+/**
+ * Motion Sequence — pro Part, 0-basierter Listenindex.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14). Parts 1-4 auf off / smooth / trigger
+ * hold / off gestellt, `+0x03` las danach:
+ *
+ *     0 1 2 0 | 1 1 1 1 1 1 1 1 1 1 1 1
+ *
+ * | Anzeige      | Byte |
+ * |--------------|------|
+ * | off          | 0    |
+ * | smooth       | 1    |
+ * | trigger hold | 2    |
+ *
+ * Alle drei Werte in EINEM Durchgang belegt, weil drei verschiedene gesetzt
+ * wurden. Die unveraenderten Parts 5-16 stehen auf 1 — „smooth" ist also der
+ * Vorgabewert, was vorher nicht zu erkennen war: eine Spalte aus lauter Einsen
+ * sieht wie ein Fuellwert aus.
+ */
+export const PART_MOTION_SEQ_OFF = 0x03;
+
+/**
+ * „Trigger Part Velocity" — pro Part, Schalter.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14): nur bei Part 3 eingeschaltet, `+0x04`
+ * las danach `0 0 1 0 …` — genau ein gesetztes Byte an genau der richtigen
+ * Stelle.
+ */
+export const PART_TRG_VELOCITY_OFF = 0x04;
+
 export const PATTERN_ALT_13_14_OFF = 0x44;
 export const PATTERN_ALT_15_16_OFF = 0x45;
 
