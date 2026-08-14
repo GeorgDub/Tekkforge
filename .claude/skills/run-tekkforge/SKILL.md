@@ -156,6 +156,22 @@ Wenn sich der Sequencer nicht stoppen laesst: dreimal lesen und je Byte die
 Mehrheit nehmen. Zwei uebereinstimmende Lesungen sind belastbar, eine einzelne
 nicht.
 
+## Pattern auf die SD-Karte legen
+
+Einzelpatterns gehoeren nach `<SD>:\KORG\electribe sampler\Pattern\`. Die
+Karte ist unter Windows das Laufwerk mit `DriveType 2` (Wechselmedium):
+
+```powershell
+Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 2
+Copy-Item examples\e2s\HWTEST.e2spat 'H:\KORG\electribe sampler\Pattern'
+```
+
+Vorher pruefen, ob am Ziel schon eine Datei gleichen Namens liegt, und danach
+die Pruefsumme vergleichen — eine halb geschriebene Datei auf einer Karte sieht
+aus wie eine ganze.
+
+Der Laufwerksbuchstabe wechselt; nie fest verdrahten.
+
 ## Gotchas
 
 - **`#midiEnable` ist da, aber unsichtbar.** Es liegt im zugeklappten
