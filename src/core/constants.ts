@@ -107,17 +107,25 @@ export const E2S_MAX_SLOTS = 1020;
  */
 export const E2S_SLOT_INDEX_MAX = 1000;
 /**
- * Anzeige am Gerät = Tabellenindex + dieser Versatz.
+ * Anzeige am Gerät = `esli.OSC_0index` + dieser Versatz. Der Tabellenindex ist
+ * für die ANZEIGE irrelevant — das Gerät zählt nach dem Nummernfeld.
  *
- * ✔ Am Gerät abgelesen (SLOTNUM.all, 2026-08-14): drei Töne auf den Plätzen
- * 498/499/500, benannt nach ihrem Platz — das Gerät zeigte --, 501, 502.
- * Platz 498 fällt auf Anzeige 500, unterhalb der User-Slots, und ist weg.
- * Bestätigt mit geladenem Set: der Part auf #501 spielt „PLATZ 499".
+ * ✔ Am Gerät abgelesen (SLOTNUM2.all, 2026-08-15) mit ENTKOPPELTEM Index/OSC:
  *
- * Helfer: `displayNumberToSlotIndex` / `slotIndexToDisplayNumber` in
- * e2sPatternSampleLink.ts — nie als nacktes `± 2` an der Fundstelle.
+ *     Index 499, OSC 551  →  Anzeige 552
+ *     Index 549, OSC 502  →  Anzeige 503
+ *     Index 520, OSC 520  →  Anzeige 521
+ *
+ * Die erste SLOTNUM-Messung (2026-08-14) konnte das nicht sehen, weil dort
+ * OSC = Index + 1 gekoppelt war — „Anzeige = Index + 2" und „Anzeige = OSC + 1"
+ * sagten dieselben Zahlen voraus. Entschieden hat die vom Gerät selbst
+ * geschriebene e2sSample.all (User-Samples auf Index == OSC == 500..) plus die
+ * entkoppelte Probe.
+ *
+ * Geräte-Konvention fürs BAUEN: Tabellenindex == OSC_0index (== Anzeige − 1).
+ * Helfer in e2sPatternSampleLink.ts — nie als nacktes `± 1` an der Fundstelle.
  */
-export const E2S_DISPLAY_SLOT_SHIFT = 2;
+export const E2S_DISPLAY_OSC_SHIFT = 1;
 /** Maximum user-visible sample name length im Device-UI; on-disk speichert das
  *  korg-chunk nur 16 Bytes (ESLI_NAME_LEN). */
 export const E2S_NAME_MAX_CHARS = 24;

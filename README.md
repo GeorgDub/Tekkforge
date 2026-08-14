@@ -83,42 +83,53 @@ Beide Fehler sind unsichtbar, solange man nur eine Seite betrachtet: ein kleiner
 Versatz liefert immer ein plausibles Sample, nur eben das falsche — oder einen
 leeren ersten Platz.
 
-**1. Die Anzeige am Gerät ist der `.all`-Tabellenindex PLUS ZWEI.**
+**1. Die Anzeige am Gerät ist das Nummernfeld (`esli.OSC_0index`) PLUS EINS —
+der Tabellenindex ist für die Anzeige irrelevant.**
 
 Die Offset-Tabelle steht bei `0x0010` und hat **1020** LE32-Einträge (nicht 250 ab
 `0x07E0` — das sah nur so aus, weil `0x0010 + 500*4 == 0x07E0` ergibt). Am Gerät
-abgelesen (Minimalbank `SLOTNUM.all`, 2026-08-14; danach mit geladenem Set
-bestätigt — der Part auf #501 spielt das Sample namens „PLATZ 499"):
+abgelesen mit der ENTKOPPELTEN Minimalbank `SLOTNUM2.all` (2026-08-15), bei der
+Index und Nummernfeld absichtlich auseinanderlaufen:
 
 ```
-Anzeige am Gerät == Tabellen-Index + 2        (Platz 499 → 501, Platz 500 → 502)
-esli.OSC_0index  == Anzeige                   (Nummernfeld = Etikett, Link-Key)
+Index 499, OSC 551  →  Anzeige 552
+Index 549, OSC 502  →  Anzeige 503        Anzeige == OSC_0index + 1
+Index 520, OSC 520  →  Anzeige 521
 ```
 
-Ein Sample, das als **501** erscheinen soll, gehört also auf Tabellenplatz
-**499**; unterhalb von Anzeige 501 gibt es keine User-Slots — was dorthin fällt,
-ist weg. Umgesetzt in `displayNumberToSlotIndex` / `slotIndexToDisplayNumber`;
-`parseE2sBank` prüft die Geometrie bei jedem Einlesen selbst und meldet
-Abweichungen als `slotNumbering.kind === "constant-shift"`. (Offener Punkt:
-`luknkicks.all` hat dieselbe Struktur wie die alten Fehlbauten, erscheint laut
-Nutzer aber ab 501 — solange das unerklärt ist, gilt die gemessene Regel.)
+Die erste Messreihe (`SLOTNUM.all`, 2026-08-14) hatte OSC = Index + 1 gekoppelt
+und ließ deshalb zwei Deutungen zu; entschieden haben die entkoppelte Probe und
+die **vom Gerät selbst geschriebene** `e2sSample.all`, die ihre User-Samples auf
+Index == OSC == 500.. legt. Das ist zugleich die Geräte-Konvention beim Bauen:
+
+```
+Tabellen-Index == esli.OSC_0index == Anzeige − 1
+```
+
+Ein Sample, das als **501** erscheinen soll, trägt also in BEIDEN Feldern
+**500**. Umgesetzt in `displayNumberToOsc` / `oscToDisplayNumber` /
+`displayNumberToSlotIndex`; `parseE2sBank` prüft die Konvention bei jedem
+Einlesen selbst und meldet Abweichungen als
+`slotNumbering.kind === "constant-shift"`. (Damit erklärt sich auch die zuvor
+rätselhafte `luknkicks.all`: OSC 501.. → erscheint ab 502.)
 
 **2. Die Pattern-Referenz liegt um eins unter der Anzeige.**
 
-Am Gerät gemessen (dreifach unabhängig): Parts, die 584/586/588 referenzieren,
-spielen die Samples, die als 585/587/589 erscheinen.
+Am Gerät gemessen: das SLOTNUM-Set — der Part mit Referenz 500 spielt das
+Sample mit OSC 500, das als 501 erscheint; eine Bank ohne OSC 500 lässt
+denselben Part leer.
 
 ```
-Anzeige am Gerät == Pattern-Referenz + 1      (== Tabellen-Index + 2)
+Anzeige am Gerät == Pattern-Referenz + 1      (Referenz == OSC_0index)
 ```
 
 Umgesetzt in `e2PatternRefToBankNumber` / `bankNumberToE2PatternRef` — nie als
 nacktes `± 1` an der Fundstelle.
 
-Omnitribes Geometrie-Check (`tools/formats/e2s_geometry_check.py`) vergleicht
-Tabellen-Index gegen `OSC_0index` und kennt die Anzeige-Regel nicht: eine nach
-der gemessenen Regel korrekt gebaute Bank meldet dort einen KONSTANTEN Versatz
-von **zwei** — das ist erwartet, nicht der alte Fehler.
+Prüfen lässt sich eine gebaute Bank mit Omnitribes Geometrie-Check
+(`tools/formats/e2s_geometry_check.py`): er vergleicht Tabellen-Index gegen
+`OSC_0index`, und da TekkForge der Geräte-Konvention Index == OSC folgt, wird
+`Versatz: OK` erwartet.
 
 ## NRPN / Live-FX (Hacktribe, experimentell)
 

@@ -7,6 +7,11 @@
  * unseren Leser, der genau hier zweimal in die Irre geführt hat.
  *
  * Die Töne sind unterschiedlich hoch, damit auch hörbar ist, welcher spielt.
+ *
+ * ⚠ NACHTRAG (2026-08-15): Diese Probe war KONFUNDIERT — OSC war überall an
+ * Index + 1 gekoppelt, dadurch ließ die Ablesung zwei Deutungen zu. Die
+ * entkoppelte Nachfolge-Probe (make-slotnum2-probe.mjs) hat entschieden:
+ * Anzeige = OSC_0index + 1, der Tabellenindex ist für die Anzeige irrelevant.
  */
 import * as fs from "node:fs";
 import { buildE2sBank } from "../src/core/e2sBankBuilder.ts";

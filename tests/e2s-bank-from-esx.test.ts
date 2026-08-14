@@ -33,6 +33,7 @@ import { buildE2sBank, type E2sSlotInput } from "../src/core/e2sBankBuilder";
 import { parseE2sBank } from "../src/core/e2sBankReader";
 import {
   bankNumberToE2PatternRef,
+  displayNumberToOsc,
   displayNumberToSlotIndex,
 } from "../src/core/e2sPatternSampleLink";
 import { buildE2AllPatFile, E2S_ALLPAT_FILE_SIZE } from "../src/core/e2sExport";
@@ -115,10 +116,11 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
     const hwNumber = USER_SAMPLE_BASE + j;
     sampleMap.set(s.index, { allSlot: hwNumber, hwNumber, name });
     return {
-      // Anzeige am Geraet = Tabellenindex + 2 (SLOTNUM-Messung 2026-08-14):
-      // Nummer N gehoert auf Platz N − 2, esli traegt N selbst.
+      // Anzeige am Geraet = OSC_0index + 1, Index folgt der Geraete-
+      // Konvention Index == OSC (SLOTNUM2-Messung 2026-08-15): fuer
+      // Anzeigenummer N gehoeren BEIDE Felder auf N − 1.
       slotIndex: displayNumberToSlotIndex(hwNumber),
-      sampleNumber: hwNumber, // device-displayed number (esli +0x08/+0x56)
+      sampleNumber: displayNumberToOsc(hwNumber),
       category: 17, // "User" — wie echte User-Sample-Bänke
       name,
       pcmData: pcm,
@@ -219,11 +221,12 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
     lines.push("");
     lines.push("## Sample-Nummerierung (am Gerät gemessen)");
     lines.push(
-      "Die User-Samples beginnen am Gerät bei **501**. Die Anzeige am Gerät " +
-        "ist der `.all`-Tabellenindex **plus zwei**: Sample **501** liegt auf " +
-        "Slot 499, **502** auf Slot 500, usw. (SLOTNUM-Messung 2026-08-14). " +
-        "In der Pattern-Datei steht die Referenz um eins unter der Anzeige " +
-        "(am Gerät gemessen) — die Parts treffen dadurch genau diese Nummern.",
+      "Die User-Samples beginnen am Gerät bei **501**. Die Anzeige ist das " +
+        "Nummernfeld (`OSC_0index`) **plus eins**; Tabellenindex und " +
+        "Nummernfeld tragen beide Anzeige − 1 (Geräte-Konvention): Sample " +
+        "**501** liegt auf Slot 500 mit Feld 500, usw. (SLOTNUM2-Messung " +
+        "2026-08-15). In der Pattern-Datei steht die Referenz ebenfalls als " +
+        "Anzeige − 1 — die Parts treffen dadurch genau diese Nummern.",
     );
     lines.push("");
     lines.push("## Sample-Liste (Geräte-Nummer → Name → ESX-Quelle)");

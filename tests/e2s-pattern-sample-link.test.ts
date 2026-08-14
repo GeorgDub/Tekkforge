@@ -2,10 +2,12 @@
  * tests/features/e2s-pattern-sample-link.test.ts
  *
  * v3.272 — verifiziert die VALUE-basierte Verknüpfung von E2-Pattern-Parts mit
- * Samples einer separaten .all-Bank über die Geräte-Sample-Nummer (OSC_0index).
+ * Samples einer separaten .all-Bank über die ANZEIGE-Nummer (= OSC_0index + 1,
+ * am Gerät gemessen — SLOTNUM2, 2026-08-15).
  *
- *   e2PatternRefToBankNumber(Pattern-Part.sampleId)  ==  E2sSlot.sampleNumber
- *   (die Datei-Referenz liegt um eins unter der Bank-/Geraete-Nummer)
+ *   e2PatternRefToBankNumber(Pattern-Part.sampleId)  ==  Anzeige
+ *   ==  oscToDisplayNumber(E2sSlot.sampleNumber)
+ *   (Referenz und OSC_0index tragen dieselbe Zahl: Anzeige − 1)
  *
  * Pure-Map-Test immer; Full-Chain gegen die generierten BOTTROP-Artefakte nur
  * wenn vorhanden (examples/e2s/).
@@ -24,15 +26,15 @@ import { parseE2sBank } from "../src/core/e2sBankReader";
 import { parseElectribeAllPatBank } from "../src/core/electribeImport";
 
 describe("e2sPatternSampleLink — buildE2sSampleMap (pure)", () => {
-  it("keyed by sampleNumber (OSC_0index), skips 0, first-wins", () => {
+  it("keyed by Anzeige (OSC_0index + 1), skips 0, first-wins", () => {
     const bank = {
       version: 1,
       slots: [
-        { sampleNumber: 501, name: "a" },
+        { sampleNumber: 500, name: "a" }, // Anzeige 501
         null,
-        { sampleNumber: 502, name: "b" },
+        { sampleNumber: 501, name: "b" }, // Anzeige 502
         { sampleNumber: 0, name: "empty" }, // ignored
-        { sampleNumber: 501, name: "dup" }, // first wins → "a"
+        { sampleNumber: 500, name: "dup" }, // first wins → "a"
       ],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;

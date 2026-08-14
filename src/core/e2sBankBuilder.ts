@@ -93,38 +93,36 @@ export interface E2sSlotInput {
   /**
    * Position in der Offset-Tabelle (0..`E2S_MAX_SLOTS`-1).
    *
-   * ⚠ **Der Index ist die Anzeigenummer MINUS ZWEI.** Für Geräte-Nr. 501
-   * gehört das Sample auf `slotIndex: 499` — Helfer:
-   * `displayNumberToSlotIndex` (e2sPatternSampleLink.ts).
+   * Für die ANZEIGE am Gerät ist dieser Index irrelevant — das Gerät zählt
+   * nach dem Nummernfeld (`sampleNumber`, Anzeige = OSC + 1). ✔ Am Gerät
+   * abgelesen (SLOTNUM2.all, 2026-08-15) mit entkoppeltem Index/OSC:
    *
-   * ✔ Am Gerät abgelesen (SLOTNUM.all, 2026-08-14): drei Töne auf den Plätzen
-   * 498/499/500, benannt nach ihrem Platz —
+   *     Index 499, OSC 551  →  Anzeige 552
+   *     Index 549, OSC 502  →  Anzeige 503
+   *     Index 520, OSC 520  →  Anzeige 521
    *
-   *     Platz 498  →  fiele auf Anzeige 500 und erscheint gar nicht
-   *     Platz 499  →  Anzeige 501
-   *     Platz 500  →  Anzeige 502
+   * Die Geräte-Konvention beim Schreiben ist `slotIndex == sampleNumber`
+   * (vom Gerät erzeugte e2sSample.all: User-Samples auf Index == OSC ==
+   * 500..). Für Anzeigenummer N also BEIDE Felder auf N − 1 — Helfer:
+   * `displayNumberToSlotIndex` / `displayNumberToOsc`
+   * (e2sPatternSampleLink.ts).
    *
-   * Danach mit geladenem Set bestätigt: der Part auf #501 spielt „PLATZ 499".
-   * Das Gerät zählt also nach der Tabellenposition, nicht nach dem
-   * gespeicherten Nummernfeld. Unterhalb von Anzeige 501 gibt es keine
-   * User-Slots; was dorthin fällt, ist weg.
-   *
-   * ⚠ Zwei frühere „Messungen" (minus eins / kein Versatz) waren Artefakte
-   * einer noch geladenen alten Bank — die Minimalbank hat es entschieden.
-   * Ungeklärt bleibt luknkicks.all (gleiche Struktur, laut Nutzer trotzdem ab
-   * 501 sichtbar); solange das offen ist, gilt die gemessene Regel — siehe
-   * scripts/make-hardtekk-bank.mjs.
+   * ⚠ Die erste SLOTNUM-Messung (2026-08-14) hatte OSC = Index + 1 gekoppelt
+   * und ließ deshalb zwei Deutungen zu; zwei noch frühere „Messungen" waren
+   * Artefakte einer noch geladenen alten Bank. Erst die entkoppelte Probe
+   * hat entschieden — und sie erklärt auch die zuvor rätselhafte
+   * luknkicks.all (OSC 501.. → erscheint ab 502).
    */
   slotIndex: number;
   /**
-   * Sample-Nummer, wie sie das Gerät anzeigt (esli-Body @ +0x56, u16 LE).
+   * Nummernfeld des Samples (esli-Body @ +0x56, u16 LE); die Anzeige am
+   * Gerät ist dieses Feld + 1.
    * v3.271: Ohne dieses Feld blieb +0x56 = 0 → das Gerät zeigte ALLE Samples
    * unter derselben Nummer (z.B. 501) statt aufsteigend. Verifiziert gegen
    * Factory-Bank `sampler_full.all` (+0x56 läuft 18,19,20,… pro Slot).
-   * Default = `slotIndex` (numeriert Samples nach Position). Für User-Sample-
-   * Banken hier die ANZEIGENUMMER setzen (= `slotIndex` + 2, siehe
-   * `slotIndexToDisplayNumber`): 501,502,… — der Default läge um zwei unter
-   * dem, was das Gerät anzeigt.
+   * Default = `slotIndex` — das entspricht genau der Geräte-Konvention
+   * (Index == OSC). Anzeige am Gerät = dieses Feld + 1: für ein Sample, das
+   * als N erscheinen soll, gehört hier N − 1 hinein (`displayNumberToOsc`).
    */
   sampleNumber?: number;
   /** Sample-Name. Wird ASCII-gefiltert und auf 16 chars getrimmt. */

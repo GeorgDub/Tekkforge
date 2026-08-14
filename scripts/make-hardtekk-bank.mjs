@@ -28,7 +28,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { buildE2sBank } from "../src/core/e2sBankBuilder.ts";
-import { displayNumberToSlotIndex } from "../src/core/e2sPatternSampleLink.ts";
+import {
+  displayNumberToOsc,
+  displayNumberToSlotIndex,
+} from "../src/core/e2sPatternSampleLink.ts";
 import { parseWav } from "../src/core/wavCodec.ts";
 
 const WURZELN = ["E:\\", "G:\\Mukke Stuff"];
@@ -165,34 +168,22 @@ for (const g of gewaehlt) {
   if (bytes + b > BUDGET_MB * 1024 * 1024) continue;
   bytes += b;
   slots.push({
-    // Der Tabellenplatz ist die Anzeigenummer MINUS ZWEI.
-    //
-    // ✔ Am Geraet abgelesen (2026-08-14) mit einer Minimalbank, die drei Toene
-    // auf die Plaetze 498/499/500 legte und sie danach benannte:
-    //
-    //     Platz 498  ->  faellt auf Anzeige 500 und erscheint gar nicht
-    //     Platz 499  ->  Anzeige 501
-    //     Platz 500  ->  Anzeige 502
-    //
-    // Danach mit geladenem Set bestaetigt: der Part auf #501 spielt das Sample
-    // namens "PLATZ 499". Unterhalb von 501 gibt es keine User-Slots; was
-    // dorthin faellt, ist weg. Genau daran trug Part 1 kein Sample: die Bank
-    // lag auf 500..603 und erschien als 502..605, waehrend das Set auf 501
-    // zeigte. Die Regel liegt inzwischen im Kern (displayNumberToSlotIndex,
-    // E2S_DISPLAY_SLOT_SHIFT).
-    //
-    // ⚠ Ungeklaert bleibt luknkicks.all: dieselbe Struktur, erstes Sample
-    // ebenfalls auf Platz 500, laut Nutzer aber ab 501 sichtbar. Der Vergleich
-    // der esli-Bloecke zeigt nur Name, Kategorie und Laenge als Unterschied.
-    // Solange das offen ist, gilt die gemessene Regel — nicht die Analogie.
-    slotIndex: displayNumberToSlotIndex(nr), sampleNumber: nr, name: kurz(g.p) || `S${nr}`,
+    // Anzeige am Geraet = Nummernfeld (OSC_0index) + 1; der Tabellenindex ist
+    // fuer die Anzeige irrelevant. ✔ Entschieden durch die entkoppelte Probe
+    // SLOTNUM2.all (2026-08-15: I499/O551→552, I549/O502→503, I520/O520→521)
+    // und die vom Geraet selbst geschriebene e2sSample.all (User-Samples auf
+    // Index == OSC == 500..). Fuer Anzeigenummer nr gehoeren also BEIDE
+    // Felder auf nr − 1 — das erklaert auch die zuvor raetselhafte
+    // luknkicks.all (OSC 501.. → erscheint ab 502). Die Regel liegt im Kern
+    // (displayNumberToOsc / displayNumberToSlotIndex, E2S_DISPLAY_OSC_SHIFT).
+    slotIndex: displayNumberToSlotIndex(nr), sampleNumber: displayNumberToOsc(nr), name: kurz(g.p) || `S${nr}`,
     category: g.kategorie.kat, pcmData: pcm, sampleRate: wav.sampleRate, channels: 1,
-    _kat: g.kategorie.name, _ms: Math.round(wav.frames / wav.sampleRate * 1000),
+    _kat: g.kategorie.name, _ms: Math.round(wav.frames / wav.sampleRate * 1000), _nr: nr,
   });
   nr++;
 }
 
-const bank = buildE2sBank(slots.map(({ _kat, _ms, ...s }) => s));
+const bank = buildE2sBank(slots.map(({ _kat, _ms, _nr, ...s }) => s));
 const out = Buffer.from(bank.buffer ?? bank);
 fs.writeFileSync(ZIEL, out);
 
@@ -201,10 +192,10 @@ console.log(`${ZIEL} — ${(out.length / 1024 / 1024).toFixed(1)} MB · ${slots.
 const proKat = {};
 for (const s of slots) (proKat[s._kat] ??= []).push(s);
 for (const [k, list] of Object.entries(proKat)) {
-  console.log(`  ${k.padEnd(6)} ${String(list.length).padStart(2)} · #${list[0].sampleNumber}–${list[list.length - 1].sampleNumber}`);
+  console.log(`  ${k.padEnd(6)} ${String(list.length).padStart(2)} · #${list[0]._nr}–${list[list.length - 1]._nr}`);
   console.log(`         ${list.slice(0, 6).map((s) => `${s.name}(${s._ms}ms)`).join("  ")}`);
 }
 fs.writeFileSync(
   ZIEL.replace(/\.all$/, "-inhalt.txt"),
-  slots.map((s) => `${s.sampleNumber}\t${s._kat}\t${s.name}\t${s._ms}ms`).join("\n") + "\n",
+  slots.map((s) => `${s._nr}\t${s._kat}\t${s.name}\t${s._ms}ms`).join("\n") + "\n",
 );

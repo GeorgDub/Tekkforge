@@ -15,10 +15,15 @@
  * Hier sind Index und OSC deshalb ENTKOPPELT. Am Geraet einfach ablesen,
  * unter welcher Nummer jeder Ton erscheint:
  *
- *   Name        Index  OSC   Modell A sagt   Modell B sagt
- *   I499 O551    499   551        501             552
- *   I549 O502    549   502        551             503
- *   I520 O520    520   520        522             521
+ *   Name        Index  OSC   Modell A sagt   Modell B sagt   ✔ abgelesen
+ *   I499 O551    499   551        501             552            552
+ *   I549 O502    549   502        551             503            503
+ *   I520 O520    520   520        522             521            521
+ *
+ * ✔ ERGEBNIS (am Geraet abgelesen, 2026-08-15): Modell B, dreifach eindeutig.
+ * Die Anzeige folgt allein dem Nummernfeld (Anzeige = OSC + 1), der
+ * Tabellenindex ist fuer die Anzeige irrelevant. Die Regel liegt im Kern
+ * (E2S_DISPLAY_OSC_SHIFT, displayNumberToOsc).
  *
  * Drei verschiedene Tonhoehen (A, C#, E), damit auch hoerbar ist, wer spielt.
  */

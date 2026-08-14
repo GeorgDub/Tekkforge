@@ -27,8 +27,10 @@ import { parseE2sBank, type E2sBank } from "./e2sBankReader";
 import { E2S_SLOT_INDEX_MAX } from "./constants";
 import {
   bankNumberToE2PatternRef,
+  displayNumberToOsc,
   displayNumberToSlotIndex,
   e2PatternRefToBankNumber,
+  oscToDisplayNumber,
 } from "./e2sPatternSampleLink";
 
 export const EDITOR_PARTS = 16;
@@ -401,8 +403,9 @@ export function importE2Patterns(bytes: Uint8Array, onlyNonEmpty = true): Import
 
 /**
  * Wandelt eine geparste `.all`-Sample-Bank in Pool-Samples (mono). Stereo-Slots
- * werden gemischt. Die vom Gerät angezeigte Nummer (sampleNumber, z.B. 501+)
- * bleibt erhalten — so linken die importierten Pattern-Parts direkt.
+ * werden gemischt. Als Pool-Nummer gilt die ANZEIGE am Gerät — OSC_0index + 1
+ * (am Gerät gemessen, siehe `oscToDisplayNumber`) — so linken die importierten
+ * Pattern-Parts direkt und die Nummern decken sich mit dem Geräte-Display.
  */
 export function poolSamplesFromE2sBank(bank: E2sBank): PoolSample[] {
   const out: PoolSample[] = [];
@@ -410,9 +413,10 @@ export function poolSamplesFromE2sBank(bank: E2sBank): PoolSample[] {
     if (!slot) continue;
     let pcm = slot.pcmData;
     if (slot.channels === 2) pcm = downmixToMono(pcm).pcm;
+    const display = oscToDisplayNumber(slot.sampleNumber);
     out.push({
-      number: slot.sampleNumber,
-      name: (slot.name || `Sample ${slot.sampleNumber}`).slice(0, 16),
+      number: display,
+      name: (slot.name || `Sample ${display}`).slice(0, 16),
       sampleRate: slot.sampleRate,
       pcm,
     });
@@ -513,11 +517,11 @@ export function buildBankFiles(project: EditorProject): BankBuildResult {
  * Samples werden nach Geräte-Nummer sortiert. Standalone nutzbar zum
  * `.all`-Bearbeiten/Exportieren (unabhängig von Patterns).
  *
- * Die Geräte-Nummer N liegt auf Tabellenplatz N − 2: Anzeige am Gerät =
- * Tabellenindex + 2 (SLOTNUM-Messung 2026-08-14, mit Set bestätigt — siehe
- * `displayNumberToSlotIndex`). Stand vorher `slotIndex: i` (um ~501 daneben)
- * und danach `slotIndex: s.number` (um zwei daneben; der Part auf #501 blieb
- * am Gerät leer).
+ * Die Geräte-Nummer N steht als N − 1 im Nummernfeld UND auf Tabellenplatz
+ * N − 1: Anzeige am Gerät = OSC_0index + 1 (SLOTNUM2-Messung 2026-08-15,
+ * entkoppelte Probe), und das Gerät schreibt seine eigenen Bänke mit
+ * Index == OSC (e2sSample.all). Frühere Stände rieten hier dreimal falsch —
+ * am Gerät erschien die Bank jeweils verschoben.
  */
 export function buildSampleBank(samples: readonly PoolSample[]): Uint8Array | null {
   if (samples.length === 0) return null;
@@ -529,7 +533,7 @@ export function buildSampleBank(samples: readonly PoolSample[]): Uint8Array | nu
   if (sorted.length === 0) return null;
   const slots: E2sSlotInput[] = sorted.map((s) => ({
     slotIndex: displayNumberToSlotIndex(s.number),
-    sampleNumber: s.number,
+    sampleNumber: displayNumberToOsc(s.number),
     category: 17, // "User"
     name: s.name,
     pcmData: s.pcm,

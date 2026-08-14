@@ -4,8 +4,9 @@
  * Produziert aus einem geparsten ESX-1-Backup beides zum Import auf die E2S:
  *   - `.e2sallpat` Pattern-Bank (250 Slots), Parts auf User-Sample-Nummern (501+)
  *     repointet → spielen direkt die mit-konvertierten Samples.
- *   - `.all` Sample-Bank: die von den Patterns genutzten Samples, nummeriert ab
- *     501 (OSC_0index +0x08 + +0x56), korrekt mit WAV_dataSize/playLogPeriod/UFix.
+ *   - `.all` Sample-Bank: die von den Patterns genutzten Samples, am Gerät ab
+ *     501 sichtbar (Anzeige = OSC_0index + 1, Index == OSC == 500..), korrekt
+ *     mit WAV_dataSize/playLogPeriod/UFix.
  *
  * Reine TS-Logik (kein DOM) — die UI (EsxToE2sConverter) lädt nur die ESX-Datei
  * und bietet die zurückgegebenen Bytes als Download an.
@@ -21,6 +22,7 @@ import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { E2S_SLOT_INDEX_MAX } from "./constants";
 import {
   bankNumberToE2PatternRef,
+  displayNumberToOsc,
   displayNumberToSlotIndex,
 } from "./e2sPatternSampleLink";
 import { buildE2AllPatFile } from "./e2sExport";
@@ -173,7 +175,7 @@ export function convertEsxToE2sBank(
     if (!usedIndices.has(s.index)) continue;
     // Deckel ist die ANZEIGENUMMER (hwNumber), nicht eine Anzahl: oberhalb
     // von E2S_SLOT_INDEX_MAX bietet das Gerät keinen wählbaren Sample-Platz
-    // mehr an. (Der Tabellenindex liegt zwei darunter und bleibt damit
+    // mehr an. (Tabellenindex/OSC liegen eins darunter und bleiben damit
     // automatisch im Rahmen.)
     if (base + nextSlot >= E2S_SLOT_INDEX_MAX) {
       droppedSamples++;
@@ -190,14 +192,16 @@ export function convertEsxToE2sBank(
     const hwNumber = base + nextSlot;
     sampleMap.set(s.index, { hwNumber, name });
     slots.push({
-      // Anzeige am Gerät = Tabellenindex + 2 (SLOTNUM-Messung 2026-08-14, mit
-      // Set bestätigt): das Sample, das als `hwNumber` erscheinen soll, gehört
-      // auf den Platz zwei darunter; `esli.OSC_0index` trägt die Anzeigenummer
-      // selbst. Frühere Stände legten hier `nextSlot` (0,1,2,…) bzw. die
-      // Nummer direkt ab — beides erschien am Gerät verschoben, und der Part
-      // auf #501 blieb leer.
+      // Anzeige am Gerät = OSC_0index + 1, der Tabellenindex ist für die
+      // Anzeige irrelevant (SLOTNUM2-Messung 2026-08-15, entkoppelte Probe).
+      // Das Sample, das als `hwNumber` erscheinen soll, trägt also Nummernfeld
+      // hwNumber − 1; der Tabellenindex folgt der Geräte-Konvention
+      // Index == OSC (so schreibt das Gerät seine eigene e2sSample.all).
+      // Frühere Stände rieten hier dreimal falsch (Nummer direkt, −1 am
+      // Index, −2 am Index) — am Gerät erschien die Bank jeweils verschoben,
+      // und der Part auf #501 blieb leer.
       slotIndex: displayNumberToSlotIndex(hwNumber),
-      sampleNumber: hwNumber,
+      sampleNumber: displayNumberToOsc(hwNumber),
       category: 17, // "User"
       name,
       pcmData: pcm,

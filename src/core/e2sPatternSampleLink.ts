@@ -1,64 +1,72 @@
 /**
  * e2sPatternSampleLink.ts — Pure-Helper: verknüpft E2-Pattern-Parts mit ihren
- * Samples aus einer SEPARATEN .all-Sample-Bank.
+ * Samples aus einer SEPARATEN .all-Sample-Bank, und hält die am Gerät
+ * gemessenen Nummerierungs-Regeln an EINER Stelle.
  *
  * Anders als ESX (Samples + Patterns in EINER Datei) liegen beim E2 Sampler die
  * Patterns (.e2sallpat) und die Samples (.all = e2sSample.all) in zwei Dateien.
- * Verknüpft werden sie über die GERÄTE-SAMPLE-NUMMER:
- *   - Pattern-Part trägt seine Sample-Ref bei esli/part +0x08 →
- *     `ParsedPart.sampleId`.
- *   - .all-Sample trägt seine Nummer als OSC_0index (esli +0x08) →
- *     `E2sSlot.sampleNumber`.
  *
- * ⚠ Die beiden Zahlen sind NICHT dieselbe — es liegt genau eins dazwischen,
- * siehe `e2PatternRefToBankNumber`. Match per VALUE (Nummer), nicht per
- * Offset-Tabellen-Position — robust auch bei Lücken/Nicht-501-Basis.
+ * ## Die drei Zahlen eines Samples
+ *
+ *   - ANZEIGE     — was das Gerät im Display zeigt (User-Samples 501+).
+ *   - OSC_0index  — das Nummernfeld im korg/esli-Chunk (`E2sSlot.sampleNumber`).
+ *   - Tabellenindex — die Position in der 1020er-Offset-Tabelle der .all.
+ *
+ * ## Gemessene Regeln (SLOTNUM2.all, entkoppelte Probe, 2026-08-15)
+ *
+ *     Anzeige          == OSC_0index + 1     (der Tabellenindex ist für die
+ *                                             Anzeige IRRELEVANT)
+ *     Pattern-Referenz == OSC_0index         (== Anzeige − 1; SLOTNUM-Set:
+ *                                             Ref 500 spielte das Sample mit
+ *                                             OSC 500)
+ *
+ * Geräte-Konvention fürs Bauen (vom Gerät geschriebene e2sSample.all):
+ * Tabellenindex == OSC_0index. TekkForge baut so und prüft beim Einlesen
+ * dagegen (`E2sSlotNumbering`).
  *
  * Dieser Helper ist rein (kein Audio/DOM). Das WAV-Encoding + Blob-URL bleibt
  * im Aufrufer (Seiteneffekt).
  */
 
 import type { E2sBank, E2sSlot } from "./e2sBankReader";
-import { E2S_DISPLAY_SLOT_SHIFT } from "./constants";
+import { E2S_DISPLAY_OSC_SHIFT } from "./constants";
 
 /**
- * Anzeigenummer → Tabellenindex in der `.all`. **Am Gerät gemessen**
- * (SLOTNUM.all, 2026-08-14, siehe `E2S_DISPLAY_SLOT_SHIFT`): das Gerät zählt
- * nach der Tabellenposition, Anzeige = Index + 2. Ein Sample, das als Nummer
- * `n` erscheinen (und von Pattern-Refs auf `n` getroffen werden) soll, gehört
- * deshalb auf Tabellenplatz `n − 2`; `esli.OSC_0index` trägt `n` selbst.
- *
- * Konsistenz mit der Pattern-Seite: Ref = n − 1 = Tabellenindex + 1.
- *
- * ⚠ Offen bleibt luknkicks.all (gleiche Struktur, laut Nutzer trotzdem ab 501
- * sichtbar) — solange das unerklärt ist, gilt die gemessene Regel, nicht die
- * Analogie. Details: scripts/make-hardtekk-bank.mjs.
+ * Anzeigenummer → `esli.OSC_0index` (Nummernfeld). **Am Gerät gemessen**
+ * (SLOTNUM2.all, 2026-08-15, siehe `E2S_DISPLAY_OSC_SHIFT`): das Gerät zeigt
+ * jedes Sample unter OSC + 1, unabhängig vom Tabellenindex.
+ */
+export function displayNumberToOsc(displayNumber: number): number {
+  return displayNumber - E2S_DISPLAY_OSC_SHIFT;
+}
+
+/** Umkehrung von `displayNumberToOsc`: Nummernfeld → Anzeigenummer. */
+export function oscToDisplayNumber(osc: number): number {
+  return osc + E2S_DISPLAY_OSC_SHIFT;
+}
+
+/**
+ * Anzeigenummer → Tabellenindex beim BAUEN einer Bank. Für die Anzeige selbst
+ * ist der Index irrelevant (siehe oben); das Gerät schreibt seine eigenen
+ * Bänke aber mit Tabellenindex == OSC_0index, und TekkForge folgt dieser
+ * Konvention.
  */
 export function displayNumberToSlotIndex(displayNumber: number): number {
-  return displayNumber - E2S_DISPLAY_SLOT_SHIFT;
+  return displayNumberToOsc(displayNumber);
 }
 
-/** Umkehrung von `displayNumberToSlotIndex`: Tabellenindex → Anzeigenummer. */
+/** Umkehrung von `displayNumberToSlotIndex` (gilt für konventionskonforme
+ *  Bänke mit Index == OSC). */
 export function slotIndexToDisplayNumber(slotIndex: number): number {
-  return slotIndex + E2S_DISPLAY_SLOT_SHIFT;
+  return oscToDisplayNumber(slotIndex);
 }
 
 /**
- * Pattern-Referenz → Bank-Slot-Nummer. **Am Gerät gemessen** (echtes E2S,
- * Omnitribe-Prüfprotokoll 2026-08-10):
- *
- *     Bank-Slot (OSC_0index) == Pattern-Referenz + 1
- *
- * Beleg (dreifach, unabhängig): die Parts 1–3 referenzieren 584/586/588, das
- * Gerät spielt bei allen dreien `Jumpkick`; in der Bank liegt `Jumpkick` auf
- * 585/587/589, während 584/586/588 `KICK9`/`L3oN_HaT`/`ZaHnI_ki` sind. Deckt
- * sich mit der Anzeige-Regel `Anzeige = Pattern-Ref + 1` (2026-08-09) und
- * schließt die dort offene Frage: **`esli` gleicht der Anzeige**, nicht der
- * Pattern-Referenz.
- *
- * Der Fehler war schwer zu sehen, weil ein Versatz von eins **immer ein
- * plausibles Sample** liefert — nur eben das falsche. Nichts bleibt leer,
- * nichts schlägt fehl.
+ * Pattern-Referenz → Anzeigenummer. **Am Gerät gemessen**: die Referenz im
+ * Pattern (part +0x08) liegt um eins unter der Anzeige und trifft das Sample
+ * über dessen OSC_0index (Ref == OSC == Anzeige − 1). Beleg: das SLOTNUM-Set —
+ * der Part mit Referenz 500 spielte den Ton mit OSC 500, der am Gerät als 501
+ * erscheint; die alte HARDTEKK-Bank ohne OSC 500 ließ denselben Part leer.
  *
  * 0 heißt „kein Sample" und bleibt 0 — sonst bände ein leerer Part an Slot 1.
  */
@@ -67,12 +75,11 @@ export function e2PatternRefToBankNumber(ref: number): number {
 }
 
 /**
- * Umkehrung von `e2PatternRefToBankNumber` — Bank-Slot-Nummer → Pattern-Referenz.
+ * Umkehrung von `e2PatternRefToBankNumber` — Anzeigenummer → Pattern-Referenz.
  *
- * Beim SCHREIBEN eines Patterns gilt dieselbe Messung rückwärts: soll ein Part
- * das Sample spielen, das am Gerät als Nummer `n` erscheint (= dessen
- * OSC_0index/Tabellen-Index), muss im Pattern `n − 1` stehen. Ohne diese
- * Umrechnung trifft jeder exportierte Part das jeweils nächsthöhere Sample.
+ * Soll ein Part das Sample spielen, das am Gerät als Nummer `n` erscheint,
+ * muss im Pattern `n − 1` stehen (== dessen OSC_0index). Ohne diese Umrechnung
+ * trifft jeder exportierte Part das jeweils nächsthöhere Sample.
  *
  * 0 bleibt 0 (kein Sample). Nummer 1 kann keine gültige Referenz erzeugen und
  * wird ebenfalls zu 0 — besser „kein Sample" als der Wraparound auf -1.
@@ -82,22 +89,25 @@ export function bankNumberToE2PatternRef(bankNumber: number): number {
 }
 
 /**
- * Baut eine Lookup-Map `Geräte-Sample-Nummer (OSC_0index) → E2sSlot`.
- * Erster-Treffer-gewinnt (stabile Slot-Reihenfolge). Nummer 0 = "keins" und wird
- * übersprungen, damit unassigned-Parts nicht fälschlich an Slot 0 binden.
+ * Baut eine Lookup-Map `Anzeigenummer → E2sSlot` (Anzeige = OSC_0index + 1,
+ * am Gerät gemessen). Erster-Treffer-gewinnt (stabile Slot-Reihenfolge).
+ * OSC 0 = "keins" und wird übersprungen, damit unassigned-Parts nicht
+ * fälschlich binden.
  */
 export function buildE2sSampleMap(bank: E2sBank): Map<number, E2sSlot> {
   const map = new Map<number, E2sSlot>();
   for (const slot of bank.slots) {
     if (!slot) continue;
     if (slot.sampleNumber <= 0) continue;
-    if (!map.has(slot.sampleNumber)) map.set(slot.sampleNumber, slot);
+    const display = oscToDisplayNumber(slot.sampleNumber);
+    if (!map.has(display)) map.set(display, slot);
   }
   return map;
 }
 
 /**
- * Wie viele der gegebenen Part-Sample-IDs ein Sample in der Map finden würden.
+ * Wie viele der gegebenen Part-Sample-Nummern (ANZEIGE-Nummern, z.B. via
+ * `e2PatternRefToBankNumber`) ein Sample in der Map finden würden.
  * Nützlich für User-Feedback ("12/16 Parts mit Sample verlinkt").
  */
 export function countLinkableE2Parts(
