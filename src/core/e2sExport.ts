@@ -128,6 +128,43 @@ export const PATTERN_KEY_OFF = 0x27;
  * die Null abgebildet.
  */
 export const PART_LAST_STEP_OFF = 0x00;
+
+/**
+ * Chain-Einstellungen — im Schwanz HINTER dem Part-Block.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14). Chain To 4 -> 6 und Chain Repeat
+ * 11 -> 64 (Maximum) geaendert; im gesamten 16-KB-PTST bewegten sich genau
+ * diese zwei Bytes:
+ *
+ *     +0x3B00  4 -> 6     Chain To
+ *     +0x3B02  11 -> 64   Chain Repeat
+ *
+ * `0x3B00` ist das erste Byte hinter den Parts (`0x800 + 16 * 816`). Damit ist
+ * der PTST-Aufbau komplett:
+ *
+ * ```
+ * 0x0000 … 0x07FF   Pattern-Kopf (BPM, Key, Scale, MFX-Typ …)
+ * 0x0800 … 0x3AFF   16 Part-Bloecke a 816 B
+ * 0x3B00 … 0x3FFF   Schwanz — hier stehen die Chain-Werte
+ * ```
+ *
+ * ### Dritte Kodierungsregel
+ *
+ * Beide Felder speichern den **Anzeigewert direkt**: die 64 steht als 64, nicht
+ * als 0. Damit sind in diesem Format drei verschiedene Konventionen belegt:
+ *
+ * | Regel                  | Felder                                        |
+ * |------------------------|-----------------------------------------------|
+ * | 0-basiert (Anzeige −1) | modType, grooveType, Key, Scale, MFX-Typ      |
+ * | Modulo (16 → 0)        | Last Step                                     |
+ * | direkt                 | Chain To, Chain Repeat                        |
+ *
+ * Eine 0 in diesem Format kann also „aus", „erster Eintrag" ODER „Maximum"
+ * bedeuten. Wer ein neues Feld deutet, muss die Regel mitmessen — sie laesst
+ * sich nicht aus dem Wert allein ablesen.
+ */
+export const PATTERN_CHAIN_TO_OFF = 0x3b00;
+export const PATTERN_CHAIN_REPEAT_OFF = 0x3b02;
 export const PATTERN_SCALE_OFF = 0x28;
 export const PATTERN_MFX_TYPE_OFF = 0x3d;
 const STEPLEN_OFF = 0x25;
