@@ -98,7 +98,8 @@ for (let o = 0x0a; o < 0x30; o++) {
     expect(outBody[so]).toBe(0x01); // trigger
     expect(outBody[so + 1]).toBe(20); // gate
     expect(outBody[so + 2]).toBe(111); // velocity
-    expect(outBody[so + 4]).toBe(65); // note
+    // Note wird als MIDI+1 abgelegt (0 = kein Ton) — siehe e2StepNote.ts.
+    expect(outBody[so + 4]).toBe(66); // MIDI 65
     // Motion-Region trotzdem erhalten
     let diffs = 0;
     for (let i = 0x100; i < 0x800; i++) if (outBody[i] !== origBody[i]) diffs++;

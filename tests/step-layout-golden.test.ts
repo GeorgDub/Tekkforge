@@ -23,11 +23,14 @@ const BODYTALK = path.join(DIR, "245_BodyTalk1.e2spat");
     expect(kick.active).toBe(true);
     expect(kick.gate).toBe(0x48); // 72
     expect(kick.velocity).toBe(0x60); // 96
-    expect(kick.note).toBe(0x3c); // C4 = Originaltonhöhe
+    // Rohbyte 0x3C, gespeichert als MIDI+1 → MIDI 59 (B3).
+    // Der frühere Kommentar las 0x3C als C4 — das war dieselbe Annahme, die
+    // auch der Schreibpfad hatte, weshalb der Test den Fehler nicht sah.
+    expect(kick.note).toBe(59)
     // Part 9 (idx 8), Step 7 — Raw-Record 01 48 60 00 3f → Note variiert (D#4)
     const mel = pat.parts[8].steps[7];
     expect(mel.active).toBe(true);
-    expect(mel.note).toBe(0x3f);
+    expect(mel.note).toBe(0x3f - 1); // Rohbyte 0x3F → MIDI 62
     // Melodie: mindestens 2 unterschiedliche Noten im Part
     const notes = new Set(
       pat.parts[8].steps.filter((s) => s.active).map((s) => s.note),

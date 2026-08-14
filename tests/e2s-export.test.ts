@@ -138,8 +138,9 @@ describe("e2sExport — template-overlay fidelity", () => {
     };
     const body = buildE2PatternBody({ ...NEUTRAL_INPUT, parts });
     const stepOff = 0x800 + 0 * 816 + 0x30 + 0 * 12; // part0, step0
-    // Korrigiertes Layout (Factory-verifiziert): b1=Gate, b2=Vel, b3=Flag, b4=Note
-    expect([...body.slice(stepOff, stepOff + 5)]).toEqual([0x01, 0x24, 0x7f, 0x01, 0x47]);
+    // Layout: b1=Gate, b2=Vel, b3=Flag, b4=Note. Die Note MIDI 0x47 liegt als
+    // 0x48 im Speicher — das Geraet schiebt um eins (siehe e2StepNote.ts).
+    expect([...body.slice(stepOff, stepOff + 5)]).toEqual([0x01, 0x24, 0x7f, 0x01, 0x48]);
     // bytes 5..11 stay zero
     expect([...body.slice(stepOff + 5, stepOff + 12)]).toEqual([0, 0, 0, 0, 0, 0, 0]);
     // every OTHER step record is still the canonical inactive form
@@ -161,8 +162,9 @@ describe("e2sExport — template-overlay fidelity", () => {
     expect(body[so + 1]).toBe(0x48);
     expect(body[so + 12 + 1]).toBe(96);
     expect(body[so + 24 + 1]).toBe(0xff);
-    // Default-Note aktiver Steps = 0x3C (C4 = Originaltonhöhe)
-    expect(body[so + 4]).toBe(0x3c);
+    // Vorgabe-Note aktiver Steps ist MIDI 60 (C4 = Originaltonhoehe); das
+    // Geraet legt sie als 0x3D ab, nicht als 0x3C — siehe e2StepNote.ts.
+    expect(body[so + 4]).toBe(0x3d);
   });
 
   it("inactive step uses canonical 00 48 60 00 00", () => {
@@ -197,7 +199,7 @@ describe("e2sExport — template-overlay fidelity", () => {
     const b2 = buildE2PatternBody({ ...NEUTRAL_INPUT, parts });
     const so = 0x800 + 0x30;
     expect(b2[so + 2]).toBe(127); // velocity geclampt
-    expect(b2[so + 4]).toBe(127); // note geclampt
+    expect(b2[so + 4]).toBe(128); // MIDI 127 (G9) geclampt, +1 gespeichert
   });
 });
 

@@ -52,6 +52,7 @@
  * zero-filled which the reader interprets as "all disabled".
  */
 
+import { midiNoteToE2StepByte } from "./e2StepNote";
 import {
   ELECTRIBE_MAGIC,
   ELECTRIBE_REAL_IDENTIFIER,
@@ -275,7 +276,8 @@ export function writeStepRecord(view: DataView, offset: number, step: E2StepInpu
   if (!step.active) {
     noteByte = E2_INACTIVE_STEP_NOTE; // 0x00
   } else {
-    noteByte = clampInt(step.note, 0, 127, E2_DEFAULT_NOTE); // default 0x3C
+    // Geraet speichert MIDI+1 (0 = kein Ton) — siehe e2StepNote.ts.
+    noteByte = midiNoteToE2StepByte(clampInt(step.note, 0, 127, E2_DEFAULT_NOTE));
   }
 
   view.setUint8(offset + ELECTRIBE_REAL_STEP_TRIGGER_OFFSET, trigger);

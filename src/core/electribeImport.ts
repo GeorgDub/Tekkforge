@@ -169,6 +169,8 @@
  *   - Values[16]      16 × 1 Byte  (Parameter-Werte 0..127)
  */
 
+import { e2StepByteToMidiNote } from "./e2StepNote";
+
 // ─── Konstanten ───────────────────────────────────────────────────────────────
 
 export const ELECTRIBE_MAGIC = "KORG";
@@ -793,7 +795,9 @@ function parseRealPartBlock(view: DataView, partOffset: number, partIndex: numbe
           gateByte === ELECTRIBE_REAL_GATE_TIE_SENTINEL
             ? ELECTRIBE_REAL_GATE_TIE_SENTINEL
             : Math.min(ELECTRIBE_REAL_GATE_MAX, gateByte);
-        const note = noteByte <= 127 ? noteByte : 127;
+        // Geraet speichert MIDI+1 (0 = kein Ton) — siehe e2StepNote.ts. Die
+        // fruehere Begrenzung auf <=127 machte aus 128 (G9) eine 127.
+        const note = e2StepByteToMidiNote(noteByte) ?? 0;
         steps[s] = { active, velocity, gate, note };
       } else {
         steps[s] = { active: false, velocity: 0 };

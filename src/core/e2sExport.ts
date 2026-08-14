@@ -45,12 +45,26 @@
  *       part +0x15  volume (0..127)
  *       part +0x22  pan    (0..127, 64 = center)
  *       part +0x30  64×12B step records:
- *         byte 0  trigger     (1 = active, 0 = off)
- *         byte 1  note        (0x48 = C5 default)
- *         byte 2  velocity    (0x60 = 96 default, 0x7F max)
- *         byte 3  gate flag   (1 on active steps — MUST be set or the step is silent)
- *         byte 4  gate length (0x3D ≈ typical; never 0 on active steps)
- *         bytes 5..11  reserved 0
+ *         byte 0      trigger  (1 = aktiv, 0 = aus)
+ *         byte 1      Gate-Zeit (Anzeige = Byte; 0x48 = 72 Vorgabe, 0xFF = Tie)
+ *         byte 2      Velocity  (Anzeige = Byte; 0x60 = 96 Vorgabe)
+ *         byte 3      Flag — Bedeutung offen, siehe unten
+ *         bytes 4..7  bis zu VIER Noten, je MIDI+1 (0 = leer)
+ *         bytes 8..11 bislang immer 0
+ *
+ *       ✔ Am Geraet gemessen (2026-08-14): Gate-Zeit und Velocity stehen
+ *       unverschluesselt im Byte (Anzeige 60 -> 60, Anzeige 52 -> 52).
+ *
+ *       ⚠ Byte 3 („STEP_FLAG"): der fruehere Kommentar behauptete, das Byte
+ *       muesse auf aktiven Steps 1 sein, sonst bleibe der Step stumm. Das ist
+ *       so nicht haltbar — ein am Geraet erzeugter, hoerbarer Step mit vier
+ *       Noten trug hier 0, waehrend einstimmige Steps 1 trugen. Auch die
+ *       Factory-Datei BodyTalk1 enthaelt beide Werte auf aktiven Steps
+ *       (105x 0, 209x 1). Der Schreibpfad setzt weiter 1, weil die alte
+ *       Behauptung nicht widerlegt, sondern nur eingeschraenkt ist.
+ *
+ *       ⚠ Nur Notenplatz 1 wird geschrieben. Die Factory-Bank belegt alle vier
+ *       (53202 / 5065 / 4096 / 3719 Vorkommen), Akkorde gehen also verloren.
  *
  * Pure TypeScript, isomorphic (no Electron/DOM deps) — safe in Node test ctx.
  *
@@ -59,6 +73,7 @@
  * destination Electribe has loaded in the matching part slots.
  */
 
+import { midiNoteToE2StepByte } from "./e2StepNote";
 import { E2S_INIT_BODY_B64, E2S_GLST_BLOCK_B64 } from "./e2sExportAssets";
 import type { E2PatternInput } from "./electribePatternBuilder";
 import { writePartParamsToBody } from "./partParams";
@@ -83,6 +98,9 @@ const GLST_OFFSET = 0x100;
 
 // body-relative field offsets
 const NAME_OFF = 0x10;
+// ✔ Ein drittes Mal bestaetigt (2026-08-14): Tempo 100 -> Bytes 0xE8 0x03 =
+// LE 1000. Der Global-Block blieb dabei erneut unveraendert; sein Byte +0x18
+// steht seit 26 Lesevorgaengen konstant auf 100 und ist NICHT das Tempo.
 // ✔ Am Geraet bestaetigt (2026-08-14): Tempo von 120 auf 135 geaendert — im
 // gesamten 2-KB-Pattern-Kopf bewegten sich GENAU diese zwei Bytes
 // (176,4 -> 70,5 = LE 1200 -> 1350). Der Global-Block blieb unveraendert,
@@ -497,7 +515,8 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
           step.gate === GATE_TIE ? GATE_TIE : clampInt(step.gate, 0, GATE_MAX, DEFAULT_GATE);
         body[so + STEP_VELOCITY] = clampInt(step.velocity, 0, 127, DEFAULT_VELOCITY);
         body[so + STEP_FLAG] = 0x01; // Factory-Konvention für aktive Steps
-        body[so + STEP_NOTE] = clampInt(step.note, 0, 127, DEFAULT_NOTE);
+        // Geraet speichert MIDI+1 (0 = kein Ton) — siehe e2StepNote.ts.
+        body[so + STEP_NOTE] = midiNoteToE2StepByte(clampInt(step.note, 0, 127, DEFAULT_NOTE));
       } else {
         // canonical inactive record — exakt wie Init-181: 00 48 60 00 00
         body[so + STEP_TRIGGER] = 0x00;
