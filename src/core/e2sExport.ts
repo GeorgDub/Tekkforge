@@ -344,59 +344,80 @@ export const PATTERN_SWING_OFF = 0x24;
 export const PATTERN_LEVEL_OFF = 0x2a;
 
 /**
- * Pattern-Kopf-Offset der „OSC Edit Motion".
+ * ## Motion-Spuren im Pattern-Kopf
  *
- * Am Geraet gemessen (2026-08-14), zwei Punkte:
+ * Der Kopfbereich ab `0x100` haelt bis zu 24 Motion-Spuren. Eine Spur bindet
+ * einen Parameter an einen Part und legt fuer jeden der 64 Steps einen Wert ab.
+ * Die Spur `i` besteht aus drei Teilen, die in drei parallelen Tabellen liegen:
+ *
+ *     0x100 + i            Part-Nummer, 1-basiert (0 = Spur unbenutzt)
+ *     0x118 + i            Parameter-Kennung (4 = Osc Edit)
+ *     0x130 + i*64 + step  Wert je Step
+ *
+ * ✔ Am Geraet hergeleitet und geprueft (2026-08-14). Zunaechst war nur eine
+ * Motion gesetzt, und im ganzen 16-KB-Pattern waren ausserhalb der Parts nur
+ * vier Bytes belegt: `0x40`, `0x100`, `0x118` und `0x130`. Der gleichmaessige
+ * Abstand von 0x18 sah nach drei Tabellen zu je 24 Eintraegen aus — mehr als
+ * eine Vermutung war es nicht.
+ *
+ * Die zweite Motion (Part 2, Step 2) hat sie bestaetigt, und zwar an einer
+ * Stelle, die sich nicht raten liess: der Wert landete auf `0x171`. Das ist
+ * `0x130 + 1*64 + 1` — Spur 1, Step 2. Zugleich erschienen `0x101 = 2` (Part 2)
+ * und `0x119 = 4` (derselbe Parameter). Alle drei Tabellen zeigten also
+ * gleichzeitig auf denselben neuen Eintrag.
+ *
+ * Bei 24 Spuren endet der Wertebereich auf `0x730`; dahinter bis `0x800` ist
+ * nichts belegt. Die Zahl 24 stammt aus dem Tabellenabstand, nicht aus einer
+ * Messung — sie ist der einzige geratene Teil dieser Struktur.
+ *
+ * ⚠ Die Parameter-Kennung ist nur fuer Osc Edit bekannt (4). Welche Nummer die
+ * uebrigen motion-faehigen Regler tragen, ist offen.
+ */
+export const PATTERN_MOTION_PART_OFF = 0x100;
+export const PATTERN_MOTION_PARAM_OFF = 0x118;
+export const PATTERN_MOTION_VALUES_OFF = 0x130;
+export const PATTERN_MOTION_LANES = 24;
+export const PATTERN_MOTION_STEPS = 64;
+/** Parameter-Kennung fuer „Osc Edit" — am Geraet gemessen. */
+export const MOTION_PARAM_OSC_EDIT = 4;
+
+/** Byte-Offset des Motion-Werts einer Spur fuer einen Step. */
+export function motionValueOffset(lane: number, step: number): number {
+  return PATTERN_MOTION_VALUES_OFF + lane * PATTERN_MOTION_STEPS + step;
+}
+
+/**
+ * ## Werteleiter der Osc-Edit-Motion
+ *
+ * Die Anzeige laeuft `Off`, dann `0 % … 98 % FWD`, dann `98 % … 0 % REV` —
+ * eine durchlaufende Leiter, die in der Mitte umklappt:
+ *
+ *     Off        0
+ *     FWD    1..64    Prozent = round((v - 1)   * 98 / 63)
+ *     REV   65..128   Prozent = round((128 - v) * 98 / 63)
+ *
+ * Zwei gleich grosse Haelften zu je 64 Werten.
+ *
+ * ✔ Am Geraet gemessen (2026-08-14):
  *
  *     Anzeige      Byte
  *     23 % REV     113
  *     90 % FWD      59
  *     98 % FWD      64   <- vorhergesagt, dann gemessen
  *     98 % REV      65   <- vorhergesagt, dann gemessen
+ *     12 % FWD       9   <- vorhergesagt, dann gemessen
  *
- * Beim Umstellen aenderte sich im gesamten 16-KB-Pattern GENAU dieses eine
- * Byte. Der Wert liegt damit im Pattern-Kopf, nicht im Part-Block und nicht im
- * Step-Record — obwohl die Einstellung am Geraet im Step-Editor sitzt.
- *
- * ## Die Skala
- *
- * Die Anzeige laeuft `Off`, dann `0 % … 98 % FWD`, dann `98 % … 0 % REV` —
- * also eine einzige durchlaufende Leiter, die in der Mitte umklappt. Ein
- * Modell, das BEIDE Messpunkte exakt trifft:
- *
- *     Off        0
- *     FWD    1..64    Prozent = round((v - 1)   * 98 / 63)
- *     REV   65..128   Prozent = round((128 - v) * 98 / 63)
- *
- * Zwei gleich grosse Haelften zu je 64 Werten, Raender 1 = 0 % FWD,
- * 64 = 98 % FWD, 65 = 98 % REV, 128 = 0 % REV.
- *
- * ✔ Beide Haelften sind per VORHERSAGE bestaetigt: 64 und 65 wurden aus dem
- * Modell berechnet und danach gemessen — und zwar die beiden Nachbarn genau am
- * Umklapppunkt, also dort, wo ein falsch herum gedachtes oder anders skaliertes
- * Modell zwangslaeufig auffliegen muss. Ein Modell, das nur die Punkte trifft,
- * aus denen es gebaut wurde, zeigt gar nichts; dieses hat zweimal einen Punkt
- * getroffen, den es nicht kannte.
+ * Drei der fuenf Werte wurden aus der Leiter BERECHNET und erst danach am
+ * Geraet abgelesen. Zwei davon (64 und 65) liegen unmittelbar beidseits des
+ * Umklapppunkts, also genau dort, wo eine falsch herum gedachte oder anders
+ * skalierte Leiter zwangslaeufig auffliegen muesste.
  *
  * Das obere Ende (128 = 0 % REV) ist nicht direkt gemessen, folgt aber aus den
  * beiden REV-Punkten: 65 -> 98 % und 113 -> 23 % ergeben eine Steigung von
  * 1,5625 je Schritt und damit den Nullpunkt bei 127,7 — gerundet 128. Die
  * naheliegende Alternative, REV ende bei 127, ist ausgeschlossen: sie wuerde
  * fuer Byte 113 eine Anzeige von 22 % verlangen, gemessen sind aber 23 %.
- *
- * ⚠ Offen ist ausserdem, ob das Byte fuer den GANZEN Part gilt oder nur fuer
- * Step 1. Beide Lesarten passen zur Messung: bei einer Ablage pro Step waeren
- * die Bytes der uebrigen 63 Steps schlicht 0 (= Off), und `0x131`..`0x16F` sind
- * tatsaechlich durchgehend null. Ein zweiter Step mit einem Wert klaert es.
- *
- * Auffaellig ist die Nachbarschaft: im Kopfbereich `0x40`..`0x7FF` sind nur
- * vier Bytes ueberhaupt belegt — `0x40`, `0x100`, `0x118` und `0x130`. Die
- * letzten drei liegen mit 0x18 Abstand gleichmaessig auseinander, was auf eine
- * Tabelle mit 24-Byte-Schritt hindeutet. Was in den ersten beiden Eintraegen
- * steht (1 bzw. 4), ist unbekannt.
  */
-export const PATTERN_OSC_EDIT_MOTION_OFF = 0x130;
-
 /** Byte-Wert fuer „Motion aus". */
 export const OSC_EDIT_MOTION_OFF_VALUE = 0;
 /** Hoechstes Byte der Leiter (= 0 % REV). */

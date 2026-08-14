@@ -9,7 +9,13 @@ import { describe, expect, it } from "vitest";
 import {
   decodeOscEditMotion,
   encodeOscEditMotion,
+  motionValueOffset,
   OSC_EDIT_MOTION_MAX_VALUE,
+  PATTERN_MOTION_LANES,
+  PATTERN_MOTION_PARAM_OFF,
+  PATTERN_MOTION_PART_OFF,
+  PATTERN_MOTION_STEPS,
+  PATTERN_MOTION_VALUES_OFF,
 } from "../src/core/e2sExport";
 
 /** Byte → Anzeige, wie am Gerät abgelesen (2026-08-14). */
@@ -18,6 +24,7 @@ const GEMESSEN: Array<[number, number, "fwd" | "rev"]> = [
   [64, 98, "fwd"], // vorhergesagt, dann gemessen
   [65, 98, "rev"], // vorhergesagt, dann gemessen
   [113, 23, "rev"],
+  [9, 12, "fwd"], // vorhergesagt, dann gemessen
 ];
 
 describe("OSC-Edit-Motion", () => {
@@ -59,5 +66,22 @@ describe("OSC-Edit-Motion", () => {
       expect(d, String(v)).not.toBeNull();
       expect(encodeOscEditMotion(d!.percent, d!.direction), String(v)).toBe(v);
     }
+  });
+
+  it("legt die Motion-Spuren dorthin, wo sie am Geraet gemessen wurden", () => {
+    // Spur 0, Step 1 — die erste gesetzte Motion.
+    expect(motionValueOffset(0, 0)).toBe(0x130);
+    // Spur 1, Step 2 — dieser Offset liess sich nicht raten und hat die
+    // Tabellenstruktur bestaetigt.
+    expect(motionValueOffset(1, 1)).toBe(0x171);
+  });
+
+  it("passt mit 24 Spuren genau in den Kopfbereich vor 0x800", () => {
+    const ende = PATTERN_MOTION_VALUES_OFF + PATTERN_MOTION_LANES * PATTERN_MOTION_STEPS;
+    expect(ende).toBe(0x730);
+    expect(ende).toBeLessThanOrEqual(0x800);
+    // Die beiden Kopftabellen liegen davor und ueberlappen einander nicht.
+    expect(PATTERN_MOTION_PARAM_OFF - PATTERN_MOTION_PART_OFF).toBe(PATTERN_MOTION_LANES);
+    expect(PATTERN_MOTION_VALUES_OFF - PATTERN_MOTION_PARAM_OFF).toBe(PATTERN_MOTION_LANES);
   });
 });
