@@ -1,0 +1,104 @@
+501	Kick	spetzial-kick10	509ms
+502	Kick	Bassdrum Gated	510ms
+503	Kick	exKicK-1-MONO-08	509ms
+504	Kick	exKicK-10	509ms
+505	Kick	ABI0-NEUER-KICK1	507ms
+506	Kick	PENGkick-MONO-15	513ms
+507	Kick	22inKickPowStrC_	512ms
+508	Kick	PaPPi KicK 1	505ms
+509	Kick	Mega-kick1	513ms
+510	Kick	Mega-kick10	513ms
+511	Kick	mein kick2	503ms
+512	Kick	TiTTeNsPriTzEr K	501ms
+513	Kick	808_LNG_KICK	501ms
+514	Kick	LS-HKI Basic Har	519ms
+515	Kick	W+chterKicK 1	500ms
+516	Kick	Hardcore extrem	518ms
+517	Kick	FPC_Kick_Yam_001	518ms
+518	Kick	HardKick17 - Kop	520ms
+519	Snare	snare-rush	390ms
+520	Snare	Kore Snare_6	386ms
+521	Snare	GMSnare1_02	385ms
+522	Snare	GMSnare1-MONO-07	385ms
+523	Snare	SD-ER1-Drupy1	399ms
+524	Snare	snarehhj	395ms
+525	Snare	Snare 001	308ms
+526	Snare	Snare 002	107ms
+527	Snare	BAHRE_Snare_2	358ms
+528	Snare	MaschinenMafia_K	359ms
+529	Clap	Clap1.wa-MONO-04	328ms
+530	Clap	Clap 10_2 - Kopi	322ms
+531	Clap	GM1Clap_01	367ms
+532	Clap	Clap 001	254ms
+533	Clap	SZ_Clap	300ms
+534	Clap	Miami_Clap1	386ms
+535	Clap	Clap 002	390ms
+536	Clap	clapfilt	408ms
+537	HiHat	ZG HH LUCAN	267ms
+538	HiHat	ZG HH THRASHED	261ms
+539	HiHat	ZG HH TANG	268ms
+540	HiHat	TeKK_HaT2	257ms
+541	HiHat	ZG HH KICK STATI	268ms
+542	HiHat	ZG HH DEEP CLICK	258ms
+543	HiHat	ZG HH MAD DOG	257ms
+544	HiHat	DuUB HaT	271ms
+545	HiHat	ZG HH WHIPPER	257ms
+546	HiHat	ZG HH GROTBAGS	272ms
+547	HiHat	DoppeL-HaT	271ms
+548	Perc	Percussion 42	424ms
+549	Perc	RIM 01	418ms
+550	Perc	STRTBTS CONGA KI	411ms
+551	Perc	SpTekK_HLS-percu	409ms
+552	Perc	Digital_Conga_01	458ms
+553	Perc	Digital_Conga_02	458ms
+554	Perc	Digital_Shake_01	458ms
+555	Perc	Digital_Rimshot_	469ms
+556	Perc	Digital_Rimshot_	472ms
+557	Perc	Digital_Shake_02	472ms
+558	Bass	Bx BassShoot PLO	1263ms
+559	Bass	Der BasS MusS Fi	1401ms
+560	Bass	Unison_Bass_C3	1220ms
+561	Bass	S53vesterbass	1215ms
+562	Bass	Kick The Bass 2	1215ms
+563	Bass	25955__walter-od	1450ms
+564	Bass	Bassdrum-02lkjhg	1461ms
+565	Bass	Bassdrum-01fd	1461ms
+566	Bass	hardbassdrumz_05	1184ms
+567	Bass	Marvibestbasssss	1182ms
+568	Bass	Bass3-MO-MONO-01	1518ms
+569	Lead	HaMMeR MeLo	4222ms
+570	Lead	T-Mello	4260ms
+571	Lead	Genetikk - MeLo	4117ms
+572	Lead	LS-HFX Sharp FX	4086ms
+573	Lead	SYNTHHS3	4367ms
+574	Lead	DL_Synthbeat	4000ms
+575	Lead	DL_Synthdrum	4000ms
+576	Lead	SynthArpSample3	4000ms
+577	Lead	#R0binS-MelO	3999ms
+578	Lead	Bluezone-HLS-syn	4414ms
+579	Lead	PsyChoTanZmELo1	3926ms
+580	Lead	Rad MeLo 1	3926ms
+581	Lead	melo neu-MONO-15	4501ms
+582	Lead	melo neu-MONO-08	4501ms
+583	Lead	melo neu 2	4501ms
+584	Lead	Krieger-MeLo	3894ms
+585	Lead	Tau-MeLo	4518ms
+586	Lead	Willst du von mi	3840ms
+587	Lead	HBsChE PaRa MeLo	4562ms
+588	Lead	Auf CrystaL-MeLo	4598ms
+589	Pad	Padseq~1	6874ms
+590	Pad	Killa Bees Pad.w	8001ms
+591	Pad	Strings of Wisdo	8000ms
+592	Pad	4017__noisecolle	8428ms
+593	Pad	FX Drone Strings	5191ms
+594	Pad	PAD_ResoChor	5089ms
+595	Pad	Killa Bees Pad.w	10080ms
+596	Pad	ED19_Pad	3746ms
+597	FX	Haus-alarm1	3076ms
+598	FX	TeRR5Rt FX 1!	2912ms
+599	FX	flying_saucer_al	3318ms
+600	FX	Riser 6 4 Bars 1	2846ms
+601	FX	Haus-alarm5_Hall	3372ms
+602	FX	Down Rise Fx	2786ms
+603	FX	HBsche Alarm MeL	2764ms
+604	FX	04 Fx-MONO-002-E	2667ms

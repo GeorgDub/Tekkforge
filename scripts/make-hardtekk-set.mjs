@@ -51,8 +51,19 @@ const THEMA = {
   },
 };
 
-/** Sample-Belegung der 16 Parts — einmal fürs ganze Set. */
-const SAMPLES = [590, 585, 562, 550, 553, 615, 549, 592, 600, 537, 530, 543, 531, 512, 501, 548];
+/**
+ * Sample-Belegung der 16 Parts. Die Nummern werden NICHT fest verdrahtet,
+ * sondern aus der Bank nach Kategorie geholt — sonst zeigt das Set nach einem
+ * Bankwechsel auf ganz andere Klaenge, ohne dass irgendetwas auffaellt.
+ *
+ * Je Part: [Kategorie-Name, wievieltes Sample dieser Kategorie].
+ */
+const BELEGUNG = [
+  ["Kick", 0], ["Kick", 3], ["Snare", 0], ["Clap", 0],
+  ["HiHat", 0], ["HiHat", 5], ["Perc.", 0], ["Perc.", 3],
+  ["Analog", 0], ["Analog", 2], ["PCM", 0], ["PCM", 4],
+  ["PCM", 8], ["PCM", 12], ["Phrase", 0], ["FX", 0],
+];
 const VOLUME = [127, 108, 105, 92, 84, 88, 80, 78, 118, 104, 100, 95, 95, 92, 68, 88];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, POLY2, POLY2, POLY2, MONO1, POLY2, POLY2];
@@ -179,9 +190,25 @@ function partsFuer(intensitaet, thema, kickFigur) {
 
 const buf = fs.readFileSync(BANK);
 const bank = parseE2sBank(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
-const belegt = new Set(bank.slots.filter((s) => s && s.frames > 0).map((s) => s.sampleNumber));
-const fehlend = SAMPLES.filter((n) => !belegt.has(n));
-if (fehlend.length) console.log("⚠ nicht in der Bank:", fehlend.join(", "));
+const belegt = bank.slots.filter((s) => s && s.frames > 0);
+
+const nachKategorie = new Map();
+for (const s of belegt) {
+  if (!nachKategorie.has(s.categoryName)) nachKategorie.set(s.categoryName, []);
+  nachKategorie.get(s.categoryName).push(s);
+}
+const SAMPLES = [], NAMEN = [];
+for (const [kat, idx] of BELEGUNG) {
+  const liste = nachKategorie.get(kat) ?? [];
+  if (!liste.length) throw new Error(`Bank enthaelt keine Kategorie "${kat}"`);
+  const s = liste[Math.min(idx, liste.length - 1)];
+  SAMPLES.push(s.sampleNumber);
+  NAMEN.push(s.name.trim());
+}
+console.log(`Bank: ${BANK.split(/[\/]/).pop()} — ${belegt.length} Samples`);
+BELEGUNG.forEach(([kat], i) =>
+  console.log(`  Part ${String(i + 1).padStart(2)}  ${kat.padEnd(7)} #${SAMPLES[i]} ${NAMEN[i]}`),
+);
 
 const patterns = PLAN.map(([name, intens, thema, kick, wdh], i) => ({
   name,
