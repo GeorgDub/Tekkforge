@@ -389,6 +389,23 @@ export const E2_GLOBAL_METRONOME_OFF = 0x10;
  * damit das Mittel der Wahl, wenn die Verbindung plötzlich tot wirkt.
  */
 export const E2_GLOBAL_MIDI_CHANNEL_OFF = 0x29;
+
+/**
+ * Global-Offset des Trigger-Modus — 0-basierter Listenindex.
+ *
+ * | Anzeige  | Byte |                     |
+ * |----------|------|---------------------|
+ * | normal   | 0    | gemessen (Ausgang)  |
+ * | seq 1st  | 1    | aus der Reihenfolge |
+ * | seq play | 2    | gemessen            |
+ *
+ * ✔ Am Gerät bestätigt (2026-08-14): auf „seq play" gestellt, `+0x1D` ging von
+ * 0 auf 2. Der mittlere Wert liegt zwischen zwei gemessenen Punkten.
+ *
+ * Im selben Durchgang ging `+0x29` von 4 auf 0 zurück (MIDI-Kanal wieder 1) —
+ * eine unbeabsichtigte, aber willkommene Gegenprobe für dessen 0-Basis.
+ */
+export const E2_GLOBAL_TRIGGER_MODE_OFF = 0x1d;
 export function decodeGlobalDump(bytes: Uint8Array): Uint8Array | null {
   if (bytes.length < 8 || bytes[0] !== SYSEX_START || bytes[1] !== KORG_MANUFACTURER_ID)
     return null;
