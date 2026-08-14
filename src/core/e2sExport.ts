@@ -101,6 +101,33 @@ const BPM_OFF = 0x22;
 // TekkForge schreibt diese Felder derzeit NICHT — sie sind hier nur
 // dokumentiert, damit die naechste Erweiterung nicht wieder suchen muss.
 export const PATTERN_KEY_OFF = 0x27;
+
+/**
+ * Last Step eines Parts — **pro Part**, nicht pattern-weit.
+ *
+ * ✔ Am Geraet bestaetigt (2026-08-14). Eingestellt wurden Parts 9-16 auf
+ * 14/16/2/5/7/9/13/15, gelesen wurde bei Part-Offset 0x00:
+ *
+ *     0 0 0 0 0 0 0 0  14  0  2  5  7  9  13  15
+ *
+ * Sieben der acht Werte stimmen exakt. Der achte ist der interessante: Part 10
+ * war auf **16** gestellt und steht als **0** im Speicher.
+ *
+ * ⇒ Gespeichert wird `Anzeige mod 16`. Die 16 ist die 0. Dazu passt die
+ * Bedienung: am Geraet schlaegt der Wert von 1 nach unten auf 16 um.
+ *
+ * ### Das widerlegt einen Schluss in der Omnitribe-Doku
+ *
+ * `docs/hwtest/sitzung_2026-08-10.md` liest dort ueber alle 16 Parts eine 0 und
+ * folgert: „LastStep 0 bei 64 Steps ist Unsinn ⇒ der RAM-Block hat am Part-Kopf
+ * ein anderes Layout als der Sysex-Body."
+ *
+ * Das Layout ist NICHT anders. Die 0 war kein Widerspruch, sondern der
+ * Normalfall: alle Parts standen auf 16 Steps. Der Fehler lag in der Annahme,
+ * ein Feld muesse seinen Anzeigewert speichern — hier ist die Obergrenze auf
+ * die Null abgebildet.
+ */
+export const PART_LAST_STEP_OFF = 0x00;
 export const PATTERN_SCALE_OFF = 0x28;
 export const PATTERN_MFX_TYPE_OFF = 0x3d;
 const STEPLEN_OFF = 0x25;
