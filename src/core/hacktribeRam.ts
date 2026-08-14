@@ -157,6 +157,15 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     // für Live-Änderungen — weder für NRPN noch für RAM-Writes. Wer das
     // uebersieht, haelt einen funktionierenden Sendeweg fuer kaputt; genau das
     // ist hier passiert.
+    //
+    // Praezisierung: statisch ist nur der PARAMETER-Bereich (`0x03 + 2k`). Ein
+    // Stueck weiter hinten schreibt das Geraet sehr wohl. Gemessen an einem
+    // Ring-Mod-Part, waehrend der Sequencer lief: 0x4E, 0x4F, 0x52, 0x55, 0x56
+    // wechselten von 0 auf 18/60/128/128/128 — und 128 ist als 7-Bit-Parameter
+    // gar nicht darstellbar. Das sieht nach Laufzeitzustand aus (LFO-Phase o.ae.),
+    // der erst mit der Wiedergabe entsteht. Wer den Puffer byteweise
+    // vergleicht, muss diese Bytes also erwarten und darf sie nicht fuer eine
+    // Parameteraenderung halten.
     label: "FX-Puffer (Pattern-Stand, nicht live)",
     // Adressen NICHT doppelt pflegen — sie stehen in e2FxParams, wo auch der
     // Dekoder für die Struktur liegt. Zwei Quellen für dieselbe Adresse driften.
