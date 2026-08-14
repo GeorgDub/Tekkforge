@@ -6,8 +6,8 @@ Generiert aus `BOTTROP.ESX` (ESX-1) für die Electribe 2 Sampler.
 - `bottrop-samples.all` → auf SD-Karte als `e2sSample.all`, am Gerät importieren.
 - `bottrop-test.e2sallpat` → Pattern-Bank importieren.
 
-## Annahme zur Sample-Nummerierung
-Die User-Samples beginnen am Gerät bei **501**. Der `.all`-Slot-Index IST die Geräte-Nummer: Slot 501 → Sample **501**, Slot 502 → **502**, usw. In der Pattern-Datei steht die Referenz um eins niedriger (am Gerät gemessen) — die Parts treffen dadurch genau diese Nummern.
+## Sample-Nummerierung (am Gerät gemessen)
+Die User-Samples beginnen am Gerät bei **501**. Die Anzeige am Gerät ist der `.all`-Tabellenindex **plus zwei**: Sample **501** liegt auf Slot 499, **502** auf Slot 500, usw. (SLOTNUM-Messung 2026-08-14). In der Pattern-Datei steht die Referenz um eins unter der Anzeige (am Gerät gemessen) — die Parts treffen dadurch genau diese Nummern.
 
 ## Sample-Liste (Geräte-Nummer → Name → ESX-Quelle)
 

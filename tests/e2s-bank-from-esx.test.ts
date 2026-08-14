@@ -31,7 +31,10 @@ import { parseEsxBank } from "../src/core/esxParser";
 import type { EsxPattern, EsxSample } from "../src/core/esxParser";
 import { buildE2sBank, type E2sSlotInput } from "../src/core/e2sBankBuilder";
 import { parseE2sBank } from "../src/core/e2sBankReader";
-import { bankNumberToE2PatternRef } from "../src/core/e2sPatternSampleLink";
+import {
+  bankNumberToE2PatternRef,
+  displayNumberToSlotIndex,
+} from "../src/core/e2sPatternSampleLink";
 import { buildE2AllPatFile, E2S_ALLPAT_FILE_SIZE } from "../src/core/e2sExport";
 import type { E2PatternInput } from "../src/core/electribePatternBuilder";
 
@@ -112,8 +115,9 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
     const hwNumber = USER_SAMPLE_BASE + j;
     sampleMap.set(s.index, { allSlot: hwNumber, hwNumber, name });
     return {
-      // Tabellen-Index IST die Geraete-Nummer (index == esli.OSC_0index).
-      slotIndex: hwNumber,
+      // Anzeige am Geraet = Tabellenindex + 2 (SLOTNUM-Messung 2026-08-14):
+      // Nummer N gehoert auf Platz N − 2, esli traegt N selbst.
+      slotIndex: displayNumberToSlotIndex(hwNumber),
       sampleNumber: hwNumber, // device-displayed number (esli +0x08/+0x56)
       category: 17, // "User" — wie echte User-Sample-Bänke
       name,
@@ -213,12 +217,13 @@ describe("BOTTROP.ESX → matching .e2sallpat + .all (samples at 501+) + manual"
     lines.push("- `bottrop-samples.all` → auf SD-Karte als `e2sSample.all`, am Gerät importieren.");
     lines.push("- `bottrop-test.e2sallpat` → Pattern-Bank importieren.");
     lines.push("");
-    lines.push("## Annahme zur Sample-Nummerierung");
+    lines.push("## Sample-Nummerierung (am Gerät gemessen)");
     lines.push(
-      "Die User-Samples beginnen am Gerät bei **501**. Der `.all`-Slot-Index IST " +
-        "die Geräte-Nummer: Slot 501 → Sample **501**, Slot 502 → **502**, usw. " +
-        "In der Pattern-Datei steht die Referenz um eins niedriger (am Gerät " +
-        "gemessen) — die Parts treffen dadurch genau diese Nummern.",
+      "Die User-Samples beginnen am Gerät bei **501**. Die Anzeige am Gerät " +
+        "ist der `.all`-Tabellenindex **plus zwei**: Sample **501** liegt auf " +
+        "Slot 499, **502** auf Slot 500, usw. (SLOTNUM-Messung 2026-08-14). " +
+        "In der Pattern-Datei steht die Referenz um eins unter der Anzeige " +
+        "(am Gerät gemessen) — die Parts treffen dadurch genau diese Nummern.",
     );
     lines.push("");
     lines.push("## Sample-Liste (Geräte-Nummer → Name → ESX-Quelle)");

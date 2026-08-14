@@ -77,39 +77,48 @@ Optionen für `convert`: `-o/--out <dir>`, `--base <n>` (erste Sample-Nr., Defau
 
 ## Sample-Nummerierung (geräteverifiziert)
 
-Zwei Regeln, die sich nur am Gerät bzw. über die Selbstkonsistenz echter Dateien
-belegen lassen — TekkForge hat beide bis 0.2.x verletzt und dadurch Bänke gebaut,
-die am Gerät um eins verschoben klangen. Beide Fehler waren unsichtbar, weil ein
-Versatz von *eins* immer ein plausibles Sample liefert, nur eben das falsche.
+Zwei Regeln, die sich nur am Gerät belegen lassen — TekkForge hat beide mehrfach
+falsch geraten und dadurch Bänke gebaut, die am Gerät verschoben erschienen.
+Beide Fehler sind unsichtbar, solange man nur eine Seite betrachtet: ein kleiner
+Versatz liefert immer ein plausibles Sample, nur eben das falsche — oder einen
+leeren ersten Platz.
 
-**1. In der `.all` IST der Tabellen-Index die Geräte-Nummer.**
+**1. Die Anzeige am Gerät ist der `.all`-Tabellenindex PLUS ZWEI.**
 
 Die Offset-Tabelle steht bei `0x0010` und hat **1020** LE32-Einträge (nicht 250 ab
-`0x07E0` — das sah nur so aus, weil das erste Werks-Sample bei Nr. 500 liegt und
-`0x0010 + 500*4 == 0x07E0` ergibt). Jedes Sample trägt seine Nummer ein zweites Mal
-im `korg/esli`-Chunk als `OSC_0index`, und beide müssen übereinstimmen:
+`0x07E0` — das sah nur so aus, weil `0x0010 + 500*4 == 0x07E0` ergibt). Am Gerät
+abgelesen (Minimalbank `SLOTNUM.all`, 2026-08-14; danach mit geladenem Set
+bestätigt — der Part auf #501 spielt das Sample namens „PLATZ 499"):
 
 ```
-Tabellen-Index == esli.OSC_0index == Anzeige am Gerät
+Anzeige am Gerät == Tabellen-Index + 2        (Platz 499 → 501, Platz 500 → 502)
+esli.OSC_0index  == Anzeige                   (Nummernfeld = Etikett, Link-Key)
 ```
 
-Belegt über 47 reale Bänke; `parseE2sBank` prüft es bei jedem Einlesen selbst und
-meldet einen konstanten Versatz als `slotNumbering.kind === "constant-shift"`.
+Ein Sample, das als **501** erscheinen soll, gehört also auf Tabellenplatz
+**499**; unterhalb von Anzeige 501 gibt es keine User-Slots — was dorthin fällt,
+ist weg. Umgesetzt in `displayNumberToSlotIndex` / `slotIndexToDisplayNumber`;
+`parseE2sBank` prüft die Geometrie bei jedem Einlesen selbst und meldet
+Abweichungen als `slotNumbering.kind === "constant-shift"`. (Offener Punkt:
+`luknkicks.all` hat dieselbe Struktur wie die alten Fehlbauten, erscheint laut
+Nutzer aber ab 501 — solange das unerklärt ist, gilt die gemessene Regel.)
 
-**2. Die Pattern-Referenz liegt um eins darunter.**
+**2. Die Pattern-Referenz liegt um eins unter der Anzeige.**
 
 Am Gerät gemessen (dreifach unabhängig): Parts, die 584/586/588 referenzieren,
-spielen die Samples, die in der Bank auf 585/587/589 liegen.
+spielen die Samples, die als 585/587/589 erscheinen.
 
 ```
-Bank-Slot (OSC_0index) == Pattern-Referenz + 1
+Anzeige am Gerät == Pattern-Referenz + 1      (== Tabellen-Index + 2)
 ```
 
 Umgesetzt in `e2PatternRefToBankNumber` / `bankNumberToE2PatternRef` — nie als
 nacktes `± 1` an der Fundstelle.
 
-Prüfen lässt sich eine gebaute Bank mit Omnitribes Geometrie-Check
-(`tools/formats/e2s_geometry_check.py`); erwartet wird `Versatz: OK`.
+Omnitribes Geometrie-Check (`tools/formats/e2s_geometry_check.py`) vergleicht
+Tabellen-Index gegen `OSC_0index` und kennt die Anzeige-Regel nicht: eine nach
+der gemessenen Regel korrekt gebaute Bank meldet dort einen KONSTANTEN Versatz
+von **zwei** — das ist erwartet, nicht der alte Fehler.
 
 ## NRPN / Live-FX (Hacktribe, experimentell)
 

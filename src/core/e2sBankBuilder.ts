@@ -93,22 +93,27 @@ export interface E2sSlotInput {
   /**
    * Position in der Offset-Tabelle (0..`E2S_MAX_SLOTS`-1).
    *
-   * ⚠ **Der Index ist die Anzeigenummer MINUS EINS.** Für Geräte-Nr. 501 gehört
-   * das Sample auf `slotIndex: 500`.
+   * ⚠ **Der Index ist die Anzeigenummer MINUS ZWEI.** Für Geräte-Nr. 501
+   * gehört das Sample auf `slotIndex: 499` — Helfer:
+   * `displayNumberToSlotIndex` (e2sPatternSampleLink.ts).
    *
-   * ✔ Am Gerät gemessen (2026-08-14): eine Bank mit `slotIndex === sampleNumber`
-   * zeigte am Gerät Nummern **ab 502** statt ab 501, und Platz 501 blieb leer —
-   * der erste Part eines Patterns, das auf #501 zeigt, trug deshalb gar kein
-   * Sample. Eine vom Gerät selbst erzeugte Bank legt #501 auf Index 500.
+   * ✔ Am Gerät abgelesen (SLOTNUM.all, 2026-08-14): drei Töne auf den Plätzen
+   * 498/499/500, benannt nach ihrem Platz —
    *
-   * Die beiden Bänke unterscheiden sich NUR im Index; das Nummernfeld (+0x56)
-   * stand in beiden auf 501. Das Gerät zählt also nach der Tabellenposition,
-   * nicht nach dem gespeicherten Feld.
+   *     Platz 498  →  fiele auf Anzeige 500 und erscheint gar nicht
+   *     Platz 499  →  Anzeige 501
+   *     Platz 500  →  Anzeige 502
    *
-   * ⚠ Bis dahin stand hier das Gegenteil, und der Reader bestätigte es: er
-   * meldet `slotIndex === sampleNumber` als „ok" und den korrekten Versatz als
-   * `constant-shift`, also als Auffälligkeit. Beides ist falsch herum — siehe
-   * `E2sSlotNumbering`.
+   * Danach mit geladenem Set bestätigt: der Part auf #501 spielt „PLATZ 499".
+   * Das Gerät zählt also nach der Tabellenposition, nicht nach dem
+   * gespeicherten Nummernfeld. Unterhalb von Anzeige 501 gibt es keine
+   * User-Slots; was dorthin fällt, ist weg.
+   *
+   * ⚠ Zwei frühere „Messungen" (minus eins / kein Versatz) waren Artefakte
+   * einer noch geladenen alten Bank — die Minimalbank hat es entschieden.
+   * Ungeklärt bleibt luknkicks.all (gleiche Struktur, laut Nutzer trotzdem ab
+   * 501 sichtbar); solange das offen ist, gilt die gemessene Regel — siehe
+   * scripts/make-hardtekk-bank.mjs.
    */
   slotIndex: number;
   /**
@@ -117,7 +122,9 @@ export interface E2sSlotInput {
    * unter derselben Nummer (z.B. 501) statt aufsteigend. Verifiziert gegen
    * Factory-Bank `sampler_full.all` (+0x56 läuft 18,19,20,… pro Slot).
    * Default = `slotIndex` (numeriert Samples nach Position). Für User-Sample-
-   * Banken ab Geräte-Nr. 501 hier 501,502,… setzen.
+   * Banken hier die ANZEIGENUMMER setzen (= `slotIndex` + 2, siehe
+   * `slotIndexToDisplayNumber`): 501,502,… — der Default läge um zwei unter
+   * dem, was das Gerät anzeigt.
    */
   sampleNumber?: number;
   /** Sample-Name. Wird ASCII-gefiltert und auf 16 chars getrimmt. */

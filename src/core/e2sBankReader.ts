@@ -53,6 +53,7 @@ import {
   ESLI_SLICING_BEAT_OFFSET,
   ESLI_SLICING_NUM_STEPS_OFFSET,
   ESLI_USE_CHAN1_OFFSET,
+  E2S_DISPLAY_SLOT_SHIFT,
   KORG_SUBCHUNK_BODY_SIZE,
   KORG_SUBCHUNK_ID,
   LOOP_TYPE_FORWARD,
@@ -80,7 +81,9 @@ export interface E2sSlice {
  * interleaved L,R,L,R,... (gleiche Konvention wie EsxSample).
  */
 export interface E2sSlot {
-  /** Index in der 1020-Entry-Offset-Table (== esli.OSC_0index). */
+  /** Index in der 1020-Entry-Offset-Table. Anzeige am Gerät = Index + 2
+   *  (`E2S_DISPLAY_SLOT_SHIFT`); korrekt gebaute Bänke tragen die Anzeige-
+   *  nummer im `esli.OSC_0index`, also Index + 2. */
   index: number;
   /** OSC_0index (esli +0x08) — vom Gerät angezeigte Sample-Nummer (z.B. 501+).
    *  Link-Key für E2-Pattern-Part-Refs; die tragen die Nummer **um eins
@@ -133,35 +136,26 @@ export interface E2sSlot {
 }
 
 /**
- * Ergebnis der Slot-Nummerierungs-Selbstprüfung — maschinenlesbar, damit die
+ * Befund der Slot-Nummerierungs-Selbstprüfung — maschinenlesbar, damit die
  * Oberfläche warnen kann, ohne Warntexte zu parsen.
  *
- * - `"ok"` — jeder belegte Slot trägt seine eigene Nummer.
- * - `"constant-shift"` — **alle** belegten Slots liegen um `shift` daneben.
- *   Die Bank ist fehlnummeriert und muss neu gebaut werden.
+ * ✔ Das Gerät zählt nach der Tabellenposition: **Anzeige = Index + 2**
+ * (SLOTNUM.all, am Gerät abgelesen 2026-08-14, danach mit geladenem Set
+ * bestätigt — siehe `E2S_DISPLAY_SLOT_SHIFT`). Eine korrekt gebaute User-Bank
+ * legt Nummer N auf Tabellenplatz N − 2 und trägt N im `esli.OSC_0index`.
+ *
+ * - `"ok"` — jeder belegte Slot erfüllt `OSC_0index == Index + 2`.
+ * - `"constant-shift"` — **alle** belegten Slots haben denselben anderen
+ *   Versatz `shift` (= `OSC_0index − Index`). `shift: 0` ist die alte
+ *   TekkForge-Geometrie (Index == Nummer; erschien am Gerät zwei zu hoch,
+ *   der Part auf #501 blieb leer), `shift: 1` die Struktur mancher
+ *   Fremdbänke (luknkicks.all — deren Anzeigeverhalten ist ungeklärt,
+ *   siehe scripts/make-hardtekk-bank.mjs).
  * - `"scattered"` — einzelne Slots inkonsistent; kein Geometriefehler.
- */
-/**
- * Befund der Slot-Nummerierungs-Prüfung.
- *
- * ⚠ Die Bedeutung der Werte ist derzeit IRREFÜHREND. `kind: "ok"` meint
- * `slotIndex === sampleNumber` — und genau das ist am Gerät falsch: eine solche
- * Bank zeigt ihre Samples eine Nummer zu hoch, der erste Platz bleibt leer.
- * Vom Gerät erzeugte, funktionierende Bänke melden hier `constant-shift` mit
- * `shift: 1`, also den Normalfall als Auffälligkeit.
- *
- * ✔ Am Gerät gemessen (2026-08-14), siehe `E2sSlotInput.slotIndex`.
- *
- * Die Prüfung ist absichtlich noch nicht umgedreht: sie hängt an den Aufrufern
- * `esxToE2sBank.ts` (`slotIndex: hwNumber`) und `editorModel.ts`
- * (`slotIndex: s.number`), die beide denselben Versatz haben. Das zusammen zu
- * ändern ist richtig, aber es gehört hinter eine Bestätigung am Gerät und nicht
- * nebenbei — ein Fehler in die andere Richtung verschiebt jede erzeugte Bank
- * genauso, nur unbemerkt in die Gegenrichtung.
  */
 export interface E2sSlotNumbering {
   kind: "ok" | "constant-shift" | "scattered";
-  /** Betrag des Versatzes (`OSC_0index − Index`), nur bei `constant-shift`. */
+  /** Roher Versatz (`OSC_0index − Index`; korrekt wäre +2), nur bei `constant-shift`. */
   shift: number | null;
   /** Anzahl betroffener Slots. */
   affected: number;
@@ -688,14 +682,17 @@ export function parseE2sBank(
   // ── Selbstprüfung der Slot-Nummerierung ────────────────────────────────────
   //
   // Die Datei trägt die Sample-Nummer doppelt: einmal als Position in der
-  // Offset-Tabelle, einmal als `OSC_0index` im korg/esli-Chunk des Slots. Bei
-  // einer korrekt gebauten Bank sind beide gleich — das ist die einzige
+  // Offset-Tabelle, einmal als `OSC_0index` im korg/esli-Chunk des Slots. Das
+  // Gerät zählt nach der Tabellenposition — Anzeige = Index + 2, am Gerät
+  // gemessen (SLOTNUM.all, siehe `E2S_DISPLAY_SLOT_SHIFT`). Bei einer korrekt
+  // gebauten Bank steht im `OSC_0index` also Index + 2 — das ist die einzige
   // Prüfung, die eine falsche Tabellengeometrie überhaupt sichtbar macht.
   //
-  // Deutung eines konstanten Versatzes: **diese BANK ist fehlnummeriert** und
-  // zeigt am Gerät falsche Sample-Nummern. Ältere Werkzeuge (TekkForge selbst
-  // bis zu diesem Stand) packen die Zeiger ab Index 0 bzw. um eins versetzt,
-  // während die Samples ihre gemeinte Gerätenummer behalten.
+  // Deutung eines konstanten anderen Versatzes: **diese BANK ist
+  // fehlnummeriert** — am Gerät erscheinen ihre Samples auf anderen Nummern,
+  // als ihr `OSC_0index` behauptet. Ältere TekkForge-Stände legten Nummer N
+  // direkt auf Index N (Versatz 0) oder auf N − 1 (Versatz 1); die Sets zeigten
+  // dann auf leere oder falsche Anzeigenummern.
   //
   // Der Restwert der umgekehrten Deutung bleibt: wenn AUSNAHMSLOS JEDE geladene
   // Bank denselben Versatz meldet, ist eher `E2S_ALL_OFFSET_TABLE_START` schuld
@@ -704,7 +701,7 @@ export function parseE2sBank(
   for (let i = 0; i < E2S_MAX_SLOTS; i++) {
     const s = slots[i];
     if (s === null) continue;
-    if (s.sampleNumber !== i) mismatches.push(i);
+    if (s.sampleNumber !== i + E2S_DISPLAY_SLOT_SHIFT) mismatches.push(i);
   }
   const filled = slots.reduce<number>((n, s) => (s === null ? n : n + 1), 0);
   let slotNumbering: E2sSlotNumbering = {
@@ -731,14 +728,16 @@ export function parseE2sBank(
         filled,
       };
       warnings.push(
-        `Bank fehlnummeriert: alle ${mismatches.length} belegten Slots liegen ` +
-          `${shift > 0 ? "+" : ""}${shift} neben ihrer eigenen Sample-Nummer. ` +
-          `Am Gerät zeigt diese Bank verschobene Nummern, und Patterns treffen ` +
-          `die falschen Samples — sie muss neu gebaut werden (Slots so ` +
-          `speichern, wie die Samples sich selbst nummerieren). Nur falls JEDE ` +
-          `Bank denselben Versatz meldet, ist stattdessen ` +
-          `E2S_ALL_OFFSET_TABLE_START (0x${E2S_ALL_OFFSET_TABLE_START.toString(16)}) ` +
-          `um ${Math.abs(shift) * 4} Bytes zu prüfen.`,
+        `Bank fehlnummeriert: alle ${mismatches.length} belegten Slots tragen ` +
+          `OSC_0index = Index ${shift >= 0 ? "+" : ""}${shift} statt Index + ` +
+          `${E2S_DISPLAY_SLOT_SHIFT}. Das Gerät zählt nach der Tabellenposition ` +
+          `(Anzeige = Index + ${E2S_DISPLAY_SLOT_SHIFT}, am Gerät gemessen) — ` +
+          `diese Bank erscheint um ${E2S_DISPLAY_SLOT_SHIFT - shift} über ihrer ` +
+          `eigenen Nummerierung. Neu bauen: Nummer N gehört auf Tabellenplatz ` +
+          `N − ${E2S_DISPLAY_SLOT_SHIFT}. Nur falls JEDE Bank denselben Versatz ` +
+          `meldet, ist stattdessen E2S_ALL_OFFSET_TABLE_START ` +
+          `(0x${E2S_ALL_OFFSET_TABLE_START.toString(16)}) um ` +
+          `${Math.abs(shift - E2S_DISPLAY_SLOT_SHIFT) * 4} Bytes zu prüfen.`,
       );
     } else {
       slotNumbering = {
@@ -748,7 +747,8 @@ export function parseE2sBank(
         filled,
       };
       warnings.push(
-        `${mismatches.length} Slot(s) mit OSC_0index != Tabellen-Index ` +
+        `${mismatches.length} Slot(s) mit OSC_0index != Tabellen-Index + ` +
+          `${E2S_DISPLAY_SLOT_SHIFT} ` +
           `(z.B. Slot ${mismatches[0]} meldet ${(slots[mismatches[0]] as E2sSlot).sampleNumber}). ` +
           `Kein konstanter Versatz — einzelne Slots wurden nachbearbeitet, ` +
           `die Bank als Ganzes ist nicht verschoben.`,

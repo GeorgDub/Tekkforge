@@ -27,6 +27,7 @@ import { parseE2sBank, type E2sBank } from "./e2sBankReader";
 import { E2S_SLOT_INDEX_MAX } from "./constants";
 import {
   bankNumberToE2PatternRef,
+  displayNumberToSlotIndex,
   e2PatternRefToBankNumber,
 } from "./e2sPatternSampleLink";
 
@@ -512,18 +513,22 @@ export function buildBankFiles(project: EditorProject): BankBuildResult {
  * Samples werden nach Geräte-Nummer sortiert. Standalone nutzbar zum
  * `.all`-Bearbeiten/Exportieren (unabhängig von Patterns).
  *
- * Der Slot-Index IST die Geräte-Nummer — nicht die Position in der Liste.
- * Stand vorher `slotIndex: i`, ergab das eine um ~501 fehlnummerierte Bank
- * (Selbstprüfung beim Einlesen: `E2sSlotNumbering.kind === "constant-shift"`).
+ * Die Geräte-Nummer N liegt auf Tabellenplatz N − 2: Anzeige am Gerät =
+ * Tabellenindex + 2 (SLOTNUM-Messung 2026-08-14, mit Set bestätigt — siehe
+ * `displayNumberToSlotIndex`). Stand vorher `slotIndex: i` (um ~501 daneben)
+ * und danach `slotIndex: s.number` (um zwei daneben; der Part auf #501 blieb
+ * am Gerät leer).
  */
 export function buildSampleBank(samples: readonly PoolSample[]): Uint8Array | null {
   if (samples.length === 0) return null;
   const sorted = [...samples]
     .sort((a, b) => a.number - b.number)
-    .filter((s) => s.number > 0 && s.number < E2S_SLOT_INDEX_MAX);
+    .filter(
+      (s) => displayNumberToSlotIndex(s.number) >= 0 && s.number < E2S_SLOT_INDEX_MAX,
+    );
   if (sorted.length === 0) return null;
   const slots: E2sSlotInput[] = sorted.map((s) => ({
-    slotIndex: s.number,
+    slotIndex: displayNumberToSlotIndex(s.number),
     sampleNumber: s.number,
     category: 17, // "User"
     name: s.name,

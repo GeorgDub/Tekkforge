@@ -106,6 +106,18 @@ export const E2S_MAX_SLOTS = 1020;
  * (exklusiv). Die restlichen Tabellen-Einträge bleiben reserviert.
  */
 export const E2S_SLOT_INDEX_MAX = 1000;
+/**
+ * Anzeige am Gerät = Tabellenindex + dieser Versatz.
+ *
+ * ✔ Am Gerät abgelesen (SLOTNUM.all, 2026-08-14): drei Töne auf den Plätzen
+ * 498/499/500, benannt nach ihrem Platz — das Gerät zeigte --, 501, 502.
+ * Platz 498 fällt auf Anzeige 500, unterhalb der User-Slots, und ist weg.
+ * Bestätigt mit geladenem Set: der Part auf #501 spielt „PLATZ 499".
+ *
+ * Helfer: `displayNumberToSlotIndex` / `slotIndexToDisplayNumber` in
+ * e2sPatternSampleLink.ts — nie als nacktes `± 2` an der Fundstelle.
+ */
+export const E2S_DISPLAY_SLOT_SHIFT = 2;
 /** Maximum user-visible sample name length im Device-UI; on-disk speichert das
  *  korg-chunk nur 16 Bytes (ESLI_NAME_LEN). */
 export const E2S_NAME_MAX_CHARS = 24;

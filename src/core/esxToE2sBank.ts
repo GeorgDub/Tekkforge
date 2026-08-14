@@ -19,7 +19,10 @@
 import type { EsxBank, EsxPart, EsxPattern, EsxSample } from "./esxParser";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { E2S_SLOT_INDEX_MAX } from "./constants";
-import { bankNumberToE2PatternRef } from "./e2sPatternSampleLink";
+import {
+  bankNumberToE2PatternRef,
+  displayNumberToSlotIndex,
+} from "./e2sPatternSampleLink";
 import { buildE2AllPatFile } from "./e2sExport";
 import type { E2PatternInput } from "./electribePatternBuilder";
 
@@ -168,9 +171,10 @@ export function convertEsxToE2sBank(
   let nextSlot = 0;
   for (const s of esx.monoSamples as EsxSample[]) {
     if (!usedIndices.has(s.index)) continue;
-    // Deckel ist jetzt der Slot-INDEX (== Geräte-Nummer), nicht mehr eine
-    // Anzahl: oberhalb von E2S_SLOT_INDEX_MAX bietet das Gerät keinen
-    // wählbaren Sample-Platz mehr an.
+    // Deckel ist die ANZEIGENUMMER (hwNumber), nicht eine Anzahl: oberhalb
+    // von E2S_SLOT_INDEX_MAX bietet das Gerät keinen wählbaren Sample-Platz
+    // mehr an. (Der Tabellenindex liegt zwei darunter und bleibt damit
+    // automatisch im Rahmen.)
     if (base + nextSlot >= E2S_SLOT_INDEX_MAX) {
       droppedSamples++;
       continue;
@@ -186,11 +190,13 @@ export function convertEsxToE2sBank(
     const hwNumber = base + nextSlot;
     sampleMap.set(s.index, { hwNumber, name });
     slots.push({
-      // Der Tabellen-Index IST die Geräte-Nummer — nicht die Position in der
-      // Auswahl. Früher stand hier `nextSlot` (0,1,2,…), was zusammen mit dem
-      // damals falschen Tabellenstart 0x07E0 eine um eins fehlnummerierte Bank
-      // ergab (Omnitribe-Geometrie-Check: „Versatz: KONSTANT -1").
-      slotIndex: hwNumber,
+      // Anzeige am Gerät = Tabellenindex + 2 (SLOTNUM-Messung 2026-08-14, mit
+      // Set bestätigt): das Sample, das als `hwNumber` erscheinen soll, gehört
+      // auf den Platz zwei darunter; `esli.OSC_0index` trägt die Anzeigenummer
+      // selbst. Frühere Stände legten hier `nextSlot` (0,1,2,…) bzw. die
+      // Nummer direkt ab — beides erschien am Gerät verschoben, und der Part
+      // auf #501 blieb leer.
+      slotIndex: displayNumberToSlotIndex(hwNumber),
       sampleNumber: hwNumber,
       category: 17, // "User"
       name,

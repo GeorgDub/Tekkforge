@@ -19,6 +19,29 @@
  */
 
 import type { E2sBank, E2sSlot } from "./e2sBankReader";
+import { E2S_DISPLAY_SLOT_SHIFT } from "./constants";
+
+/**
+ * Anzeigenummer → Tabellenindex in der `.all`. **Am Gerät gemessen**
+ * (SLOTNUM.all, 2026-08-14, siehe `E2S_DISPLAY_SLOT_SHIFT`): das Gerät zählt
+ * nach der Tabellenposition, Anzeige = Index + 2. Ein Sample, das als Nummer
+ * `n` erscheinen (und von Pattern-Refs auf `n` getroffen werden) soll, gehört
+ * deshalb auf Tabellenplatz `n − 2`; `esli.OSC_0index` trägt `n` selbst.
+ *
+ * Konsistenz mit der Pattern-Seite: Ref = n − 1 = Tabellenindex + 1.
+ *
+ * ⚠ Offen bleibt luknkicks.all (gleiche Struktur, laut Nutzer trotzdem ab 501
+ * sichtbar) — solange das unerklärt ist, gilt die gemessene Regel, nicht die
+ * Analogie. Details: scripts/make-hardtekk-bank.mjs.
+ */
+export function displayNumberToSlotIndex(displayNumber: number): number {
+  return displayNumber - E2S_DISPLAY_SLOT_SHIFT;
+}
+
+/** Umkehrung von `displayNumberToSlotIndex`: Tabellenindex → Anzeigenummer. */
+export function slotIndexToDisplayNumber(slotIndex: number): number {
+  return slotIndex + E2S_DISPLAY_SLOT_SHIFT;
+}
 
 /**
  * Pattern-Referenz → Bank-Slot-Nummer. **Am Gerät gemessen** (echtes E2S,

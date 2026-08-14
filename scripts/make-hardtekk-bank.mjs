@@ -28,6 +28,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { buildE2sBank } from "../src/core/e2sBankBuilder.ts";
+import { displayNumberToSlotIndex } from "../src/core/e2sPatternSampleLink.ts";
 import { parseWav } from "../src/core/wavCodec.ts";
 
 const WURZELN = ["E:\\", "G:\\Mukke Stuff"];
@@ -173,15 +174,18 @@ for (const g of gewaehlt) {
     //     Platz 499  ->  Anzeige 501
     //     Platz 500  ->  Anzeige 502
     //
-    // Unterhalb von 501 gibt es keine User-Slots; was dorthin faellt, ist weg.
-    // Genau daran trug Part 1 kein Sample: die Bank lag auf 500..603 und
-    // erschien als 502..605, waehrend das Set auf 501 zeigte.
+    // Danach mit geladenem Set bestaetigt: der Part auf #501 spielt das Sample
+    // namens "PLATZ 499". Unterhalb von 501 gibt es keine User-Slots; was
+    // dorthin faellt, ist weg. Genau daran trug Part 1 kein Sample: die Bank
+    // lag auf 500..603 und erschien als 502..605, waehrend das Set auf 501
+    // zeigte. Die Regel liegt inzwischen im Kern (displayNumberToSlotIndex,
+    // E2S_DISPLAY_SLOT_SHIFT).
     //
     // ⚠ Ungeklaert bleibt luknkicks.all: dieselbe Struktur, erstes Sample
     // ebenfalls auf Platz 500, laut Nutzer aber ab 501 sichtbar. Der Vergleich
     // der esli-Bloecke zeigt nur Name, Kategorie und Laenge als Unterschied.
     // Solange das offen ist, gilt die gemessene Regel — nicht die Analogie.
-    slotIndex: nr - 2, sampleNumber: nr, name: kurz(g.p) || `S${nr}`,
+    slotIndex: displayNumberToSlotIndex(nr), sampleNumber: nr, name: kurz(g.p) || `S${nr}`,
     category: g.kategorie.kat, pcmData: pcm, sampleRate: wav.sampleRate, channels: 1,
     _kat: g.kategorie.name, _ms: Math.round(wav.frames / wav.sampleRate * 1000),
   });
