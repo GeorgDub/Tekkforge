@@ -239,6 +239,29 @@ export const ELECTRIBE_REAL_STEP_VELOCITY_OFFSET = 2;
 export const ELECTRIBE_REAL_STEP_NOTE_OFFSET = 4;
 /** Gate-Rohwert 0xFF (Factory-Files) = Tie/unendlich. */
 export const ELECTRIBE_REAL_GATE_TIE_SENTINEL = 0xff;
+
+/**
+ * Zweiter Tie-Sentinel: 127.
+ *
+ * ✔ Am Geraet gemessen (2026-08-14): im Step-Editor die Gate-Zeit auf `TIE`
+ * gestellt, das Byte wurde **127**. Erwartet hatte ich 255 — die Vorhersage war
+ * falsch, und zwar nicht knapp.
+ *
+ * Regulaere Gate-Zeiten stehen unverschluesselt im Byte (47 -> 47, 32 -> 32,
+ * 60 -> 60) und reichen bis 96; `TIE` liegt als Sentinel darueber.
+ *
+ * ⚠ In der Factory-Bank kommen BEIDE Werte an der Gate-Stelle vor: 255 sehr
+ * haeufig (14 448 aktive Steps) und 127 selten (157). Was 255 bedeutet, ist
+ * damit offen — die bisherige Einordnung als Tie-Sentinel stammt nicht aus
+ * einer Messung, sondern aus der Haeufigkeit in echten Dateien.
+ *
+ * Der Lesepfad behandelt deshalb beide Werte als Tie: 127 wurde vorher auf 96
+ * begrenzt, womit ein am Geraet gesetztes Tie beim Einlesen still zu einer
+ * gewoehnlichen Gate-Zeit wurde. Der Schreibpfad bleibt bei 255 — dafuer gibt
+ * es 14 448 Belege in offiziellen KORG-Dateien, fuer eine Umstellung dagegen
+ * keinen.
+ */
+export const ELECTRIBE_REAL_GATE_TIE_ALT = 127;
 /** Maximaler regulärer Gate-Wert (96 = Tie laut Format-Doku). */
 export const ELECTRIBE_REAL_GATE_MAX = 96;
 /** Defensive: 0xFF im Velocity-Byte wird als 127 gelesen. */
@@ -792,7 +815,8 @@ function parseRealPartBlock(view: DataView, partOffset: number, partIndex: numbe
         }
         // Gate: 0..96 regulär, 0xFF = Tie-Sentinel (durchreichen), Rest clampen.
         const gate =
-          gateByte === ELECTRIBE_REAL_GATE_TIE_SENTINEL
+          gateByte === ELECTRIBE_REAL_GATE_TIE_SENTINEL ||
+          gateByte === ELECTRIBE_REAL_GATE_TIE_ALT
             ? ELECTRIBE_REAL_GATE_TIE_SENTINEL
             : Math.min(ELECTRIBE_REAL_GATE_MAX, gateByte);
         // Geraet speichert MIDI+1 (0 = kein Ton) — siehe e2StepNote.ts. Die

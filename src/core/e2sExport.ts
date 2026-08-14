@@ -46,7 +46,9 @@
  *       part +0x22  pan    (0..127, 64 = center)
  *       part +0x30  64×12B step records:
  *         byte 0      trigger  (1 = aktiv, 0 = aus)
- *         byte 1      Gate-Zeit (Anzeige = Byte; 0x48 = 72 Vorgabe, 0xFF = Tie)
+ *         byte 1      Gate-Zeit (Anzeige = Byte, 0..96; 0x48 = 72 Vorgabe).
+ *                     TIE ist am Geraet 127; Factory-Dateien fuehren daneben
+ *                     sehr haeufig 255 — siehe ELECTRIBE_REAL_GATE_TIE_ALT.
  *         byte 2      Velocity  (Anzeige = Byte; 0x60 = 96 Vorgabe)
  *         byte 3      Flag — Bedeutung offen, siehe unten
  *         bytes 4..7  bis zu VIER Noten, je MIDI+1 (0 = leer)
@@ -55,13 +57,25 @@
  *       ✔ Am Geraet gemessen (2026-08-14): Gate-Zeit und Velocity stehen
  *       unverschluesselt im Byte (Anzeige 60 -> 60, Anzeige 52 -> 52).
  *
- *       ⚠ Byte 3 („STEP_FLAG"): der fruehere Kommentar behauptete, das Byte
- *       muesse auf aktiven Steps 1 sein, sonst bleibe der Step stumm. Das ist
- *       so nicht haltbar — ein am Geraet erzeugter, hoerbarer Step mit vier
- *       Noten trug hier 0, waehrend einstimmige Steps 1 trugen. Auch die
- *       Factory-Datei BodyTalk1 enthaelt beide Werte auf aktiven Steps
- *       (105x 0, 209x 1). Der Schreibpfad setzt weiter 1, weil die alte
- *       Behauptung nicht widerlegt, sondern nur eingeschraenkt ist.
+ *       ⚠ Byte 3 („STEP_FLAG"): Bedeutung UNBEKANNT. Der fruehere Kommentar
+ *       behauptete, das Byte muesse auf aktiven Steps 1 sein, sonst bleibe der
+ *       Step stumm — das ist nicht haltbar, hoerbare Geraete-Steps tragen dort
+ *       auch 0. Zwei Deutungen wurden geprueft und BEIDE widerlegt:
+ *
+ *         „0 heisst vier Noten" — passte zu allen fuenf Geraetemessungen
+ *         (1/2/3 Noten -> 1, 4 Noten -> 0), scheitert aber an BodyTalk1: dort
+ *         tragen 105 Steps eine 0, obwohl die Datei ueberhaupt keinen Step mit
+ *         mehr als einer Note enthaelt.
+ *
+ *         „0 heisst Motion auf diesem Step" — passte ebenfalls zu allen
+ *         Geraetemessungen, scheitert aber an der Factory-Bank: unter den
+ *         Byte3=0-Steps haben 11 % eine Motion, unter den Byte3=1-Steps 6 %.
+ *         Ein Zusammenhang, aber keine Regel.
+ *
+ *       Beide Deutungen haetten zu allen bis dahin vorliegenden Messungen
+ *       gepasst — die Factory-Bank hat sie erledigt. Ein Byte, dessen Deutung
+ *       an fuenf Messpunkten haelt, ist eben noch lange nicht verstanden.
+ *       Der Schreibpfad setzt weiter 1 und bleibt unangetastet.
  *
  *       ⚠ Nur Notenplatz 1 wird geschrieben. Die Factory-Bank belegt alle vier
  *       (53202 / 5065 / 4096 / 3719 Vorkommen), Akkorde gehen also verloren.

@@ -13,6 +13,11 @@ import {
   e2StepByteToMidiNote,
   midiNoteToE2StepByte,
 } from "../src/core/e2StepNote";
+import {
+  ELECTRIBE_REAL_GATE_MAX,
+  ELECTRIBE_REAL_GATE_TIE_ALT,
+  ELECTRIBE_REAL_GATE_TIE_SENTINEL,
+} from "../src/core/electribeImport";
 
 /** Anzeige am Gerät → MIDI-Nummer → gelesenes Byte. */
 const GEMESSEN: Array<[string, number, number]> = [
@@ -60,5 +65,31 @@ describe("E2-Step-Noten", () => {
     for (let midi = 0; midi <= 127; midi++) {
       expect(e2StepByteToMidiNote(midiNoteToE2StepByte(midi))).toBe(midi);
     }
+  });
+});
+
+/**
+ * Gate-Tie: das Gerät schreibt 127, Factory-Dateien führen daneben 255.
+ * Beide müssen beim Einlesen als Tie ankommen — 127 wurde vorher auf 96
+ * begrenzt und ging damit still verloren.
+ */
+describe("Gate-Tie beim Einlesen", () => {
+  const tie = (byte: number) =>
+    byte === ELECTRIBE_REAL_GATE_TIE_SENTINEL || byte === ELECTRIBE_REAL_GATE_TIE_ALT
+      ? ELECTRIBE_REAL_GATE_TIE_SENTINEL
+      : Math.min(ELECTRIBE_REAL_GATE_MAX, byte);
+
+  it("erkennt beide Tie-Werte", () => {
+    expect(tie(ELECTRIBE_REAL_GATE_TIE_ALT)).toBe(ELECTRIBE_REAL_GATE_TIE_SENTINEL);
+    expect(tie(ELECTRIBE_REAL_GATE_TIE_SENTINEL)).toBe(ELECTRIBE_REAL_GATE_TIE_SENTINEL);
+  });
+
+  it("laesst regulaere Gate-Zeiten unveraendert", () => {
+    // Am Geraet gemessen: Anzeige = Byte.
+    for (const g of [32, 47, 60, 96]) expect(tie(g)).toBe(g);
+  });
+
+  it("haelt 96 als hoechste regulaere Gate-Zeit vom Tie getrennt", () => {
+    expect(ELECTRIBE_REAL_GATE_MAX).toBeLessThan(ELECTRIBE_REAL_GATE_TIE_ALT);
   });
 });
