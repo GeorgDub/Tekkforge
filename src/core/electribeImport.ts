@@ -169,7 +169,7 @@
  *   - Values[16]      16 × 1 Byte  (Parameter-Werte 0..127)
  */
 
-import { e2StepByteToMidiNote } from "./e2StepNote";
+import { e2StepByteToMidiNote, readStepNotes } from "./e2StepNote";
 
 // ─── Konstanten ───────────────────────────────────────────────────────────────
 
@@ -511,6 +511,8 @@ export interface ParsedPartStep {
   gate?: number;
   /** MIDI-Note 0..127 (0x3C = Originaltonhöhe). Undefined bei legacy Quellen. */
   note?: number;
+  /** Alle belegten Notenplaetze als MIDI-Nummern (Akkord), in Speicherreihenfolge. */
+  notes?: number[];
 }
 
 export interface ParsedPart {
@@ -830,7 +832,10 @@ function parseRealPartBlock(view: DataView, partOffset: number, partIndex: numbe
         const trigByte = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_TRIGGER_OFFSET);
         const gateByte = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_GATE_OFFSET);
         const velByte  = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_VELOCITY_OFFSET);
-        const noteByte = safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_NOTE_OFFSET);
+        const noteBytes = [0, 1, 2, 3].map((i) =>
+          safeU8(recOffsetWithinPart + ELECTRIBE_REAL_STEP_NOTE_OFFSET + i),
+        );
+        const noteByte = noteBytes[0];
         const active = trigByte === 0x01;
         // Velocity 0..127; defensive: 0x80..0xFF → 127.
         let velocity: number;
@@ -848,7 +853,10 @@ function parseRealPartBlock(view: DataView, partOffset: number, partIndex: numbe
         // Geraet speichert MIDI+1 (0 = kein Ton) — siehe e2StepNote.ts. Die
         // fruehere Begrenzung auf <=127 machte aus 128 (G9) eine 127.
         const note = e2StepByteToMidiNote(noteByte) ?? 0;
-        steps[s] = { active, velocity, gate, note };
+        // Alle vier Plaetze; `note` bleibt der erste, damit vorhandene Aufrufer
+        // unveraendert weiterlaufen.
+        const notes = readStepNotes(noteBytes);
+        steps[s] = { active, velocity, gate, note, notes };
       } else {
         steps[s] = { active: false, velocity: 0 };
       }

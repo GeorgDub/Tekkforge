@@ -52,7 +52,11 @@
  * zero-filled which the reader interprets as "all disabled".
  */
 
-import { midiNoteToE2StepByte } from "./e2StepNote";
+import {
+  E2_STEP_NOTE_SLOTS,
+  midiNoteToE2StepByte,
+  resolveStepNotes,
+} from "./e2StepNote";
 import {
   ELECTRIBE_MAGIC,
   ELECTRIBE_REAL_IDENTIFIER,
@@ -96,6 +100,11 @@ export interface E2StepInput {
   accent?: boolean;
   /** MIDI note 0..127. Default 0x3C (C4 = Originaltonhöhe). */
   note?: number;
+  /**
+   * Bis zu vier MIDI-Noten (Akkord). Hat Vorrang vor `note`; Dubletten und
+   * Werte ausserhalb 0..127 fallen weg, die Reihenfolge bleibt erhalten.
+   */
+  notes?: number[];
   /** Gate-Länge 0..96 (96 = Tie), 0xFF = Factory-Tie-Sentinel. Default 0x48. */
   gate?: number;
 }
@@ -271,20 +280,21 @@ export function writeStepRecord(view: DataView, offset: number, step: E2StepInpu
     step.gate === 0xff ? 0xff : clampInt(step.gate, 0, 96, E2_DEFAULT_GATE);
   const velocityByte = clampInt(step.velocity, 0, 127, E2_DEFAULT_VELOCITY);
 
-  // Note byte: inactive steps get 0x00 (Init-181-Konvention).
-  let noteByte: number;
-  if (!step.active) {
-    noteByte = E2_INACTIVE_STEP_NOTE; // 0x00
-  } else {
-    // Geraet speichert MIDI+1 (0 = kein Ton) — siehe e2StepNote.ts.
-    noteByte = midiNoteToE2StepByte(clampInt(step.note, 0, 127, E2_DEFAULT_NOTE));
+  // Notenplaetze: inaktive Steps bekommen ueberall 0x00 (Init-181-Konvention).
+  // Aktive Steps fuellen bis zu vier Plaetze; das Geraet speichert MIDI+1.
+  const noteBytes = new Array<number>(E2_STEP_NOTE_SLOTS).fill(E2_INACTIVE_STEP_NOTE);
+  if (step.active) {
+    const midi = resolveStepNotes(step.notes, clampInt(step.note, 0, 127, E2_DEFAULT_NOTE));
+    midi.forEach((n, i) => (noteBytes[i] = midiNoteToE2StepByte(n)));
   }
 
   view.setUint8(offset + ELECTRIBE_REAL_STEP_TRIGGER_OFFSET, trigger);
   view.setUint8(offset + ELECTRIBE_REAL_STEP_GATE_OFFSET, gateByte);
   view.setUint8(offset + ELECTRIBE_REAL_STEP_VELOCITY_OFFSET, velocityByte);
   view.setUint8(offset + 3, accent);
-  view.setUint8(offset + ELECTRIBE_REAL_STEP_NOTE_OFFSET, noteByte);
+  for (let i = 0; i < E2_STEP_NOTE_SLOTS; i++) {
+    view.setUint8(offset + ELECTRIBE_REAL_STEP_NOTE_OFFSET + i, noteBytes[i]);
+  }
   // bytes 5..11 are already 0 (full file is zero-initialised before fill).
 }
 

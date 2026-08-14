@@ -115,3 +115,50 @@ export function e2StepByteToMidiNote(byte: number): number | null {
   const n = Math.round(byte) - E2_STEP_NOTE_BIAS;
   return Math.max(0, Math.min(127, n));
 }
+
+/** Anzahl Notenplätze je Step-Record (Bytes +4..+7). */
+export const E2_STEP_NOTE_SLOTS = 4;
+
+/**
+ * Bringt die Noten eines Steps in die Form, die ins Record geschrieben wird:
+ * höchstens vier, ohne Dubletten, in Eingabereihenfolge.
+ *
+ * Die Reihenfolge bleibt erhalten und wird NICHT sortiert — am Gerät standen
+ * die Noten stets so in den Plätzen, wie sie eingegeben wurden (`G9 F#9 E9 C-1`
+ * ebenso wie `C-1 D-1 E-1 F-1`).
+ *
+ * Dubletten fallen weg, weil das Gerät die vier Plätze wie eine Menge behandelt:
+ * eine bereits vorhandene Note legte es kein zweites Mal ab. Ohne diesen Schritt
+ * schriebe TekkForge Records, wie das Gerät sie nie erzeugt.
+ */
+export function resolveStepNotes(
+  notes: readonly number[] | null | undefined,
+  fallback?: number | null,
+): number[] {
+  const roh =
+    Array.isArray(notes) && notes.length > 0
+      ? notes
+      : typeof fallback === "number"
+        ? [fallback]
+        : [];
+  const out: number[] = [];
+  for (const n of roh) {
+    if (typeof n !== "number" || !Number.isFinite(n)) continue;
+    const v = Math.round(n);
+    if (v < 0 || v > 127) continue;
+    if (out.includes(v)) continue;
+    out.push(v);
+    if (out.length === E2_STEP_NOTE_SLOTS) break;
+  }
+  return out;
+}
+
+/** Liest die bis zu vier Notenplätze eines Records als MIDI-Nummern. */
+export function readStepNotes(bytes: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < E2_STEP_NOTE_SLOTS; i++) {
+    const midi = e2StepByteToMidiNote(bytes[i] ?? 0);
+    if (midi !== null) out.push(midi);
+  }
+  return out;
+}

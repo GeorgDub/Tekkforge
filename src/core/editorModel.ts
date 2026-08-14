@@ -67,8 +67,14 @@ export interface EditorStep {
   on: boolean;
   /** 1..127. */
   velocity: number;
-  /** MIDI 0..127 (60 = C4 = Originaltonhöhe). */
+  /** MIDI 0..127 (60 = C4 = Originaltonhöhe). Erster Ton des Akkords. */
   note: number;
+  /**
+   * Weitere Töne desselben Steps (Akkord), MIDI 0..127. Das Gerät bietet vier
+   * Notenplätze je Step; `note` ist der erste. Fehlt das Feld, ist der Step
+   * einstimmig.
+   */
+  notes?: number[];
   /** Gate-Länge 1..96 (96 = Tie). */
   gate: number;
 }
@@ -258,6 +264,7 @@ export function patternToE2Input(p: EditorPattern): E2PatternInput {
         active: s.on,
         velocity: s.velocity,
         note: s.note,
+        notes: s.notes,
         gate: s.gate,
       })),
     })),
@@ -306,6 +313,7 @@ export function editorPatternFromParsed(p: ParsedPattern): EditorPattern {
         on: !!st.active,
         velocity: clampRange(st.velocity, 1, 127, EDITOR_DEFAULT_VELOCITY),
         note: clampRange(st.note ?? EDITOR_DEFAULT_NOTE, 0, 127, EDITOR_DEFAULT_NOTE),
+        notes: Array.isArray(st.notes) && st.notes.length > 1 ? [...st.notes] : undefined,
         // 0xFF-Tie-Sentinel oder 96 → Tie (Editor kennt nur 1..96).
         gate:
           st.gate === undefined || st.gate >= EDITOR_GATE_MAX
@@ -621,6 +629,7 @@ export function deserializeProject(text: string): EditorProject {
           on: !!st.on,
           velocity: Number.isFinite(st.velocity) ? Math.min(127, Math.max(1, st.velocity)) : EDITOR_DEFAULT_VELOCITY,
           note: Number.isFinite(st.note) ? Math.min(127, Math.max(0, st.note)) : EDITOR_DEFAULT_NOTE,
+          notes: Array.isArray(st.notes) && st.notes.length > 1 ? [...st.notes] : undefined,
           gate: Number.isFinite(st.gate) ? Math.min(EDITOR_GATE_MAX, Math.max(1, st.gate)) : EDITOR_DEFAULT_GATE,
         };
       }

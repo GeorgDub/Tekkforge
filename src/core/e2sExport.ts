@@ -115,8 +115,9 @@
  *       nicht — der Trigger entscheidet —, aber beim erneuten Einschalten am
  *       Geraet sind die alten Werte weg.
  *
- *       ⚠ Nur Notenplatz 1 wird geschrieben. Die Factory-Bank belegt alle vier
- *       (53202 / 5065 / 4096 / 3719 Vorkommen), Akkorde gehen also verloren.
+ *       ✔ Alle vier Notenplaetze werden geschrieben und gelesen. Die
+ *       Factory-Bank belegt sie ebenfalls alle (53202 / 5065 / 4096 / 3719
+ *       Vorkommen).
  *
  * Pure TypeScript, isomorphic (no Electron/DOM deps) — safe in Node test ctx.
  *
@@ -125,7 +126,11 @@
  * destination Electribe has loaded in the matching part slots.
  */
 
-import { midiNoteToE2StepByte } from "./e2StepNote";
+import {
+  E2_STEP_NOTE_SLOTS,
+  midiNoteToE2StepByte,
+  resolveStepNotes,
+} from "./e2StepNote";
 import { E2S_INIT_BODY_B64, E2S_GLST_BLOCK_B64 } from "./e2sExportAssets";
 import type { E2PatternInput } from "./electribePatternBuilder";
 import { writePartParamsToBody } from "./partParams";
@@ -651,17 +656,22 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
           step.gate === GATE_TIE ? GATE_TIE : clampInt(step.gate, 0, GATE_MAX, DEFAULT_GATE);
         body[so + STEP_VELOCITY] = clampInt(step.velocity, 0, 127, DEFAULT_VELOCITY);
         body[so + STEP_FLAG] = 0x01; // Factory-Konvention für aktive Steps
-        // Geraet speichert MIDI+1 (0 = kein Ton) — siehe e2StepNote.ts.
-        body[so + STEP_NOTE] = midiNoteToE2StepByte(clampInt(step.note, 0, 127, DEFAULT_NOTE));
+        // Bis zu vier Noten, je MIDI+1 (0 = leer) — siehe e2StepNote.ts. Freie
+        // Plaetze werden ausdruecklich genullt: die Vorlage koennte an dieser
+        // Stelle noch Noten eines frueheren Akkords tragen.
+        const midi = resolveStepNotes(step.notes, clampInt(step.note, 0, 127, DEFAULT_NOTE));
+        for (let i = 0; i < E2_STEP_NOTE_SLOTS; i++) {
+          body[so + STEP_NOTE + i] = i < midi.length ? midiNoteToE2StepByte(midi[i]) : 0x00;
+        }
       } else {
         // canonical inactive record — exakt wie Init-181: 00 48 60 00 00
         body[so + STEP_TRIGGER] = 0x00;
         body[so + STEP_GATE] = DEFAULT_GATE;
         body[so + STEP_VELOCITY] = DEFAULT_VELOCITY;
         body[so + STEP_FLAG] = 0x00;
-        body[so + STEP_NOTE] = 0x00;
+        for (let i = 0; i < E2_STEP_NOTE_SLOTS; i++) body[so + STEP_NOTE + i] = 0x00;
       }
-      // bytes 5..11 remain as the template (zero) — never touched.
+      // bytes 8..11 remain as the template (zero) — never touched.
     }
   }
 
