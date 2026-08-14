@@ -351,6 +351,31 @@ export const E2_GLOBAL_SIZE = 0x100; // 256
  * hier einen Parameter sucht, braucht ihn nicht im ganzen Puffer zu suchen —
  * es kommen nur die ersten 48 Bytes in Frage.
  *
+ * ### Der gelesene Block ist Arbeitsstand, nicht Flash-Inhalt
+ *
+ * Nach einem Aus- und Wiedereinschalten des Geräts standen fünf zuvor gemessene
+ * Bytes wieder auf einem älteren Wert:
+ *
+ *     +0x10  Metronom           rec 2       -> off
+ *     +0x14  Audio In Thru      off         -> on
+ *     +0x1C  Knob-Modus         value scale -> jump
+ *     +0x26  Touch Scale Range  4 oct       -> 1 oct
+ *     +0x28  Clock-Quelle       ext usb     -> auto
+ *
+ * Andere Änderungen aus derselben Messreihe überlebten den Neustart dagegen
+ * (Sync-Einheit, Velocity-Kurve, Trigger-Modus, Kontrast, Chain Mode, beide
+ * MIDI-Filter). Ein Werksreset war es also nicht. Nach welcher Regel sich das
+ * aufteilt, ist unbekannt — hier wird nur die Beobachtung festgehalten.
+ *
+ * **Für die Offsets ändert das nichts.** Jede Zuordnung stammt aus zwei
+ * Lesevorgängen im selben eingeschalteten Zustand; ein späterer Neustart kann
+ * einen gemessenen Zusammenhang nicht nachträglich aufheben.
+ *
+ * **Für das Schreiben ist es wichtig:** Wer den Global-Block zurückschreibt,
+ * trifft damit sichtbar den Arbeitsstand — ob das Gerät ihn ohne ausdrücklichen
+ * Write-Vorgang in den Flash übernimmt, ist offen und sollte nicht angenommen
+ * werden.
+ *
  * ### Nicht im Block: Tempo — und warum `+0x18` trotzdem 100 zeigt
  *
  * `+0x18` steht auf 100 und hat sich in 26 aufeinanderfolgenden Lesevorgängen
