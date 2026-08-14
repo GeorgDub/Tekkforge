@@ -76,11 +76,19 @@ export interface PartParam {
  * | Offset | Feld       | Beobachtung ueber die 16 Parts              |
  * |--------|------------|---------------------------------------------|
  * | `0x0C` | filterType | 16 verschiedene Werte (1..16)               |
+ * | `0x0D` | cutoff     | Rampe `0 10 20 … 100 105 … 120 127`         |
  * | `0x20` | ifxOn      | `0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0` — alterniert |
  * | `0x21` | ifxType    | 16 verschiedene, absteigend 48..34          |
  *
  * Das alternierende Bit bei `0x20` ist der staerkste Einzelbeleg: ein solches
  * Muster entsteht nicht zufaellig, es war die Vorgabe des Testpatterns.
+ *
+ * ### Cutoff: einzige aufsteigende Spalte
+ *
+ * Testpattern mit aufsteigendem Cutoff ueber die 16 Parts. `0x0D` las
+ * `0 10 20 30 40 50 60 70 80 90 100 105 110 115 120 127` — und war die
+ * **einzige streng aufsteigende Spalte** im gesamten 816-B-Part-Block. Kein
+ * zweiter Kandidat, also keine Verwechslungsmoeglichkeit.
  *
  * ### Gegenprobe mit Vorhersage
  *
@@ -115,7 +123,7 @@ export interface PartParam {
  */
 export const PART_PARAMS: PartParam[] = [
   { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt; Testpattern zeigte 1..16
-  { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" },
+  { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" },
   { key: "egInt", label: "EG-Int", offset: 0x0f, min: -63, max: 63, kind: "i8", group: "Filter" }, // bipolar, Stock -49..+63
   { key: "modType", label: "Mod-Typ", offset: 0x10, min: 0, max: 255, kind: "u8", group: "Mod" }, // Stock bis 71; Obergrenze unbekannt
