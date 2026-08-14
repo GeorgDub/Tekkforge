@@ -886,7 +886,20 @@ async function midiSendCurrent(): Promise<void> {
   try {
     const msg = buildCurrentPatternDump(currentPatternBody(), midiOpts());
     await midi.sendAsync(msg);
-    setMidiStatus(`„${project.patterns[cur].name}" → Edit-Buffer gesendet (${msg.length} Bytes)`);
+    // Ties ueberleben diesen Weg nicht: das Geraet begrenzt die Gate-Zeit beim
+    // Laden ueber SysEx auf 96. Ueber SD-Karte kommt derselbe Wert als Tie an —
+    // beides am Geraet gemessen. Ohne Hinweis sucht man den Fehler bei sich.
+    const ties = project.patterns[cur].parts.reduce(
+      (n, part) => n + part.steps.filter((st) => st.on && st.gate >= EDITOR_GATE_MAX).length,
+      0,
+    );
+    setMidiStatus(
+      `„${project.patterns[cur].name}" → Edit-Buffer gesendet (${msg.length} Bytes)` +
+        (ties
+          ? ` — Achtung: ${ties} Tie${ties === 1 ? "" : "s"} gehen auf diesem Weg verloren ` +
+            `(das Gerät kürzt sie auf Gate 96). Über SD-Karte bleiben sie erhalten.`
+          : ""),
+    );
   } catch (err) {
     setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
   }

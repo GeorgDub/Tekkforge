@@ -553,8 +553,23 @@ const DEFAULT_NOTE = 0x3c; // C4 = 60 = Originaltonhöhe (Briefing §4.1 + Hardt
  * Die Messung ist bei gestopptem Sequencer wiederholt worden, und zwei
  * Lesevorgaenge stimmten byteweise ueberein — kein einziges abweichendes Byte.
  * Von zwoelf geschriebenen Ties trug danach keiner den Wert 127; alle zwoelf
- * standen auf 96. Der Befund haengt also nicht am Lesefehler, den der laufende
- * Sequencer verursacht hatte.
+ * standen auf 96.
+ *
+ * ## Der Ladeweg entscheidet
+ *
+ * ✔ Dieselbe Datei ueber SD-Karte geladen: das Geraet zeigt `TIE` an, und im
+ * Speicher stehen alle zwoelf Ties als 127. Kein einziges 96.
+ *
+ *     ueber SysEx     127 -> 96    Tie geht verloren
+ *     ueber SD-Karte  127 -> 127   Tie bleibt erhalten
+ *
+ * Es liegt also nicht an der Kodierung, sondern am Uebertragungsweg — der
+ * SysEx-Ladepfad des Geraets begrenzt die Gate-Zeit, der Datei-Ladepfad nicht.
+ * Ohne den Vergleich beider Wege haette man endlos an der Kodierung gesucht.
+ *
+ * Fuer TekkForge heisst das: 127 ist richtig, und exportierte Dateien tragen
+ * korrekte Ties. Beim Senden ueber MIDI weist die Oberflaeche darauf hin, dass
+ * sie auf diesem Weg verlorengehen.
  *
  * Daraus folgt: **ein Tie laesst sich derzeit nicht per Pattern-Uebertragung
  * setzen.** Das Geraet legt zwar 127 ab, wenn man Tie im Step-Editor waehlt —
