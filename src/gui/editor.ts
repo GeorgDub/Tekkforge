@@ -765,6 +765,32 @@ function midiOpts(): E2SysexOptions {
   return { channel: midiChannel, productId: midiProductId };
 }
 
+/**
+ * Brücke für den E2S-Panel-Tab. Der KORG-USB-Treiber ist Single-Client — es
+ * darf nur EINE MidiIO existieren, deshalb teilt sich das Panel Instanz,
+ * gefundenen Kanal und Projektzustand mit dem Editor, statt selbst Ports zu
+ * öffnen. MIDI aktivieren/verbinden bleibt Sache des Editor-MIDI-Panels.
+ */
+export const panelBridge = {
+  midi,
+  midiOpts,
+  get midiChannel(): number {
+    return midiChannel;
+  },
+  get project(): EditorProject {
+    return project;
+  },
+  get patternIndex(): number {
+    return cur;
+  },
+  set patternIndex(i: number) {
+    cur = Math.max(0, Math.min(project.patterns.length - 1, i));
+    renderAll();
+  },
+  writePatternToSlot,
+  markDirty,
+};
+
 /** 0x4000-Body des aktuellen Patterns (ohne 0x100-Dateiheader). */
 function currentPatternBody(): Uint8Array {
   return buildPatternFile(project.patterns[cur]).slice(0x100);
