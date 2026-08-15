@@ -19,7 +19,7 @@ import {
   oscToDisplayNumber,
 } from "../src/core/e2sPatternSampleLink.ts";
 
-const BANK = process.argv[3] ?? "examples/e2s/tekk.all";
+const BANK = process.argv[3] ?? "examples/e2s/tekk2.all";
 const ZIEL = process.argv[2] ?? "examples/e2s/TEKK_SET4.e2sallpat";
 const N = 64;
 const BPM = Number(process.argv[4]) || 186;
@@ -38,14 +38,18 @@ const THEMA = {
   },
 };
 
-// tekk.all-Belegung OHNE keyboard: Stabs uebernehmen die Melo-Parts.
+// tekk2-Belegung OHNE keyboard: Stabs bleiben die rauen tekk-Shots (das ist
+// der Charakter dieses Sets), aber der Bass ist seit Hoerrunde 7 echt —
+// Synth Le war ein Lead und kratzte; Part 10 layert jetzt ein ANDERES
+// Sample (kein Kammfilter mehr wie bei der Synth-Le-Doppelung).
 const BELEGUNG = [
   ["Kick", "HaimKind"], ["Kick", "Jumpkick"], ["Snare", "clydesna"], ["Snare", "snarre-p"],
   ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], ["Shots", "ZaHnI_To"],
-  ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", "[ViNTeKk"], ["Shots", "lemmy br"],
+  ["Analog", "Unison_Bass_C3"], ["Analog", "Bassdrum-01fd"], ["Shots", "[ViNTeKk"], ["Shots", "lemmy br"],
   ["Shots", "VEC2 Syn"], ["Shots", "Remember"], ["Loop", "killerme"], ["Shots", "Wuuuuup"],
 ];
-const VOLUME = [127, 110, 106, 96, 84, 88, 80, 78, 120, 106, 98, 96, 92, 90, 64, 94];
+// Bass 120 -> 116: Headroom-Lektion aus Set 5 (Summe uebersteuerte mit Kick).
+const VOLUME = [127, 110, 106, 96, 84, 88, 80, 78, 116, 104, 98, 96, 92, 90, 64, 94];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, POLY2, POLY2, POLY2, MONO1, POLY2, POLY2];
 
