@@ -177,14 +177,19 @@ function partsFuer(intensitaet, thema, kickFigur) {
     });
   }
   if (i >= 4) steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)] - 12], 104, 52) : null));
-  // Melos laufen KOMPLETT durch (Hoerrunde 2026-08-15): volle Gates statt
-  // kurzer Stiche, Frage auf der Eins, Antwort auf der Drei.
-  if (i >= 3) steps[10] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 96, 96) : null));
-  if (i >= 4) steps[11] = baue((s) => (imTakt(s) === 8 ? hit(t.akkorde[takt(s)], 92, 96) : null));
-  // Sirene auf JEDER Drop-Eins — das Erkennungszeichen dieses Sets.
-  if (i >= 5) steps[12] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 90, 16) : null));
+  // Melos laufen KOMPLETT durch, aber EINSTIMMIG (Hoerrunde 2, 2026-08-15):
+  // als Dreiklang gespielte Shots stapeln drei transponierte Kopien
+  // uebereinander — das war das "Kratzige". Grundton reicht, volle Gates,
+  // Frage auf der Eins, Antwort auf der Drei, Velocities zurueckgenommen.
+  if (i >= 3) steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 88, 96) : null));
+  if (i >= 4) steps[11] = baue((s) => (imTakt(s) === 8 ? hit([t.akkorde[takt(s)][0]], 86, 96) : null));
+  // Sirene nur noch jeden zweiten Takt — jede Eins war zu viel.
+  if (i >= 5)
+    steps[12] = baue((s) =>
+      imTakt(s) === 0 && takt(s) % 2 === 0 ? hit([t.akkorde[takt(s)][0]], 84, 16) : null,
+    );
   // Remember laeuft ab Intensitaet 4 als durchgehende Melodie-Ebene mit.
-  if (i >= 4) steps[13] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 88, 96) : null));
+  if (i >= 4) steps[13] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 84, 96) : null));
   if (i >= 5) steps[15] = baue((s) => (s === 0 ? hit([60], 94, 32) : null));
 
   if (breakStelle) {
