@@ -327,11 +327,12 @@ function padKlick(i: number): void {
     if (!part) return;
     part.muted = !part.muted;
     if (modus === "live") {
-      // Hacktribe-NRPN-Bedienfeldbefehl — EXPERIMENTELL, am Gerät unbestätigt.
+      // Hacktribe-NRPN-Bedienfeldbefehl — ✔ am Gerät bestätigt (2026-08-15):
+      // Part 1 wurde hörbar stumm- und wieder freigeschaltet.
       try {
         for (const triple of buildPanelControl(panelBridge.midiChannel, "mute", i, part.muted ? 1 : 0))
           panelBridge.midi.send(new Uint8Array(triple));
-        setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — NRPN gesendet (experimentell, am Gerät prüfen).`);
+        setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — live ans Gerät gesendet.`);
       } catch (err) {
         setStatus(`NRPN-Send fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
       }

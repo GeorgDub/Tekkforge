@@ -12,10 +12,13 @@
  * und ignoriert diese Nachrichten stillschweigend: es passiert nichts Schlimmes,
  * aber eben auch nichts.
  *
- * WARNUNG — in TekkForge nicht am Geraet erprobt. Die Kodierung folgt den
- * Messungen aus dem Omnitribe-Pruefprotokoll (siehe `FX_SOURCE_CONTROL`), die
- * Bytes sind gegen die dokumentierte CC-Reihenfolge getestet — ein Hardware-
- * Abnahmelauf steht aber aus.
+ * ✔ Am Geraet erprobt (2026-08-15): `buildPanelControl(ch, "mute", part, 1/0)`
+ * hat Part 1 hoerbar stumm- und wieder freigeschaltet (E2 Sampler mit
+ * Hacktribe, Kanal 1, gesendet aus dem E2S-Panel-Tab). Damit ist der
+ * CC-Rahmen als Ganzes belegt; die uebrigen Kategorien/Modi folgen derselben
+ * Kodierung, sind aber einzeln noch nicht abgenommen. Zuvor war nur ein
+ * `setFxParam`-Send „akustisch belegt" (editor.ts) — die Kodierung stammt
+ * aus dem Omnitribe-Pruefprotokoll (siehe `FX_SOURCE_CONTROL`).
  *
  * Rahmenformat:
  *
