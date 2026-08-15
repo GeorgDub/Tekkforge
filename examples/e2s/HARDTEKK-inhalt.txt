@@ -1,21 +1,21 @@
-501	Kick	spetzial-kick10	509ms
-502	Kick	Bassdrum Gated	510ms
-503	Kick	exKicK-1-MONO-08	509ms
-504	Kick	exKicK-10	509ms
-505	Kick	ABI0-NEUER-KICK1	507ms
-506	Kick	PENGkick-MONO-15	513ms
-507	Kick	PaPPi KicK 1	505ms
-508	Kick	Mega-kick1	513ms
-509	Kick	Mega-kick10	513ms
-510	Kick	mein kick2	503ms
-511	Kick	808_LNG_KICK	501ms
-512	Kick	LS-HKI Basic Har	519ms
-513	Kick	W+chterKicK 1	500ms
-514	Kick	Hardcore extrem	518ms
-515	Kick	FPC_Kick_Yam_001	518ms
-516	Kick	HardKick17 - Kop	520ms
-517	Kick	kick jerk 2	520ms
-518	Kick	OverH_Kick_002d	521ms
+501	Kick	Jumpkick 2o	493ms
+502	Kick	Jumpkick 20	493ms
+503	Kick	Jumpkick-MONO-02	493ms
+504	Kick	Jumpkick-MONO-06	493ms
+505	Kick	spetzial-kick10	509ms
+506	Kick	Bassdrum Gated	510ms
+507	Kick	exKicK-1-MONO-08	509ms
+508	Kick	ABI0-NEUER-KICK1	507ms
+509	Kick	PENGkick-MONO-15	513ms
+510	Kick	PaPPi KicK 1	505ms
+511	Kick	Mega-kick1	513ms
+512	Kick	Mega-kick10	513ms
+513	Kick	mein kick2	503ms
+514	Kick	808_LNG_KICK	501ms
+515	Kick	LS-HKI Basic Har	519ms
+516	Kick	W+chterKicK 1	500ms
+517	Kick	Hardcore extrem	518ms
+518	Kick	FPC_Kick_Yam_001	518ms
 519	Snare	snare-rush	390ms
 520	Snare	Kore Snare_6	386ms
 521	Snare	GMSnare1_02	385ms
@@ -77,15 +77,15 @@
 577	Lead	#R0binS-MelO	3999ms
 578	Lead	Bluezone-HLS-syn	4414ms
 579	Lead	PsyChoTanZmELo1	3926ms
-580	Lead	Rad MeLo 1	3926ms
-581	Lead	melo neu-MONO-15	4501ms
-582	Lead	melo neu-MONO-08	4501ms
-583	Lead	melo neu 2	4501ms
-584	Lead	Krieger-MeLo	3894ms
-585	Lead	Tau-MeLo	4518ms
-586	Lead	Willst du von mi	3840ms
-587	Lead	HBsChE PaRa MeLo	4562ms
-588	Lead	Auf CrystaL-MeLo	4598ms
+580	Lead	melo neu-MONO-15	4501ms
+581	Lead	melo neu-MONO-08	4501ms
+582	Lead	melo neu 2	4501ms
+583	Lead	Krieger-MeLo	3894ms
+584	Lead	Tau-MeLo	4518ms
+585	Lead	Willst du von mi	3840ms
+586	Lead	HBsChE PaRa MeLo	4562ms
+587	Lead	Auf CrystaL-MeLo	4598ms
+588	Lead	Wfg90_MeLo	4607ms
 589	Pad	Padseq~1	6874ms
 590	Pad	Killa Bees Pad.w	8001ms
 591	Pad	Strings of Wisdo	8000ms

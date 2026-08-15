@@ -80,10 +80,13 @@ const THEMA = {
 // (2026-08-15): Melos aus Paket C, Pad aus A (Padseq~1), Snare am Geraet
 // gewaehlt — snare-rush fiel durch ("klingt furchtbar"), "Snare 001" (#525)
 // ist der vom Nutzer bestimmte Ersatz.
+// Dritte Hoerrunde (2026-08-15): exKicK-10 und Rad MeLo waren "zu kratzig" —
+// Part 2 jetzt Jumpkick (Nutzerwunsch), Part 11 T-Mello. Kicks namentlich
+// gepinnt, weil die Jumpkicks die Kick-Reihenfolge der Bank verschoben haben.
 const BELEGUNG = [
-  ["Kick", 0], ["Kick", 3], ["Snare", "Snare 001"], ["Clap", 0],
+  ["Kick", "spetzial-kick10"], ["Kick", "Jumpkick 20"], ["Snare", "Snare 001"], ["Clap", 0],
   ["HiHat", 0], ["HiHat", 5], ["Perc.", 0], ["Perc.", 3],
-  ["Analog", "Bassdrum-01fd"], ["Analog", "Unison_Bass_C3"], ["PCM", "Rad MeLo"], ["PCM", "Tau-MeLo"],
+  ["Analog", "Bassdrum-01fd"], ["Analog", "Unison_Bass_C3"], ["PCM", "T-Mello"], ["PCM", "Tau-MeLo"],
   ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"], ["Phrase", "Padseq~1"], ["FX", 0],
 ];
 
@@ -108,7 +111,7 @@ const VARIANTEN = {
   C: {
     titel: "Melo-Paket C (Rad MeLo/Tau-MeLo/PaRa/CrystaL)",
     tausch: {
-      10: ["PCM", "Rad MeLo"],
+      10: ["PCM", "PsyChoTanZ"], // Rad MeLo flog aus der Bank (zu kratzig)
       11: ["PCM", "Tau-MeLo"],
       12: ["PCM", "HBsChE PaRa"],
       13: ["PCM", "Auf CrystaL"],

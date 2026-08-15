@@ -44,8 +44,13 @@ const BUDGET_MB = 20;
  * bevorzugten Bereich in Millisekunden, `anzahl` wie viele hineinsollen.
  * `kat` ist die Geräte-Kategorie (siehe E2S_CATEGORY_NAMES).
  */
+/**
+ * `wunsch`/`wunschAnzahl`: bis zu N Kandidaten, die auf das Wunsch-Muster
+ * passen, kommen VOR der normalen Auswahl in die Kategorie (Nutzerwunsch
+ * 2026-08-15: "sowas wie jumpkick" fuer den zweiten Kick).
+ */
 const KATEGORIEN = [
-  { name: "Kick",   kat: 2,  anzahl: 18, dauer: [120, 900],   muster: /\b(kick|bd|bassdrum|kik)\b|kick/i },
+  { name: "Kick",   kat: 2,  anzahl: 18, dauer: [120, 900],   muster: /\b(kick|bd|bassdrum|kik)\b|kick/i, wunsch: /jump/i, wunschAnzahl: 4 },
   { name: "Snare",  kat: 3,  anzahl: 10, dauer: [80, 700],    muster: /snare|snr|\bsd\b/i },
   { name: "Clap",   kat: 4,  anzahl: 8,  dauer: [80, 600],    muster: /clap|clp/i },
   { name: "HiHat",  kat: 5,  anzahl: 12, dauer: [30, 500],    muster: /hat|hh\b|hihat/i },
@@ -67,6 +72,8 @@ const KATEGORIEN = [
  *   #601 Haus-alarm5_Hall             (Nummern der Bank vom 2026-08-15)
  */
 const SPERRLISTE = [
+  /^exKicK-10\./i, // #504, dritte Hoerrunde — "zu kratzig"
+  /^Rad MeLo/i, // #580, dritte Hoerrunde — "zu kratzig"
   /^BAHRE_Snare_2/i, // #527 der Bank vom 2026-08-15, zweite Hoerrunde
   /^22inKickPowStrC/i,
   /^tittenspritzer/i,
@@ -157,11 +164,13 @@ for (const k of KATEGORIEN) {
     if (h.ms < minMs || h.ms > maxMs) continue;
     // Näher an der Mitte des Zielbereichs = typischer für die Kategorie.
     familien.set(stamm, (familien.get(stamm) ?? 0) + 1);
-    kandidaten.push({ p, h, abstand: Math.abs(h.ms - mitte) });
+    kandidaten.push({ p, h, abstand: Math.abs(h.ms - mitte), wunsch: k.wunsch ? k.wunsch.test(datei) : false });
     if (kandidaten.length > k.anzahl * 40) break; // genug zur Auswahl
   }
   kandidaten.sort((a, b) => a.abstand - b.abstand);
-  const nehmen = kandidaten.slice(0, k.anzahl);
+  // Wunschkandidaten zuerst (gedeckelt), dann die normale Auswahl.
+  const wunschTeil = k.wunsch ? kandidaten.filter((x) => x.wunsch).slice(0, k.wunschAnzahl ?? 2) : [];
+  const nehmen = [...wunschTeil, ...kandidaten.filter((x) => !wunschTeil.includes(x))].slice(0, k.anzahl);
   for (const n of nehmen) { belegt.add(n.p); gewaehlt.push({ ...n, kategorie: k }); }
   console.log(`  ${k.name.padEnd(6)} ${String(nehmen.length).padStart(2)}/${k.anzahl} aus ${kandidaten.length} Kandidaten`);
 }
