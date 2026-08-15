@@ -29,15 +29,23 @@ const BPM = Number(process.argv[4]) || 192;
 
 const MONO1 = 0, MONO2 = 1, POLY2 = 3;
 
-/** Phrygisch-minimal: fast nur Em, die Bewegung kommt aus dem Bass. */
+/**
+ * Phrygisch-minimal: fast nur Em, die Bewegung kommt aus dem Bass.
+ *
+ * Hoerrunde 4 (2026-08-15): eine Oktave HOEHER als zuerst gebaut. Die
+ * tekk.all-Samples (Synth Le, Shots) liefen bis zu drei Oktaven unter der
+ * Originaltonhoehe (Note 60) — so tief gepitcht wird jedes Sample koernig,
+ * DAS war das verbliebene Kratzen. Melo-Grundtoene liegen jetzt nahe 60,
+ * der Bass eine Oktave darunter.
+ */
 const THEMA = {
   A: {
-    akkorde: [[52, 55, 59], [53, 57, 60], [52, 55, 59], [50, 54, 57]], // Em F Em D
-    bass: [28, 29, 28, 26],
+    akkorde: [[64, 67, 71], [65, 69, 72], [64, 67, 71], [62, 66, 69]], // Em F Em D
+    bass: [40, 41, 40, 38],
   },
   B: {
-    akkorde: [[52, 55, 59], [52, 55, 59], [48, 52, 55], [47, 51, 54]], // Em Em C H
-    bass: [28, 28, 24, 23],
+    akkorde: [[64, 67, 71], [64, 67, 71], [60, 64, 67], [59, 63, 66]], // Em Em C H
+    bass: [40, 40, 36, 35],
   },
 };
 
@@ -165,18 +173,18 @@ function partsFuer(intensitaet, thema, kickFigur) {
     );
   if (i >= 4) steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 13) : null));
   if (i >= 5) steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 11) : null));
-  // Bass ohne Pause: Offbeats, ab 4 Pickups, im Drop tiefer.
-  // Hoerrunde 2026-08-15: Velocities hoch — der Bass soll vorne stehen.
+  // Bass ohne Pause: Offbeats, ab 4 Pickups. Kein Oktav-Drop mehr — unter
+  // dieser Lage wird der Synth koernig (Hoerrunde 4); Druck kommt aus
+  // Velocity und dem Sub-Layer auf gleicher Hoehe.
   if (i >= 2) {
-    const tief = i >= 5 ? -12 : 0;
     steps[8] = baue((s) => {
-      if (s % 4 === 2) return hit([t.bass[takt(s)] + tief], 118, 16);
-      if (i >= 4 && imTakt(s) === 7) return hit([t.bass[takt(s)] + tief], 108, 9);
-      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4] + tief], 108, 9);
+      if (s % 4 === 2) return hit([t.bass[takt(s)]], 118, 16);
+      if (i >= 4 && imTakt(s) === 7) return hit([t.bass[takt(s)]], 108, 9);
+      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 108, 9);
       return null;
     });
   }
-  if (i >= 4) steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)] - 12], 104, 52) : null));
+  if (i >= 4) steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)]], 104, 52) : null));
   // Melos laufen KOMPLETT durch, aber EINSTIMMIG (Hoerrunde 2, 2026-08-15):
   // als Dreiklang gespielte Shots stapeln drei transponierte Kopien
   // uebereinander — das war das "Kratzige". Grundton reicht, volle Gates,
