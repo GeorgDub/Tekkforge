@@ -28,11 +28,17 @@ describe("decodeKnobCc", () => {
     const keys = [...KNOB_CCS.values()].map((k) => k.key);
     expect(keys).toEqual(
       expect.arrayContaining([
-        "cutoff", "resonance", "egInt", "oscPitch", "oscGlide", "modDepth",
-        "modSpeed", "egAttack", "egDecay", "volume", "pan", "ifxEdit",
+        "cutoff", "resonance", "egInt", "oscPitch", "oscGlide", "oscEdit",
+        "modDepth", "modSpeed", "egAttack", "egDecay", "volume", "pan", "ifxEdit",
       ]),
     );
-    expect(KNOB_CCS.size).toBe(12);
+    expect(KNOB_CCS.size).toBe(13);
+  });
+
+  it("traegt die entwirrte Zuordnung (Lauscher-Protokoll 2026-08-15)", () => {
+    expect(KNOB_CCS.get(85)?.key).toBe("modDepth");
+    expect(KNOB_CCS.get(82)?.key).toBe("oscEdit");
+    expect(KNOB_CCS.get(86)?.key).toBe("modSpeed");
   });
 
   it("liefert unbekannte CCs mit knob: null statt sie zu verwerfen", () => {

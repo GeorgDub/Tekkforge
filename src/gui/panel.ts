@@ -419,8 +419,6 @@ const KNOB_BELEGUNG: Record<string, { key: string; min: number; max: number }> =
   e2sKnobEgInt: { key: "egInt", min: -63, max: 63 },
   e2sKnobPitch: { key: "oscPitch", min: -63, max: 63 },
   e2sKnobGlide: { key: "oscGlide", min: 0, max: 127 },
-  // Osc Edit hat (noch) keinen bekannten CC — drehbar, wirkt aber im
-  // Live-Modus nur lokal; ans Geraet kommt er erst beim Uebertragen.
   e2sKnobOscEdit: { key: "oscEdit", min: 0, max: 127 },
   e2sKnobDepth: { key: "modDepth", min: 0, max: 127 },
   e2sKnobSpeed: { key: "modSpeed", min: 0, max: 127 },

@@ -30,9 +30,14 @@
  * Edit-Regler der Sample-Sektion gedreht, der offenbar auf der Glide-Ebene
  * stand). Eintrag entsprechend korrigiert.
  *
- * ⚠ Offen: CC fuer OSC EDIT (unbekannt); Mod Depth (CC 82 wird vom Geraet
- * GESENDET, aber ein gesendetes CC 82 bewirkte nichts — Empfang unklar);
- * die grossen Auswahlregler (Sample / Mod-Typ / IFX-Typ).
+ * ✔ Entwirrt per Direkt-Lauscher (3-Minuten-Protokoll mit Zeitstempeln,
+ * 2026-08-15, streng entkoppelte Dreher): Depth = CC 85, Speed = CC 86,
+ * OSC EDIT = CC 82. Die Grossmessung hatte Depth faelschlich auf 82 — daher
+ * wirkte der Depth-Drag nicht (er stellte in Wahrheit Osc Edit).
+ *
+ * ✔ Die grossen Auswahlregler (Sample / Mod-Typ / IFX-Typ) senden NICHTS —
+ * im selben Protokoll blieben ihre Dreher komplett stumm. Typ-Wechsel
+ * erreichen das Geraet also nur ueber Pattern-Transfer (oder ggf. NRPN).
  *
  * Die `key`s entsprechen den PART_PARAMS-Schluesseln (partParams.ts);
  * `volume`/`pan` sind die Festfelder des Parts. Bipolare Regler (Pitch,
@@ -52,7 +57,8 @@ export const KNOB_CCS: ReadonlyMap<number, KnobCc> = new Map<number, KnobCc>([
   [83, { key: "egInt", label: "EG Int" }],
   [80, { key: "oscPitch", label: "Pitch" }],
   [81, { key: "oscGlide", label: "Glide" }],
-  [82, { key: "modDepth", label: "Mod Depth" }],
+  [82, { key: "oscEdit", label: "Osc Edit" }],
+  [85, { key: "modDepth", label: "Mod Depth" }],
   [86, { key: "modSpeed", label: "Mod Speed" }],
   [73, { key: "egAttack", label: "Attack" }],
   [72, { key: "egDecay", label: "Decay/Release" }],
