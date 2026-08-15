@@ -4,7 +4,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { decodeKnobCc, KNOB_CCS } from "../src/core/e2KnobCc";
+import {
+  buildKnobCc,
+  ccForKey,
+  ccValueToParam,
+  decodeKnobCc,
+  KNOB_CCS,
+  paramToCcValue,
+} from "../src/core/e2KnobCc";
 
 describe("decodeKnobCc", () => {
   it("dekodiert die gemessenen Regler (Cutoff-Beispiel aus dem Monitor)", () => {
@@ -40,5 +47,27 @@ describe("decodeKnobCc", () => {
     expect(decodeKnobCc([0xf8])).toBeNull(); // Clock
     expect(decodeKnobCc([0xb0, 0x63, 0x00])).toBeNull(); // NRPN MSB
     expect(decodeKnobCc([0xb0, 0x26, 0x01])).toBeNull(); // NRPN DATA LSB
+  });
+});
+
+describe("Senden — Kanal = Part, bipolar um Mitte 64", () => {
+  it("baut die CC-Nachricht auf dem Kanal des Parts", () => {
+    // Cutoff 100 fuer Part 3 → Status 0xB2, CC 74, Wert 100.
+    expect(Array.from(buildKnobCc(2, "cutoff", 100)!)).toEqual([0xb2, 0x4a, 100]);
+  });
+
+  it("rechnet bipolare Werte um Mitte 64 (Pitch-Messung: Ruhelage 64)", () => {
+    expect(paramToCcValue("oscPitch", 0)).toBe(64);
+    expect(paramToCcValue("oscPitch", -63)).toBe(1);
+    expect(paramToCcValue("egInt", 12)).toBe(76);
+    expect(ccValueToParam("oscPitch", 64)).toBe(0);
+    expect(ccValueToParam("egInt", 0)).toBe(-64);
+    expect(ccValueToParam("cutoff", 39)).toBe(39);
+  });
+
+  it("kennt fuer unbekannte Keys keinen CC", () => {
+    expect(ccForKey("ifxOn")).toBeNull();
+    expect(buildKnobCc(0, "ifxOn", 1)).toBeNull();
+    expect(ccForKey("cutoff")).toBe(74);
   });
 });

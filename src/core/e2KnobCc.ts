@@ -18,14 +18,19 @@
  *     Pan           CC 10   (Standard "Pan")
  *     IFX Edit      CC 87
  *
- * Alle Ereignisse kamen auf Kanal 1 (dem Global-/Suchkanal des Geraets).
- * ⚠ Offen: ob der Kanal dem am Geraet AKTIVEN Part folgt (die Messung lief
- * durchgehend mit Part 1) und welche CCs die grossen Auswahlregler
- * (Sample / Mod-Typ / IFX-Typ) senden. Bis dahin ordnet der Empfaenger den
- * Wert dem in der UI aktiven Part zu.
+ * ✔ KANAL = PART-NUMMER (Nutzer-Auskunft 2026-08-15): die Messung lief mit
+ * Part 1 aktiv, daher Kanal 1; die uebrigen Parts senden auf dem Kanal ihrer
+ * Nummer. Passt zu den beobachteten Note-Events je Part-Kanal bei laufendem
+ * Sequencer. Der Empfaenger ordnet den Wert also ueber den Kanal dem
+ * richtigen Part zu — und beim SENDEN adressiert der CC-Kanal den Part.
+ *
+ * ⚠ Offen: welche CCs die grossen Auswahlregler (Sample / Mod-Typ /
+ * IFX-Typ) senden.
  *
  * Die `key`s entsprechen den PART_PARAMS-Schluesseln (partParams.ts);
- * `volume`/`pan` sind die Festfelder des Parts.
+ * `volume`/`pan` sind die Festfelder des Parts. Bipolare Regler (Pitch,
+ * EG Int) laufen auf dem Draht um Mitte 64 — abgeleitet aus der
+ * Pitch-Messung (Ruhelage sendete 64).
  */
 
 export interface KnobCc {
@@ -78,4 +83,32 @@ export function decodeKnobCc(bytes: ArrayLike<number>): KnobCcEvent | null {
     value: bytes[2],
     knob: KNOB_CCS.get(cc) ?? null,
   };
+}
+
+/** Regler, die auf dem Draht um Mitte 64 laufen (Speicherwert −63..+63). */
+export const BIPOLARE_KNOB_KEYS: ReadonlySet<string> = new Set(["egInt", "oscPitch"]);
+
+const CC_BY_KEY = new Map([...KNOB_CCS.entries()].map(([cc, k]) => [k.key, cc]));
+
+/** CC-Nummer zu einem Regler-Key — null, wenn der Key keinen gemessenen CC hat. */
+export function ccForKey(key: string): number | null {
+  return CC_BY_KEY.get(key) ?? null;
+}
+
+/** Draht-Wert (0..127) → Speicherwert (bipolar: −63..+63). */
+export function ccValueToParam(key: string, value: number): number {
+  return BIPOLARE_KNOB_KEYS.has(key) ? value - 64 : value;
+}
+
+/** Speicherwert → Draht-Wert 0..127 (geclamped). */
+export function paramToCcValue(key: string, wert: number): number {
+  const roh = BIPOLARE_KNOB_KEYS.has(key) ? wert + 64 : wert;
+  return Math.max(0, Math.min(127, Math.round(roh)));
+}
+
+/** Baut die CC-Nachricht, die den Regler eines Parts stellt (Kanal = Part). */
+export function buildKnobCc(part0: number, key: string, wert: number): Uint8Array | null {
+  const cc = ccForKey(key);
+  if (cc === null) return null;
+  return new Uint8Array([0xb0 | (part0 & 0x0f), cc, paramToCcValue(key, wert)]);
 }

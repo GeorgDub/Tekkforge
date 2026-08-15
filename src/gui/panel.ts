@@ -37,7 +37,7 @@ import {
   type EditorPattern,
 } from "../core/editorModel";
 import { displayInfo, partLeds, stepStates, taktAnzahl } from "../core/panelState";
-import { decodeKnobCc } from "../core/e2KnobCc";
+import { buildKnobCc, ccValueToParam, decodeKnobCc } from "../core/e2KnobCc";
 
 let modus: "live" | "prepare" = "prepare";
 let padModus: "mute" | "sequencer" = "mute";
@@ -108,6 +108,8 @@ const PANEL_CSS = `
   background: radial-gradient(circle at 38% 32%, #b7b7bd, #7e7e86 70%, #55555c);
   box-shadow: 0 3px 6px rgba(0,0,0,.45); }
 .e2s-knob.gross { width: 48px; height: 48px; }
+.e2s-knob.drehbar { cursor: ns-resize; }
+.e2s-knob.drehbar:hover { outline: 2px solid rgba(255,255,255,.35); }
 .e2s-knob.wert { background: radial-gradient(circle at 38% 32%, #c9505c, #93313c 75%); }
 .e2s-zeiger { position: absolute; left: 50%; top: 4px; width: 2px; height: 40%;
   background: #16161a; transform-origin: 50% 145%; border-radius: 2px; }
@@ -387,27 +389,98 @@ async function aufSlotSchreiben(): Promise<void> {
 
 /**
  * Live-Mitlauf: Reglerdrehungen am Gerät kommen als CC herein (am Gerät
- * gemessen 2026-08-15, siehe e2KnobCc.ts) und drehen die Panel-Regler mit.
- *
- * ⚠ Der CC verrät nicht, welcher Part am GERÄT aktiv ist (alles kommt auf
- * Kanal 1) — der Wert wird dem in der UI aktiven Part zugeschrieben. Bipolare
- * Regler (Pitch, EG Int) senden um Mitte 64; die Umrechnung −64 ist aus der
- * Pitch-Messung abgeleitet.
+ * gemessen 2026-08-15, siehe e2KnobCc.ts). Der KANAL ist die Part-Nummer
+ * (Nutzer-Auskunft) — der Wert landet also beim richtigen Part, und die UI
+ * springt auf diesen Part, damit die Regler zeigen, was man gerade anfasst.
  */
 function empfangeVomGeraet(bytes: number[]): void {
   if (modus !== "live") return;
   const ev = decodeKnobCc(bytes);
   if (!ev || !ev.knob) return;
   const p = aktuellesPattern();
-  const part = p.parts[aktiverPart];
+  const part = p.parts[ev.channel0];
   if (!part) return;
-  const bipolar = ev.knob.key === "egInt" || ev.knob.key === "oscPitch";
-  const wert = bipolar ? ev.value - 64 : ev.value;
+  const wert = ccValueToParam(ev.knob.key, ev.value);
   if (ev.knob.key === "volume") part.volume = ev.value;
   else if (ev.knob.key === "pan") part.pan = ev.value;
   else part.params = { ...(part.params ?? {}), [ev.knob.key]: wert };
-  setStatus(`${ev.knob.label} = ${wert} — live vom Gerät (zugeordnet: Part ${aktiverPart + 1} der UI).`);
+  aktiverPart = ev.channel0;
+  setStatus(`${ev.knob.label} = ${wert} — live vom Gerät (Part ${ev.channel0 + 1}).`);
   renderPanel();
+}
+
+// ─── Drehbare Regler (UI → Gerät) ────────────────────────────────────────────
+
+/** Element-ID → Regler-Key + Anzeigebereich. Nur gemessene Regler sind drehbar. */
+const KNOB_BELEGUNG: Record<string, { key: string; min: number; max: number }> = {
+  e2sKnobCutoff: { key: "cutoff", min: 0, max: 127 },
+  e2sKnobReso: { key: "resonance", min: 0, max: 127 },
+  e2sKnobEgInt: { key: "egInt", min: -63, max: 63 },
+  e2sKnobPitch: { key: "oscPitch", min: -63, max: 63 },
+  e2sKnobOscEdit: { key: "oscEdit", min: 0, max: 127 },
+  e2sKnobDepth: { key: "modDepth", min: 0, max: 127 },
+  e2sKnobSpeed: { key: "modSpeed", min: 0, max: 127 },
+  e2sKnobAttack: { key: "egAttack", min: 0, max: 127 },
+  e2sKnobDecay: { key: "egDecay", min: 0, max: 127 },
+  e2sKnobLevel: { key: "volume", min: 0, max: 127 },
+  e2sKnobPan: { key: "pan", min: 0, max: 127 },
+  e2sKnobIfxEdit: { key: "ifxEdit", min: 0, max: 127 },
+};
+
+function reglerWert(def: { key: string; min: number }, partIdx: number): number {
+  const part = aktuellesPattern().parts[partIdx];
+  if (!part) return def.min;
+  if (def.key === "volume") return part.volume;
+  if (def.key === "pan") return part.pan;
+  return part.params?.[def.key] ?? 0;
+}
+
+/**
+ * Setzt einen Reglerwert: Pattern-Zustand immer, im Live-Modus zusätzlich als
+ * CC auf dem Kanal des aktiven Parts ans Gerät (Kanal = Part). Ob das Gerät
+ * die CCs auch EMPFÄNGT, ist der nächste Abnahmetest — gesendet wird exakt
+ * das Format, das es selbst beim Drehen sendet.
+ */
+function setzeReglerWert(def: { key: string; min: number; max: number }, wert: number): void {
+  const geclampt = Math.max(def.min, Math.min(def.max, Math.round(wert)));
+  const part = aktuellesPattern().parts[aktiverPart];
+  if (!part) return;
+  if (def.key === "volume") part.volume = geclampt;
+  else if (def.key === "pan") part.pan = geclampt;
+  else part.params = { ...(part.params ?? {}), [def.key]: geclampt };
+  if (modus === "live") {
+    const msg = buildKnobCc(aktiverPart, def.key, geclampt);
+    if (msg) panelBridge.midi.send(msg);
+    setStatus(`${def.key} = ${geclampt} → Gerät (CC, Kanal ${aktiverPart + 1}).`);
+  } else {
+    panelBridge.markDirty();
+    setStatus(`${def.key} = ${geclampt} (Prepare — wirkt beim Übertragen).`);
+  }
+  renderPanel();
+}
+
+function macheReglerDrehbar(): void {
+  for (const [id, def] of Object.entries(KNOB_BELEGUNG)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.classList.add("drehbar");
+    el.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      el.setPointerCapture(ev.pointerId);
+      const startY = ev.clientY;
+      const startWert = reglerWert(def, aktiverPart);
+      const move = (m: PointerEvent) => {
+        // 2 Pixel pro Schritt: ein voller Bildschirm-Zug überstreicht den Bereich.
+        setzeReglerWert(def, startWert + (startY - m.clientY) / 2);
+      };
+      const up = () => {
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+      };
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+    });
+  }
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
@@ -421,6 +494,7 @@ export function panelWirdSichtbar(): void {
 export function initPanel(): void {
   baueDom();
   panelBridge.onIncoming = empfangeVomGeraet;
+  macheReglerDrehbar();
 
   $("e2sModusLive").addEventListener("click", () => {
     modus = "live";
