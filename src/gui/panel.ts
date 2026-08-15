@@ -345,16 +345,27 @@ function padKlick(i: number): void {
       setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} (Prepare — wirkt beim Übertragen).`);
     }
   } else {
-    if (modus === "live") {
-      setStatus("Steps live schalten kommt in Stufe 2 — im Prepare-Modus geht es jetzt schon.");
-      return;
-    }
     const idx = takt * 16 + i;
     if (idx >= p.stepLength) return;
     const step = p.parts[aktiverPart]?.steps[idx];
     if (!step) return;
     step.on = !step.on;
-    panelBridge.markDirty();
+    if (modus === "live") {
+      // NRPN-Bedienfeldbefehl "sequencer" — EXPERIMENTELL (der Mute mit
+      // demselben Rahmen ist am Gerät bestätigt). Sub-Index = absoluter
+      // Step (0..63); wirkt mutmaßlich auf den am GERÄT aktiven Part.
+      try {
+        for (const triple of buildPanelControl(panelBridge.midiChannel, "sequencer", idx, step.on ? 1 : 0))
+          panelBridge.midi.send(new Uint8Array(triple));
+        setStatus(
+          `Step ${idx + 1} ${step.on ? "an" : "aus"} — NRPN gesendet (experimentell; zielt auf den am Gerät aktiven Part).`,
+        );
+      } catch (err) {
+        setStatus(`NRPN-Send fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+      }
+    } else {
+      panelBridge.markDirty();
+    }
   }
   renderPanel();
 }
