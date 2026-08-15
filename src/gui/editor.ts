@@ -774,6 +774,8 @@ function midiOpts(): E2SysexOptions {
 export const panelBridge = {
   midi,
   midiOpts,
+  /** Vom Panel gesetzt: bekommt jede eingehende MIDI-Nachricht (Live-Mitlauf). */
+  onIncoming: null as ((bytes: number[]) => void) | null,
   get midiChannel(): number {
     return midiChannel;
   },
@@ -852,7 +854,10 @@ async function midiEnable(): Promise<void> {
   try {
     await midi.enable();
     midi.onPortsChanged = () => refreshMidiPorts();
-    midi.onAnyMessage = (bytes) => pushMonitor("◀ IN", bytes);
+    midi.onAnyMessage = (bytes) => {
+      pushMonitor("◀ IN", bytes);
+      panelBridge.onIncoming?.(bytes);
+    };
     midi.onSent = (bytes) => pushMonitor("▶ OUT", bytes);
     refreshMidiPorts();
     $("midiEnable").classList.add("hidden");

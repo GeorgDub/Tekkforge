@@ -37,6 +37,7 @@ import {
   type EditorPattern,
 } from "../core/editorModel";
 import { displayInfo, partLeds, stepStates, taktAnzahl } from "../core/panelState";
+import { decodeKnobCc } from "../core/e2KnobCc";
 
 let modus: "live" | "prepare" = "prepare";
 let padModus: "mute" | "sequencer" = "mute";
@@ -384,6 +385,31 @@ async function aufSlotSchreiben(): Promise<void> {
   }
 }
 
+/**
+ * Live-Mitlauf: Reglerdrehungen am Gerät kommen als CC herein (am Gerät
+ * gemessen 2026-08-15, siehe e2KnobCc.ts) und drehen die Panel-Regler mit.
+ *
+ * ⚠ Der CC verrät nicht, welcher Part am GERÄT aktiv ist (alles kommt auf
+ * Kanal 1) — der Wert wird dem in der UI aktiven Part zugeschrieben. Bipolare
+ * Regler (Pitch, EG Int) senden um Mitte 64; die Umrechnung −64 ist aus der
+ * Pitch-Messung abgeleitet.
+ */
+function empfangeVomGeraet(bytes: number[]): void {
+  if (modus !== "live") return;
+  const ev = decodeKnobCc(bytes);
+  if (!ev || !ev.knob) return;
+  const p = aktuellesPattern();
+  const part = p.parts[aktiverPart];
+  if (!part) return;
+  const bipolar = ev.knob.key === "egInt" || ev.knob.key === "oscPitch";
+  const wert = bipolar ? ev.value - 64 : ev.value;
+  if (ev.knob.key === "volume") part.volume = ev.value;
+  else if (ev.knob.key === "pan") part.pan = ev.value;
+  else part.params = { ...(part.params ?? {}), [ev.knob.key]: wert };
+  setStatus(`${ev.knob.label} = ${wert} — live vom Gerät (zugeordnet: Part ${aktiverPart + 1} der UI).`);
+  renderPanel();
+}
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 /** Beim Tab-Wechsel aufrufen: Editor-Daten können sich geändert haben. */
@@ -394,6 +420,7 @@ export function panelWirdSichtbar(): void {
 
 export function initPanel(): void {
   baueDom();
+  panelBridge.onIncoming = empfangeVomGeraet;
 
   $("e2sModusLive").addEventListener("click", () => {
     modus = "live";
