@@ -132,6 +132,11 @@ const PANEL_CSS = `
 .e2s-pad.sel .led { background: #7a5cff; box-shadow: 0 0 14px #7a5cff; }
 .e2s-pad small { position: absolute; right: 5px; bottom: 3px; font-size: 9px; color: #9b8f92; }
 .e2s-status { font-size: 12px; color: var(--muted, #aaa); }
+.e2s-stepedit { position: fixed; z-index: 40; background: #1d1d22; border: 1px solid #57232a;
+  border-radius: 8px; padding: 10px 12px; color: #eee; font-size: 12px; width: 210px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 6px; }
+.e2s-stepedit label { display: flex; flex-direction: column; gap: 2px; }
+.e2s-stepedit small { color: #998; }
 `;
 
 function baueDom(): void {
@@ -147,6 +152,7 @@ function baueDom(): void {
     <button id="e2sAnhoeren" title="Pattern in den Edit-Buffer senden — klingt sofort, überschreibt keinen Slot">▶ Anhören (Edit-Buffer)</button>
     <label>Slot <input id="e2sSlot" type="number" min="1" max="250" value="1" style="width:60px"></label>
     <button id="e2sSchreiben" title="Pattern dauerhaft auf den Geräte-Slot schreiben">💾 → Slot</button>
+    <label title="Zieht den Gerätezustand regelmäßig automatisch — bei laufendem Sequencer per Dreifach-Lesung mit Byte-Mehrheit"><input id="e2sAutoSync" type="checkbox" checked> Auto-Sync</label>
     <span class="e2s-status" id="e2sStatus">Prepare-Modus — Pattern aus dem Editor.</span>
   </div>
   <div class="e2s">
@@ -336,7 +342,10 @@ function padKlick(i: number): void {
       try {
         for (const triple of buildPanelControl(panelBridge.midiChannel, "mute", i, part.muted ? 1 : 0))
           panelBridge.midi.send(new Uint8Array(triple));
-        setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — live ans Gerät gesendet.`);
+        // NRPN wirkt sofort hörbar, hält aber nicht im Edit-Buffer — der
+        // Auto-Transfer macht den Zustand dauerhaft (Nutzer-Befund).
+        planeAutoUebertragung();
+        setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — live gesendet, Übertragung folgt.`);
       } catch (err) {
         setStatus(`NRPN-Send fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
       }
@@ -366,14 +375,93 @@ function padKlick(i: number): void {
   renderPanel();
 }
 
-/** Sammelt schnelle Step-Klicks und überträgt das Pattern EINMAL danach. */
+/** Sammelt schnelle Änderungen (Steps, Mutes, Step-Details) und überträgt das
+ *  Pattern EINMAL danach in den Edit-Buffer. */
 let autoSendeTimer: number | null = null;
 function planeAutoUebertragung(): void {
+  letzteLokaleAenderungUm = Date.now();
+  if (modus !== "live") return;
   if (autoSendeTimer !== null) window.clearTimeout(autoSendeTimer);
   autoSendeTimer = window.setTimeout(() => {
     autoSendeTimer = null;
     void anhoeren();
   }, 350);
+}
+
+// ─── Automatischer Rück-Sync (Gerät → UI) ────────────────────────────────────
+//
+// Der Pattern-Dump ist NUR bei gestopptem Sequencer zuverlässig (am Gerät
+// gemessen: laufend = still beschädigt). Deshalb zieht der Auto-Sync den
+// Zustand nur, wenn das Gerät als gestoppt gilt (Stop-Ereignis oder ≥8 s ohne
+// Note), nie während eine eigene Übertragung ansteht, und nie kurz nach einer
+// lokalen Änderung (sonst überschreibt der Sync, was man gerade anfasst).
+
+let autoSyncTimer: number | null = null;
+function planeAutoSync(delayMs: number): void {
+  if (autoSyncTimer !== null) window.clearTimeout(autoSyncTimer);
+  autoSyncTimer = window.setTimeout(() => {
+    autoSyncTimer = null;
+    void autoSync();
+  }, delayMs);
+}
+
+async function leseDumpEinmal(): Promise<Uint8Array | null> {
+  try {
+    const reply = await requestSysex(
+      panelBridge.midi,
+      buildCurrentPatternRequest(panelBridge.midiOpts()),
+      (b) => decodeDump(b) !== null,
+      2500,
+    );
+    return decodeDump(reply)!.body;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Liest den Edit-Buffer auch bei LAUFENDEM Sequencer verlässlich: Dumps sind
+ * dann still verschoben (am Gerät gemessen) — aber die Verschiebung liegt pro
+ * Lesung woanders. Deshalb der dokumentierte Ausweg aus der Messreihe:
+ * dreimal lesen, je Byte die Mehrheit. Zwei übereinstimmende Lesungen sind
+ * belastbar; bei gestopptem Gerät genügt eine.
+ */
+async function leseDumpVerlaesslich(): Promise<Uint8Array | null> {
+  const stillSeit = Date.now() - letzteNoteUm;
+  const vermutlichGestoppt = !spieltGerade || stillSeit > 8000;
+  const a = await leseDumpEinmal();
+  if (!a) return null;
+  if (vermutlichGestoppt) return a;
+  const b = await leseDumpEinmal();
+  if (b && a.length === b.length && a.every((v, i) => v === b[i])) return a;
+  const c = await leseDumpEinmal();
+  if (!b || !c || a.length !== b.length || a.length !== c.length) return null;
+  const out = new Uint8Array(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = a[i] === b[i] || a[i] === c[i] ? a[i] : b[i];
+  return out;
+}
+
+function autoSyncErlaubt(): boolean {
+  const schalter = document.getElementById("e2sAutoSync") as HTMLInputElement | null;
+  return !schalter || schalter.checked;
+}
+
+async function autoSync(): Promise<void> {
+  if (modus !== "live" || syncLaeuft || autoSendeTimer !== null) return;
+  if (!autoSyncErlaubt()) return;
+  if (Date.now() - letzteLokaleAenderungUm < 3000) return;
+  syncLaeuft = true;
+  try {
+    const body = await leseDumpVerlaesslich();
+    if (!body) return;
+    livePattern = editorPatternFromBody(body);
+    setStatus(`Auto-Sync: „${livePattern.name}" um ${new Date().toLocaleTimeString()}.`);
+    renderPanel();
+  } catch {
+    // still bleiben — Auto-Sync ist Komfort, kein Fehlerfall wert.
+  } finally {
+    syncLaeuft = false;
+  }
 }
 
 async function anhoeren(): Promise<void> {
@@ -411,7 +499,25 @@ async function aufSlotSchreiben(): Promise<void> {
  * (Nutzer-Auskunft) — der Wert landet also beim richtigen Part, und die UI
  * springt auf diesen Part, damit die Regler zeigen, was man gerade anfasst.
  */
+/** Spielt das Gerät gerade? Konservativer Start: ja — kein Auto-Sync, bevor
+ *  ein Stopp sicher erkannt ist (Dumps bei laufendem Sequencer kommen still
+ *  beschädigt zurück, am Gerät gemessen). */
+let spieltGerade = true;
+let letzteNoteUm = 0;
+let letzteLokaleAenderungUm = 0;
+let syncLaeuft = false;
+
 function empfangeVomGeraet(bytes: number[]): void {
+  const st = bytes[0];
+  // Transport-Erkennung: Start/Continue/Stop plus Noten als Spiel-Heuristik.
+  if (st === 0xfa || st === 0xfb) spieltGerade = true;
+  else if (st === 0xfc) {
+    spieltGerade = false;
+    planeAutoSync(800); // nach dem Stopp einmal frisch ziehen
+  } else if ((st & 0xf0) === 0x90 && bytes.length >= 3 && bytes[2] > 0) {
+    spieltGerade = true;
+    letzteNoteUm = Date.now();
+  }
   if (modus !== "live") return;
   const ev = decodeKnobCc(bytes);
   if (!ev || !ev.knob) return;
@@ -464,6 +570,7 @@ function setzeReglerWert(def: { key: string; min: number; max: number }, wert: n
   const geclampt = Math.max(def.min, Math.min(def.max, Math.round(wert)));
   const part = aktuellesPattern().parts[aktiverPart];
   if (!part) return;
+  letzteLokaleAenderungUm = Date.now(); // Auto-Sync nicht ins Ziehen grätschen lassen
   if (def.key === "volume") part.volume = geclampt;
   else if (def.key === "pan") part.pan = geclampt;
   else part.params = { ...(part.params ?? {}), [def.key]: geclampt };
@@ -504,6 +611,67 @@ function macheReglerDrehbar(): void {
       el.addEventListener("pointerup", up);
     });
   }
+}
+
+// ─── Step-Details (Gate/Velocity) per Rechtsklick ────────────────────────────
+
+let stepEditEl: HTMLElement | null = null;
+
+function schliesseStepEditor(): void {
+  stepEditEl?.remove();
+  stepEditEl = null;
+}
+
+function oeffneStepEditor(padIdx: number, x: number, y: number): void {
+  schliesseStepEditor();
+  const p = aktuellesPattern();
+  const idx = takt * 16 + padIdx;
+  if (idx >= p.stepLength) return;
+  const step = p.parts[aktiverPart]?.steps[idx];
+  if (!step) return;
+
+  const el = document.createElement("div");
+  el.className = "e2s-stepedit";
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.innerHTML = `
+    <b>Step ${idx + 1} · Part ${aktiverPart + 1}</b>
+    <label>Velocity <span id="e2sSeVelWert">${step.velocity}</span>
+      <input id="e2sSeVel" type="range" min="1" max="127" value="${step.velocity}"></label>
+    <label>Gate <span id="e2sSeGateWert">${step.gate}</span>
+      <input id="e2sSeGate" type="range" min="1" max="96" value="${step.gate}"></label>
+    <small>96 = Tie (nur über SD, SysEx kürzt auf 96)</small>`;
+  document.body.appendChild(el);
+  stepEditEl = el;
+
+  const vel = el.querySelector<HTMLInputElement>("#e2sSeVel")!;
+  const gate = el.querySelector<HTMLInputElement>("#e2sSeGate")!;
+  vel.addEventListener("input", () => {
+    step.velocity = Number(vel.value);
+    el.querySelector("#e2sSeVelWert")!.textContent = vel.value;
+    if (!step.on) step.on = true;
+    if (modus === "prepare") panelBridge.markDirty();
+    planeAutoUebertragung();
+    renderPanel();
+  });
+  gate.addEventListener("input", () => {
+    step.gate = Number(gate.value);
+    el.querySelector("#e2sSeGateWert")!.textContent = gate.value;
+    if (!step.on) step.on = true;
+    if (modus === "prepare") panelBridge.markDirty();
+    planeAutoUebertragung();
+    renderPanel();
+  });
+  // Klick außerhalb schließt.
+  setTimeout(() => {
+    const zu = (ev: MouseEvent) => {
+      if (stepEditEl && !stepEditEl.contains(ev.target as Node)) {
+        schliesseStepEditor();
+        document.removeEventListener("mousedown", zu);
+      }
+    };
+    document.addEventListener("mousedown", zu);
+  }, 0);
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
@@ -558,6 +726,16 @@ export function initPanel(): void {
     const pad = (ev.target as HTMLElement).closest<HTMLElement>(".e2s-pad");
     if (pad) padKlick(Number(pad.dataset.pad));
   });
+  // Rechtsklick auf ein Step-Pad: Gate/Velocity des Steps.
+  $("e2sPads").addEventListener("contextmenu", (ev) => {
+    const pad = (ev.target as HTMLElement).closest<HTMLElement>(".e2s-pad");
+    if (!pad || padModus !== "sequencer") return;
+    ev.preventDefault();
+    oeffneStepEditor(Number(pad.dataset.pad), ev.clientX, ev.clientY);
+  });
+
+  // Regelmäßiger Rück-Sync vom Gerät (greift nur in sicheren Momenten).
+  window.setInterval(() => void autoSync(), 10000);
 
   renderPanel();
 }
