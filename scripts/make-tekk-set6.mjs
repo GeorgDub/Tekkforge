@@ -197,10 +197,12 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
   }
 
   if (jamMelos) {
-    steps[10] = leer();
-    steps[11] = leer();
-    steps[12] = leer();
-    steps[13] = leer();
+    // Duennes Starter-Muster (Nutzerwunsch): je ein Anschlag pro Loop,
+    // versetzt — im Sequencer greifbar, ueber die Pads frei spielbar.
+    steps[10] = baue((s) => (s === 0 ? hit([t.akkorde[0][0]], 88, 96) : null));
+    steps[11] = baue((s) => (takt(s) === 1 && imTakt(s) === 8 ? hit([t.akkorde[1][0]], 86, 96) : null));
+    steps[12] = baue((s) => (takt(s) === 2 && imTakt(s) === 0 ? hit([t.akkorde[2][0]], 84, 96) : null));
+    steps[13] = baue((s) => (takt(s) === 3 && imTakt(s) === 0 ? hit([t.akkorde[3][0]], 84, 96) : null));
   }
 
   return steps.map((st, idx) => {
