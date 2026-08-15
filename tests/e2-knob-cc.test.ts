@@ -28,7 +28,7 @@ describe("decodeKnobCc", () => {
     const keys = [...KNOB_CCS.values()].map((k) => k.key);
     expect(keys).toEqual(
       expect.arrayContaining([
-        "cutoff", "resonance", "egInt", "oscPitch", "oscEdit", "modDepth",
+        "cutoff", "resonance", "egInt", "oscPitch", "oscGlide", "modDepth",
         "modSpeed", "egAttack", "egDecay", "volume", "pan", "ifxEdit",
       ]),
     );

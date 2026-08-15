@@ -24,8 +24,15 @@
  * Sequencer. Der Empfaenger ordnet den Wert also ueber den Kanal dem
  * richtigen Part zu — und beim SENDEN adressiert der CC-Kanal den Part.
  *
- * ⚠ Offen: welche CCs die grossen Auswahlregler (Sample / Mod-Typ /
- * IFX-Typ) senden.
+ * ✔ Rueckrichtung am Geraet getestet (UI-Drag → CC → Geraet, 2026-08-15):
+ * Pitch, Resonance, Cutoff, EG Int und IFX Edit wirken. CC 81 stellte sich
+ * dabei als GLIDE heraus (nicht Osc Edit — in der Messreihe wurde der
+ * Edit-Regler der Sample-Sektion gedreht, der offenbar auf der Glide-Ebene
+ * stand). Eintrag entsprechend korrigiert.
+ *
+ * ⚠ Offen: CC fuer OSC EDIT (unbekannt); Mod Depth (CC 82 wird vom Geraet
+ * GESENDET, aber ein gesendetes CC 82 bewirkte nichts — Empfang unklar);
+ * die grossen Auswahlregler (Sample / Mod-Typ / IFX-Typ).
  *
  * Die `key`s entsprechen den PART_PARAMS-Schluesseln (partParams.ts);
  * `volume`/`pan` sind die Festfelder des Parts. Bipolare Regler (Pitch,
@@ -43,8 +50,8 @@ export const KNOB_CCS: ReadonlyMap<number, KnobCc> = new Map<number, KnobCc>([
   [74, { key: "cutoff", label: "Cutoff" }],
   [71, { key: "resonance", label: "Resonance" }],
   [83, { key: "egInt", label: "EG Int" }],
-  [80, { key: "oscPitch", label: "Pitch/Glide" }],
-  [81, { key: "oscEdit", label: "Osc Edit" }],
+  [80, { key: "oscPitch", label: "Pitch" }],
+  [81, { key: "oscGlide", label: "Glide" }],
   [82, { key: "modDepth", label: "Mod Depth" }],
   [86, { key: "modSpeed", label: "Mod Speed" }],
   [73, { key: "egAttack", label: "Attack" }],

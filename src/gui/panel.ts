@@ -181,7 +181,7 @@ function baueDom(): void {
           <div class="e2s-sektion">${knob("e2sValue", "", true)}</div>
           <div class="e2s-sektion"><h4>Sample</h4>
             <div class="e2s-reihe">${knob("e2sKnobSample", "", true)}</div>
-            <div class="e2s-reihe">${knob("e2sKnobPitch", "Pitch/Glide")} ${knob("e2sKnobOscEdit", "Edit")}</div>
+            <div class="e2s-reihe">${knob("e2sKnobPitch", "Pitch")} ${knob("e2sKnobGlide", "Glide")} ${knob("e2sKnobOscEdit", "Edit")}</div>
           </div>
           <div class="e2s-sektion"><h4>Filter</h4>
             <div class="e2s-reihe">${knob("e2sKnobCutoff", "", true)}</div>
@@ -255,7 +255,8 @@ function renderPanel(): void {
     `  ${modus === "live" ? "LIVE" : "PREP"}`;
 
   dreheKnob("e2sKnobSample", info.sampleNumber ?? undefined, 0, 999, info.sampleNumber == null ? "kein Sample" : `Sample ${info.sampleNumber}`);
-  dreheKnob("e2sKnobPitch", params.oscPitch, -63, 63, `Pitch ${params.oscPitch ?? "—"} · Glide ${params.oscGlide ?? "—"}`);
+  dreheKnob("e2sKnobPitch", params.oscPitch, -63, 63);
+  dreheKnob("e2sKnobGlide", params.oscGlide);
   dreheKnob("e2sKnobOscEdit", params.oscEdit);
   dreheKnob("e2sKnobCutoff", params.cutoff);
   dreheKnob("e2sKnobReso", params.resonance);
@@ -417,6 +418,9 @@ const KNOB_BELEGUNG: Record<string, { key: string; min: number; max: number }> =
   e2sKnobReso: { key: "resonance", min: 0, max: 127 },
   e2sKnobEgInt: { key: "egInt", min: -63, max: 63 },
   e2sKnobPitch: { key: "oscPitch", min: -63, max: 63 },
+  e2sKnobGlide: { key: "oscGlide", min: 0, max: 127 },
+  // Osc Edit hat (noch) keinen bekannten CC — drehbar, wirkt aber im
+  // Live-Modus nur lokal; ans Geraet kommt er erst beim Uebertragen.
   e2sKnobOscEdit: { key: "oscEdit", min: 0, max: 127 },
   e2sKnobDepth: { key: "modDepth", min: 0, max: 127 },
   e2sKnobSpeed: { key: "modSpeed", min: 0, max: 127 },
@@ -450,8 +454,12 @@ function setzeReglerWert(def: { key: string; min: number; max: number }, wert: n
   else part.params = { ...(part.params ?? {}), [def.key]: geclampt };
   if (modus === "live") {
     const msg = buildKnobCc(aktiverPart, def.key, geclampt);
-    if (msg) panelBridge.midi.send(msg);
-    setStatus(`${def.key} = ${geclampt} → Gerät (CC, Kanal ${aktiverPart + 1}).`);
+    if (msg) {
+      panelBridge.midi.send(msg);
+      setStatus(`${def.key} = ${geclampt} → Gerät (CC, Kanal ${aktiverPart + 1}).`);
+    } else {
+      setStatus(`${def.key} = ${geclampt} — kein CC bekannt, nur lokal (wirkt beim Übertragen).`);
+    }
   } else {
     panelBridge.markDirty();
     setStatus(`${def.key} = ${geclampt} (Prepare — wirkt beim Übertragen).`);
