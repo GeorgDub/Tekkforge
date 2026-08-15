@@ -96,14 +96,16 @@ const BELEGUNG_HARDTEKK = [
  * Perc/Melos, der einzige Analog-Synth traegt Bass UND Sub, killerme (Loop)
  * ist die Flaeche. ["Shots", 11] = zweites "keyboard" (Namen doppelt).
  */
+// Seit Hoerrunde 7 fuer tekk2.all: echter Bass (Unison/Bassdrum-01fd statt
+// des kratzenden Synth Le) und das Sieger-Melo-Paket aus HARDTEKK.
 const BELEGUNG_TEKK = [
   ["Kick", "HaimKind"], ["Kick", "Jumpkick"], ["Snare", "clydesna"], ["Snare", "snarre-p"],
   ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], ["Shots", "ZaHnI_To"],
-  ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", "keyboard"], ["Shots", 11],
-  ["Shots", "VEC2 Syn"], ["Shots", "Remember"], ["Loop", "killerme"], ["Shots", "Wuuuuup"],
+  ["Analog", "Unison_Bass_C3"], ["Analog", "Bassdrum-01fd"], ["PCM", "T-Mello"], ["PCM", "Tau-MeLo"],
+  ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"], ["Phrase", "Padseq~1"], ["FX", "TeRR5Rt"],
 ];
 
-const IST_TEKK = /tekk\.all$/i.test(BANK);
+const IST_TEKK = /tekk2?\.all$/i.test(BANK);
 const BELEGUNG = IST_TEKK ? BELEGUNG_TEKK : BELEGUNG_HARDTEKK;
 if (IST_TEKK && VARIANTE !== "A")
   throw new Error("Varianten sind auf die HARDTEKK-Bank gepinnt — mit tekk.all nur Variante A.");

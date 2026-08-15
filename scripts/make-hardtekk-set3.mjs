@@ -56,15 +56,15 @@ const BELEGUNG_HARDTEKK = [
   ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"], ["Phrase", "Padseq~1"], ["FX", 0],
 ];
 
-// Belegung fuer die Nutzer-Bank tekk.all — Details siehe make-hardtekk-set.mjs.
+// Belegung fuer die Nutzer-Bank tekk2.all — Details siehe make-hardtekk-set.mjs.
 const BELEGUNG_TEKK = [
   ["Kick", "HaimKind"], ["Kick", "Jumpkick"], ["Snare", "clydesna"], ["Snare", "snarre-p"],
   ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], ["Shots", "ZaHnI_To"],
-  ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", "keyboard"], ["Shots", 11],
-  ["Shots", "VEC2 Syn"], ["Shots", "Remember"], ["Loop", "killerme"], ["Shots", "Wuuuuup"],
+  ["Analog", "Unison_Bass_C3"], ["Analog", "Bassdrum-01fd"], ["PCM", "T-Mello"], ["PCM", "Tau-MeLo"],
+  ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"], ["Phrase", "Padseq~1"], ["FX", "TeRR5Rt"],
 ];
 
-const BELEGUNG = /tekk\.all$/i.test(BANK) ? BELEGUNG_TEKK : BELEGUNG_HARDTEKK;
+const BELEGUNG = /tekk2?\.all$/i.test(BANK) ? BELEGUNG_TEKK : BELEGUNG_HARDTEKK;
 const VOLUME = [127, 110, 106, 94, 84, 88, 80, 78, 120, 106, 96, 94, 90, 92, 66, 92];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, POLY2, POLY2, POLY2, MONO1, POLY2, POLY2];
