@@ -5,8 +5,11 @@
  * Drop-Eins, Breaks nur als einzelne Atemzuege (1x).
  *
  * Nutzerwunsch (2026-08-15): "keyboard" bleibt weg — hier stossen die
- * anderen Shots dazu: zweiter [ViNTeKk und Freddy L als Stabs, ZaHnI_Ma
- * als zweite Perc. Remember/killerme nur im Break.
+ * anderen Shots dazu: zweiter [ViNTeKk und Freddy L, ZaHnI_Ma als zweite
+ * Perc. Zweite Hoerrunde: Bass lauter (Volume UND Velocity), und die
+ * Melos laufen komplett durch — [ViNTeKk/Freddy L mit vollen Gates als
+ * Frage/Antwort, Remember ab Intensitaet 4 als durchgehende Ebene;
+ * killerme bleibt Break-exklusiv.
  *
  * Konventionen: 64 Steps, Parts ohne Steps gemutet, Velocity je Part und
  * Pattern konstant, Wiederholungen fast durchgehend 1x.
@@ -45,7 +48,8 @@ const BELEGUNG = [
   ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", 1], ["Shots", "Freddy L"],
   ["Shots", "VEC2 Syn"], ["Shots", "Remember"], ["Loop", "killerme"], ["Shots", "Wuuuuup"],
 ];
-const VOLUME = [127, 110, 106, 96, 84, 88, 80, 78, 121, 106, 98, 96, 94, 90, 62, 96];
+// Hoerrunde 2026-08-15: Bass war zu leise — Part 9 auf Anschlag, Sub nach.
+const VOLUME = [127, 110, 106, 96, 84, 88, 80, 78, 127, 112, 98, 96, 94, 96, 62, 96];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, POLY2, POLY2, POLY2, MONO1, POLY2, POLY2];
 
@@ -162,24 +166,25 @@ function partsFuer(intensitaet, thema, kickFigur) {
   if (i >= 4) steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 13) : null));
   if (i >= 5) steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 11) : null));
   // Bass ohne Pause: Offbeats, ab 4 Pickups, im Drop tiefer.
+  // Hoerrunde 2026-08-15: Velocities hoch — der Bass soll vorne stehen.
   if (i >= 2) {
     const tief = i >= 5 ? -12 : 0;
     steps[8] = baue((s) => {
-      if (s % 4 === 2) return hit([t.bass[takt(s)] + tief], 112, 16);
-      if (i >= 4 && imTakt(s) === 7) return hit([t.bass[takt(s)] + tief], 102, 9);
-      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4] + tief], 102, 9);
+      if (s % 4 === 2) return hit([t.bass[takt(s)] + tief], 118, 16);
+      if (i >= 4 && imTakt(s) === 7) return hit([t.bass[takt(s)] + tief], 108, 9);
+      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4] + tief], 108, 9);
       return null;
     });
   }
-  if (i >= 4) steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)] - 12], 98, 52) : null));
-  // Stabs.
-  if (i >= 3) steps[10] = baue((s) => (imTakt(s) === 8 ? hit(t.akkorde[takt(s)], 94, 12) : null));
-  if (i >= 4)
-    steps[11] = baue((s) =>
-      imTakt(s) === 10 && takt(s) % 2 === 1 ? hit(t.akkorde[takt(s)], 92, 11) : null,
-    );
+  if (i >= 4) steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)] - 12], 104, 52) : null));
+  // Melos laufen KOMPLETT durch (Hoerrunde 2026-08-15): volle Gates statt
+  // kurzer Stiche, Frage auf der Eins, Antwort auf der Drei.
+  if (i >= 3) steps[10] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 96, 96) : null));
+  if (i >= 4) steps[11] = baue((s) => (imTakt(s) === 8 ? hit(t.akkorde[takt(s)], 92, 96) : null));
   // Sirene auf JEDER Drop-Eins — das Erkennungszeichen dieses Sets.
   if (i >= 5) steps[12] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 90, 16) : null));
+  // Remember laeuft ab Intensitaet 4 als durchgehende Melodie-Ebene mit.
+  if (i >= 4) steps[13] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 88, 96) : null));
   if (i >= 5) steps[15] = baue((s) => (s === 0 ? hit([60], 94, 32) : null));
 
   if (breakStelle) {
