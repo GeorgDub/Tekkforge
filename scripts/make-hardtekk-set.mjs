@@ -287,7 +287,13 @@ function partsFuer(intensitaet, thema, kickFigur) {
       sampleId: bankNumberToE2PatternRef(SAMPLES[idx]),
       steps: st,
       volume: VOLUME[idx],
-      params: { voiceAssign: VOICE[idx] },
+      // Kicks (Parts 1+2) mit IFX "09 LOW EQ" voll aufgedreht — mehr Druck
+      // (Nutzerwunsch 2026-08-15; Anzeige 09 = Speicher 8, 0-basiert wie
+      // Mod- und Groove-Typ — am Geraet gegenpruefen).
+      params:
+        idx <= 1
+          ? { voiceAssign: VOICE[idx], ifxOn: 1, ifxType: 8, ifxEdit: 127 }
+          : { voiceAssign: VOICE[idx] },
       muted: aktiv === 0, // Konvention: was nichts spielt, wird gemutet.
     };
   });

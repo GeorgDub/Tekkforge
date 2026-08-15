@@ -204,7 +204,13 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
       sampleId: bankNumberToE2PatternRef(jamPart ? jamMelos[idx - 10] : SAMPLES[idx]),
       steps: st,
       volume: jamPart ? 104 : VOLUME[idx],
-      params: { voiceAssign: VOICE[idx] },
+      // Kicks (Parts 1+2) mit IFX "09 LOW EQ" voll aufgedreht — mehr Druck
+      // (Nutzerwunsch 2026-08-15; Anzeige 09 = Speicher 8, 0-basiert wie
+      // Mod- und Groove-Typ — am Geraet gegenpruefen).
+      params:
+        idx <= 1
+          ? { voiceAssign: VOICE[idx], ifxOn: 1, ifxType: 8, ifxEdit: 127 }
+          : { voiceAssign: VOICE[idx] },
       muted: jamPart ? false : aktiv === 0, // Jam-Parts bleiben offen zum Zocken.
     };
   });
