@@ -22,7 +22,7 @@ import {
   oscToDisplayNumber,
 } from "../src/core/e2sPatternSampleLink.ts";
 
-const BANK = process.argv[3] ?? "examples/e2s/tekk.all";
+const BANK = process.argv[3] ?? "examples/e2s/tekk2.all";
 const ZIEL = process.argv[2] ?? "examples/e2s/TEKK_SET5.e2sallpat";
 const N = 64;
 const BPM = Number(process.argv[4]) || 192;
@@ -41,34 +41,38 @@ const MONO1 = 0, MONO2 = 1, POLY2 = 3;
 const THEMA = {
   A: {
     akkorde: [[64, 67, 71], [65, 69, 72], [64, 67, 71], [62, 66, 69]], // Em F Em D
-    bass: [40, 41, 40, 38],
+    // Hoerrunde 7: mit echtem Bass (Unison_Bass_C3 aus tekk2) darf der Bass
+    // wieder in die Basslage — die HARDTEKK-Sets spielten ihn dort sauber.
+    bass: [28, 29, 28, 26],
   },
   B: {
     akkorde: [[64, 67, 71], [64, 67, 71], [60, 64, 67], [59, 63, 66]], // Em Em C H
-    bass: [40, 40, 36, 35],
+    bass: [28, 28, 24, 23],
   },
 };
 
-// tekk.all-Belegung OHNE keyboard. Hoerrunde 5 ("immer noch kratzig"):
-// der [ViNTeKk-Shot fliegt aus den komponierten Melos — Sound7-M ist der
-// glattere Ersatz. In den JAM-Patterns bleiben die rauen Shots waehlbar.
+// tekk2.all-Belegung (Hoerrunde 7): Drums bleiben die handverlesenen
+// tekk-Samples, aber Bass und Melos kommen aus dem am Geraet fuer gut
+// befundenen HARDTEKK-Material — das Kratzen sass im Rohmaterial (Synth Le
+// war ein Lead, kein Bass). Keyboard bleibt weiterhin draussen.
 const BELEGUNG = [
   ["Kick", "HaimKind"], ["Kick", "Jumpkick"], ["Snare", "clydesna"], ["Snare", "snarre-p"],
   ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], ["Shots", "ZaHnI_Ma"],
-  ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", "Sound7-M"], ["Shots", "Freddy L"],
-  ["Shots", "VEC2 Syn"], ["Shots", "Remember"], ["Loop", "killerme"], ["Shots", "Wuuuuup"],
+  ["Analog", "Unison_Bass_C3"], ["Analog", "Bassdrum-01fd"], ["PCM", "T-Mello"], ["PCM", "Tau-MeLo"],
+  ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"], ["Phrase", "Padseq~1"], ["FX", "TeRR5Rt"],
 ];
 
 /**
  * Melo-Saetze fuer die JAM-Patterns (Parts 11–14): dort sind keine Steps
  * programmiert, die Parts sind UNGEMUTET — man zockt sie selbst ueber die
- * Pads (Trigger-Modus am Geraet). Jeder Jam traegt einen anderen Satz.
+ * Pads (Trigger-Modus am Geraet). Jeder Jam traegt einen anderen Satz;
+ * die rauen tekk-Shots leben im Jam D weiter.
  */
 const JAM_SETS = {
-  A: [["Shots", "Sound7-M"], ["Shots", "Remember"], ["Shots", "VEC2 Syn"], ["Shots", "lemmy br"]],
-  B: [["Shots", 0], ["Shots", "Freddy L"], ["Shots", "Sound7-M"], ["Shots", "Remember"]],
-  C: [["Shots", "ancer-sp"], ["Shots", "ancernu"], ["Shots", "VEC2 Syn"], ["Analog", "Synth Le"]],
-  D: [["Shots", "ZaHnI_ki"], ["Shots", "heimkik"], ["Shots", "lemmy br"], ["Shots", "Remember"]],
+  A: [["PCM", "T-Mello"], ["PCM", "Tau-MeLo"], ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"]],
+  B: [["PCM", "HaMMeR"], ["PCM", "Genetikk"], ["PCM", "PsyChoTanZ"], ["PCM", "Krieger"]],
+  C: [["PCM", "melo neu 2"], ["PCM", "SYNTHHS3"], ["PCM", "Wfg90"], ["Shots", "VEC2 Syn"]],
+  D: [["Shots", 0], ["Shots", "Freddy L"], ["Shots", "Sound7-M"], ["Shots", "Remember"]],
 };
 // Hoerrunde 6: Bass von Anschlag (127) auf 116 — zusammen mit der Kick
 // uebersteuerte die Summe hoerbar ("kratzen"). Part 10 traegt keine Steps
