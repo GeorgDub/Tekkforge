@@ -185,61 +185,68 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
   const breakStelle = intensitaet < 0;
   const i = breakStelle ? 0 : intensitaet;
 
+  // Nutzerwunsch 2026-08-15: ALLE Parts tragen ihre Figur in voller Dichte —
+  // Intensitaet/Break steuern nur noch, wer UNGEMUTET startet (`wach`).
   const steps = Array.from({ length: 16 }, leer);
+  const wach = new Array(16).fill(false);
 
-  if (!breakStelle) steps[0] = KICK[kickFigur]();
-  if (i >= 5) steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 98, 22) : null));
-  if (i >= 3 || kickFigur === "roll")
-    steps[2] = baue((s) => {
-      if (kickFigur === "roll" && takt(s) === 3) return hit([60], 104, 9);
-      if (i >= 3 && (imTakt(s) === 4 || imTakt(s) === 12)) return hit([60], 108, 28);
-      return null;
-    });
-  if (i >= 4) steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 100, 22) : null));
-  // Hoerrunde 5: die 16tel-Hats im Drop-Endtakt raus — zu viel Reibung.
-  if (i >= 1) steps[4] = baue((s) => (s % 4 === 2 ? hit([60], 82, 11) : null));
-  if (i >= 3)
-    steps[5] = baue((s) =>
-      imTakt(s) === 14 || (i >= 4 && imTakt(s) === 6) ? hit([60], 88, 32) : null,
-    );
-  if (i >= 4) steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 13) : null));
-  if (i >= 5) steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 11) : null));
-  // Bass ohne Pause: Offbeats, ab 4 Pickups. Kein Oktav-Drop (Hoerrunde 4:
-  // zu tief wird koernig) und KEIN Sub-Layer mehr (Hoerrunde 6: Part 10
-  // spielte dasselbe Sample auf gleicher Hoehe — zwei identische Wellen
-  // leicht versetzt kratzen als Kammfilter, und zusammen mit der Kick
-  // uebersteuerte die Summe). Velocities entsprechend zurueck auf Headroom.
-  if (i >= 2) {
-    steps[8] = baue((s) => {
-      if (s % 4 === 2) return hit([t.bass[takt(s)]], 110, 16);
-      if (i >= 4 && imTakt(s) === 7) return hit([t.bass[takt(s)]], 100, 9);
-      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 100, 9);
-      return null;
-    });
-  }
-  // Melos laufen KOMPLETT durch, aber EINSTIMMIG (Hoerrunde 2, 2026-08-15):
-  // als Dreiklang gespielte Shots stapeln drei transponierte Kopien
-  // uebereinander — das war das "Kratzige". Grundton reicht, volle Gates,
-  // Frage auf der Eins, Antwort auf der Drei, Velocities zurueckgenommen.
-  if (i >= 3) steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 88, 96) : null));
-  if (i >= 4) steps[11] = baue((s) => (imTakt(s) === 8 ? hit([t.akkorde[takt(s)][0]], 86, 96) : null));
-  // Sirene nur noch jeden VIERTEN Takt (Hoerrunde 5) — als Akzent, nicht Dauerton.
-  if (i >= 5)
+  steps[0] = KICK[kickFigur === "kein" ? "vier" : kickFigur]();
+  wach[0] = !breakStelle;
+  steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 98, 22) : null));
+  wach[1] = i >= 5;
+  steps[2] = baue((s) => {
+    if (kickFigur === "roll" && takt(s) === 3) return hit([60], 104, 9);
+    if (imTakt(s) === 4 || imTakt(s) === 12) return hit([60], 108, 28);
+    return null;
+  });
+  wach[2] = i >= 3 || kickFigur === "roll";
+  steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 100, 22) : null));
+  wach[3] = i >= 4;
+  steps[4] = baue((s) => (s % 4 === 2 ? hit([60], 82, 11) : null));
+  wach[4] = i >= 1;
+  steps[5] = baue((s) =>
+    imTakt(s) === 14 || imTakt(s) === 6 ? hit([60], 88, 32) : null,
+  );
+  wach[5] = i >= 3;
+  steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 13) : null));
+  wach[6] = i >= 4;
+  steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 11) : null));
+  wach[7] = i >= 5;
+  // Bass: Offbeats + Pickups (volle Fassung), Lage/Headroom aus Hoerrunde 4/6.
+  steps[8] = baue((s) => {
+    if (s % 4 === 2) return hit([t.bass[takt(s)]], 110, 16);
+    if (imTakt(s) === 7) return hit([t.bass[takt(s)]], 100, 9);
+    if (imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 100, 9);
+    return null;
+  });
+  wach[8] = i >= 2;
+  // Part 10 (Bassdrum-01fd): Zock-Reserve — Sub-Akzent auf der Eins, gemutet.
+  steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)]], 100, 40) : null));
+  // Melos einstimmig, volle Gates (Hoerrunde 2/5); Break ueberschreibt 12-15.
+  if (breakStelle) {
+    steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 88, 96) : null));
+    steps[12] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 84, 96) : null));
+    wach[12] = true;
+    steps[13] = baue((s) => (s === 0 ? hit(t.akkorde[0], 78, 96) : null));
+    wach[13] = true;
+  } else {
+    steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 88, 96) : null));
+    wach[10] = i >= 3;
     steps[12] = baue((s) =>
       imTakt(s) === 0 && takt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 82, 16) : null,
     );
-  // Remember laeuft ab Intensitaet 4 als durchgehende Melodie-Ebene mit.
-  if (i >= 4) steps[13] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 84, 96) : null));
-  // Hoerrunde 5: FX-Stab auf der Drop-Eins raus — Wuuuuup nur noch im Break.
-
-  if (breakStelle) {
-    steps[12] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 84, 96) : null));
-    steps[13] = baue((s) => (s === 0 ? hit(t.akkorde[0], 78, 96) : null));
-    steps[14] = baue((s) =>
-      imTakt(s) === 0 ? hit(t.akkorde[takt(s)].map((n) => n - 12), 60, 96) : null,
-    );
-    steps[15] = baue((s) => (s === 0 ? hit([60], 90, 96) : null));
+    wach[12] = i >= 5;
+    steps[13] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 84, 96) : null));
+    wach[13] = i >= 4;
   }
+  steps[11] = baue((s) => (imTakt(s) === 8 ? hit([t.akkorde[takt(s)][0]], 86, 96) : null));
+  wach[11] = !breakStelle && i >= 4;
+  steps[14] = baue((s) =>
+    imTakt(s) === 0 ? hit(t.akkorde[takt(s)].map((n) => n - 12), 60, 96) : null,
+  );
+  wach[14] = breakStelle;
+  steps[15] = baue((s) => (s === 0 ? hit([60], 90, breakStelle ? 96 : 40) : null));
+  wach[15] = breakStelle;
 
   if (jamMelos) {
     // JAM: Fundament laeuft, und die Melo-Parts tragen ein DUENNES
@@ -253,7 +260,6 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
   }
 
   return steps.map((st, idx) => {
-    const aktiv = st.filter((x) => x.active).length;
     const jamPart = jamMelos && idx >= 10 && idx <= 13;
     return {
       sampleId: bankNumberToE2PatternRef(jamPart ? jamMelos[idx - 10] : SAMPLES[idx]),
@@ -266,9 +272,7 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
         idx <= 1
           ? { voiceAssign: VOICE[idx], ifxOn: 1, ifxType: 8, ifxEdit: 127 }
           : { voiceAssign: VOICE[idx] },
-      // Konvention: was nichts spielt, wird gemutet — AUSSER den Jam-Parts,
-      // die gerade deshalb offen bleiben (zum Selberspielen ueber die Pads).
-      muted: jamPart ? false : aktiv === 0,
+      muted: jamPart ? false : !wach[idx],
     };
   });
 }
@@ -324,6 +328,9 @@ for (const [key, eintraege] of Object.entries(JAM_SETS)) {
 const patterns = PLAN.map(([name, intens, thema, kick, wdh, jam], i) => ({
   name,
   bpm: BPM,
+  // MFX "12 GRAIN SHIFTER" (Anzeige 12 = Speicher 11, 0-basiert vermutet;
+  // Offset 0x3d unverifiziert) — Nutzerwunsch 2026-08-15, am Geraet pruefen.
+  mfxType: 11,
   stepLength: 64,
   parts: partsFuer(intens, thema, kick, jam ? JAM_MELOS[jam] : undefined),
   alternate13_14: false,

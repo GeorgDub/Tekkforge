@@ -139,54 +139,70 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
   const breakStelle = intensitaet < 0;
   const i = breakStelle ? 0 : intensitaet;
 
+  // Nutzerwunsch 2026-08-15: ALLE Parts tragen ihre Figur in voller Dichte —
+  // Intensitaet/Break steuern nur noch, wer UNGEMUTET startet (`wach`).
   const steps = Array.from({ length: 16 }, leer);
+  const wach = new Array(16).fill(false);
 
-  if (!breakStelle) steps[0] = KICK[kickFigur]();
-  if (i >= 5) steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 94, 22) : null));
-  if (i >= 3 || kickFigur === "roll")
-    steps[2] = baue((s) => {
-      if (kickFigur === "roll" && takt(s) === 3) return hit([60], 98, 10);
-      if (i >= 3 && (imTakt(s) === 4 || imTakt(s) === 12)) return hit([60], 104, 28);
-      return null;
-    });
+  steps[0] = KICK[kickFigur === "kein" ? "vier" : kickFigur]();
+  wach[0] = !breakStelle;
+  steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 94, 22) : null));
+  wach[1] = i >= 5;
+  steps[2] = baue((s) => {
+    if (kickFigur === "roll" && takt(s) === 3) return hit([60], 98, 10);
+    if (imTakt(s) === 4 || imTakt(s) === 12) return hit([60], 104, 28);
+    return null;
+  });
+  wach[2] = i >= 3 || kickFigur === "roll";
   // Pump: die zweite Snare traegt die Offbeats — das Sonnendeck-Wippen.
-  if (kickFigur === "pump" && i >= 2)
+  if (kickFigur === "pump") {
     steps[3] = baue((s) => (s % 4 === 2 ? hit([60], 88, 16) : null));
-  else if (i >= 4) steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 94, 22) : null));
-  if (i >= 1) steps[4] = baue((s) => (s % 4 === 2 ? hit([60], 80, 12) : null));
-  if (i >= 3)
-    steps[5] = baue((s) =>
-      imTakt(s) === 14 || (i >= 4 && imTakt(s) === 6) ? hit([60], 86, 34) : null,
-    );
-  if (i >= 4) steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 76, 13) : null));
-  if (i >= 5) steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 70, 11) : null));
-  // Runder Bass: Offbeats, ab 4 ein 16tel-Pickup auf den Wechsel.
-  if (i >= 2) {
-    steps[8] = baue((s) => {
-      if (s % 4 === 2) return hit([t.bass[takt(s)]], 106, 18);
-      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 96, 9);
-      return null;
-    });
+    wach[3] = i >= 2;
+  } else {
+    steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 94, 22) : null));
+    wach[3] = i >= 4;
   }
-  // Melos: Traeger auf der Eins, Antwort auf der Drei jeden zweiten Takt,
-  // Stab-Akzent, Laeufer ab 5 — alles einstimmig nahe Unity.
-  if (i >= 2) steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 90, 96) : null));
-  if (i >= 3)
-    steps[11] = baue((s) =>
-      imTakt(s) === 8 && takt(s) % 2 === 1 ? hit([t.akkorde[takt(s)][0]], 86, 96) : null,
-    );
-  if (i >= 4)
-    steps[12] = baue((s) => (imTakt(s) === 10 ? hit([t.akkorde[takt(s)][0]], 82, 18) : null));
-  if (i >= 5) steps[13] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 84, 96) : null));
-  // Flaeche traegt ab Intensitaet 4 mit — Sonnendeck eben.
-  if (i >= 4 || breakStelle)
-    steps[14] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], breakStelle ? 76 : 66, 96) : null));
-
+  steps[4] = baue((s) => (s % 4 === 2 ? hit([60], 80, 12) : null));
+  wach[4] = i >= 1;
+  steps[5] = baue((s) =>
+    imTakt(s) === 14 || imTakt(s) === 6 ? hit([60], 86, 34) : null,
+  );
+  wach[5] = i >= 3;
+  steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 76, 13) : null));
+  wach[6] = i >= 4;
+  steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 70, 11) : null));
+  wach[7] = i >= 5;
+  steps[8] = baue((s) => {
+    if (s % 4 === 2) return hit([t.bass[takt(s)]], 106, 18);
+    if (imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 96, 9);
+    return null;
+  });
+  wach[8] = i >= 2;
+  // Zock-Reserve: Unison-Layer auf der Eins, startet gemutet.
+  steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)]], 98, 40) : null));
   if (breakStelle) {
     steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 84, 96) : null));
+    wach[10] = true;
     steps[13] = baue((s) => (s % 4 === 0 ? hit([t.akkorde[takt(s)][(s / 4) % 3]], 74, 40) : null));
-    steps[15] = baue((s) => (s === 0 ? hit([60], 84, 96) : null));
+    wach[13] = true;
+  } else {
+    steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 90, 96) : null));
+    wach[10] = i >= 2;
+    steps[13] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 84, 96) : null));
+    wach[13] = i >= 5;
   }
+  steps[11] = baue((s) =>
+    imTakt(s) === 8 && takt(s) % 2 === 1 ? hit([t.akkorde[takt(s)][0]], 86, 96) : null,
+  );
+  wach[11] = !breakStelle && i >= 3;
+  steps[12] = baue((s) => (imTakt(s) === 10 ? hit([t.akkorde[takt(s)][0]], 82, 18) : null));
+  wach[12] = !breakStelle && i >= 4;
+  steps[14] = baue((s) =>
+    imTakt(s) === 0 ? hit(t.akkorde[takt(s)], breakStelle ? 76 : 66, 96) : null,
+  );
+  wach[14] = i >= 4 || breakStelle;
+  steps[15] = baue((s) => (s === 0 ? hit([60], 84, 96) : null));
+  wach[15] = breakStelle;
 
   if (jamMelos) {
     // Duennes Starter-Muster (Nutzerwunsch): je ein Anschlag pro Loop,
@@ -198,7 +214,6 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
   }
 
   return steps.map((st, idx) => {
-    const aktiv = st.filter((x) => x.active).length;
     const jamPart = jamMelos && idx >= 10 && idx <= 13;
     return {
       sampleId: bankNumberToE2PatternRef(jamPart ? jamMelos[idx - 10] : SAMPLES[idx]),
@@ -211,7 +226,7 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
         idx <= 1
           ? { voiceAssign: VOICE[idx], ifxOn: 1, ifxType: 8, ifxEdit: 127 }
           : { voiceAssign: VOICE[idx] },
-      muted: jamPart ? false : aktiv === 0, // Jam-Parts bleiben offen zum Zocken.
+      muted: jamPart ? false : !wach[idx],
     };
   });
 }
@@ -259,6 +274,9 @@ for (const [key, eintraege] of Object.entries(JAM_SETS)) {
 const patterns = PLAN.map(([name, intens, thema, kick, wdh, jam], i) => ({
   name,
   bpm: BPM,
+  // MFX "12 GRAIN SHIFTER" (Anzeige 12 = Speicher 11, 0-basiert vermutet;
+  // Offset 0x3d unverifiziert) — Nutzerwunsch 2026-08-15, am Geraet pruefen.
+  mfxType: 11,
   stepLength: 64,
   parts: partsFuer(intens, thema, kick, jam ? JAM_MELOS[jam] : undefined),
   alternate13_14: false,

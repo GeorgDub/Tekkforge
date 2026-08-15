@@ -166,6 +166,12 @@ export interface E2PatternInput {
   chainTo?: number;
   chainRepeat?: number;
   /**
+   * Master-FX-Typ des Patterns (Byte @ 0x3d). ⚠ Offset noch NICHT am Gerät
+   * verifiziert; Skala vermutlich 0-basiert (Anzeige „12 GRAIN SHIFTER" = 11).
+   * Ohne Angabe bleibt der Wert der Vorlage stehen.
+   */
+  mfxType?: number;
+  /**
    * Optionaler 0x4000-Basis-Body: statt des Init-Templates wird dieser als
    * Ausgangspunkt genommen und nur gesetzte Felder überlagert. Bewahrt
    * Filter/Amp/IFX/Motion importierter Patterns. Muss 0x4000 lang sein.

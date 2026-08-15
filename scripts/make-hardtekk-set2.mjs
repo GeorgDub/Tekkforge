@@ -155,59 +155,76 @@ function partsFuer(intensitaet, thema, kickFigur) {
   const breakStelle = intensitaet < 0;
   const i = breakStelle ? 0 : intensitaet;
 
+  // Nutzerwunsch 2026-08-15: ALLE Parts tragen ihre Figur in voller Dichte —
+  // Intensitaet/Break steuern nur noch, wer UNGEMUTET startet (`wach`).
   const steps = Array.from({ length: 16 }, leer);
+  const wach = new Array(16).fill(false);
 
-  if (!breakStelle) steps[0] = KICK[kickFigur]();
-  if (i >= 5) steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 96, 24) : null));
-  if (i >= 3) steps[2] = baue((s) => (imTakt(s) === 4 || imTakt(s) === 12 ? hit([60], 108, 30) : null));
+  steps[0] = KICK[kickFigur === "kein" ? "vier" : kickFigur]();
+  wach[0] = !breakStelle;
+  steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 96, 24) : null));
+  wach[1] = i >= 5;
+  steps[2] = baue((s) => (imTakt(s) === 4 || imTakt(s) === 12 ? hit([60], 108, 30) : null));
+  wach[2] = i >= 3;
   // Clap: bei "pump" durchgehende Offbeats (das Pumpen), sonst Akzent auf 12.
-  if (kickFigur === "pump" && i >= 2)
+  if (kickFigur === "pump") {
     steps[3] = baue((s) => (s % 4 === 2 ? hit([60], 92, 18) : null));
-  else if (i >= 4) steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 100, 26) : null));
-  if (i >= 1) steps[4] = baue((s) => (s % 4 === 2 ? hit([60], 80, 14) : null));
-  if (i >= 3)
-    steps[5] = baue((s) =>
-      imTakt(s) === 14 || (i >= 4 && imTakt(s) === 6) ? hit([60], 86, 40) : null,
-    );
-  if (i >= 4) steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 16) : null));
-  if (i >= 5) steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 12) : null));
-  // Bass: pumpende Offbeat-Achtel; im Drop ein 16tel-Anlauf auf die naechste Eins.
-  if (i >= 2)
-    steps[8] = baue((s) => {
-      if (s % 4 === 2) return hit([t.bass[takt(s)]], 106, 22);
-      if (i >= 5 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 96, 12);
-      return null;
-    });
-  if (i >= 4) steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)] - 12], 98, 60) : null));
-  // Melo 1 + 2: Frage (gerade Takte) und Antwort (ungerade) — tragen frueh.
-  if (i >= 2)
-    steps[10] = baue((s) =>
-      imTakt(s) === 0 && takt(s) % 2 === 0 ? hit(t.akkorde[takt(s)], 96, 96) : null,
-    );
-  if (i >= 3)
-    steps[11] = baue((s) =>
-      imTakt(s) === 0 && takt(s) % 2 === 1 ? hit(t.akkorde[takt(s)], 94, 96) : null,
-    );
-  if (i >= 4)
-    steps[12] = baue((s) =>
-      imTakt(s) === 8 || imTakt(s) === 10 ? hit(t.akkorde[takt(s)], 88, 16) : null,
-    );
-  if (i >= 5) steps[13] = baue((s) => (imTakt(s) === 12 ? hit(t.akkorde[takt(s)], 90, 20) : null));
-
+    wach[3] = i >= 2;
+  } else {
+    steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 100, 26) : null));
+    wach[3] = i >= 4;
+  }
+  steps[4] = baue((s) => (s % 4 === 2 ? hit([60], 80, 14) : null));
+  wach[4] = i >= 1;
+  steps[5] = baue((s) =>
+    imTakt(s) === 14 || imTakt(s) === 6 ? hit([60], 86, 40) : null,
+  );
+  wach[5] = i >= 3;
+  steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 16) : null));
+  wach[6] = i >= 4;
+  steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 12) : null));
+  wach[7] = i >= 5;
+  // Bass: pumpende Offbeat-Achtel mit 16tel-Anlauf auf die naechste Eins.
+  steps[8] = baue((s) => {
+    if (s % 4 === 2) return hit([t.bass[takt(s)]], 106, 22);
+    if (imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 96, 12);
+    return null;
+  });
+  wach[8] = i >= 2;
+  steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)] - 12], 98, 60) : null));
+  wach[9] = i >= 4;
   if (breakStelle) {
-    // Break: Flaeche + Antwort-Melo als Bogen, Arpeggio, Pad und Riser.
+    // Break: Flaeche + Arpeggio, Pad und Riser statt der Drop-Figuren.
     steps[10] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 88, 96) : null));
     steps[13] = baue((s) =>
       s % 4 === 0 ? hit([t.akkorde[takt(s)][(s / 4) % 3]], 76, 40) : null,
     );
-    steps[14] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 74, 96) : null));
-    steps[15] = baue((s) => (s === 0 ? hit([60], 84, 96) : null));
-  } else if (i >= 4) {
-    steps[14] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 70, 96) : null));
+    wach[10] = true;
+    wach[13] = true;
+  } else {
+    steps[10] = baue((s) =>
+      imTakt(s) === 0 && takt(s) % 2 === 0 ? hit(t.akkorde[takt(s)], 96, 96) : null,
+    );
+    wach[10] = i >= 2;
+    steps[13] = baue((s) => (imTakt(s) === 12 ? hit(t.akkorde[takt(s)], 90, 20) : null));
+    wach[13] = i >= 5;
   }
+  steps[11] = baue((s) =>
+    imTakt(s) === 0 && takt(s) % 2 === 1 ? hit(t.akkorde[takt(s)], 94, 96) : null,
+  );
+  wach[11] = !breakStelle && i >= 3;
+  steps[12] = baue((s) =>
+    imTakt(s) === 8 || imTakt(s) === 10 ? hit(t.akkorde[takt(s)], 88, 16) : null,
+  );
+  wach[12] = !breakStelle && i >= 4;
+  steps[14] = baue((s) =>
+    imTakt(s) === 0 ? hit(t.akkorde[takt(s)], breakStelle ? 74 : 70, 96) : null,
+  );
+  wach[14] = i >= 4 || breakStelle;
+  steps[15] = baue((s) => (s === 0 ? hit([60], 84, 96) : null));
+  wach[15] = breakStelle;
 
   return steps.map((st, idx) => {
-    const aktiv = st.filter((x) => x.active).length;
     return {
       sampleId: bankNumberToE2PatternRef(SAMPLES[idx]),
       steps: st,
@@ -219,7 +236,7 @@ function partsFuer(intensitaet, thema, kickFigur) {
         idx <= 1
           ? { voiceAssign: VOICE[idx], ifxOn: 1, ifxType: 8, ifxEdit: 127 }
           : { voiceAssign: VOICE[idx] },
-      muted: aktiv === 0, // Konvention: was nichts spielt, wird gemutet.
+      muted: !wach[idx],
     };
   });
 }
@@ -259,6 +276,9 @@ BELEGUNG.forEach(([kat], i) =>
 const patterns = PLAN.map(([name, intens, thema, kick, wdh], i) => ({
   name,
   bpm: BPM,
+  // MFX "12 GRAIN SHIFTER" (Anzeige 12 = Speicher 11, 0-basiert vermutet;
+  // Offset 0x3d unverifiziert) — Nutzerwunsch 2026-08-15, am Geraet pruefen.
+  mfxType: 11,
   stepLength: 64,
   parts: partsFuer(intens, thema, kick),
   alternate13_14: false,
