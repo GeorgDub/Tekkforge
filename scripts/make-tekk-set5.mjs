@@ -70,8 +70,10 @@ const JAM_SETS = {
   C: [["Shots", "ancer-sp"], ["Shots", "ancernu"], ["Shots", "VEC2 Syn"], ["Analog", "Synth Le"]],
   D: [["Shots", "ZaHnI_ki"], ["Shots", "heimkik"], ["Shots", "lemmy br"], ["Shots", "Remember"]],
 };
-// Hoerrunde 2026-08-15: Bass war zu leise — Part 9 auf Anschlag, Sub nach.
-const VOLUME = [127, 110, 106, 96, 84, 88, 80, 78, 127, 112, 98, 96, 94, 96, 62, 96];
+// Hoerrunde 6: Bass von Anschlag (127) auf 116 — zusammen mit der Kick
+// uebersteuerte die Summe hoerbar ("kratzen"). Part 10 traegt keine Steps
+// mehr (Kammfilter-Doppelung, s. partsFuer) und ist nur noch Jam-Reserve.
+const VOLUME = [127, 110, 106, 96, 84, 88, 80, 78, 116, 100, 98, 96, 94, 96, 62, 96];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, POLY2, POLY2, POLY2, MONO1, POLY2, POLY2];
 
@@ -198,18 +200,19 @@ function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
     );
   if (i >= 4) steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 13) : null));
   if (i >= 5) steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 11) : null));
-  // Bass ohne Pause: Offbeats, ab 4 Pickups. Kein Oktav-Drop mehr — unter
-  // dieser Lage wird der Synth koernig (Hoerrunde 4); Druck kommt aus
-  // Velocity und dem Sub-Layer auf gleicher Hoehe.
+  // Bass ohne Pause: Offbeats, ab 4 Pickups. Kein Oktav-Drop (Hoerrunde 4:
+  // zu tief wird koernig) und KEIN Sub-Layer mehr (Hoerrunde 6: Part 10
+  // spielte dasselbe Sample auf gleicher Hoehe — zwei identische Wellen
+  // leicht versetzt kratzen als Kammfilter, und zusammen mit der Kick
+  // uebersteuerte die Summe). Velocities entsprechend zurueck auf Headroom.
   if (i >= 2) {
     steps[8] = baue((s) => {
-      if (s % 4 === 2) return hit([t.bass[takt(s)]], 118, 16);
-      if (i >= 4 && imTakt(s) === 7) return hit([t.bass[takt(s)]], 108, 9);
-      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 108, 9);
+      if (s % 4 === 2) return hit([t.bass[takt(s)]], 110, 16);
+      if (i >= 4 && imTakt(s) === 7) return hit([t.bass[takt(s)]], 100, 9);
+      if (i >= 4 && imTakt(s) === 15) return hit([t.bass[(takt(s) + 1) % 4]], 100, 9);
       return null;
     });
   }
-  if (i >= 4) steps[9] = baue((s) => (imTakt(s) === 0 ? hit([t.bass[takt(s)]], 104, 52) : null));
   // Melos laufen KOMPLETT durch, aber EINSTIMMIG (Hoerrunde 2, 2026-08-15):
   // als Dreiklang gespielte Shots stapeln drei transponierte Kopien
   // uebereinander — das war das "Kratzige". Grundton reicht, volle Gates,
