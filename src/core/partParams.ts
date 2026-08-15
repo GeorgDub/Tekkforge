@@ -239,15 +239,18 @@ export interface PartParam {
  * `0x24` laeuft durch die Null ins Negative — damit ist die bipolare Speicherung
  * auch am Geraet belegt, nicht nur aus der Werksbank erschlossen.
  *
- * ⚠ **`oscGlide` bei `0x25` wurde entfernt.** Der Nutzer weist darauf hin, dass
- * Pitch und Glide am Geraet EIN Regler sind — es gibt also gar keinen zweiten,
- * separat einstellbaren Wert. Passend dazu hat sich `0x25` in der gesamten
- * Messreihe (sieben Testpattern) **kein einziges Mal** bewegt. Der Eintrag war
- * eine Annahme ohne Grundlage, und ein editierbares Feld auf einem unbekannten
- * Byte laedt dazu ein, etwas zu ueberschreiben, das man nicht versteht.
+ * ✔ **`oscGlide` bei `0x25` — erst verworfen, dann doch gemessen.** In der
+ * Messreihe vom 2026-08-14 bewegte sich `0x25` nie, und der Eintrag wurde als
+ * grundlose Annahme entfernt („Pitch und Glide sind ein Regler"). Am
+ * 2026-08-15 hat der Nutzer Glide dann gezielt verstellt (Parts 1–5 auf
+ * 0/7/17/27/127) — und der Live-PTST-Dump (0xC06B2F9C, 16x816 B) zeigte die
+ * Rampe exakt auf `0x25`, als EINZIGE passende Spalte im ganzen Part-Block:
  *
- * An seine Stelle tritt `oscEdit` bei `0x0B` — der Wert, den der Nutzer als
- * „Edit" gesetzt hat und der dort exakt als Rampe erscheint.
+ *     0x25  0 7 17 27 127 0 0 0 0 0 0 0 0 0 0 0
+ *
+ * Die alte Verwerfung war also ein Messartefakt: damals wurde nur Pitch
+ * gedreht, Glide nie separat verstellt. `oscEdit` bei `0x0B` bleibt daneben
+ * bestehen — beide Felder existieren.
  *
  * ### Gegenprobe mit Vorhersage
  *
@@ -324,6 +327,7 @@ export const PART_PARAMS: PartParam[] = [
   { key: "ifxType", label: "IFX-Typ", offset: 0x21, min: 0, max: 255, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt; Testpattern zeigte bis 48
   { key: "ifxEdit", label: "IFX-Edit", offset: 0x22, min: 0, max: 127, kind: "u8", group: "IFX" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "oscPitch", label: "Pitch", offset: 0x24, min: -63, max: 63, kind: "i8", group: "Osc" }, // ✔ geraetebestaetigt bipolar (durch die Null gemessen)
+  { key: "oscGlide", label: "Glide", offset: 0x25, min: 0, max: 127, kind: "u8", group: "Osc" }, // ✔ geraetebestaetigt 2026-08-15 (Nutzer-Rampe 0/7/17/27/127 im Live-PTST exakt auf 0x25)
   { key: "oscEdit", label: "Osc-Edit", offset: 0x0b, min: 0, max: 127, kind: "u8", group: "Osc" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
 ];
 
