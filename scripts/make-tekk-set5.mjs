@@ -49,13 +49,27 @@ const THEMA = {
   },
 };
 
-// tekk.all-Belegung OHNE keyboard — Set 5 nimmt die haerteren Shots.
+// tekk.all-Belegung OHNE keyboard. Hoerrunde 5 ("immer noch kratzig"):
+// der [ViNTeKk-Shot fliegt aus den komponierten Melos — Sound7-M ist der
+// glattere Ersatz. In den JAM-Patterns bleiben die rauen Shots waehlbar.
 const BELEGUNG = [
   ["Kick", "HaimKind"], ["Kick", "Jumpkick"], ["Snare", "clydesna"], ["Snare", "snarre-p"],
   ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], ["Shots", "ZaHnI_Ma"],
-  ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", 1], ["Shots", "Freddy L"],
+  ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", "Sound7-M"], ["Shots", "Freddy L"],
   ["Shots", "VEC2 Syn"], ["Shots", "Remember"], ["Loop", "killerme"], ["Shots", "Wuuuuup"],
 ];
+
+/**
+ * Melo-Saetze fuer die JAM-Patterns (Parts 11–14): dort sind keine Steps
+ * programmiert, die Parts sind UNGEMUTET — man zockt sie selbst ueber die
+ * Pads (Trigger-Modus am Geraet). Jeder Jam traegt einen anderen Satz.
+ */
+const JAM_SETS = {
+  A: [["Shots", "Sound7-M"], ["Shots", "Remember"], ["Shots", "VEC2 Syn"], ["Shots", "lemmy br"]],
+  B: [["Shots", 0], ["Shots", "Freddy L"], ["Shots", "Sound7-M"], ["Shots", "Remember"]],
+  C: [["Shots", "ancer-sp"], ["Shots", "ancernu"], ["Shots", "VEC2 Syn"], ["Analog", "Synth Le"]],
+  D: [["Shots", "ZaHnI_ki"], ["Shots", "heimkik"], ["Shots", "lemmy br"], ["Shots", "Remember"]],
+};
 // Hoerrunde 2026-08-15: Bass war zu leise — Part 9 auf Anschlag, Sub nach.
 const VOLUME = [127, 110, 106, 96, 84, 88, 80, 78, 127, 112, 98, 96, 94, 96, 62, 96];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
@@ -63,57 +77,67 @@ const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
 
 // ─── Dramaturgie: 50 Patterns ────────────────────────────────────────────────
 // [Name, Intensität, Thema, Kick-Figur, Wiederholungen in der Kette]
+// [Name, Intensität, Thema, Kick-Figur, Wiederholungen, Jam-Satz?]
+// Ein Jam-Satz beendet die Kette (Pattern loopt): Fundament laeuft, die
+// Melo-Parts sind frei zum Selberspielen. Weiter geht es erst, wenn man am
+// Geraet das naechste Pattern anwaehlt — fuenf gekettete Segmente, jedes
+// muendet in einen Jam mit anderem Melo-Satz.
 const PLAN = [
+  // Segment 1 → JAM A
   ["ZUENDUNG 1",   0, "A", "vier", 2],
   ["ZUENDUNG 2",   1, "A", "vier", 2],
-  ["ZUENDUNG 3",   2, "A", "hart", 1],
-  ["GANG 1",       3, "A", "vier", 2],
+  ["GANG 1",       2, "A", "vier", 2],
   ["GANG 2",       3, "A", "hart", 1],
-  ["GANG 3",       4, "A", "drei", 1],
   ["NADEL 1",      4, "A", "roll", 1],
   ["VOLLGAS 1",    5, "A", "hart", 2],
   ["VOLLGAS 2",    5, "A", "drei", 2],
   ["VOLLGAS 3",    5, "A", "hart", 1],
-  ["VOLLGAS 4",    5, "A", "drei", 1],
-  ["KETTE 1",      4, "A", "hart", 2],
-  ["KETTE 2",      3, "A", "vier", 2],
-  ["ATEM 1",      -1, "A", "kein", 1],
-  ["ANRISS 1",     3, "B", "hart", 1],
-  ["ANRISS 2",     4, "B", "drei", 1],
-  ["NADEL 2",      5, "B", "roll", 1],
-  ["VOLLGAS 5",    5, "B", "hart", 2],
-  ["VOLLGAS 6",    5, "B", "drei", 2],
-  ["VOLLGAS 7",    5, "B", "hart", 1],
-  ["VOLLGAS 8",    5, "B", "drei", 2],
-  ["KETTE 3",      4, "B", "hart", 2],
-  ["KETTE 4",      3, "B", "vier", 2],
-  ["KETTE 5",      4, "A", "hart", 1],
+  ["KETTE 1",      4, "A", "vier", 2],
+  ["JAM A",        2, "A", "vier", 1, "A"],
+  // Segment 2 → JAM B
+  ["ANRISS 1",     2, "B", "hart", 1],
+  ["ANRISS 2",     3, "B", "drei", 1],
+  ["NADEL 2",      4, "B", "roll", 1],
+  ["VOLLGAS 4",    5, "B", "hart", 2],
+  ["VOLLGAS 5",    5, "B", "drei", 2],
+  ["VOLLGAS 6",    5, "B", "hart", 1],
+  ["KETTE 2",      4, "B", "vier", 2],
+  ["KETTE 3",      3, "B", "hart", 1],
+  ["ATEM 1",      -1, "B", "kein", 1],
+  ["JAM B",        2, "B", "vier", 1, "B"],
+  // Segment 3 → JAM C
+  ["DRUCK 1",      3, "A", "hart", 1],
+  ["DRUCK 2",      4, "A", "drei", 1],
   ["NADEL 3",      5, "A", "roll", 1],
-  ["VOLLGAS 9",    5, "A", "drei", 2],
-  ["VOLLGAS 10",   5, "A", "hart", 2],
+  ["VOLLGAS 7",    5, "A", "drei", 2],
+  ["VOLLGAS 8",    5, "A", "hart", 2],
+  ["VOLLGAS 9",    5, "B", "drei", 1],
+  ["KETTE 4",      4, "A", "vier", 2],
+  ["KETTE 5",      3, "A", "hart", 1],
+  ["ATEM 2",      -1, "A", "kein", 1],
+  ["JAM C",        2, "A", "vier", 1, "C"],
+  // Segment 4 → JAM D
+  ["ANRISS 3",     3, "B", "hart", 1],
+  ["NADEL 4",      4, "B", "roll", 1],
+  ["VOLLGAS 10",   5, "B", "hart", 2],
   ["VOLLGAS 11",   5, "B", "drei", 2],
-  ["ATEM 2",      -1, "B", "kein", 1],
-  ["ANRISS 3",     4, "B", "hart", 1],
-  ["NADEL 4",      5, "B", "roll", 1],
+  ["VOLLGAS 12",   5, "B", "hart", 1],
   ["SCHLEUDER 1",  5, "B", "drei", 2],
-  ["SCHLEUDER 2",  5, "B", "hart", 2],
-  ["SCHLEUDER 3",  5, "A", "drei", 2],
-  ["SCHLEUDER 4",  5, "A", "hart", 2],
-  ["KETTE 6",      4, "A", "vier", 2],
-  ["KETTE 7",      4, "A", "hart", 2],
-  ["ATEM 3",      -1, "A", "kein", 1],
-  ["ANRISS 4",     4, "A", "drei", 1],
+  ["SCHLEUDER 2",  5, "A", "hart", 2],
+  ["KETTE 6",      4, "B", "vier", 2],
+  ["ATEM 3",      -1, "B", "kein", 1],
+  ["JAM D",        2, "B", "vier", 1, "D"],
+  // Segment 5 → Finale + freier Jam
+  ["ENDLAUF 1",    4, "A", "hart", 1],
   ["NADEL 5",      5, "A", "roll", 1],
-  ["ENDLAUF 1",    5, "A", "hart", 2],
   ["ENDLAUF 2",    5, "A", "drei", 2],
-  ["ENDLAUF 3",    5, "B", "hart", 2],
+  ["ENDLAUF 3",    5, "A", "hart", 2],
   ["ENDLAUF 4",    5, "B", "drei", 2],
-  ["ENDLAUF 5",    5, "A", "hart", 1],
-  ["AUSROLLEN 1",  4, "A", "vier", 2],
-  ["AUSROLLEN 2",  3, "A", "vier", 2],
-  ["AUSROLLEN 3",  2, "A", "hart", 1],
-  ["AUSROLLEN 4",  1, "A", "vier", 2],
-  ["STILLSTAND",   0, "A", "vier", 2],
+  ["ABKUEHLUNG 1", 3, "A", "vier", 2],
+  ["ABKUEHLUNG 2", 2, "A", "vier", 2],
+  ["AUSKLANG",     1, "A", "vier", 2],
+  ["STILLSTAND",   0, "A", "vier", 1],
+  ["JAM FREI",     2, "A", "vier", 1, "A"],
 ];
 
 // ─── Bausteine ───────────────────────────────────────────────────────────────
@@ -135,17 +159,22 @@ const KICK = {
     baue((s) =>
       s % 4 === 0 ? hit([60], 112, 40) : imTakt(s) === 15 ? hit([60], 108, 14) : null,
     ),
-  // Drei: Dreier-Anlauf (13/14/15) in die naechste Eins — das Syntekkz-Brett.
+  // Drei: Anlauf in die naechste Eins. Hoerrunde 5: nur noch Doppel (14/15)
+  // statt Dreier — drei 16tel hintereinander verschmierten zum Kratzen.
   drei: () =>
     baue((s) =>
-      s % 4 === 0 ? hit([60], 112, 40) : imTakt(s) >= 13 ? hit([60], 106, 10) : null,
+      s % 4 === 0 ? hit([60], 112, 40) : imTakt(s) >= 14 ? hit([60], 106, 10) : null,
     ),
   // Rollend: Achtel im letzten Takt (Snare-Build dazu, s.u.).
   roll: () =>
     baue((s) => (s % 4 === 0 || (takt(s) === 3 && s % 2 === 0) ? hit([60], 112, 28) : null)),
 };
 
-function partsFuer(intensitaet, thema, kickFigur) {
+/**
+ * @param jamMelos Anzeigenummern fuer die Parts 11–14 in einem JAM-Pattern —
+ *   dort bleiben diese Parts ohne Steps, aber UNGEMUTET (selbst zocken).
+ */
+function partsFuer(intensitaet, thema, kickFigur, jamMelos) {
   const t = THEMA[thema];
   const breakStelle = intensitaet < 0;
   const i = breakStelle ? 0 : intensitaet;
@@ -161,12 +190,8 @@ function partsFuer(intensitaet, thema, kickFigur) {
       return null;
     });
   if (i >= 4) steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 100, 22) : null));
-  if (i >= 1)
-    steps[4] = baue((s) => {
-      if (s % 4 === 2) return hit([60], 82, 11);
-      if (i >= 5 && takt(s) === 3 && s % 2 === 1) return hit([60], 76, 8);
-      return null;
-    });
+  // Hoerrunde 5: die 16tel-Hats im Drop-Endtakt raus — zu viel Reibung.
+  if (i >= 1) steps[4] = baue((s) => (s % 4 === 2 ? hit([60], 82, 11) : null));
   if (i >= 3)
     steps[5] = baue((s) =>
       imTakt(s) === 14 || (i >= 4 && imTakt(s) === 6) ? hit([60], 88, 32) : null,
@@ -191,14 +216,14 @@ function partsFuer(intensitaet, thema, kickFigur) {
   // Frage auf der Eins, Antwort auf der Drei, Velocities zurueckgenommen.
   if (i >= 3) steps[10] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 88, 96) : null));
   if (i >= 4) steps[11] = baue((s) => (imTakt(s) === 8 ? hit([t.akkorde[takt(s)][0]], 86, 96) : null));
-  // Sirene nur noch jeden zweiten Takt — jede Eins war zu viel.
+  // Sirene nur noch jeden VIERTEN Takt (Hoerrunde 5) — als Akzent, nicht Dauerton.
   if (i >= 5)
     steps[12] = baue((s) =>
-      imTakt(s) === 0 && takt(s) % 2 === 0 ? hit([t.akkorde[takt(s)][0]], 84, 16) : null,
+      imTakt(s) === 0 && takt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 82, 16) : null,
     );
   // Remember laeuft ab Intensitaet 4 als durchgehende Melodie-Ebene mit.
   if (i >= 4) steps[13] = baue((s) => (imTakt(s) === 0 ? hit([t.akkorde[takt(s)][0]], 84, 96) : null));
-  if (i >= 5) steps[15] = baue((s) => (s === 0 ? hit([60], 94, 32) : null));
+  // Hoerrunde 5: FX-Stab auf der Drop-Eins raus — Wuuuuup nur noch im Break.
 
   if (breakStelle) {
     steps[12] = baue((s) => (imTakt(s) === 0 ? hit(t.akkorde[takt(s)], 84, 96) : null));
@@ -209,14 +234,27 @@ function partsFuer(intensitaet, thema, kickFigur) {
     steps[15] = baue((s) => (s === 0 ? hit([60], 90, 96) : null));
   }
 
+  if (jamMelos) {
+    // JAM: nur Fundament (Kick/Hats/Bass laufen ueber die i>=…-Zweige oben),
+    // die Melo-Parts 11–14 bleiben leer — sie werden gleich UNGEMUTET
+    // zurueckgegeben und selbst gespielt.
+    steps[10] = leer();
+    steps[11] = leer();
+    steps[12] = leer();
+    steps[13] = leer();
+  }
+
   return steps.map((st, idx) => {
     const aktiv = st.filter((x) => x.active).length;
+    const jamPart = jamMelos && idx >= 10 && idx <= 13;
     return {
-      sampleId: bankNumberToE2PatternRef(SAMPLES[idx]),
+      sampleId: bankNumberToE2PatternRef(jamPart ? jamMelos[idx - 10] : SAMPLES[idx]),
       steps: st,
-      volume: VOLUME[idx],
+      volume: jamPart ? 104 : VOLUME[idx],
       params: { voiceAssign: VOICE[idx] },
-      muted: aktiv === 0, // Konvention: was nichts spielt, wird gemutet.
+      // Konvention: was nichts spielt, wird gemutet — AUSSER den Jam-Parts,
+      // die gerade deshalb offen bleiben (zum Selberspielen ueber die Pads).
+      muted: jamPart ? false : aktiv === 0,
     };
   });
 }
@@ -251,14 +289,33 @@ BELEGUNG.forEach(([kat], i) =>
   console.log(`  Part ${String(i + 1).padStart(2)}  ${kat.padEnd(7)} #${SAMPLES[i]} ${NAMEN[i]}`),
 );
 
-const patterns = PLAN.map(([name, intens, thema, kick, wdh], i) => ({
+/** Loest ein [Kategorie, Name/Position]-Paar in die Anzeigenummer auf. */
+function findeAnzeige(kat, wahl) {
+  const liste = nachKategorie.get(kat) ?? [];
+  const s =
+    typeof wahl === "string"
+      ? liste.find((x) => x.name.trim().toLowerCase().startsWith(wahl.toLowerCase()))
+      : liste[Math.min(wahl, liste.length - 1)];
+  if (!s) throw new Error(`Jam-Satz: Kategorie "${kat}", "${wahl}" nicht gefunden`);
+  return { nr: oscToDisplayNumber(s.sampleNumber), name: s.name.trim() };
+}
+
+const JAM_MELOS = {};
+for (const [key, eintraege] of Object.entries(JAM_SETS)) {
+  const aufgeloest = eintraege.map(([kat, wahl]) => findeAnzeige(kat, wahl));
+  JAM_MELOS[key] = aufgeloest.map((a) => a.nr);
+  console.log(`  Jam ${key}: ${aufgeloest.map((a) => `#${a.nr} ${a.name}`).join(" · ")}`);
+}
+
+const patterns = PLAN.map(([name, intens, thema, kick, wdh, jam], i) => ({
   name,
   bpm: BPM,
   stepLength: 64,
-  parts: partsFuer(intens, thema, kick),
+  parts: partsFuer(intens, thema, kick, jam ? JAM_MELOS[jam] : undefined),
   alternate13_14: false,
   alternate15_16: false,
-  chainTo: i + 1 < PLAN.length ? i + 2 : 0,
+  // Jams beenden die Kette: das Pattern loopt, bis man selbst weiterschaltet.
+  chainTo: jam || i + 1 >= PLAN.length ? 0 : i + 2,
   chainRepeat: wdh,
 }));
 
