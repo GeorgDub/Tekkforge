@@ -47,12 +47,22 @@ const THEMA = {
 
 // Finale Belegung aus Set 1 (am Geraet durchgehoert, 2026-08-15) — per Name
 // gepinnt, damit Bank-Umbauten die Klaenge nicht stillschweigend verschieben.
-const BELEGUNG = [
+const BELEGUNG_HARDTEKK = [
   ["Kick", "spetzial-kick10"], ["Kick", "Jumpkick 20"], ["Snare", "Snare 001"], ["Clap", 0],
   ["HiHat", 0], ["HiHat", 5], ["Perc.", 0], ["Perc.", 3],
   ["Analog", "Bassdrum-01fd"], ["Analog", "Unison_Bass_C3"], ["PCM", "T-Mello"], ["PCM", "Tau-MeLo"],
   ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"], ["Phrase", "Padseq~1"], ["FX", 0],
 ];
+
+// Belegung fuer die Nutzer-Bank tekk.all — Details siehe make-hardtekk-set.mjs.
+const BELEGUNG_TEKK = [
+  ["Kick", "HaimKind"], ["Kick", "Jumpkick"], ["Snare", "clydesna"], ["Snare", "snarre-p"],
+  ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], ["Shots", "ZaHnI_To"],
+  ["Analog", "Synth Le"], ["Analog", "Synth Le"], ["Shots", "keyboard"], ["Shots", 11],
+  ["Shots", "VEC2 Syn"], ["Shots", "Remember"], ["Loop", "killerme"], ["Shots", "Wuuuuup"],
+];
+
+const BELEGUNG = /tekk\.all$/i.test(BANK) ? BELEGUNG_TEKK : BELEGUNG_HARDTEKK;
 const VOLUME = [127, 108, 105, 92, 84, 88, 80, 78, 118, 104, 100, 95, 95, 92, 72, 88];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, POLY2, POLY2, POLY2, MONO1, POLY2, POLY2];
