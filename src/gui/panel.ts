@@ -351,23 +351,29 @@ function padKlick(i: number): void {
     if (!step) return;
     step.on = !step.on;
     if (modus === "live") {
-      // NRPN-Bedienfeldbefehl "sequencer" — EXPERIMENTELL (der Mute mit
-      // demselben Rahmen ist am Gerät bestätigt). Sub-Index = absoluter
-      // Step (0..63); wirkt mutmaßlich auf den am GERÄT aktiven Part.
-      try {
-        for (const triple of buildPanelControl(panelBridge.midiChannel, "sequencer", idx, step.on ? 1 : 0))
-          panelBridge.midi.send(new Uint8Array(triple));
-        setStatus(
-          `Step ${idx + 1} ${step.on ? "an" : "aus"} — NRPN gesendet (experimentell; zielt auf den am Gerät aktiven Part).`,
-        );
-      } catch (err) {
-        setStatus(`NRPN-Send fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
-      }
+      // Steps live: per NRPN NICHT erreichbar — am Gerät dreifach widerlegt
+      // (panelControl "sequencer" mit absolutem und seitenrelativem Index,
+      // dann sequence_param mit Trigger-Param 0; nichts davon wirkte, während
+      // der Mute über denselben Rahmen funktioniert). Was nachweislich geht:
+      // der Edit-Buffer-Dump. Also sammeln wir Klicks kurz und schicken das
+      // Pattern automatisch — fuehlt sich live an, nutzt nur belegte Wege.
+      setStatus(`Step ${idx + 1} ${step.on ? "an" : "aus"} — wird gleich automatisch übertragen …`);
+      planeAutoUebertragung();
     } else {
       panelBridge.markDirty();
     }
   }
   renderPanel();
+}
+
+/** Sammelt schnelle Step-Klicks und überträgt das Pattern EINMAL danach. */
+let autoSendeTimer: number | null = null;
+function planeAutoUebertragung(): void {
+  if (autoSendeTimer !== null) window.clearTimeout(autoSendeTimer);
+  autoSendeTimer = window.setTimeout(() => {
+    autoSendeTimer = null;
+    void anhoeren();
+  }, 350);
 }
 
 async function anhoeren(): Promise<void> {
