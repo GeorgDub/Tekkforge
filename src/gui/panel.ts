@@ -33,6 +33,7 @@ import { requestSysex } from "./midi";
 import { buildPanelControl } from "../core/hacktribeNrpn";
 import {
   buildPatternFile,
+  clonePattern,
   editorPatternFromBody,
   type EditorPattern,
 } from "../core/editorModel";
@@ -314,19 +315,15 @@ function renderPanel(): void {
 
 async function syncVomGeraet(): Promise<void> {
   try {
-    setStatus("hole Edit-Buffer … (Sequencer am Gerät stoppen!)");
-    const reply = await requestSysex(
-      panelBridge.midi,
-      buildCurrentPatternRequest(panelBridge.midiOpts()),
-      (b) => decodeDump(b) !== null,
-      2500,
-    );
-    livePattern = editorPatternFromBody(decodeDump(reply)!.body);
+    setStatus("hole Edit-Buffer … (bei laufendem Gerät: Dreifach-Lesung, kann kurz stören)");
+    const body = await leseDumpVerlaesslich();
+    if (!body) throw new Error("keine verlässliche Lesung");
+    livePattern = editorPatternFromBody(body);
     modus = "live";
     setStatus(`Live-Sync: „${livePattern.name}" vom Gerät geholt.`);
     renderPanel();
   } catch (err) {
-    setStatus(`Sync fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI im Editor-Tab aktiviert? Sequencer gestoppt?`);
+    setStatus(`Sync fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI im Editor-Tab aktiviert?`);
   }
 }
 
@@ -450,6 +447,13 @@ async function autoSync(): Promise<void> {
   if (modus !== "live" || syncLaeuft || autoSendeTimer !== null) return;
   if (!autoSyncErlaubt()) return;
   if (Date.now() - letzteLokaleAenderungUm < 3000) return;
+  // Nur bei gestopptem Gerät automatisch ziehen: Dumps bei laufendem
+  // Sequencer stören hörbar die Wiedergabe und die Pattern-Chains
+  // (Nutzer-Befund im Live-Test). Während des Spielens hält der CC-Spiegel
+  // die Regler aktuell; den Rest holt der Sync nach dem Stopp — oder der
+  // manuelle Sync-Knopf, der die Dreifach-Lesung bewusst in Kauf nimmt.
+  const stillSeit = Date.now() - letzteNoteUm;
+  if (spieltGerade && stillSeit < 8000) return;
   syncLaeuft = true;
   try {
     const body = await leseDumpVerlaesslich();
@@ -517,6 +521,21 @@ function empfangeVomGeraet(bytes: number[]): void {
   } else if ((st & 0xf0) === 0x90 && bytes.length >= 3 && bytes[2] > 0) {
     spieltGerade = true;
     letzteNoteUm = Date.now();
+  } else if ((st & 0xf0) === 0xc0 && bytes.length >= 2 && modus === "live") {
+    // Patternwechsel: das Gerät sendet einen Program Change (am Gerät
+    // gemessen, 2026-08-15). Liegt im Editor dieselbe Bank, übernehmen wir
+    // das Pattern direkt als Kopie — exakt ohne Dump; sonst bleibt der
+    // Sync für den nächsten Stopp vorgemerkt.
+    const nr = bytes[1];
+    const kandidat = panelBridge.project.patterns[nr];
+    if (kandidat) {
+      livePattern = clonePattern(kandidat);
+      setStatus(`Patternwechsel am Gerät: #${nr + 1} „${kandidat.name}" — aus dem Projekt übernommen.`);
+    } else {
+      setStatus(`Patternwechsel am Gerät: #${nr + 1} — nicht im Projekt, Sync beim nächsten Stopp.`);
+    }
+    renderPanel();
+    return;
   }
   if (modus !== "live") return;
   const ev = decodeKnobCc(bytes);
