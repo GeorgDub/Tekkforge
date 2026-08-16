@@ -4,13 +4,15 @@
  * fasst exakt 250 Patterns; fuenf Sets x 50 fuellen sie randlos:
  *
  *     Slots   1– 50  TEKK_SET    (160, Final)
- *     Slots  51–100  TEKK_SET2   (172, euphorisch)
+ *     Slots  51–100  TEKK_SET8   (170, Wechselspiel + Jams)
  *     Slots 101–150  TEKK_SET5   (192, Vollgas + Jams)
  *     Slots 151–200  TEKK_SET6   (178, Nachtschicht + Jams)
  *     Slots 201–250  TEKK_SET7   (165, Sonnendeck + Jams)
  *
- * SET3/SET4/SET_180 passen nicht mehr hinein — die Auswahl laesst sich hier
- * in QUELLEN einfach tauschen. Alle Quellen zeigen auf tekk2.all.
+ * SET2/SET3/SET4/SET_180 passen nicht mehr hinein — die Auswahl laesst sich
+ * hier in QUELLEN einfach tauschen. Bank: tekk3.all (enthaelt tekk2
+ * byte-genau, darum bleiben auch die aelteren Sets kompatibel; SET8 braucht
+ * die 554+-Melos aus tekk3).
  *
  * Die Ketten-Verweise (chainTo, 1-basiert) werden je Block um den Offset
  * verschoben, damit jede Kette in ihrem Set bleibt; 0 (Jam/Ende) bleibt 0.
@@ -19,7 +21,7 @@ import * as fs from "node:fs";
 
 const QUELLEN = [
   "examples/e2s/TEKK_SET.e2sallpat",
-  "examples/e2s/TEKK_SET2.e2sallpat",
+  "examples/e2s/TEKK_SET8.e2sallpat",
   "examples/e2s/TEKK_SET5.e2sallpat",
   "examples/e2s/TEKK_SET6.e2sallpat",
   "examples/e2s/TEKK_SET7.e2sallpat",
