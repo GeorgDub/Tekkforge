@@ -760,9 +760,8 @@ export function buildE2PatternBody(input: E2PatternInput): Uint8Array {
     view.setUint16(PATTERN_CHAIN_TO_OFF, clampInt(input.chainTo, 0, 250, 0), true);
   if (typeof input.chainRepeat === "number")
     view.setUint16(PATTERN_CHAIN_REPEAT_OFF, clampInt(input.chainRepeat, 0, 64, 0), true);
-  // ⚠ Offset 0x3d ist bisher NICHT am Geraet verifiziert (nur aus der
-  // Format-Doku); Werteskala vermutlich 0-basiert wie Mod-/Groove-/IFX-Typ.
-  // Erster Praxistest: mfxType 11 soll am Geraet "12 GRAIN SHIFTER" zeigen.
+  // ✔ Offset 0x3d am Geraet bestaetigt (2026-08-16): mfxType 11 zeigte im
+  // Display "12 GRAIN SHIFTER" — Skala also 0-basiert wie Mod-/Groove-/IFX-Typ.
   if (typeof input.mfxType === "number")
     body[PATTERN_MFX_TYPE_OFF] = clampInt(input.mfxType, 0, 255, 0);
 

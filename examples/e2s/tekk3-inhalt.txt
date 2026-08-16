@@ -1,0 +1,69 @@
+501	HaimKind
+502	Jumpkick
+503	Jumpkick
+504	kick tou
+505	ZaHnI_Fu
+506	707_hho-
+507	CB_Hat-M
+508	closed 8
+509	clydesna
+510	snarre-p
+511	[ViNTeKk
+512	[ViNTeKk
+513	[ViNTeKk
+514	ABI0-SUP
+515	ancer-sp
+516	ancernu
+517	ED Close
+518	ED Close
+519	Freddy L
+520	heimkik
+521	keyboard
+522	keyboard
+523	lemmy br
+524	Remember
+525	Sound7-M
+526	VEC2 Syn
+527	Wuuuuup
+528	ZaHnI_ki
+529	ZaHnI_Ma
+530	ZaHnI_To
+531	ziKzAk-k
+532	killerme
+533	Synth Le
+534	Unison_Bass_C3
+535	Bassdrum-01fd
+536	S53vesterbass
+537	Kick The Bass 2
+538	T-Mello
+539	Tau-MeLo
+540	HBsChE PaRa MeLo
+541	Auf CrystaL-MeLo
+542	HaMMeR MeLo
+543	Genetikk - MeLo
+544	PsyChoTanZmELo1
+545	Krieger-MeLo
+546	melo neu 2
+547	SYNTHHS3
+548	Wfg90_MeLo
+549	Padseq~1
+550	PAD_ResoChor
+551	Strings of Wisdo
+552	TeRR5Rt FX 1!
+553	Riser 6 4 Bars 1
+554	melo neu-MONO-15
+555	melo neu-MONO-08
+556	Bluezone-HLS-syn
+557	Holia-MeLo
+558	LuZZiFeR_MeLo_1
+559	RoBBaFFerT_MeLo_
+560	melo6dk
+561	HyPer__MeLo
+562	Ha He MeLo
+563	Bse MeLo
+564	KoRgeR KlAnG MeL
+565	Schrauber MeloNe
+566	120CHOIRC23sD
+567	120CHOIRCAD
+568	120CHOIRDAQF
+569	120CHOIREBEM

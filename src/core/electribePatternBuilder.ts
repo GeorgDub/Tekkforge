@@ -166,9 +166,9 @@ export interface E2PatternInput {
   chainTo?: number;
   chainRepeat?: number;
   /**
-   * Master-FX-Typ des Patterns (Byte @ 0x3d). ⚠ Offset noch NICHT am Gerät
-   * verifiziert; Skala vermutlich 0-basiert (Anzeige „12 GRAIN SHIFTER" = 11).
-   * Ohne Angabe bleibt der Wert der Vorlage stehen.
+   * Master-FX-Typ des Patterns (Byte @ 0x3d). ✔ Am Gerät bestätigt
+   * (2026-08-16): Wert 11 zeigt „12 GRAIN SHIFTER" — Skala 0-basiert
+   * (Anzeige − 1). Ohne Angabe bleibt der Wert der Vorlage stehen.
    */
   mfxType?: number;
   /**
