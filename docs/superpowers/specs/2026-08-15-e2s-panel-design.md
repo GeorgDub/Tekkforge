@@ -3,6 +3,11 @@
 Stand 2026-08-15, vom Nutzer freigegeben („bau"). Vorlage: Foto der roten
 electribe sampler (`omnitribe-hwtest-kit/korg.png`).
 
+> **Status (2026-08-21): Stufe 1 umgesetzt** (`e22cfa3`), Abnahmetest
+> NRPN-Mute am Gerät bestanden (`0eed511`). **Stufe 2 ebenfalls umgesetzt**
+> (`558f6e2` … `02cd3f1`): Regler drehbar, CC-Empfang vom Gerät, Live-Step-
+> Toggle per Auto-Übertragung, Auto-Sync. Details unten unter „Ergebnis".
+
 ## Ziel
 
 Dritter Tab „E2S Panel" in der TekkForge-Electron-App, der aussieht wie das
@@ -48,7 +53,20 @@ Trigger, Sequencer, …) und zwei Modi hat:
 - NRPN-Panel-Befehle sind am Gerät noch unbestätigt — Stufe-1-Abnahme
   enthält genau diesen Test.
 
-## Stufe 2 (nicht Teil dieser Umsetzung)
+## Stufe 2 (ursprünglich nicht Teil dieser Umsetzung)
 
 Regler drehbar (IFX/FX live per NRPN, Rest per automatischem
 Edit-Buffer-Resend), Live-Step-Toggle, Empfangs-Dekoder je nach Testergebnis.
+
+## Ergebnis der Gerätetests (nachgetragen 2026-08-21)
+
+- **NRPN-Mute bestätigt** (2026-08-15): `buildPanelControl(ch, "mute", …)`
+  wirkt sofort hörbar, hält aber nicht im Edit-Buffer.
+- **Rückkanal existiert**: das Gerät sendet Reglerdrehungen als CC
+  (Kanal = Part). Der Empfangs-Dekoder ist gebaut (`panelBridge.onIncoming`),
+  Regler-CCs sind gemessen — u. a. CC 81 = Glide, Depth 85, Osc Edit 82.
+- **Regler drehbar** in beide Richtungen per CC; nur gemessene Regler.
+- **Steps per NRPN nicht erreichbar** (dreifach widerlegt) — Live-Step-Toggle
+  läuft über die automatische Edit-Buffer-Übertragung.
+- **Auto-Sync** nur nach erkanntem Stopp (laufende Dumps stören die
+  Wiedergabe und Pattern-Chains); Patternwechsel am Gerät per Program Change.

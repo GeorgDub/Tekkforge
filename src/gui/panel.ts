@@ -11,7 +11,7 @@
  * - LIVE: „Sync" holt den Edit-Buffer des Geräts (0x10-Dump — nur bei
  *   GESTOPPTEM Sequencer zuverlässig, am Gerät gemessen). Danach führt die
  *   UI; Pad-Klick im Part-Mute-Modus schaltet Mute per Hacktribe-NRPN
- *   (experimentell, am Gerät zu verifizieren).
+ *   (am Gerät bestätigt 2026-08-15, siehe hacktribeNrpn.ts).
  * - PREPARE: arbeitet auf dem aktuellen Editor-Pattern. Steps setzen im
  *   Sequencer-Pad-Modus, dann „Anhören" (Edit-Buffer, klingt sofort) oder
  *   „→ Slot" (dauerhaft, mit ACK-Prüfung über den Editor-Schreibpfad).
@@ -19,7 +19,10 @@
  * MIDI läuft über die panelBridge des Editors — der KORG-Treiber ist
  * Single-Client, eine zweite MidiIO wäre ein stummer Portkonflikt.
  *
- * Stufe 1: Regler ZEIGEN die Werte des aktiven Parts (drehbar wird Stufe 2).
+ * Stufe 2 (umgesetzt): gemessene Regler sind drehbar (CC, Kanal = Part),
+ * Reglerdrehungen am Gerät laufen per CC-Empfang live mit, Auto-Sync nach
+ * erkanntem Stopp. Steps sind per NRPN NICHT erreichbar (am Gerät widerlegt)
+ * und gehen im Live-Modus über die automatische Edit-Buffer-Übertragung.
  */
 
 import { panelBridge } from "./editor";
