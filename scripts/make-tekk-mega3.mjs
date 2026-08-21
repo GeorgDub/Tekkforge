@@ -4,15 +4,18 @@
  * 16 Song-Bloecke a 15 Patterns (Slots 1–240) + 10 TRANS-Patterns (241–250).
  * Jeder Block baut einen Song aus „round 1" als Tekk nach — Melos im Fokus:
  *
- *   Part 11 MELO  = 4-Takt-Hook des Songs (Slice, 175 BPM, echte Tonart)
- *   Part 12 DROP  = 1-Takt-Loop aus dem Drop des Songs
- *   Part 13 STAB  = Einzelklang aus dem Hook, spielt die erkannte Melodie
- *                   (transponiert relativ zur gemessenen Stab-Tonhoehe)
- *   Part 14 SYN   = tekk4-PCM-Melo spielt dieselbe Melodie (ohne Loops —
- *                   Samplegrundton unbekannt, darum nie gleichzeitig)
- *   Part 15 ARP   = STAB-Sample als Achtel-Arpeggio ueber die Song-Akkorde
- *   Part 16 PAD   = Choir/Pad-Akkorde (nur in Synth-Patterns)
- *   Parts 1–10    = Tekk-Drums + Bass (Bass folgt den Song-Akkordwurzeln)
+ *   Part 13 MELO A = Takte 1–4 der 8-Takt-Hook (Demucs-Stem other+vocals,
+ *   Part 14 MELO B = Takte 5–8   175 BPM, echte Tonart). Das Paar 13/14 ist
+ *                    am Geraet ALTERNATE geschaltet: jeder Pattern-Durchlauf
+ *                    spielt abwechselnd A und B → eine 8-Takt-Melodie loopt
+ *                    in einem einzelnen Pattern.
+ *   Part 11 STAB   = Einzelklang aus dem Hook, spielt die erkannte Melodie
+ *                    (transponiert relativ zur gemessenen Stab-Tonhoehe)
+ *   Part 12 DROP   = 1-Takt-Loop aus dem Drop des Songs (Vollmix)
+ *   Part 15 ARP    = STAB-Sample als Achtel-Arpeggio ueber die Song-Akkorde
+ *   Part 16 SYN    = tekk4-PCM-Melo spielt dieselbe Melodie (ohne Loops —
+ *                    Samplegrundton unbekannt, darum nie gleichzeitig)
+ *   Parts 1–10     = Tekk-Drums + Bass (Bass folgt den Song-Akkordwurzeln)
  *
  * Blockverlauf (15): INTRO · AUF 1 · AUF 2 · ANLAUF · DROP 1 · DROP 2 · DROP 3 ·
  * RUHE 1 · RUHE 2 · LUFT · DROP 4 · DROP 5 · AUSKL · JAM SY · JAM (Kettenende).
@@ -40,6 +43,9 @@ const PRO_BLOCK = 15;
 
 const MONO1 = 0, MONO2 = 1, POLY2 = 3;
 
+// Part-Indizes (0-basiert)
+const P_STAB = 10, P_DROP = 11, P_MELOA = 12, P_MELOB = 13, P_ARP = 14, P_SYN = 15;
+
 const analyse = JSON.parse(fs.readFileSync(`${ROUND1}/analyse.json`, "utf8")).filter((a) => !a.error);
 const mapping = JSON.parse(fs.readFileSync(`${ROUND1}/mapping.json`, "utf8"));
 const songs = mapping.map((m) => {
@@ -60,13 +66,10 @@ const SYNTH_MELOS = [
   ["PCM", "T-Mello"], ["PCM", "Tau-MeLo"], ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"],
   ["PCM", "Holia-MeLo"], ["PCM", "melo6dk"], ["PCM", "Ha He MeLo"], ["PCM", "Krieger"],
 ];
-const PADS = [
-  ["Phrase", "Padseq~1"], ["Phrase", "120CHOIRC23sD"], ["Phrase", "PAD_ResoChor"], ["Phrase", "Strings of Wisdo"],
-];
-//            K1   K2   SN  SN2  HH  HHO  SH  SH2  BASS BAS2 MELO DROP STAB SYN  ARP  PAD
-const VOLUME = [127, 108, 105, 94, 84, 88, 80, 78, 116, 100, 112, 108, 104, 96, 90, 66];
+//            K1   K2   SN  SN2  HH  HHO  SH  SH2  BASS BAS2 STAB DROP MELA MELB ARP  SYN
+const VOLUME = [127, 108, 105, 94, 84, 88, 80, 78, 116, 100, 104, 108, 114, 114, 90, 96];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
-               MONO2, MONO2, MONO1, MONO1, MONO1, POLY2, MONO1, POLY2];
+               MONO2, MONO2, MONO1, MONO1, MONO1, MONO1, MONO1, POLY2];
 
 const buf = fs.readFileSync(BANK);
 const bank = parseE2sBank(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
@@ -85,9 +88,8 @@ function findeAnzeige(kat, wahl) {
 }
 const SAMPLES = BELEGUNG.map(([k, w]) => findeAnzeige(k, w));
 const SYN_NR = SYNTH_MELOS.map(([k, w]) => findeAnzeige(k, w));
-const PAD_NR = PADS.map(([k, w]) => findeAnzeige(k, w));
 for (const s of songs) {
-  for (const art of ["MELO", "DROP", "STAB"]) {
+  for (const art of ["MELOA", "MELOB", "DROP", "STAB"]) {
     if (!vorhandeneNr.has(s[art])) throw new Error(`Song ${s.idx}: Sample #${s[art]} (${art}) fehlt in ${BANK}`);
   }
 }
@@ -115,11 +117,12 @@ const KICK = {
 };
 
 /**
- * Melodie-Ereignisse des Songs als [step, absNote, laenge]. Weniger als 6
+ * Melodie-Ereignisse der ersten 4 Takte als [step, absNote, laenge]
+ * (STAB/SYN alternieren nicht, darum nur Haelfte A). Weniger als 6
  * erkannte Ereignisse → Achtel-Arpeggio aus den Song-Akkorden als Ersatz.
  */
 function melodie(song) {
-  let ev = song.events ?? [];
+  let ev = (song.events ?? []).filter((e) => e[0] < N);
   if (ev.length < 6) {
     ev = [];
     for (let s = 0; s < N; s += 2) {
@@ -137,7 +140,7 @@ function stabRef(song) {
   return noten.length ? noten[Math.floor(noten.length / 2)] : 60;
 }
 
-function songParts(song, intens, kickFigur, lagen, jam) {
+function songParts(song, intens, kickFigur, lagen) {
   const breakStelle = intens < 0;
   const i = breakStelle ? 0 : intens;
   const ref = stabRef(song);
@@ -169,7 +172,7 @@ function songParts(song, intens, kickFigur, lagen, jam) {
   wach[6] = i >= 4;
   steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 11) : null));
   wach[7] = i >= 5;
-  // Bass (8–9) folgt den Akkordwurzeln des Songs
+  // Bass (8–9) folgt den Akkordwurzeln des Songs (Takte 1–4)
   steps[8] = baue((s) => {
     if (s % 4 === 2) return hit([bass[takt(s)]], 108, 17);
     if (imTakt(s) === 15) return hit([bass[(takt(s) + 1) % 4]], 98, 9);
@@ -180,37 +183,39 @@ function songParts(song, intens, kickFigur, lagen, jam) {
   wach[9] = !breakStelle;
 
   // Song-Lagen (10–15)
-  steps[10] = baue((s) => (s === 0 ? hit([60], 127, 96) : null));           // MELO, 4 Takte
-  wach[10] = !!lagen.melo;
-  steps[11] = baue((s) => (imTakt(s) === 0 ? hit([60], 120, 96) : null));   // DROP, je Takt
-  wach[11] = !!lagen.drop;
-  steps[12] = baue((s) => {                                                  // STAB spielt Melodie
+  steps[P_STAB] = baue((s) => {
     const e = ev.find((x) => x[0] === s);
     return e ? hit([fold(60 + (e[1] - ref), 40, 84)], 104, gateFuer(e[2])) : null;
   });
-  wach[12] = !!lagen.stab;
-  steps[13] = baue((s) => {                                                  // SYN spielt Melodie
+  wach[P_STAB] = !!lagen.stab;
+  steps[P_DROP] = baue((s) => (imTakt(s) === 0 ? hit([60], 120, 96) : null));
+  wach[P_DROP] = !!lagen.drop;
+  steps[P_MELOA] = baue((s) => (s === 0 ? hit([60], 127, 96) : null)); // Alternate: Durchlauf 1, 3, …
+  steps[P_MELOB] = baue((s) => (s === 0 ? hit([60], 127, 96) : null)); // Alternate: Durchlauf 2, 4, …
+  wach[P_MELOA] = wach[P_MELOB] = !!lagen.melo;
+  steps[P_ARP] = baue((s) =>
+    s % 2 === 0 ? hit([fold(60 + (akk[takt(s)][[0, 1, 2, 1][(s / 2) % 4]] - ref), 48, 72)], 84, 12) : null,
+  );
+  wach[P_ARP] = !!lagen.arp;
+  steps[P_SYN] = baue((s) => {
     const e = ev.find((x) => x[0] === s);
     return e ? hit([fold(e[1], 55, 79)], 92, gateFuer(e[2])) : null;
   });
-  wach[13] = !!lagen.syn;
-  steps[14] = baue((s) =>                                                    // ARP: STAB ueber Akkorde
-    s % 2 === 0 ? hit([fold(60 + (akk[takt(s)][[0, 1, 2, 1][(s / 2) % 4]] - ref), 48, 72)], 84, 12) : null,
-  );
-  wach[14] = !!lagen.arp;
-  steps[15] = baue((s) => (imTakt(s) === 0 ? hit(akk[takt(s)], breakStelle ? 76 : 66, 96) : null)); // PAD
-  wach[15] = !!lagen.pad;
+  wach[P_SYN] = !!lagen.syn;
 
   const synNr = SYN_NR[(song.idx - 1) % SYN_NR.length];
-  const padNr = PAD_NR[(song.idx - 1) % PAD_NR.length];
   const nrFuer = (idx) =>
-    idx < 10 ? SAMPLES[idx] : idx === 10 ? song.MELO : idx === 11 ? song.DROP
-      : idx === 12 || idx === 14 ? song.STAB : idx === 13 ? synNr : padNr;
+    idx < 10 ? SAMPLES[idx]
+      : idx === P_STAB || idx === P_ARP ? song.STAB
+      : idx === P_DROP ? song.DROP
+      : idx === P_MELOA ? song.MELOA
+      : idx === P_MELOB ? song.MELOB
+      : synNr;
 
   return steps.map((st, idx) => {
     const params = { voiceAssign: VOICE[idx] };
     if (idx <= 1) Object.assign(params, { ifxOn: 1, ifxType: 8, ifxEdit: 127 });
-    if (idx === 10 || idx === 11) params.ampEgOn = 0; // Loops laufen durch
+    if (idx === P_DROP || idx === P_MELOA || idx === P_MELOB) params.ampEgOn = 0; // Loops laufen durch
     return {
       sampleId: bankNumberToE2PatternRef(nrFuer(idx)),
       steps: st,
@@ -221,20 +226,19 @@ function songParts(song, intens, kickFigur, lagen, jam) {
   });
 }
 
-/** TRANS: Takte 1–2 DROP von A, Takte 3–4 DROP von B, Drums dazwischen. */
+/** TRANS: Takte 1–2 DROP von A, Takte 3–4 DROP von B, Drums dazwischen. Kein Alternate. */
 function transParts(a, b) {
-  const lagen = {};
-  const parts = songParts(a, 4, "hart", lagen, false);
-  parts[11].steps = baue((s) => (imTakt(s) === 0 && takt(s) < 2 ? hit([60], 120, 96) : null));
-  parts[11].muted = false;
-  parts[12] = {
+  const parts = songParts(a, 4, "hart", {});
+  parts[P_DROP].steps = baue((s) => (imTakt(s) === 0 && takt(s) < 2 ? hit([60], 120, 96) : null));
+  parts[P_DROP].muted = false;
+  parts[P_MELOA] = {
     sampleId: bankNumberToE2PatternRef(b.DROP),
     steps: baue((s) => (imTakt(s) === 0 && takt(s) >= 2 ? hit([60], 120, 96) : null)),
-    volume: VOLUME[11],
+    volume: VOLUME[P_DROP],
     params: { voiceAssign: MONO1, ampEgOn: 0 },
     muted: false,
   };
-  // Bass: erste Haelfte A, zweite Haelfte B
+  parts[P_MELOB].muted = true;
   parts[8].steps = baue((s) => {
     const src = takt(s) < 2 ? a : b;
     return s % 4 === 2 ? hit([src.bass[takt(s)]], 108, 17) : null;
@@ -250,18 +254,18 @@ const BLOCK = [
   ["INTRO",   1, "vier", 2, { melo: 1 }],
   ["AUF 1",   2, "vier", 2, { melo: 1 }],
   ["AUF 2",   3, "hart", 2, { melo: 1, arp: 1 }],
-  ["ANLAUF",  4, "roll", 1, { syn: 1, pad: 1 }],
+  ["ANLAUF",  4, "roll", 2, { syn: 1 }],
   ["DROP 1",  5, "hart", 2, { melo: 1, stab: 1 }],
   ["DROP 2",  5, "vier", 2, { drop: 1, stab: 1 }],
   ["DROP 3",  5, "hart", 2, { melo: 1, drop: 1 }],
   ["RUHE 1",  2, "vier", 2, { melo: 1 }],
-  ["RUHE 2",  3, "vier", 2, { syn: 1, pad: 1 }],
+  ["RUHE 2",  3, "vier", 2, { syn: 1, arp: 1 }],
   ["LUFT",   -1, "kein", 2, { melo: 1 }],
   ["DROP 4",  5, "hart", 2, { melo: 1, stab: 1, arp: 1 }],
   ["DROP 5",  5, "vier", 2, { stab: 1, arp: 1 }],
   ["AUSKL",   3, "vier", 2, { melo: 1 }],
-  ["JAM SY",  2, "vier", 1, { syn: 1, arp: 0, pad: 1 }],
-  ["JAM",     2, "vier", 1, { melo: 1, drop: 1, stab: 1, arp: 1 }],
+  ["JAM SY",  2, "vier", 2, { syn: 1, arp: 1 }],
+  ["JAM",     2, "vier", 2, { melo: 1, drop: 1, stab: 1, arp: 1 }],
 ];
 if (BLOCK.length !== PRO_BLOCK) throw new Error("Block hat nicht 15 Patterns");
 
@@ -277,11 +281,11 @@ for (const song of songs) {
       bpm: BPM,
       mfxType: 11, // "12 GRAIN SHIFTER"
       stepLength: 64,
-      parts: songParts(song, intens, kick, lagen, name.startsWith("JAM")),
-      alternate13_14: false,
+      parts: songParts(song, intens, kick, lagen),
+      alternate13_14: true, // MELO A/B abwechselnd → 8-Takt-Loop
       alternate15_16: false,
       chainTo: letzte ? 0 : start + p + 2,
-      chainRepeat: wdh,
+      chainRepeat: wdh, // gerade Wiederholungen → A und B kommen beide dran
     });
   });
 }
@@ -305,10 +309,11 @@ const out = Buffer.from(buildE2AllPatFile(patterns));
 fs.writeFileSync(ZIEL, out);
 console.log(`${ZIEL} — ${out.length} Bytes · ${patterns.length} Patterns · ${BPM} BPM`);
 for (const [i, s] of songs.entries()) {
-  const ev = melodie(s);
+  const evA = (s.events ?? []).filter((e) => e[0] < N).length;
   console.log(
     `  Block ${String(i + 1).padStart(2)}  Slots ${String(i * PRO_BLOCK + 1).padStart(3)}–${(i + 1) * PRO_BLOCK}  ${s.tag.padEnd(9)} ` +
-    `${s.key.padEnd(6)} ${String(s.bpm).padStart(5)}→175  Melo-Events ${String((s.events ?? []).length).padStart(2)}${(s.events ?? []).length < 6 ? " (Arp-Ersatz)" : ""}  Stab-Ref ${stabRef(s)}  #${s.MELO}/${s.DROP}/${s.STAB}`,
+    `${s.key.padEnd(6)} ${String(s.bpm).padStart(5)}→175${s.varispeed ? ` VS${s.shift >= 0 ? "+" : ""}${s.shift}` : ""}  ` +
+    `${s.stems ? "Stem" : "Mix "}  Melo-Events ${String((s.events ?? []).length).padStart(2)} (A: ${String(evA).padStart(2)}${evA < 6 ? ", Arp-Ersatz" : ""})  Stab-Ref ${stabRef(s)}  #${s.MELOA}/${s.MELOB}/${s.DROP}/${s.STAB}`,
   );
 }
 console.log(`  Slots 241–250  TRANS ${TRANS.map(([a, b]) => `${a}>${b}`).join(" ")}`);

@@ -1,15 +1,16 @@
 /**
  * Erzeugt round1.all — eine EIGENSTAENDIGE Bank fuer TEKK_MEGA3:
- * die 22 tekk4-Samples, die MEGA3 nutzt (Drums, Bass, Synth-Melos, Pads —
+ * die 18 tekk4-Samples, die MEGA3 nutzt (Drums, Bass, Synth-Melos —
  * mit ihren ORIGINALEN tekk4-Nummern, also lueckenhaft 501–577), plus die
  * Song-Slices aus „round 1" (scripts/analyze-round1.py → examples/e2s/round1).
  *
  * Warum nicht tekk4 + Slices: tekk4.all belegt allein ~17,7 MB (≈220 s) vom
- * ~24-MB-Sample-RAM des Geraets; 16 Songs × 7,5 s Slices (≈10,6 MB) passen
- * da nicht mehr dazu. Die Auswahl haelt die Bank bei ~14 MB.
+ * ~24-MB-Sample-RAM des Geraets; 16 Songs × 13 s Slices (≈18 MB) passen
+ * da nicht mehr dazu. Die Auswahl (ohne Pads) haelt die Bank bei ~21 MB.
  *
  *   je Song drei Samples, fortlaufend ab Anzeige 581:
- *     <Tag> ML  = MELO, 4 Takte @175 BPM (5,486 s), 64 Slices (Sechzehntel), Kat. Phrase
+ *     <Tag> MA  = MELO Hälfte A, 4 Takte @175 BPM (5,486 s), 64 Slices, Kat. Phrase
+ *     <Tag> MB  = MELO Hälfte B (Alternate-Paar 13/14 → 8-Takt-Loop),  Kat. Phrase
  *     <Tag> DR  = DROP, 1 Takt @175 BPM (1,371 s), 16 Slices,                Kat. Loop
  *     <Tag> ST  = STAB, 0,6 s Einzelklang aus dem Hook,                      Kat. Hits
  *
@@ -40,7 +41,6 @@ const BASIS = [
   "HaimKind", "Jumpkick", "clydesna", "snarre-p", "closed 8", "707_hho", "ED Close", "ZaHnI_To",
   "Unison_Bass_C3", "Bassdrum-01fd",
   "T-Mello", "Tau-MeLo", "HBsChE PaRa", "Auf CrystaL", "Holia-MeLo", "melo6dk", "Ha He MeLo", "Krieger",
-  "Padseq~1", "120CHOIRC23sD", "PAD_ResoChor", "Strings of Wisdo",
 ];
 
 /** Kurztags je Song (Reihenfolge = sortierte Dateinamen, s. analyse.json). */
@@ -50,9 +50,9 @@ export const TAGS = [
   "Vorbild", "SteinStn", "Sturmmask", "WasnDas",
 ];
 
-const KAT = { MELO: 14, DROP: 15, STAB: 7 }; // Phrase, Loop, Hits
-const SUFFIX = { MELO: "ML", DROP: "DR", STAB: "ST" };
-const SLICES = { MELO: 64, DROP: 16, STAB: 0 };
+const KAT = { MELOA: 14, MELOB: 14, DROP: 15, STAB: 7 }; // Phrase, Loop, Hits
+const SUFFIX = { MELOA: "MA", MELOB: "MB", DROP: "DR", STAB: "ST" };
+const SLICES = { MELOA: 64, MELOB: 64, DROP: 16, STAB: 0 };
 
 const basis = parseE2sBank(new Uint8Array(fs.readFileSync(QUELLE)), QUELLE);
 const slots = [];
@@ -115,7 +115,7 @@ let sekunden = 0;
 for (const song of songs) {
   const tag = TAGS[song.idx - 1] ?? `Song${song.idx}`;
   const eintrag = { idx: song.idx, tag, file: song.file };
-  for (const art of ["MELO", "DROP", "STAB"]) {
+  for (const art of ["MELOA", "MELOB", "DROP", "STAB"]) {
     const wavPfad = path.join(ROUND1, `${String(song.idx).padStart(2, "0")}-${art}.wav`);
     const wav = parseWav(new Uint8Array(fs.readFileSync(wavPfad)));
     if (wav.channels !== 1 || wav.sampleRate !== 44100) throw new Error(`${wavPfad}: erwartet mono 44.1k`);

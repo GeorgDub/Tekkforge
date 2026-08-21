@@ -1,35 +1,37 @@
 """
-analyze-round1.py — Songs aus „round 1" analysieren und für tekk5.all slicen.
+analyze-round1.py — Songs aus „round 1" analysieren und für round1.all slicen.
 
 Je Song:
   * Tempo + Beat-Raster (librosa), Downbeat-Phase über Kick-Energie
   * Tonart (Krumhansl-Templates auf der Chroma-Summe)
-  * MELO  = 4 Tekk-Takte (bei 175 BPM = 5,486 s) aus dem melodischsten,
-            perkussionsärmsten Abschnitt (Breakdown-Hook) — time-gestretcht
-            auf exakt 175 BPM, Tonhöhe bleibt
-  * DROP  = 1 Tekk-Takt aus dem lautesten melodischen Abschnitt
-  * STAB  = 0,6 s ab dem stärksten harmonischen Onset im MELO-Abschnitt,
-            mit gemessener Tonhöhe (für die Transposition im Pattern)
-  * Melodie des MELO-Abschnitts als 64 Sechzehntel (pyin → MIDI-Noten)
-  * Akkorde je Tekk-Takt (Dur/Moll-Templates auf Chroma) + Bassnoten
+  * MELO  = 8 Tekk-Takte (bei 175 BPM = 10,97 s) aus dem melodischsten,
+            perkussionsärmsten Abschnitt (Hook). Das Fenster wird mit Demucs
+            (htdemucs) in Stems getrennt; MELO = other + vocals — also ohne
+            Kick/Snare/Bass, die kommen vom Gerät. Geliefert als zwei Hälften
+            MELOA / MELOB à 4 Takte (Alternate-Paar 13/14 am Gerät → eine
+            8-Takt-Melodie loopt in einem einzelnen Pattern).
+  * DROP  = 1 Tekk-Takt aus dem lautesten melodischen Abschnitt (Vollmix)
+  * STAB  = 0,6 s ab dem stärksten Onset im Melodie-Stem, mit Tonhöhe
+  * Melodie des MELO-Fensters als 128 Sechzehntel (pyin auf dem Stem)
+  * Akkorde je Tekk-Takt (8) + Bassnoten
 
 Tempo-Oktave: Rap (~90 BPM) wird als Half-Time behandelt (k=2), d. h. ein
 Rap-Beat = zwei Tekk-Beats; Stretch-Faktor bleibt damit nahe 1.
 
 Aufruf:  python scripts/analyze-round1.py [quellordner] [zielordner]
-             [--only 3,14] [--varispeed 14]
+             [--only 3,14] [--varispeed 14] [--varispeed all] [--no-stems]
          --only      nur diese Songs neu rechnen, Rest in analyse.json behalten
          --varispeed diese Songs per Resampling statt Phase-Vocoder auf Tempo
                      bringen (Tonhöhe geht mit; Noten/Akkorde/Bass werden
                      mitverschoben) — z. B. Stein zu Stein 129 → 175 = +5,26 HT
-Ausgabe: <ziel>/<nn>-{MELO,DROP,STAB}.wav + <ziel>/analyse.json
+         --no-stems  Demucs überspringen (MELO aus dem Vollmix)
+Ausgabe: <ziel>/<nn>-{MELOA,MELOB,DROP,STAB}.wav + <ziel>/analyse.json
 """
 import json
 import io
 import os
 import sys
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace") if hasattr(sys.stdout, "buffer") else sys.stdout
-import re
 import numpy as np
 import librosa
 import soundfile as sf
@@ -44,8 +46,12 @@ SR = 44100
 SR_A = 22050  # Analyse-Rate
 BEAT_T = 60.0 / TARGET_BPM          # 0.3429 s
 BAR_T = 4 * BEAT_T                  # 1.3714 s
-MELO_T = 4 * BAR_T                  # 5.4857 s
+MELO_BARS = 8
+MELO_T = MELO_BARS * BAR_T          # 10.971 s
+HALF_T = MELO_T / 2                 # 5.486 s
+STEPS = MELO_BARS * 16              # 128 Sechzehntel
 STAB_T = 0.6
+USE_STEMS = "--no-stems" not in sys.argv
 
 os.makedirs(OUT, exist_ok=True)
 
@@ -53,9 +59,28 @@ MAJ = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29
 MIN = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
+_MODEL = None
+
 
 def log(*a):
     print(*a, flush=True)
+
+
+def _hat_soxr():
+    try:
+        import soxr  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def demucs_model():
+    global _MODEL
+    if _MODEL is None:
+        from demucs.pretrained import get_model
+        _MODEL = get_model("htdemucs")
+        _MODEL.eval()
+    return _MODEL
 
 
 def key_of(chroma_mean):
@@ -94,35 +119,58 @@ def triad(root, mode, low=57):
     return [r, r + third, r + 7]
 
 
-def stretch_to(seg, rate, n_target, varispeed=False):
+def fades(seg, fi_s=0.002, fo_s=0.012):
+    seg = seg.copy()
+    fi, fo = int(fi_s * SR), int(fo_s * SR)
+    if fi:
+        seg[:fi] *= np.linspace(0, 1, fi)
+    if fo:
+        seg[-fo:] *= np.linspace(1, 0, fo)
+    return seg
+
+
+def stretch_to(seg, rate, n_target, varispeed=False, normalize=True):
     """Auf Tempo bringen und exakt auf n_target Samples schneiden.
     varispeed=False: Phase-Vocoder (Tonhöhe bleibt).
     varispeed=True:  Resampling wie ein schneller laufendes Band — Tonhöhe
                      geht um 12·log2(1/rate) Halbtöne mit (klassischer Tekk-Trick)."""
     if abs(rate - 1.0) > 0.002:
         if varispeed:
-            seg = librosa.resample(seg, orig_sr=SR, target_sr=SR * rate, res_type="soxr_hq"
-                                   if _hat_soxr() else "kaiser_best")
+            seg = librosa.resample(seg, orig_sr=SR, target_sr=SR * rate,
+                                   res_type="soxr_hq" if _hat_soxr() else "kaiser_best")
         else:
             seg = librosa.effects.time_stretch(seg, rate=rate)
     if len(seg) < n_target:
         seg = np.pad(seg, (0, n_target - len(seg)))
-    seg = seg[:n_target].copy()
-    # kurze Fades gegen Klicks
-    fi = int(0.002 * SR)
-    fo = int(0.012 * SR)
-    seg[:fi] *= np.linspace(0, 1, fi)
-    seg[-fo:] *= np.linspace(1, 0, fo)
-    peak = float(np.max(np.abs(seg))) or 1.0
-    return seg * (0.95 / peak)
+    seg = fades(seg[:n_target])
+    if normalize:
+        peak = float(np.max(np.abs(seg))) or 1.0
+        seg = seg * (0.95 / peak)
+    return seg
 
 
-def _hat_soxr():
-    try:
-        import soxr  # noqa: F401
-        return True
-    except Exception:
-        return False
+def separate(path, t0, length_s):
+    """Demucs auf dem Fenster [t0, t0+length_s] (Stereo). Liefert
+    (melodie_stem_mono, mix_mono) ab t0, beide @SR."""
+    import torch
+    from demucs.apply import apply_model
+    pad = 0.75
+    start = max(0.0, t0 - pad)
+    ys, _ = librosa.load(path, sr=SR, mono=False, offset=start, duration=length_s + 2 * pad)
+    if ys.ndim == 1:
+        ys = np.stack([ys, ys])
+    model = demucs_model()
+    wav = torch.from_numpy(np.ascontiguousarray(ys, dtype=np.float32))[None]
+    ref = wav.mean(0)
+    wav = (wav - ref.mean()) / (ref.std() + 1e-8)
+    with torch.no_grad():
+        out = apply_model(model, wav, device="cpu", progress=False, shifts=1, overlap=0.25)[0]
+    out = out * (ref.std() + 1e-8) + ref.mean()
+    src = dict(zip(model.sources, out.numpy()))
+    stem = (src["other"] + src["vocals"]).mean(axis=0)
+    mix = ys.mean(axis=0)
+    off = int((t0 - start) * SR)
+    return stem[off:], mix[off:]
 
 
 def analyse(path, idx, varispeed=False):
@@ -140,30 +188,24 @@ def analyse(path, idx, varispeed=False):
     beats = librosa.frames_to_time(beat_frames, sr=SR_A, hop_length=512)
     if len(beats) < 32:
         raise RuntimeError("zu wenige Beats")
-    # Tempo-Oktave: k Tekk-Beats je erkannter Beat
     k = min((0.5, 1.0, 2.0), key=lambda kk: abs(tempo * kk - TARGET_BPM))
     eff_bpm = tempo * k
-    rate = eff_bpm / TARGET_BPM  # >1 = Quelle schneller als Ziel → wird verlangsamt... (librosa: rate>1 = schneller)
+    rate = eff_bpm / TARGET_BPM
     log(f"  Tempo {tempo:.1f} BPM · k={k} → effektiv {eff_bpm:.1f} · Stretch-Rate {rate:.3f}")
 
-    # ── HPSS + Takt-Features ──
+    # ── HPSS + Takt-Features (Fensterwahl) ──
     S = librosa.stft(ya, n_fft=2048, hop_length=512)
     H, P = librosa.decompose.hpss(S, margin=2.0)
     yh = librosa.istft(H, hop_length=512, length=len(ya))
     yp = librosa.istft(P, hop_length=512, length=len(ya))
-    # Mittenband der harmonischen Spur (Lead statt Bass) für Stab + Melodie
-    sos = butter(4, [180, 5000], btype="bandpass", fs=SR_A, output="sos")
-    yh_mid = sosfiltfilt(sos, yh).astype(np.float32)
     rms_h = librosa.feature.rms(y=yh, hop_length=512)[0]
     rms_p = librosa.feature.rms(y=yp, hop_length=512)[0]
     rms_t = librosa.feature.rms(y=ya, hop_length=512)[0]
     chroma = librosa.feature.chroma_cqt(y=yh, sr=SR_A, hop_length=512)
-    # Kick-Energie (<160 Hz) je Beat für die Downbeat-Phase
     low = np.abs(S[: int(160 / (SR_A / 2048)) + 1, :]).sum(axis=0)
     kick_at_beat = low[np.clip(beat_frames, 0, len(low) - 1)]
     phase = int(np.argmax([kick_at_beat[p::4].sum() for p in range(4)]))
-    bars = beats[phase::4]  # Taktanfänge der Quelle (Quell-Beats)
-    bar_frames = beat_frames[phase::4]
+    bars = beats[phase::4]
     log(f"  Beats {len(beats)} · Takte {len(bars)} · Downbeat-Phase {phase}")
 
     def frames_between(t0, t1):
@@ -171,22 +213,19 @@ def analyse(path, idx, varispeed=False):
         f1 = max(f0 + 1, int(t1 * SR_A / 512))
         return f0, f1
 
-    # Quell-Beats je Tekk-Takt: 4/k  (k=2 → 2 Quell-Beats = 1 Tekk-Takt)
-    src_beats_per_tekk_bar = 4.0 / k
-    # MELO-Fenster = 4 Tekk-Takte = 16/k Quell-Beats; Startpunkte an Quell-Taktanfängen
-    melo_src_beats = int(round(16 / k))
-    melo_src_bars = max(1, melo_src_beats // 4)
+    # MELO-Fenster = 8 Tekk-Takte = 32/k Quell-Beats
+    melo_src_bars = max(1, int(round(32 / k)) // 4)
+    drop_src_bars = max(1, melo_src_bars // MELO_BARS) if k <= 1 else 1  # 1 Tekk-Takt in Quelltakten (k=2: halber)
 
-    # Phrasenraster: Versatz o, bei dem die Chroma-Neuheit an 4-Takt-Grenzen maximal ist
+    # Phrasenraster: Versatz, bei dem die Chroma-Neuheit an Fenstergrenzen maximal ist
     cm = []
     for b in range(len(bars) - 1):
         f0, f1 = frames_between(bars[b], bars[b + 1])
         cm.append(chroma[:, f0:f1].mean(axis=1))
     cm = np.array(cm)
     nov = np.r_[0, np.linalg.norm(np.diff(cm, axis=0), axis=1)] if len(cm) > 1 else np.zeros(len(cm))
-    step_bars = max(1, melo_src_bars)
-    offs = range(step_bars) if step_bars > 1 else [0]
-    o = int(max(offs, key=lambda oo: nov[oo::step_bars].sum())) if len(nov) else 0
+    step_bars = melo_src_bars
+    o = int(max(range(step_bars), key=lambda oo: nov[oo::step_bars].sum())) if len(nov) and step_bars > 1 else 0
 
     cands = []
     b = o
@@ -203,24 +242,40 @@ def analyse(path, idx, varispeed=False):
     if not cands:
         raise RuntimeError("keine Kandidatenfenster")
     hs = np.array([c["h"] for c in cands])
-    ts = np.array([c["t"] for c in cands])
     h_thr = np.percentile(hs, 55)
-    # MELO: harmonisch stark, möglichst wenig Perkussion, klare Tonalität
+
     def melo_score(c):
         if c["h"] < h_thr:
             return -1
         return (c["h"] / (c["p"] + 1e-6)) * (0.5 + c["clarity"])
-    melo = max(cands, key=melo_score)
-    # DROP: laut und harmonisch — nicht dasselbe Fenster wie MELO
+    # Top-4 nach HPSS, Entscheidung per Demucs: das Fenster mit dem lautesten Melodie-Stem
+    top = sorted((c for c in cands if melo_score(c) > 0), key=melo_score, reverse=True)[:4] or [max(cands, key=melo_score)]
+    melo = top[0]
+    stem_cache = {}
+    if USE_STEMS and len(top) > 1:
+        src_melo_len_ = MELO_T * rate
+        for c in top:
+            try:
+                st, mx = separate(path, c["t0"], src_melo_len_)
+                r_st = float(np.sqrt(np.mean(st ** 2)) + 1e-9)
+                r_mx = float(np.sqrt(np.mean(mx ** 2)) + 1e-9)
+                stem_cache[c["bar"]] = (st, mx, r_st, r_mx)
+                log(f"    Kandidat Takt {c['bar']:3d} @{c['t0']:6.1f}s: Stem {20*np.log10(r_st):6.1f} dBFS ({20*np.log10(r_st/r_mx):+.1f} dB zum Mix)")
+            except Exception as e:
+                log(f"    Kandidat Takt {c['bar']}: Demucs fehlgeschlagen ({e})")
+        if stem_cache:
+            melo = max((c for c in top if c["bar"] in stem_cache), key=lambda c: stem_cache[c["bar"]][2])
+
     def drop_score(c):
         if c is melo:
             return -1
         return c["t"] * (c["h"] ** 0.5)
     drop = max(cands, key=drop_score)
-    log(f"  MELO {melo['t0']:.1f}s (Takt {melo['bar']}, h/p={melo['h']/(melo['p']+1e-6):.2f}) · DROP {drop['t0']:.1f}s (Takt {drop['bar']})")
+    log(f"  MELO {melo['t0']:.1f}s (Takt {melo['bar']}, {melo_src_bars} Quelltakte, h/p={melo['h']/(melo['p']+1e-6):.2f}) · DROP {drop['t0']:.1f}s (Takt {drop['bar']})")
 
-    # ── Slices schneiden & stretchen ──
+    # ── Schneiden ──
     n_melo = int(round(MELO_T * SR))
+    n_half = int(round(HALF_T * SR))
     n_bar = int(round(BAR_T * SR))
     n_stab = int(round(STAB_T * SR))
     src_melo_len = MELO_T * rate
@@ -228,91 +283,119 @@ def analyse(path, idx, varispeed=False):
 
     def cut(t0, length_s):
         a = int(t0 * SR)
-        b = min(len(y), a + int(length_s * SR) + 2048)
-        return y[a:b]
+        b_ = min(len(y), a + int(length_s * SR) + 2048)
+        return y[a:b_]
 
-    melo_seg = stretch_to(cut(melo["t0"], src_melo_len), rate, n_melo, varispeed)
+    # Stems fürs MELO-Fenster
+    stem_ok = False
+    if USE_STEMS:
+        try:
+            if melo["bar"] in stem_cache:
+                stem, mix, r_stem, r_mix = stem_cache[melo["bar"]]
+            else:
+                stem, mix = separate(path, melo["t0"], src_melo_len)
+                r_stem = float(np.sqrt(np.mean(stem ** 2)) + 1e-9)
+                r_mix = float(np.sqrt(np.mean(mix ** 2)) + 1e-9)
+            stem_ok = r_stem >= 0.05 * r_mix
+            log(f"  Demucs: Melodie-Stem {20*np.log10(r_stem/r_mix):+.1f} dB zum Mix{'' if stem_ok else ' → zu leise, nehme Vollmix'}")
+        except Exception as e:
+            log(f"  Demucs fehlgeschlagen ({e}) → Vollmix")
+    melo_src = stem if stem_ok else cut(melo["t0"], src_melo_len)
+
+    melo_seg = stretch_to(melo_src, rate, n_melo, varispeed)
+    melo_a = fades(melo_seg[:n_half], 0.002, 0.003)
+    melo_b = fades(melo_seg[n_half:n_half * 2], 0.002, 0.012)
     drop_seg = stretch_to(cut(drop["t0"], src_bar_len), rate, n_bar, varispeed)
-    # Varispeed verschiebt die Tonhöhe — alle Song-Noten ziehen mit (gerundet)
     shift_exact = 12 * np.log2(1 / rate) if varispeed else 0.0
     shift = int(round(shift_exact))
     if varispeed:
         log(f"  Varispeed: Tonhöhe {shift_exact:+.2f} Halbtöne (Noten {shift:+d})")
 
-    # STAB: stärkster harmonischer Onset im MELO-Quellfenster
-    f0, f1 = frames_between(melo["t0"], melo["t0"] + src_melo_len - STAB_T)
-    on_h = librosa.onset.onset_strength(y=yh_mid[f0 * 512:f1 * 512], sr=SR_A, hop_length=512)
-    stab_t = melo["t0"] + (int(np.argmax(on_h)) * 512) / SR_A if len(on_h) else melo["t0"]
-    # STAB bekommt dieselbe Varispeed-Verschiebung wie der Loop (Quelle etwas länger schneiden)
-    stab_raw = cut(stab_t, STAB_T * rate if varispeed else STAB_T)
+    # Analysespur fürs Fenster: Melodie-Stem (oder Vollmix) → 22050, Mittenband
+    win22 = librosa.resample(melo_src[: int(src_melo_len * SR)], orig_sr=SR, target_sr=SR_A, res_type="polyphase")
+    sos = butter(4, [180, 5000], btype="bandpass", fs=SR_A, output="sos")
+    win_mid = sosfiltfilt(sos, win22).astype(np.float32)
+
+    # STAB: stärkster Onset im Stem (nicht in den letzten 0,6 s)
+    on_h = librosa.onset.onset_strength(y=win_mid, sr=SR_A, hop_length=512)
+    grenze = max(1, int((src_melo_len - STAB_T * rate) * SR_A / 512))
+    on_h = on_h[:grenze]
+    stab_rel = (int(np.argmax(on_h)) * 512) / SR_A if len(on_h) else 0.0
+    stab_t = melo["t0"] + stab_rel
+    a_s = int(stab_rel * SR)
+    stab_raw = melo_src[a_s: a_s + int((STAB_T * rate if varispeed else STAB_T) * SR) + 2048]
     stab_seg = stretch_to(stab_raw, rate if varispeed else 1.0, n_stab, varispeed)
-    # Tonhöhe des Stabs (Mittenband, Lead-Bereich A2..B6)
-    a0 = int(stab_t * SR_A)
-    fz, vz, pz = librosa.pyin(yh_mid[a0:a0 + int(STAB_T * SR_A)], fmin=110, fmax=2000, sr=SR_A,
-                              frame_length=2048, hop_length=256)
+    a0 = int(stab_rel * SR_A)
+    fz, vz, _ = librosa.pyin(win_mid[a0:a0 + int(STAB_T * SR_A)], fmin=110, fmax=2000, sr=SR_A,
+                             frame_length=2048, hop_length=256)
     ok = vz & np.isfinite(fz)
     stab_voiced = float(ok.mean()) if len(ok) else 0.0
     stab_note = int(round(float(np.median(librosa.hz_to_midi(fz[ok]))))) if ok.sum() >= 4 and stab_voiced >= 0.3 else None
     if stab_note is not None:
         stab_note += shift
 
-    # ── Melodie (64 Sechzehntel) aus dem MELO-Quellfenster (Mittenband) ──
-    seg_h = yh_mid[int(melo["t0"] * SR_A): int((melo["t0"] + src_melo_len) * SR_A)]
-    f0s, voiced, _ = librosa.pyin(seg_h, fmin=110, fmax=1500, sr=SR_A, frame_length=2048, hop_length=256)
+    # ── Melodie (128 Sechzehntel) ──
+    f0s, voiced, _ = librosa.pyin(win_mid, fmin=110, fmax=1500, sr=SR_A, frame_length=2048, hop_length=256)
     n_fr = len(f0s)
     notes = []
     prev = None
-    for s in range(64):
-        a = int(s * n_fr / 64)
-        b = max(a + 1, int((s + 1) * n_fr / 64))
-        fv = f0s[a:b]
-        vv = voiced[a:b] & np.isfinite(fv)
+    for s in range(STEPS):
+        a = int(s * n_fr / STEPS)
+        b_ = max(a + 1, int((s + 1) * n_fr / STEPS))
+        fv = f0s[a:b_]
+        vv = voiced[a:b_] & np.isfinite(fv)
         if vv.mean() >= 0.4:
-            n = int(round(float(np.median(librosa.hz_to_midi(fv[vv]))))) + shift
-            notes.append(n)
+            notes.append(int(round(float(np.median(librosa.hz_to_midi(fv[vv]))))) + shift)
         else:
             notes.append(None)
-    # Notenereignisse: neu, wenn Note wechselt oder nach Pause
     events = []
     for s, n in enumerate(notes):
         if n is not None and n != prev:
             events.append([s, n])
         prev = n
 
-    # ── Akkorde je Tekk-Takt + Tonart ──
+    # ── Akkorde je Tekk-Takt (8) + Tonart ──
     key_root, key_mode = key_of(chroma.mean(axis=1))
     chords, bass = [], []
-    for tb in range(4):
+    for tb in range(MELO_BARS):
         t0 = melo["t0"] + tb * src_bar_len
         a, bb = frames_between(t0, t0 + src_bar_len)
         r, m = chord_of(chroma[:, a:bb].mean(axis=1), key_root, key_mode)
         r = (r + shift) % 12
         chords.append(triad(r, m))
-        bass.append(24 + ((r - 24) % 12) + 12 if r >= 0 else 36)  # C2..B2 (36..47)
+        bass.append(24 + ((r - 24) % 12) + 12)  # C2..B2 (36..47)
     key_root = (key_root + shift) % 12
-    log(f"  Tonart {NAMES[key_root]}{key_mode} · Akkorde {[NAMES[c[0]%12] for c in chords]} · {len(events)} Melodie-Events · Stab {stab_note}")
+    ev64 = sum(1 for e in events if e[0] < 64)
+    log(f"  Tonart {NAMES[key_root]}{key_mode} · Akkorde {[NAMES[c[0]%12] for c in chords]} · {len(events)} Melodie-Events ({ev64} in Hälfte A) · Stab {stab_note}")
 
-    stem = f"{idx:02d}"
-    sf.write(os.path.join(OUT, f"{stem}-MELO.wav"), melo_seg, SR, subtype="PCM_16")
-    sf.write(os.path.join(OUT, f"{stem}-DROP.wav"), drop_seg, SR, subtype="PCM_16")
-    sf.write(os.path.join(OUT, f"{stem}-STAB.wav"), stab_seg, SR, subtype="PCM_16")
+    stem_ = f"{idx:02d}"
+    sf.write(os.path.join(OUT, f"{stem_}-MELOA.wav"), melo_a, SR, subtype="PCM_16")
+    sf.write(os.path.join(OUT, f"{stem_}-MELOB.wav"), melo_b, SR, subtype="PCM_16")
+    sf.write(os.path.join(OUT, f"{stem_}-DROP.wav"), drop_seg, SR, subtype="PCM_16")
+    sf.write(os.path.join(OUT, f"{stem_}-STAB.wav"), stab_seg, SR, subtype="PCM_16")
+    alt = os.path.join(OUT, f"{stem_}-MELO.wav")
+    if os.path.exists(alt):
+        os.remove(alt)
 
     return dict(
         idx=idx, file=name, duration=round(dur, 1), bpm=round(tempo, 1), k=k,
         eff_bpm=round(eff_bpm, 1), rate=round(rate, 4),
-        varispeed=bool(varispeed), shift=round(float(shift_exact), 2),
+        varispeed=bool(varispeed), shift=round(float(shift_exact), 2), stems=bool(stem_ok),
         key=f"{NAMES[key_root]}{key_mode}", key_root=key_root, key_mode=key_mode,
-        melo=dict(t0=round(melo["t0"], 2), bar=melo["bar"]),
+        melo=dict(t0=round(melo["t0"], 2), bar=melo["bar"], bars=MELO_BARS),
         drop=dict(t0=round(drop["t0"], 2), bar=drop["bar"]),
         stab=dict(t0=round(stab_t, 2), note=stab_note, voiced=round(stab_voiced, 2)),
         notes=notes, events=events, chords=chords, bass=bass,
     )
 
 
-def _idx_liste(flag):
-    """--only 3,14 bzw. --varispeed 14 → {3, 14}."""
+def _idx_liste(flag, n_max=99):
+    """--only 3,14 bzw. --varispeed 14 / all → Menge."""
     if flag in sys.argv:
-        return {int(x) for x in sys.argv[sys.argv.index(flag) + 1].split(",")}
+        wert = sys.argv[sys.argv.index(flag) + 1]
+        if wert == "all":
+            return set(range(1, n_max + 1))
+        return {int(x) for x in wert.split(",")}
     return set()
 
 
