@@ -1,0 +1,70 @@
+501	HaimKind
+502	Jumpkick
+506	707_hho-
+508	closed 8
+509	clydesna
+510	snarre-p
+517	ED Close
+530	ZaHnI_To
+534	Unison_Bass_C3
+535	Bassdrum-01fd
+538	T-Mello
+539	Tau-MeLo
+540	HBsChE PaRa MeLo
+541	Auf CrystaL-MeLo
+545	Krieger-MeLo
+549	Padseq~1
+550	PAD_ResoChor
+551	Strings of Wisdo
+557	Holia-MeLo
+560	melo6dk
+562	Ha He MeLo
+566	120CHOIRC23sD
+581	Abovegrnd ML
+582	Abovegrnd DR
+583	Abovegrnd ST
+584	Drogen ML
+585	Drogen DR
+586	Drogen ST
+587	Amphegot2 ML
+588	Amphegot2 DR
+589	Amphegot2 ST
+590	Zuckerwat ML
+591	Zuckerwat DR
+592	Zuckerwat ST
+593	NewToday ML
+594	NewToday DR
+595	NewToday ST
+596	RawFloor ML
+597	RawFloor DR
+598	RawFloor ST
+599	TuerkAmph ML
+600	TuerkAmph DR
+601	TuerkAmph ST
+602	JajaVeve ML
+603	JajaVeve DR
+604	JajaVeve ST
+605	KlarBengl ML
+606	KlarBengl DR
+607	KlarBengl ST
+608	Amphegott ML
+609	Amphegott DR
+610	Amphegott ST
+611	RoundWrld ML
+612	RoundWrld DR
+613	RoundWrld ST
+614	Schmettr ML
+615	Schmettr DR
+616	Schmettr ST
+617	Vorbild ML
+618	Vorbild DR
+619	Vorbild ST
+620	SteinStn ML
+621	SteinStn DR
+622	SteinStn ST
+623	Sturmmask ML
+624	Sturmmask DR
+625	Sturmmask ST
+626	WasnDas ML
+627	WasnDas DR
+628	WasnDas ST
