@@ -17,6 +17,11 @@ Tempo-Oktave: Rap (~90 BPM) wird als Half-Time behandelt (k=2), d. h. ein
 Rap-Beat = zwei Tekk-Beats; Stretch-Faktor bleibt damit nahe 1.
 
 Aufruf:  python scripts/analyze-round1.py [quellordner] [zielordner]
+             [--only 3,14] [--varispeed 14]
+         --only      nur diese Songs neu rechnen, Rest in analyse.json behalten
+         --varispeed diese Songs per Resampling statt Phase-Vocoder auf Tempo
+                     bringen (Tonhöhe geht mit; Noten/Akkorde/Bass werden
+                     mitverschoben) — z. B. Stein zu Stein 129 → 175 = +5,26 HT
 Ausgabe: <ziel>/<nn>-{MELO,DROP,STAB}.wav + <ziel>/analyse.json
 """
 import json
@@ -30,8 +35,10 @@ import librosa
 import soundfile as sf
 from scipy.signal import butter, sosfiltfilt
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else r"G:\Mukke Stuff\Musik für Sample\round 1"
-OUT = sys.argv[2] if len(sys.argv) > 2 else r"G:\IdeaProjects\TekkForge\examples\e2s\round1"
+_POS = [a for i, a in enumerate(sys.argv[1:], 1)
+        if not a.startswith("--") and not sys.argv[i - 1].startswith("--")]
+SRC = _POS[0] if len(_POS) > 0 else r"G:\Mukke Stuff\Musik für Sample\round 1"
+OUT = _POS[1] if len(_POS) > 1 else r"G:\IdeaProjects\TekkForge\examples\e2s\round1"
 TARGET_BPM = 175.0
 SR = 44100
 SR_A = 22050  # Analyse-Rate
@@ -87,10 +94,17 @@ def triad(root, mode, low=57):
     return [r, r + third, r + 7]
 
 
-def stretch_to(seg, rate, n_target):
-    """Phase-Vocoder-Stretch, dann exakt auf n_target Samples bringen."""
+def stretch_to(seg, rate, n_target, varispeed=False):
+    """Auf Tempo bringen und exakt auf n_target Samples schneiden.
+    varispeed=False: Phase-Vocoder (Tonhöhe bleibt).
+    varispeed=True:  Resampling wie ein schneller laufendes Band — Tonhöhe
+                     geht um 12·log2(1/rate) Halbtöne mit (klassischer Tekk-Trick)."""
     if abs(rate - 1.0) > 0.002:
-        seg = librosa.effects.time_stretch(seg, rate=rate)
+        if varispeed:
+            seg = librosa.resample(seg, orig_sr=SR, target_sr=SR * rate, res_type="soxr_hq"
+                                   if _hat_soxr() else "kaiser_best")
+        else:
+            seg = librosa.effects.time_stretch(seg, rate=rate)
     if len(seg) < n_target:
         seg = np.pad(seg, (0, n_target - len(seg)))
     seg = seg[:n_target].copy()
@@ -103,9 +117,17 @@ def stretch_to(seg, rate, n_target):
     return seg * (0.95 / peak)
 
 
-def analyse(path, idx):
+def _hat_soxr():
+    try:
+        import soxr  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def analyse(path, idx, varispeed=False):
     name = os.path.basename(path)
-    log(f"\n[{idx:02d}] {name}")
+    log(f"\n[{idx:02d}] {name}{'  [VARISPEED]' if varispeed else ''}")
     y, _ = librosa.load(path, sr=SR, mono=True)
     dur = len(y) / SR
     ya = librosa.resample(y, orig_sr=SR, target_sr=SR_A, res_type="polyphase")
@@ -209,15 +231,21 @@ def analyse(path, idx):
         b = min(len(y), a + int(length_s * SR) + 2048)
         return y[a:b]
 
-    melo_seg = stretch_to(cut(melo["t0"], src_melo_len), rate, n_melo)
-    drop_seg = stretch_to(cut(drop["t0"], src_bar_len), rate, n_bar)
+    melo_seg = stretch_to(cut(melo["t0"], src_melo_len), rate, n_melo, varispeed)
+    drop_seg = stretch_to(cut(drop["t0"], src_bar_len), rate, n_bar, varispeed)
+    # Varispeed verschiebt die Tonhöhe — alle Song-Noten ziehen mit (gerundet)
+    shift_exact = 12 * np.log2(1 / rate) if varispeed else 0.0
+    shift = int(round(shift_exact))
+    if varispeed:
+        log(f"  Varispeed: Tonhöhe {shift_exact:+.2f} Halbtöne (Noten {shift:+d})")
 
     # STAB: stärkster harmonischer Onset im MELO-Quellfenster
     f0, f1 = frames_between(melo["t0"], melo["t0"] + src_melo_len - STAB_T)
     on_h = librosa.onset.onset_strength(y=yh_mid[f0 * 512:f1 * 512], sr=SR_A, hop_length=512)
     stab_t = melo["t0"] + (int(np.argmax(on_h)) * 512) / SR_A if len(on_h) else melo["t0"]
-    stab_raw = cut(stab_t, STAB_T)
-    stab_seg = stretch_to(stab_raw, 1.0, n_stab)
+    # STAB bekommt dieselbe Varispeed-Verschiebung wie der Loop (Quelle etwas länger schneiden)
+    stab_raw = cut(stab_t, STAB_T * rate if varispeed else STAB_T)
+    stab_seg = stretch_to(stab_raw, rate if varispeed else 1.0, n_stab, varispeed)
     # Tonhöhe des Stabs (Mittenband, Lead-Bereich A2..B6)
     a0 = int(stab_t * SR_A)
     fz, vz, pz = librosa.pyin(yh_mid[a0:a0 + int(STAB_T * SR_A)], fmin=110, fmax=2000, sr=SR_A,
@@ -225,6 +253,8 @@ def analyse(path, idx):
     ok = vz & np.isfinite(fz)
     stab_voiced = float(ok.mean()) if len(ok) else 0.0
     stab_note = int(round(float(np.median(librosa.hz_to_midi(fz[ok]))))) if ok.sum() >= 4 and stab_voiced >= 0.3 else None
+    if stab_note is not None:
+        stab_note += shift
 
     # ── Melodie (64 Sechzehntel) aus dem MELO-Quellfenster (Mittenband) ──
     seg_h = yh_mid[int(melo["t0"] * SR_A): int((melo["t0"] + src_melo_len) * SR_A)]
@@ -238,7 +268,7 @@ def analyse(path, idx):
         fv = f0s[a:b]
         vv = voiced[a:b] & np.isfinite(fv)
         if vv.mean() >= 0.4:
-            n = int(round(float(np.median(librosa.hz_to_midi(fv[vv])))))
+            n = int(round(float(np.median(librosa.hz_to_midi(fv[vv]))))) + shift
             notes.append(n)
         else:
             notes.append(None)
@@ -256,8 +286,10 @@ def analyse(path, idx):
         t0 = melo["t0"] + tb * src_bar_len
         a, bb = frames_between(t0, t0 + src_bar_len)
         r, m = chord_of(chroma[:, a:bb].mean(axis=1), key_root, key_mode)
+        r = (r + shift) % 12
         chords.append(triad(r, m))
         bass.append(24 + ((r - 24) % 12) + 12 if r >= 0 else 36)  # C2..B2 (36..47)
+    key_root = (key_root + shift) % 12
     log(f"  Tonart {NAMES[key_root]}{key_mode} · Akkorde {[NAMES[c[0]%12] for c in chords]} · {len(events)} Melodie-Events · Stab {stab_note}")
 
     stem = f"{idx:02d}"
@@ -268,6 +300,7 @@ def analyse(path, idx):
     return dict(
         idx=idx, file=name, duration=round(dur, 1), bpm=round(tempo, 1), k=k,
         eff_bpm=round(eff_bpm, 1), rate=round(rate, 4),
+        varispeed=bool(varispeed), shift=round(float(shift_exact), 2),
         key=f"{NAMES[key_root]}{key_mode}", key_root=key_root, key_mode=key_mode,
         melo=dict(t0=round(melo["t0"], 2), bar=melo["bar"]),
         drop=dict(t0=round(drop["t0"], 2), bar=drop["bar"]),
@@ -276,16 +309,33 @@ def analyse(path, idx):
     )
 
 
+def _idx_liste(flag):
+    """--only 3,14 bzw. --varispeed 14 → {3, 14}."""
+    if flag in sys.argv:
+        return {int(x) for x in sys.argv[sys.argv.index(flag) + 1].split(",")}
+    return set()
+
+
 def main():
     files = sorted(f for f in os.listdir(SRC) if f.lower().endswith((".wav", ".mp3", ".flac", ".aiff", ".aif")))
+    only = _idx_liste("--only")
+    varispeed = _idx_liste("--varispeed")
+    json_pfad = os.path.join(OUT, "analyse.json")
     results = []
+    if only and os.path.exists(json_pfad):  # Teil-Lauf: bestehende Ergebnisse behalten
+        with open(json_pfad, encoding="utf-8") as fh:
+            results = json.load(fh)
     for i, f in enumerate(files, 1):
+        if only and i not in only:
+            continue
         try:
-            results.append(analyse(os.path.join(SRC, f), i))
+            r = analyse(os.path.join(SRC, f), i, varispeed=i in varispeed)
         except Exception as e:  # ein Song darf die Runde nicht abbrechen
             log(f"  FEHLER: {e}")
-            results.append(dict(idx=i, file=f, error=str(e)))
-        with open(os.path.join(OUT, "analyse.json"), "w", encoding="utf-8") as fh:
+            r = dict(idx=i, file=f, error=str(e))
+        results = [x for x in results if x.get("idx") != i] + [r]
+        results.sort(key=lambda x: x["idx"])
+        with open(json_pfad, "w", encoding="utf-8") as fh:
             json.dump(results, fh, ensure_ascii=False, indent=1)
     log(f"\nfertig: {len(results)} Songs → {OUT}")
 
