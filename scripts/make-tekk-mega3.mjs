@@ -46,6 +46,10 @@ const MONO1 = 0, MONO2 = 1, POLY2 = 3;
 // Part-Indizes (0-basiert)
 const P_STAB = 10, P_DROP = 11, P_MELOA = 12, P_MELOB = 13, P_ARP = 14, P_SYN = 15;
 
+/** Songs, deren STAB-Tonhoehe nicht messbar war (Vollmix-Fenster ohne klare
+ *  Einzelnoten): STAB- und ARP-Part bleiben stumm, sonst verstimmt gegen den Loop. */
+const OHNE_STAB = new Set([5, 10]); // NewToday, Amphegott
+
 const analyse = JSON.parse(fs.readFileSync(`${ROUND1}/analyse.json`, "utf8")).filter((a) => !a.error);
 const mapping = JSON.parse(fs.readFileSync(`${ROUND1}/mapping.json`, "utf8"));
 const songs = mapping.map((m) => {
@@ -187,7 +191,7 @@ function songParts(song, intens, kickFigur, lagen) {
     const e = ev.find((x) => x[0] === s);
     return e ? hit([fold(60 + (e[1] - ref), 40, 84)], 104, gateFuer(e[2])) : null;
   });
-  wach[P_STAB] = !!lagen.stab;
+  wach[P_STAB] = !!lagen.stab && !OHNE_STAB.has(song.idx);
   steps[P_DROP] = baue((s) => (imTakt(s) === 0 ? hit([60], 120, 96) : null));
   wach[P_DROP] = !!lagen.drop;
   steps[P_MELOA] = baue((s) => (s === 0 ? hit([60], 127, 96) : null)); // Alternate: Durchlauf 1, 3, …
@@ -196,7 +200,7 @@ function songParts(song, intens, kickFigur, lagen) {
   steps[P_ARP] = baue((s) =>
     s % 2 === 0 ? hit([fold(60 + (akk[takt(s)][[0, 1, 2, 1][(s / 2) % 4]] - ref), 48, 72)], 84, 12) : null,
   );
-  wach[P_ARP] = !!lagen.arp;
+  wach[P_ARP] = !!lagen.arp && !OHNE_STAB.has(song.idx);
   steps[P_SYN] = baue((s) => {
     const e = ev.find((x) => x[0] === s);
     return e ? hit([fold(e[1], 55, 79)], 92, gateFuer(e[2])) : null;
