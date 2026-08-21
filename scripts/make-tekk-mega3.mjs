@@ -48,7 +48,7 @@ const P_STAB = 10, P_DROP = 11, P_MELOA = 12, P_MELOB = 13, P_ARP = 14, P_SYN = 
 
 /** Songs, deren STAB-Tonhoehe nicht messbar war (Vollmix-Fenster ohne klare
  *  Einzelnoten): STAB- und ARP-Part bleiben stumm, sonst verstimmt gegen den Loop. */
-const OHNE_STAB = new Set([5, 10]); // NewToday, Amphegott
+const OHNE_STAB = new Set([5, 10, 13]); // NewToday, Amphegott, Vorbild
 
 const analyse = JSON.parse(fs.readFileSync(`${ROUND1}/analyse.json`, "utf8")).filter((a) => !a.error);
 const mapping = JSON.parse(fs.readFileSync(`${ROUND1}/mapping.json`, "utf8"));

@@ -4080,13 +4080,13 @@
   "rate": 1.0938,
   "varispeed": true,
   "shift": -1.55,
-  "stems": true,
+  "stems": false,
   "key": "F#maj",
   "key_root": 6,
   "key_mode": "maj",
   "melo": {
-   "t0": 398.71,
-   "bar": 160,
+   "t0": 220.19,
+   "bar": 88,
    "bars": 8
   },
   "drop": {
@@ -4094,88 +4094,44 @@
    "bar": 96
   },
   "stab": {
-   "t0": 400.03,
-   "note": null,
-   "voiced": 0.0
+   "t0": 224.49,
+   "note": 43,
+   "voiced": 0.88
   },
   "notes": [
-   53,
-   53,
-   53,
-   null,
-   null,
-   null,
-   null,
-   46,
-   46,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   49,
-   49,
-   null,
-   null,
-   null,
-   null,
-   49,
-   49,
-   49,
-   null,
-   49,
-   null,
-   null,
-   49,
-   49,
-   49,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   65,
-   65,
-   65,
-   65,
-   63,
-   63,
-   null,
-   46,
-   46,
-   46,
-   null,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   44,
    44,
    null,
    null,
-   61,
-   61,
-   61,
+   null,
+   null,
+   null,
    null,
    null,
    null,
@@ -4191,36 +4147,80 @@
    null,
    null,
    43,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   49,
-   53,
-   53,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
    null,
-   53,
-   53,
-   53,
-   null,
-   46,
-   46,
+   43,
+   43,
    null,
    null,
+   43,
+   43,
+   43,
+   43,
+   43,
+   null,
+   43,
+   43,
+   43,
+   43,
+   43,
+   null,
+   null,
+   43,
+   43,
+   43,
+   43,
+   null,
+   null,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
    null,
    null,
    null,
+   null,
+   null,
+   null,
+   43,
+   43,
+   null,
+   43,
+   43,
+   null,
+   43,
+   43,
+   43,
+   43,
+   43,
+   43,
+   null,
+   43,
+   43,
+   null,
+   43,
+   43,
+   null,
+   null,
+   43,
+   43,
    null,
    null,
    null,
@@ -4231,120 +4231,112 @@
   "events": [
    [
     0,
-    53
-   ],
-   [
-    7,
-    46
-   ],
-   [
-    34,
-    49
-   ],
-   [
-    40,
-    49
-   ],
-   [
-    44,
-    49
-   ],
-   [
-    47,
-    49
-   ],
-   [
-    60,
-    65
-   ],
-   [
-    64,
-    63
-   ],
-   [
-    67,
-    46
-   ],
-   [
-    71,
-    44
-   ],
-   [
-    74,
-    61
-   ],
-   [
-    91,
     43
    ],
    [
-    92,
-    49
+    26,
+    44
    ],
    [
-    108,
-    53
+    47,
+    43
    ],
    [
-    111,
-    53
+    63,
+    43
    ],
    [
-    115,
-    46
+    67,
+    43
+   ],
+   [
+    73,
+    43
+   ],
+   [
+    80,
+    43
+   ],
+   [
+    86,
+    43
+   ],
+   [
+    100,
+    43
+   ],
+   [
+    103,
+    43
+   ],
+   [
+    106,
+    43
+   ],
+   [
+    113,
+    43
+   ],
+   [
+    116,
+    43
+   ],
+   [
+    120,
+    43
    ]
   ],
   "chords": [
    [
-    66,
-    70,
-    73
+    64,
+    67,
+    71
    ],
    [
-    66,
-    70,
-    73
+    64,
+    67,
+    71
    ],
    [
-    66,
-    70,
-    73
+    59,
+    63,
+    66
    ],
    [
-    66,
-    70,
-    73
+    64,
+    67,
+    71
    ],
    [
-    66,
-    70,
-    73
+    64,
+    67,
+    71
    ],
    [
+    63,
     66,
-    69,
-    73
+    70
    ],
    [
+    63,
     66,
-    69,
-    73
+    70
    ],
    [
+    63,
     66,
-    70,
-    73
+    70
    ]
   ],
   "bass": [
-   42,
-   42,
-   42,
-   42,
-   42,
-   42,
-   42,
-   42
+   40,
+   40,
+   47,
+   40,
+   40,
+   39,
+   39,
+   39
   ]
  },
  {
@@ -4357,13 +4349,13 @@
   "rate": 1.1812,
   "varispeed": true,
   "shift": -2.88,
-  "stems": true,
+  "stems": false,
   "key": "Dmaj",
   "key_root": 2,
   "key_mode": "maj",
   "melo": {
-   "t0": 96.25,
-   "bar": 41,
+   "t0": 281.47,
+   "bar": 121,
    "bars": 8
   },
   "drop": {
@@ -4371,11 +4363,105 @@
    "bar": 9
   },
   "stab": {
-   "t0": 107.67,
+   "t0": 291.16,
    "note": null,
    "voiced": 0.0
   },
   "notes": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
    43,
    null,
    null,
@@ -4384,8 +4470,10 @@
    null,
    null,
    null,
-   43,
-   43,
+   null,
+   null,
+   null,
+   null,
    null,
    null,
    null,
@@ -4396,23 +4484,6 @@
    null,
    null,
    null,
-   43,
-   43,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   43,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
    null,
    null,
    null,
@@ -4424,143 +4495,20 @@
    45,
    45,
    45,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   43,
-   43,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   43,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   null,
-   55,
-   57,
-   null,
-   55,
-   56,
-   57,
-   null,
-   null,
-   56,
-   56
+   null
   ],
   "events": [
    [
-    0,
+    94,
     43
    ],
    [
-    8,
-    43
-   ],
-   [
-    13,
+    109,
     42
    ],
    [
-    20,
-    43
-   ],
-   [
-    29,
-    43
-   ],
-   [
-    45,
+    124,
     45
-   ],
-   [
-    61,
-    43
-   ],
-   [
-    69,
-    43
-   ],
-   [
-    118,
-    55
-   ],
-   [
-    119,
-    57
-   ],
-   [
-    121,
-    55
-   ],
-   [
-    122,
-    56
-   ],
-   [
-    123,
-    57
-   ],
-   [
-    126,
-    56
    ]
   ],
   "chords": [
@@ -4576,7 +4524,7 @@
    ],
    [
     67,
-    70,
+    71,
     74
    ],
    [
@@ -4590,19 +4538,19 @@
     74
    ],
    [
-    67,
-    71,
-    74
-   ],
-   [
-    67,
-    70,
-    74
+    57,
+    60,
+    64
    ],
    [
     67,
     71,
     74
+   ],
+   [
+    57,
+    61,
+    64
    ]
   ],
   "bass": [
@@ -4611,9 +4559,9 @@
    43,
    45,
    43,
+   45,
    43,
-   43,
-   43
+   45
   ]
  },
  {
