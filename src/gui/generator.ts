@@ -11,6 +11,10 @@ import { PreviewPlayer } from "./preview";
 import { panelBridge } from "./editor";
 import { tekkFs, ordnerVon } from "./tekkFs";
 import { tekkKi } from "./tekkKi";
+import { tekkLied } from "./tekkLied";
+import { analysiereLied, type LiedFenster } from "../core/liedAnalyse";
+import { encodeWav16, parseWav } from "../core/wavCodec";
+import { rmsDb, peakVon, familie } from "../core/sampleScan";
 import { promptFuer, antwortZuRezept, REZEPT_SCHEMA, KI_MODELL_STANDARD } from "../core/kiPlaner";
 import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
 import { planeBank, type Projekt } from "../core/bankPlan";
@@ -42,11 +46,18 @@ interface Zustand {
   ki: { gesetzt: boolean; modell: string; vorschau?: string } | null;
   kiLaeuft: boolean;
   kiHinweis: string;
+  /** Python/Demucs-Probe (nur Electron) */
+  python: { demucs: boolean; meldung: string } | null;
+  /** zuletzt analysiertes Lied */
+  lied: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean } | null;
+  liedLaeuft: boolean;
+  liedStatus: string;
 }
 
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
+  python: null, lied: null, liedLaeuft: false, liedStatus: "",
 };
 const player = new PreviewPlayer();
 let onEditor: (p: EditorProject) => void = () => {};
@@ -203,6 +214,17 @@ function render(): void {
         <input id="genOrdner" type="file" multiple />
       </div>
       <div class="fortschritt" id="genFortschritt">${escapeHtml(z.fortschritt)}</div>
+      <div class="zeile">
+        <label for="genLied">Lied analysieren</label>
+        <input id="genLied" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" />
+      </div>
+      <div class="zeile">
+        <label for="genLiedBpm">Lied-BPM</label>
+        <input id="genLiedBpm" type="number" min="40" max="300" placeholder="messen" style="width:80px" />
+        <label title="${escapeHtml(z.python?.meldung ?? "Probe laeuft …")}"><input id="genDemucs" type="checkbox" ${z.python?.demucs ? "checked" : "disabled"} /> Stems per Demucs${z.python ? (z.python.demucs ? "" : " (nicht verfuegbar)") : " (Probe …)"}</label>
+        <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
+      </div>
+      ${z.liedStatus ? `<div class="fortschritt" id="genLiedStatus">${escapeHtml(z.liedStatus)}</div>` : ""}
       ${quelle}
     </div>
     <div class="card">
@@ -225,6 +247,7 @@ function verdrahte(): void {
   const ordner = $("genOrdner") as HTMLInputElement;
   ordner.addEventListener("change", () => void scanneOrdner(ordner.files));
   knopf("genBank", () => void bankBauen());
+  knopf("genLiedLos", () => void liedAnalysieren());
   knopf("genBankSpeichern", () => {
     if (z.bank && z.projekt) download(z.bank, `${z.projekt.name}.all`, "application/octet-stream");
   });
@@ -294,6 +317,90 @@ async function scanneOrdner(files: FileList | null): Promise<void> {
   z.zusammen = zusammenfassung(z.eintraege);
   z.fortschritt = "";
   render();
+}
+
+/** Ein Fenster (mono 44,1 k) als Scan-Eintrag — 8 Takte, ein Sample, Gruppe melo:<lied> <label>. */
+function fensterEintrag(liedName: string, label: string, pcm: Float32Array, rolle: "melo" | "vox"): ScanEintrag {
+  const stem = `${liedName} ${label}${rolle === "vox" ? " VX" : ""}`;
+  return {
+    datei: `${stem}.wav`, stem, rolle, familie: familie(stem), sekunden: pcm.length / 44100,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100,
+  };
+}
+
+/** Lied dekodieren → Fenster (TS) → optional Demucs-Stems → als Melo/Vox-Eintraege in den Scan. */
+async function liedAnalysieren(): Promise<void> {
+  const input = document.getElementById("genLied") as HTMLInputElement | null;
+  const datei = input?.files?.[0];
+  if (!datei) {
+    z.liedStatus = "Erst eine Audiodatei waehlen.";
+    render();
+    return;
+  }
+  if (z.liedLaeuft) return;
+  z.liedLaeuft = true;
+  z.liedStatus = `Dekodiere ${datei.name} …`;
+  render();
+  const lied = tekkLied();
+  let abmelden: (() => void) | null = null;
+  try {
+    const eingabe = await dekodiere(datei);
+    const hinweis = Number((document.getElementById("genLiedBpm") as HTMLInputElement | null)?.value) || undefined;
+    z.liedStatus = "Tempo messen, Fenster waehlen …";
+    render();
+    await new Promise((r) => setTimeout(r, 0));
+    // Ziel-Tempo: Feld bzw. Verzeichnis-Vorschlag; ohne beides das Lied-Tempo in der Tekk-Oktave (kein Varispeed)
+    let zielBpm = Number((document.getElementById("genBpm") as HTMLInputElement | null)?.value) || z.zusammen?.tempoVorschlag || 0;
+    if (!zielBpm) {
+      const vor = analysiereLied(eingabe.pcm, 44100, { zielBpm: 180, bpmHinweis: hinweis, anzahl: 1 });
+      zielBpm = Math.round(vor.bpm * vor.k * 10) / 10;
+    }
+    const res = analysiereLied(eingabe.pcm, 44100, { zielBpm, bpmHinweis: hinweis });
+    if (!res.fenster.length) throw new Error("kein hoerbares Fenster gefunden");
+    const liedName = datei.name.replace(/\.[^.]+$/, "").slice(0, 10).trim() || "Lied";
+    const demucs = !!(document.getElementById("genDemucs") as HTMLInputElement | null)?.checked && !!lied && !!z.python?.demucs;
+    const neue: ScanEintrag[] = [];
+    if (demucs && lied) {
+      abmelden = lied.onFortschritt((t) => {
+        z.liedStatus = t;
+        const el = document.getElementById("genLiedStatus");
+        if (el) el.textContent = t;
+      });
+      z.liedStatus = `Demucs auf ${res.fenster.length} Fenstern (dauert ein bis zwei Minuten) …`;
+      render();
+      const antwort = await lied.stems({
+        fenster: res.fenster.map((f) => ({ id: f.label, bytes: Array.from(encodeWav16(f.pcm, 44100, 1)) })),
+      });
+      for (const f of antwort.fenster) {
+        const melo = parseWav(Uint8Array.from(f.melo));
+        neue.push(fensterEintrag(liedName, f.id, melo.pcm, "melo"));
+        if (f.vox) {
+          const vox = parseWav(Uint8Array.from(f.vox));
+          neue.push(fensterEintrag(liedName, f.id, vox.pcm, "vox"));
+        }
+      }
+    } else {
+      for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm, "melo"));
+    }
+    // Eintraege desselben Lieds ersetzen, andere Samples behalten
+    z.eintraege = z.eintraege.filter((e) => !e.datei.startsWith(`${liedName} `)).concat(neue);
+    if (!z.ordner) z.ordner = liedName;
+    z.zusammen = zusammenfassung(z.eintraege);
+    z.projekt = null;
+    z.bank = null;
+    z.ergebnis = null;
+    z.pool = [];
+    z.lied = { name: liedName, bpm: res.bpm, k: res.k, fenster: res.fenster.map((f) => f.label), stems: demucs };
+    z.liedStatus = `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)}) · Fenster ${res.fenster
+      .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
+      .join(", ")}${demucs ? " · Stems: bass+other als Melo, Vocals als Vox" : " · Vollmix (ohne Demucs)"} — jetzt „Bank bauen"`;
+  } catch (e) {
+    z.liedStatus = "Lied-Analyse fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
+  } finally {
+    abmelden?.();
+    z.liedLaeuft = false;
+    render();
+  }
 }
 
 async function bankBauen(): Promise<void> {
@@ -485,6 +592,18 @@ export function initGenerator(cb: (p: EditorProject) => void): void {
     }).catch(() => {
       z.ki = { gesetzt: false, modell: KI_MODELL_STANDARD };
     });
+  }
+  const lied = tekkLied();
+  if (lied) {
+    void lied.pythonStatus().then((s) => {
+      z.python = { demucs: s.demucs, meldung: s.meldung };
+      render();
+    }).catch((e: unknown) => {
+      z.python = { demucs: false, meldung: "Probe fehlgeschlagen: " + (e instanceof Error ? e.message : String(e)) };
+      render();
+    });
+  } else {
+    z.python = { demucs: false, meldung: "nur in der Desktop-App" };
   }
 }
 
