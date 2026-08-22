@@ -6,8 +6,8 @@ Generator-Tab. Eingabe ist ein JSON (Pfad als Argument):
     "ziel": "<ordner>" }
 
 Je Fenster entstehen <ziel>/<id>-melo.wav (bass + other; Vocals werden
-eingefaltet, wenn sie leiser als -32 dB sind) und <ziel>/<id>-vox.wav (nur
-wenn Vocals > -32 dB). Fortschritt auf stderr, Ergebnis-JSON auf stdout:
+eingefaltet, wenn sie leiser als -36 dB sind) und <ziel>/<id>-vox.wav (nur
+wenn Vocals > -36 dB, dann auf 0,95 normalisiert). Fortschritt auf stderr, Ergebnis-JSON auf stdout:
 
   { "fenster": [ { "id": "DROP", "melo": "<pfad>", "vox": "<pfad>" | null } ] }
 """
@@ -74,7 +74,9 @@ def main():
             import librosa
             y = librosa.resample(y, orig_sr=sr, target_sr=SR, res_type="soxr_hq")
         st = stems(y)
-        vox_stark = rms_db(st["vocals"]) > -32
+        # -36 dB: Tekk-Vocals liegen oft 20 dB unter den Drums (Tommi Track 1: -32…-36 dB) und
+        # sollen trotzdem als eigener, hochnormalisierter Vox-Loop rauskommen
+        vox_stark = rms_db(st["vocals"]) > -36
         melo = st["bass"] + st["other"] + (0 if vox_stark else st["vocals"])
         melo_pfad = os.path.join(ziel, f"{f['id']}-melo.wav")
         sf.write(melo_pfad, normalisiere(melo), SR, subtype="PCM_16")
