@@ -49,6 +49,10 @@ im Browser doppelklicken.
    + `projekt.json` an, „auf SD kopieren" schreibt nach `<SD>6\`, „als geladen markieren"
    merkt sich die Bank (überlebt Neustarts) und gibt „→ Gerät ab Slot N" frei — Patterns gehen
    dann per 0x4C-Slot-Dump ans Gerät, ohne das laufende Pattern zu stören.
+   **KI (Premium):** Mit Anthropic-API-Key (Feld im Tab, gespeichert in den App-Einstellungen,
+   nie im Projekt) übersetzt Claude (`claude-opus-5`, Server-Fallback) die Beschreibung in das
+   Rezept-JSON; die Antwort läuft durch dieselbe Prüfung wie der Regel-Planer, bei Fehler oder
+   Timeout (25 s) greift der Regel-Planer mit Hinweis. Pro Melo bleibt regelbasiert.
 
 ## Pattern-Editor — Workflow
 
