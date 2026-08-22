@@ -168,9 +168,12 @@ MIDI-Nachrichten, also mit Stock **und** Hacktribe:
 
 **Gemessen 2026-08-22** (E2 Sampler v2.2, Kanal 1, Receive-Filter Off, Display
 abgelesen): Program 100 → Pattern **101**, Program 1 → **2**, Program 2 → **3**;
-Bank MSB 0 + LSB 1 + Program 0 → **129**. Das Gerät zählt also 0-basiert —
-KORGs MIDI-Implementation („Pattern 001 = Program 1") stimmt hier nicht.
-Bank im MSB wird ignoriert. **Bei gestopptem Sequencer ignoriert das Gerät
+Bank MSB 0 + LSB 1 + Program 0 → **129**; CC0 0 + CC32 1 + Program 5 → **134**.
+Das Gerät zählt also 0-basiert — KORGs MIDI-Implementation („Pattern 001 =
+Program 1") stimmt hier nicht. Bank im MSB wird ignoriert, und **CC0 (MSB 0)
+muss vorangehen**: CC32 1 + Program 5 ohne CC0 → Pattern 6 (Bank ignoriert).
+Synthstudios `e2sPatternOut.ts` lässt CC0 bewusst weg — damit sind dort die
+Patterns 129–250 nicht erreichbar. **Bei gestopptem Sequencer ignoriert das Gerät
 Program Change vollständig** (mehrfach gemessen, Display und Edit-Buffer
 unverändert); der Wechsel greift nur während der Wiedergabe am Taktende. Der
 Statustext im Panel sagt das. Empfangene Program Changes werden mit derselben

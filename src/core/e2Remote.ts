@@ -14,7 +14,10 @@
  *     Bank MSB 0, dann LSB 1, dann Program 0 → Pattern 129
  *   Also: Pattern-Index i (0..249) → CC0=0, CC32=i div 128, Program=i mod 128,
  *   als drei getrennte Nachrichten in dieser Reihenfolge. Bank im MSB wird
- *   ignoriert. Gilt nur bei Global-RECEIVE-FILTER „Off"/„Short".
+ *   ignoriert. ⚠ CC0 ist PFLICHT: CC32=1 + Program 5 OHNE CC0 → Pattern 6
+ *   (Bank ignoriert), MIT CC0=0 davor → Pattern 134 (gemessen 2026-08-22).
+ *   Synthstudios e2sPatternOut.ts lässt CC0 bewusst weg und erreicht damit
+ *   Bank 1 nicht. Gilt nur bei Global-RECEIVE-FILTER „Off"/„Short".
  *   ⚠ Bei GESTOPPTEM Sequencer ignoriert das Gerät den Program Change komplett
  *   (mehrfach gemessen: Display bleibt, Edit-Buffer bleibt) — Wechsel per MIDI
  *   funktioniert nur während der Wiedergabe (greift am Taktende).
