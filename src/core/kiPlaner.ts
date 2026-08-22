@@ -11,7 +11,8 @@ import { type Rezept, pools, meloKandidaten, pruefeRezept, regelRezept, KICK_FIG
 export const KI_MODELL_STANDARD = "claude-opus-5";
 
 const STRING = { type: "string" };
-const STRING_PAAR = { type: "array", items: STRING, minItems: 2, maxItems: 2 };
+// Kardinalitaeten (genau 2, 1–8, 1–5) prueft pruefeRezept — output_config.format erlaubt kein minItems/maxItems/minimum/maximum
+const STRING_PAAR = { type: "array", items: STRING };
 
 /** JSON-Schema des Rezepts (output_config.format). Optionale Thema-Felder duerfen leer bleiben. */
 export const REZEPT_SCHEMA = {
@@ -33,16 +34,14 @@ export const REZEPT_SCHEMA = {
     },
     abschnitte: {
       type: "array",
-      minItems: 1,
-      maxItems: 8,
       items: {
         type: "object",
         additionalProperties: false,
         required: ["name", "wiederholungen", "intensitaet", "kick", "lagen"],
         properties: {
           name: STRING,
-          wiederholungen: { type: "integer", minimum: 1, maximum: 8 },
-          intensitaet: { type: "integer", minimum: 1, maximum: 5 },
+          wiederholungen: { type: "integer" },
+          intensitaet: { type: "integer" },
           kick: { type: "string", enum: KICK_FIGUREN },
           lagen: { type: "array", items: { type: "string", enum: LAGEN } },
         },
