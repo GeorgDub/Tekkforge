@@ -10,8 +10,10 @@
  *
  * - LIVE: „Sync" holt den Edit-Buffer des Geräts (0x10-Dump — nur bei
  *   GESTOPPTEM Sequencer zuverlässig, am Gerät gemessen). Danach führt die
- *   UI; Pad-Klick im Part-Mute-Modus schaltet Mute per Hacktribe-NRPN
- *   (am Gerät bestätigt 2026-08-15, siehe hacktribeNrpn.ts).
+ *   UI; Pad-Klick im Part-Mute-Modus schaltet Mute — mit Hacktribe sofort
+ *   per NRPN (am Gerät bestätigt 2026-08-15, siehe hacktribeNrpn.ts), mit
+ *   Stock-Firmware über die automatische Edit-Buffer-Übertragung (~1 s).
+ *   Welche Firmware gilt, entscheidet `panelBridge.firmware` (firmwareMode.ts).
  * - PREPARE: arbeitet auf dem aktuellen Editor-Pattern. Steps setzen im
  *   Sequencer-Pad-Modus, dann „Anhören" (Edit-Buffer, klingt sofort) oder
  *   „→ Slot" (dauerhaft, mit ACK-Prüfung über den Editor-Schreibpfad).
@@ -340,7 +342,7 @@ function padKlick(i: number): void {
     if (modus === "live" && !featureAvailable(panelBridge.firmware, "nrpnPanel")) {
       // Stock-Firmware: kein NRPN. Der Mute geht denselben Weg wie die Steps —
       // gesammelt per Edit-Buffer-Übertragung, ~1 s später hörbar.
-      setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — Stock: wird gleich übertragen (kein NRPN).`);
+      setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — wird gleich übertragen (Stock-Firmware: kein Sofort-Mute).`);
       planeAutoUebertragung();
     } else if (modus === "live") {
       // Hacktribe-NRPN-Bedienfeldbefehl — ✔ am Gerät bestätigt (2026-08-15):
@@ -353,7 +355,10 @@ function padKlick(i: number): void {
         planeAutoUebertragung();
         setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — live gesendet, Übertragung folgt.`);
       } catch (err) {
-        setStatus(`NRPN-Send fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+        // Sofort-Mute ging nicht raus — die Übertragung setzt den Zustand
+        // trotzdem, nur eben mit der üblichen Verzögerung.
+        planeAutoUebertragung();
+        setStatus(`Sofort-Mute fehlgeschlagen (${err instanceof Error ? err.message : err}) — wird per Übertragung gesetzt.`);
       }
     } else {
       panelBridge.markDirty();
@@ -717,7 +722,10 @@ export function initPanel(): void {
 
   $("e2sModusLive").addEventListener("click", () => {
     modus = "live";
-    setStatus(livePattern ? "Live-Modus — letzter Sync-Stand." : "Live-Modus — erst ⟳ Sync vom Gerät drücken.");
+    const fw = panelBridge.firmware === "hacktribe"
+      ? "Hacktribe: Mutes sofort"
+      : "Stock: Mutes und Steps per Übertragung";
+    setStatus(livePattern ? `Live-Modus (${fw}) — letzter Sync-Stand.` : `Live-Modus (${fw}) — erst ⟳ Sync vom Gerät drücken.`);
     renderPanel();
   });
   $("e2sModusPrepare").addEventListener("click", () => {
