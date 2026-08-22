@@ -27,7 +27,11 @@ ganze Tracks, Stems) fuer eine Electribe-2-Sampler-Bank aufbereiten.
 
 Aufruf: python scripts/prep-folder.py <quelle> <ziel> --prefix Xx --bpm 180
           [--overrides datei.json] [--dry] [--no-demucs] [--track-windows 3]
-          [--max-seconds 230]
+          [--max-seconds 235] [--vox-split 12]
+          [--select [--volume N] [--max-file-seconds 20]]
+            --select: Ordner groesser als das RAM-Budget → Rangliste (taktgenaue
+            1–8-Takt-Loops, laut, "melo" im Namen, je Namensfamilie erst das
+            beste) in Budget-Scheiben; --volume N nimmt die N-te Scheibe.
 """
 import hashlib
 import io
@@ -43,7 +47,7 @@ import librosa
 import soundfile as sf
 
 # ── Argumente ──────────────────────────────────────────────────────────────
-_MIT_WERT = {"--prefix", "--bpm", "--overrides", "--track-windows", "--max-seconds", "--vox-windows"}
+_MIT_WERT = {"--prefix", "--bpm", "--overrides", "--track-windows", "--max-seconds", "--vox-windows", "--vox-split", "--volume", "--max-file-seconds"}
 _POS = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in _MIT_WERT]
 
 
@@ -61,6 +65,9 @@ NO_DEMUCS = "--no-demucs" in sys.argv
 TRACK_WINDOWS = int(arg("--track-windows", "3"))
 VOX_WINDOWS = int(arg("--vox-windows", "2"))
 MAX_SECONDS = float(arg("--max-seconds", "235"))
+SELECT = "--select" in sys.argv            # Auswahl bis zum Budget statt alles
+VOLUME = int(arg("--volume", "1"))          # n-te Scheibe der Rangliste
+MAX_FILE_SECONDS = float(arg("--max-file-seconds", "20")) if SELECT else 1e9
 
 SR = 44100
 BEAT_T = 60.0 / TARGET_BPM
@@ -68,7 +75,7 @@ BAR_T = 4 * BEAT_T
 CHUNK_BARS = 4
 LANG_AB = 2.5          # ab hier Loop/Phrase statt One-Shot
 TRACK_AB = 60.0        # ab hier ganzer Track
-VOXSAMMLUNG_AB = 12.0  # Vocal-Datei ohne BPM ab hier: Shots an Pausen
+VOXSAMMLUNG_AB = float(arg("--vox-split", "12"))  # Vocal-Datei ohne BPM ab hier: Shots an Pausen
 STILL_PEAK = 0.05
 TAKT_TOLERANZ = 0.12
 
@@ -279,6 +286,43 @@ for e in eintraege:
         continue
     behalten.append(e)
 
+if SELECT:
+    # Rangliste: taktgenaue 1–8-Takt-Loops zuerst, laut vor leise, "melo" im Namen bevorzugt;
+    # je Namensfamilie zunaechst nur das beste, dann Volume-Scheibe bis zum Budget.
+    def score(e):
+        bars = e["dauer"] / BAR_T
+        fit = abs(bars - round(bars)) / max(1, round(bars))
+        sc = -fit * 10 + min(e["rms"], -8) / 10
+        if 2.5 <= e["dauer"] <= 11:
+            sc += 2
+        if round(bars) in (4, 8):
+            sc += 1
+        if "melo" in e["stem"].lower():
+            sc += 1
+        return sc
+    kand = sorted([e for e in behalten if e["dauer"] <= MAX_FILE_SECONDS and e["rolle"] != "track"], key=score, reverse=True)
+    erste, zweite, gesehen_fam = [], [], set()
+    for e in kand:
+        fam = familie(e["stem"])
+        (zweite if fam in gesehen_fam else erste).append(e)
+        gesehen_fam.add(fam)
+    rang = erste + zweite
+    scheiben, akt, summe = [], [], 0.0
+    for e in rang:
+        if summe + e["dauer"] > MAX_SECONDS and akt:
+            scheiben.append(akt)
+            akt, summe = [], 0.0
+        akt.append(e)
+        summe += e["dauer"]
+    if akt:
+        scheiben.append(akt)
+    if VOLUME > len(scheiben):
+        raise SystemExit(f"nur {len(scheiben)} Volumes moeglich")
+    log(f"\nAuswahl: {len(rang)} Kandidaten ({sum(e['dauer'] for e in rang):.0f} s) → {len(scheiben)} Volumes a {MAX_SECONDS:.0f} s; Volume {VOLUME} mit {len(scheiben[VOLUME - 1])} Dateien")
+    log(f"  weggelassen: {len(behalten) - len(rang)} Dateien > {MAX_FILE_SECONDS:.0f} s / Tracks")
+    behalten = scheiben[VOLUME - 1]
+
+
 log(f"\n{len(behalten)} Dateien · Bank-Tempo {TARGET_BPM:g} BPM · Takt {BAR_T:.3f} s · 4 Takte {4 * BAR_T:.3f} s")
 if DRY:
     for e in sorted(behalten, key=lambda e: (e["rolle"], e["datei"].lower())):
@@ -373,14 +417,18 @@ def loop_oder_phrase(e):
 def vox_sammlung(e):
     """Lange Vocal-Datei ohne Tempo: an Pausen in Shots zerlegen, lauteste 16."""
     y = normalisiere(e["y"])
-    grenzen = librosa.effects.split(y, top_db=32, frame_length=2048, hop_length=512)
     segs = []
-    for a, b in grenzen:
-        if segs and a - segs[-1][1] < 0.25 * SR:
-            segs[-1][1] = b
-        else:
-            segs.append([a, b])
-    segs = [(a, b) for a, b in segs if 0.25 * SR <= b - a <= 4.5 * SR]
+    for top_db in (32, 24, 18):  # Film-Ton mit Grundrauschen braucht eine haertere Schwelle
+        grenzen = librosa.effects.split(y, top_db=top_db, frame_length=2048, hop_length=512)
+        segs = []
+        for a, b in grenzen:
+            if segs and a - segs[-1][1] < 0.25 * SR:
+                segs[-1][1] = b
+            else:
+                segs.append([a, b])
+        segs = [(a, b) for a, b in segs if 0.25 * SR <= b - a <= 4.5 * SR]
+        if len(segs) >= 3:
+            break
     segs.sort(key=lambda ab: -rms_db(y[ab[0]:ab[1]]))
     segs = sorted(segs[:16])
     log(f"  {e['datei']}: {len(grenzen)} Abschnitte → {len(segs)} Shots")

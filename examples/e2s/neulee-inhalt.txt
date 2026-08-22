@@ -1,0 +1,58 @@
+501	HaimKind
+502	Jumpkick
+506	707_hho-
+508	closed 8
+509	clydesna
+510	snarre-p
+517	ED Close
+530	ZaHnI_To
+534	Unison_Bass_C3
+535	Bassdrum-01fd
+601	der krumme m 1
+602	der krumme m 2
+603	der krumme m 3
+604	der krumme m 4
+605	der krumme m 5
+606	der krumme m 6
+607	der krumme m 7
+608	der krumme m 8
+609	der krumme m 9
+610	der krumme m 10
+611	der krumme m 11
+612	der krumme m 12
+613	der krumme m 13
+614	der krumme m 14
+615	der teufel steht
+616	du bistgottlos A
+617	du bistgottlos B
+618	fearStreat gra A
+619	fearStreat gra B
+620	fearStreat gra C
+621	fearStreat gra D
+622	fearStreat gra E
+623	fearStreat gra F
+624	glaubst du an de
+625	hail satan a 1
+626	hail satan a 2
+627	hail satan a 3
+628	hail satan a 4
+629	humancentepide A
+630	in diesem ha 1
+631	in diesem ha 2
+632	in diesem ha 3
+633	juhu satan 1
+634	juhu satan 2
+635	juhu satan 3
+636	LoBbeTSAtaAN
+637	Lords of Chaos A
+638	Lords of Chaos B
+639	Lords of Chaos2
+640	Lords of Chaos3
+641	Lords of Chaos H
+642	Lords of Chaos4
+643	Lords of Chaos5
+644	Lords of Cha 1
+645	Lords of Cha 2
+646	Lords of Cha 3
+647	Eerie dark hor A
+648	Eerie dark hor B

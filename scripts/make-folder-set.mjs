@@ -245,7 +245,9 @@ function parts(thema, intens, kickFigur, lagen, blockPos) {
   const stabFig = stabS && (stabS.kind === "loop" || (stabS.kind === "oneshot" && stabS.seconds >= 2)) ? "phrase" : lagen.stab ?? "stab";
   steps[P_STAB] = STAB_FIG[stabFig]();
   wach[P_STAB] = !!lagen.stab && !!stabS;
-  const shotA = lagen.shot === 3 ? thema.shotA2 : thema.shotA;
+  const shotA = voxShots.length > 2 * ANZ_THEMEN
+    ? rot(voxShots, thema.idx * 2 + (lagen.shot === 3 ? 1 : 0) + Math.floor(blockPos / 2) * 2 * ANZ_THEMEN)
+    : lagen.shot === 3 ? thema.shotA2 : thema.shotA;
   steps[P_SHA] = shotA?.kind === "loop" ? loopHit(shotA, 118) : SHOT_FIG[lagen.shot === 2 ? "a2" : "a"]();
   wach[P_SHA] = !!lagen.shot && !!shotA;
   const shotB = lagen.riser && thema.riser ? thema.riser : thema.shotB;
