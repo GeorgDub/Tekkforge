@@ -39,7 +39,7 @@ interface Zustand {
   sendeStatus: string;
   sendet: boolean;
   /** API-Key-Status aus den App-Einstellungen (nur Electron) */
-  ki: { gesetzt: boolean; modell: string } | null;
+  ki: { gesetzt: boolean; modell: string; vorschau?: string } | null;
   kiLaeuft: boolean;
   kiHinweis: string;
 }
@@ -164,7 +164,7 @@ function render(): void {
           ? `<div class="zeile"><label for="genKey">KI (Premium)</label>
         ${
           z.ki?.gesetzt
-            ? `<span class="ok">Key gesetzt · ${escapeHtml(z.ki.modell)}</span><button id="genKeyLoeschen">Key loeschen</button>`
+            ? `<span class="ok">Key gesetzt (${escapeHtml(z.ki.vorschau ?? "")}) · ${escapeHtml(z.ki.modell)}</span><button id="genKeyLoeschen">Key loeschen</button>`
             : `<input id="genKey" type="password" placeholder="Anthropic API-Key" style="width:240px" /><button id="genKeySpeichern">Key speichern</button><span class="fortschritt">kein Key — Regel-Planer</span>`
         }</div>`
           : ""

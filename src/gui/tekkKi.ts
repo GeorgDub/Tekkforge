@@ -4,8 +4,10 @@
  */
 export interface TekkKi {
   available: boolean;
-  keyStatus(): Promise<{ gesetzt: boolean; modell: string }>;
-  keySetzen(key: string, modell?: string): Promise<{ gesetzt: boolean; modell: string }>;
+  /** vorschau = Anfang…Ende · Laenge, damit ein Fehl-Paste auffaellt */
+  keyStatus(): Promise<{ gesetzt: boolean; modell: string; vorschau: string }>;
+  /** wirft, wenn der Key nicht wie "sk-ant-…" aussieht */
+  keySetzen(key: string, modell?: string): Promise<{ gesetzt: boolean; modell: string; vorschau: string }>;
   rezept(anfrage: { system: string; user: string; schema: object }): Promise<{ text: string; modell: string; tokens: number }>;
 }
 

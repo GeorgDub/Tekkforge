@@ -170,19 +170,31 @@ function schreibeSettings(s) {
 }
 const KI_MODELL_STANDARD = "claude-opus-5";
 
+/** Anfang/Ende/Laenge, damit ein Fehl-Paste auffaellt, ohne den Key zu zeigen. */
+function keyVorschau(k) {
+  return k ? `${k.slice(0, 10)}…${k.slice(-4)} · ${k.length} Zeichen` : "";
+}
+function keyStatusAus(s) {
+  const k = typeof s.anthropicApiKey === "string" ? s.anthropicApiKey : "";
+  return { gesetzt: k.length > 10, modell: s.kiModell || KI_MODELL_STANDARD, vorschau: keyVorschau(k) };
+}
+
 function registerKiIpc() {
-  ipcMain.handle("ki:keyStatus", () => {
-    const s = leseSettings();
-    return { gesetzt: typeof s.anthropicApiKey === "string" && s.anthropicApiKey.length > 10, modell: s.kiModell || KI_MODELL_STANDARD };
-  });
+  ipcMain.handle("ki:keyStatus", () => keyStatusAus(leseSettings()));
   ipcMain.handle("ki:keySetzen", (_e, key, modell) => {
     const s = leseSettings();
     const k = String(key || "").trim();
-    if (k) s.anthropicApiKey = k;
-    else delete s.anthropicApiKey;
+    if (k) {
+      if (!/^sk-ant-[\x21-\x7e]{20,}$/.test(k)) {
+        throw new Error(`Das sieht nicht wie ein Anthropic-Key aus (erwartet "sk-ant-…", nur ASCII, bekommen ${k.length} Zeichen) — Zwischenablage pruefen`);
+      }
+      s.anthropicApiKey = k;
+    } else {
+      delete s.anthropicApiKey;
+    }
     if (typeof modell === "string" && modell.trim()) s.kiModell = modell.trim();
     schreibeSettings(s);
-    return { gesetzt: !!s.anthropicApiKey, modell: s.kiModell || KI_MODELL_STANDARD };
+    return keyStatusAus(s);
   });
   ipcMain.handle("ki:rezept", async (_e, anfrage) => {
     const s = leseSettings();
