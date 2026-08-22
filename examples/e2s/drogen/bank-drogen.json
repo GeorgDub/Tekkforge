@@ -631,6 +631,106 @@
    "seconds": 0.569,
    "rms": -12.9,
    "nr": 712
+  },
+  {
+   "file": null,
+   "name": "HaimKind",
+   "category": 2,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #501",
+   "seconds": 0.367,
+   "nr": 501
+  },
+  {
+   "file": null,
+   "name": "Jumpkick",
+   "category": 2,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #502",
+   "seconds": 0.319,
+   "nr": 502
+  },
+  {
+   "file": null,
+   "name": "707_hho-",
+   "category": 5,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #506",
+   "seconds": 0.328,
+   "nr": 506
+  },
+  {
+   "file": null,
+   "name": "closed 8",
+   "category": 5,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #508",
+   "seconds": 0.138,
+   "nr": 508
+  },
+  {
+   "file": null,
+   "name": "clydesna",
+   "category": 3,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #509",
+   "seconds": 0.191,
+   "nr": 509
+  },
+  {
+   "file": null,
+   "name": "snarre-p",
+   "category": 3,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #510",
+   "seconds": 0.267,
+   "nr": 510
+  },
+  {
+   "file": null,
+   "name": "ED Close",
+   "category": 8,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #517",
+   "seconds": 0.18,
+   "nr": 517
+  },
+  {
+   "file": null,
+   "name": "ZaHnI_To",
+   "category": 8,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #530",
+   "seconds": 0.511,
+   "nr": 530
+  },
+  {
+   "file": null,
+   "name": "Unison_Bass_C3",
+   "category": 0,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #534",
+   "seconds": 1.22,
+   "nr": 534
+  },
+  {
+   "file": null,
+   "name": "Bassdrum-01fd",
+   "category": 0,
+   "group": "tekk",
+   "kind": "oneshot",
+   "source": "examples/e2s/tekk4.all #535",
+   "seconds": 1.461,
+   "nr": 535
   }
  ]
 }

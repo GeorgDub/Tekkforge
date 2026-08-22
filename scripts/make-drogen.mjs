@@ -1,9 +1,9 @@
 /**
- * Erzeugt DROGEN.e2sallpat — 250 Patterns, 175 BPM, ausschliesslich aus den
- * Samples in drogen.all (Ableton-Stem-Export des Songs, prep-drogen.py).
+ * Erzeugt DROGEN.e2sallpat — 250 Patterns, 175 BPM, aus den Song-Samples in
+ * drogen.all (Ableton-Stem-Export, prep-drogen.py) plus den tekk4-Drums.
  *
- * Parts:
- *    1 KickL   2 KickS   3 SnareL  4 SnareS  5 HatL   6 HatS   7 PercL  8 PercS
+ * Parts (Drums = bewaehrte tekk4-Samples, Song-Snare/-Perc als Layer):
+ *    1 HaimKind  2 Jumpkick  3 clydesna  4 Dr SnareL2  5 closed 8  6 707_hho  7 ED Close  8 Dr PercL2
  *    9 BASS    = 4-Takt-Chunk der Sub-Bass-Spur (wechselt je Pattern → Bassline laeuft)
  *   10 STAB    = "Upper Punch" Melodie-Hit, rhythmisch, Oktav-/Quintversatz
  *   11 SHOT A  = Vocal-One-Shot (wechselt je Thema)
@@ -35,14 +35,16 @@ const P_BASS = 8, P_STAB = 9, P_SHOTA = 10, P_SHOTB = 11, P_MELOA = 12, P_MELOB 
 
 const bank = JSON.parse(fs.readFileSync(BANKJSON, "utf8"));
 const byName = new Map(bank.samples.map((s) => [s.name, s.nr]));
+const byPrefix = (p) => bank.samples.find((s) => s.name.toLowerCase().startsWith(p.toLowerCase()))?.nr;
 const nr = (name) => {
-  const n = byName.get(name);
+  const n = byName.get(name) ?? byPrefix(name);
   if (n === undefined) throw new Error(`Sample "${name}" nicht in ${BANKJSON}`);
   return n;
 };
 const gruppe = (g) => bank.samples.filter((s) => s.group === g).map((s) => s.name);
 
-const DRUMS = ["Dr KickL1", "Dr KickS1", "Dr SnareL2", "Dr SnareL1", "Dr HatL1", "Dr HatS2", "Dr PercL2", "Dr PercL1"];
+/** Drums: bewaehrte tekk4-Kicks/Snares/Hats (SET9–11, MEGA3) + Song-Snare und -Perc als Layer. */
+const DRUMS = ["HaimKind", "Jumpkick", "clydesna", "Dr SnareL2", "closed 8", "707_hho", "ED Close", "Dr PercL2"];
 const BASS1 = gruppe("Bass1"), BASS2 = gruppe("Bass2");
 const MELO1 = gruppe("Melo1"), MELO2 = gruppe("Melo2"), MELO3 = gruppe("Melo3"), MELO4 = gruppe("Melo4");
 const VERS = gruppe("Vers1");
