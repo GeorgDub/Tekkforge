@@ -7,7 +7,7 @@
  * im Renderer sichtbar.
  */
 
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("tekkMidi", {
   available: true,
@@ -29,4 +29,24 @@ contextBridge.exposeInMainWorld("tekkMidi", {
     ipcRenderer.on("midi:message", handler);
     return () => ipcRenderer.removeListener("midi:message", handler);
   },
+});
+
+// ── Dateibruecke fuer den Generator-Tab (Projekt auf Platte, SD-Karte, tekk4-Drums) ──
+contextBridge.exposeInMainWorld("tekkFs", {
+  available: true,
+  /** Absoluter Pfad einer per Dialog/Drop gewaehlten Datei ("" wenn unbekannt). */
+  pfadVon: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || "";
+    } catch {
+      return "";
+    }
+  },
+  /** Dateien in einen Ordner schreiben (Ordner wird angelegt); { ordner, geschrieben[] }. */
+  schreibe: (ordner, dateien) =>
+    ipcRenderer.invoke("fs:schreibe", ordner, dateien.map((d) => ({ name: d.name, bytes: Array.from(d.bytes) }))),
+  /** Wechselmedien (SD-Karten): [{ pfad: "H:", label }]. */
+  wechselmedien: () => ipcRenderer.invoke("fs:wechselmedien"),
+  /** examples/e2s/tekk4.all aus dem App-Verzeichnis als Byte-Array, sonst null. */
+  tekkDrums: () => ipcRenderer.invoke("fs:tekkDrums"),
 });

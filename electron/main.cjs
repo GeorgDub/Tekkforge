@@ -8,6 +8,7 @@
 
 const { app, BrowserWindow, shell, session, protocol, ipcMain } = require("electron");
 const { Worker } = require("worker_threads");
+const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -98,6 +99,60 @@ function midiCall(cmd, payload, timeoutMs) {
   });
 }
 
+// ── Dateibruecke (Generator-Tab): schreibt nur in absolute, vom Nutzer gewaehlte Ordner ──
+function registerFsIpc() {
+  ipcMain.handle("fs:schreibe", (_e, ordner, dateien) => {
+    if (typeof ordner !== "string" || !path.isAbsolute(ordner)) throw new Error("Ordner muss ein absoluter Pfad sein");
+    fs.mkdirSync(ordner, { recursive: true });
+    const geschrieben = [];
+    for (const d of dateien) {
+      const name = path.basename(String(d.name));
+      const ziel = path.join(ordner, name);
+      const bytes = Buffer.from(d.bytes);
+      fs.writeFileSync(ziel, bytes);
+      if (fs.statSync(ziel).size !== bytes.length) throw new Error(`${name}: Laenge nach dem Schreiben falsch`);
+      geschrieben.push(ziel);
+    }
+    return { ordner, geschrieben };
+  });
+  ipcMain.handle("fs:wechselmedien", () => {
+    const out = [];
+    if (process.platform === "win32") {
+      try {
+        const txt = execFileSync("wmic", ["logicaldisk", "where", "drivetype=2", "get", "deviceid,volumename"], { encoding: "utf8", timeout: 5000 });
+        for (const zeile of txt.split(/\r?\n/).slice(1)) {
+          const m = zeile.trim().match(/^([A-Z]:)\s*(.*)$/);
+          if (m) out.push({ pfad: m[1], label: m[2].trim() || "Wechselmedium" });
+        }
+      } catch {
+        /* Fallback unten */
+      }
+      if (!out.length) {
+        for (const b of "DEFGHIJKLMNOPQRSTUVWXYZ") {
+          try {
+            if (fs.existsSync(path.join(`${b}:\\`, "KORG"))) out.push({ pfad: `${b}:`, label: "KORG-Karte" });
+          } catch {
+            /* weiter */
+          }
+        }
+      }
+    }
+    return out;
+  });
+  ipcMain.handle("fs:tekkDrums", () => {
+    const kandidaten = [path.join(app.getAppPath(), "examples", "e2s", "tekk4.all")];
+    if (process.resourcesPath) kandidaten.push(path.join(process.resourcesPath, "examples", "e2s", "tekk4.all"));
+    for (const p of kandidaten) {
+      try {
+        if (fs.existsSync(p)) return Array.from(fs.readFileSync(p));
+      } catch {
+        /* naechster */
+      }
+    }
+    return null;
+  });
+}
+
 function registerMidiIpc(win) {
   midiWin = win;
   startMidiWorker();
@@ -180,6 +235,7 @@ app.whenReady().then(() => {
   registerAppProtocol();
   const win = createWindow();
   registerMidiIpc(win);
+  registerFsIpc();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();
