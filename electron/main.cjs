@@ -105,23 +105,35 @@ function registerFsIpc() {
     if (typeof ordner !== "string" || !path.isAbsolute(ordner)) throw new Error("Ordner muss ein absoluter Pfad sein");
     fs.mkdirSync(ordner, { recursive: true });
     const geschrieben = [];
-    for (const d of dateien) {
-      const name = path.basename(String(d.name));
-      const ziel = path.join(ordner, name);
-      const bytes = Buffer.from(d.bytes);
-      fs.writeFileSync(ziel, bytes);
-      if (fs.statSync(ziel).size !== bytes.length) throw new Error(`${name}: Laenge nach dem Schreiben falsch`);
-      geschrieben.push(ziel);
+    try {
+      for (const d of dateien) {
+        const name = path.basename(String(d.name));
+        const ziel = path.join(ordner, name);
+        const bytes = Buffer.from(d.bytes);
+        fs.writeFileSync(ziel, bytes);
+        if (fs.statSync(ziel).size !== bytes.length) throw new Error(`${name}: Laenge nach dem Schreiben falsch`);
+        geschrieben.push(ziel);
+      }
+    } catch (err) {
+      if (err && (err.code === "EROFS" || err.code === "EPERM" || err.code === "EACCES")) {
+        throw new Error(`${ordner} ist schreibgeschuetzt — bei einer SD-Karte den LOCK-Schieber pruefen und die Karte neu einstecken`);
+      }
+      throw err;
     }
     return { ordner, geschrieben };
   });
   ipcMain.handle("fs:wechselmedien", () => {
     const out = [];
     if (process.platform === "win32") {
+      // Win32_LogicalDisk DriveType 2 = Wechselmedium (wmic gibt es auf neuen Windows-Builds nicht mehr)
       try {
-        const txt = execFileSync("wmic", ["logicaldisk", "where", "drivetype=2", "get", "deviceid,volumename"], { encoding: "utf8", timeout: 5000 });
-        for (const zeile of txt.split(/\r?\n/).slice(1)) {
-          const m = zeile.trim().match(/^([A-Z]:)\s*(.*)$/);
+        const txt = execFileSync(
+          "powershell",
+          ["-NoProfile", "-Command", "Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 2 | ForEach-Object { $_.DeviceID + '|' + $_.VolumeName }"],
+          { encoding: "utf8", timeout: 8000, windowsHide: true },
+        );
+        for (const zeile of txt.split(/\r?\n/)) {
+          const m = zeile.trim().match(/^([A-Z]:)\|(.*)$/);
           if (m) out.push({ pfad: m[1], label: m[2].trim() || "Wechselmedium" });
         }
       } catch {
