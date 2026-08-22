@@ -32,6 +32,7 @@ import { $ } from "./shared";
 import {
   buildCurrentPatternDump,
   buildCurrentPatternRequest,
+  buildPatternRequest,
   decodeDump,
 } from "../core/e2sysex";
 import { requestSysex } from "./midi";
@@ -366,15 +367,24 @@ function renderPanel(): void {
 
 async function syncVomGeraet(): Promise<void> {
   try {
-    setStatus("hole Edit-Buffer … (bei laufendem Gerät: Dreifach-Lesung, kann kurz stören)");
+    const stillSeit = Date.now() - letzteNoteUm;
+    const laeuft = spieltGerade && stillSeit < 8000;
+    // Bei laufendem Gerät ist der Edit-Buffer-Dump unzuverlässig (gemessen:
+    // meist Timeout/verschoben). Dann lieber den angewählten Slot per 0x1C
+    // holen — das klappt im Lauf und zeigt das richtige Pattern.
+    if (laeuft && zielPatternIdx !== null) {
+      modus = "live";
+      if (await zeigeSlotVomGeraet(zielPatternIdx, "Live-Sync (läuft)")) return;
+    }
+    setStatus(laeuft ? "hole Edit-Buffer … (läuft: Dreifach-Lesung, kann kurz stören)" : "hole Edit-Buffer …");
     const body = await leseDumpVerlaesslich();
-    if (!body) throw new Error("keine verlässliche Lesung");
+    if (!body) throw new Error(laeuft ? "bei laufendem Sequencer keine verlässliche Lesung — Gerät stoppen oder zuerst ein Pattern anwählen" : "keine verlässliche Lesung");
     livePattern = editorPatternFromBody(body);
     modus = "live";
     setStatus(`Live-Sync: „${livePattern.name}" vom Gerät geholt.`);
     renderPanel();
   } catch (err) {
-    setStatus(`Sync fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI im Editor-Tab aktiviert?`);
+    setStatus(`Sync fehlgeschlagen: ${err instanceof Error ? err.message : err}${spieltGerade ? "" : " — MIDI im Editor-Tab aktiviert?"}`);
   }
 }
 
@@ -385,6 +395,41 @@ function zeigeZielPattern(idx: number): void {
   zielPatternIdx = idx;
   const eingabe = document.getElementById("e2sGoto") as HTMLInputElement | null;
   if (eingabe) eingabe.value = String(idx + 1);
+}
+
+/**
+ * Slot `idx` per 0x1C vom Gerät holen und als Live-Stand anzeigen. Das ist
+ * der zuverlässige Weg bei laufendem Sequencer (Edit-Buffer-Dumps kommen dann
+ * beschädigt); Live-Edits am Gerät, die noch nicht gespeichert sind, enthält
+ * der Slot nicht — das sagt der Status dazu. Bis zu drei Anläufe.
+ */
+let slotAbrufLaeuft = false;
+async function zeigeSlotVomGeraet(idx: number, was: string): Promise<boolean> {
+  if (slotAbrufLaeuft) return false;
+  slotAbrufLaeuft = true;
+  try {
+    for (let versuch = 0; versuch < 3; versuch++) {
+      try {
+        const reply = await requestSysex(
+          panelBridge.midi,
+          buildPatternRequest(idx, panelBridge.midiOpts()),
+          (b) => decodeDump(b)?.index === idx,
+          4000,
+        );
+        livePattern = editorPatternFromBody(decodeDump(reply)!.body);
+        zeigeZielPattern(idx);
+        setStatus(`${was}: „${livePattern.name}" aus Slot ${idx + 1} geholt${spieltGerade ? " (läuft — Live-Edits am Gerät nicht enthalten)" : ""}.`);
+        renderPanel();
+        return true;
+      } catch {
+        /* nächster Anlauf */
+      }
+    }
+    setStatus(`${was}: Slot ${idx + 1} nicht lesbar (3 Anläufe) — Sync folgt nach dem Stopp.`);
+    return false;
+  } finally {
+    slotAbrufLaeuft = false;
+  }
 }
 
 /** Pattern am Gerät wechseln (Program Change + Bank Select) und im Editor folgen. */
@@ -398,7 +443,10 @@ export function wechslePattern(idx: number): void {
   if (modus === "live") {
     try {
       for (const m of buildProgramChange(panelBridge.midiChannel, idx)) panelBridge.midi.send(m);
-      livePattern = null; // Stand ist unbekannt, bis der Sync ihn holt
+      // Anzeige sofort nachziehen: den Ziel-Slot per 0x1C holen (geht auch bei
+      // laufendem Gerät) statt auf einen Stopp-Sync zu warten. Bis dahin bleibt
+      // der alte Stand stehen — kein Rückfall aufs Editor-Pattern.
+      void zeigeSlotVomGeraet(idx, `Pattern ${idx + 1}`);
       planeAutoSync(600);
       // Gemessen 2026-08-22: das Gerät nimmt den Program Change nur bei
       // LAUFENDEM Sequencer an (Wechsel am Taktende); gestoppt ignoriert es ihn.
@@ -760,6 +808,9 @@ function empfangeVomGeraet(bytes: number[]): void {
     const nr = patternIndexFromProgram(letzterBankLsb, bytes[1]);
     if (nr === null) return;
     zeigeZielPattern(nr);
+    // Den Slot gleich per 0x1C holen — zeigt auch bei laufendem Gerät das
+    // richtige Pattern (Chain-Weiterschaltung, Pattern-Rad am Gerät).
+    void zeigeSlotVomGeraet(nr, `Patternwechsel am Gerät: #${nr + 1}`);
     const kandidat = panelBridge.project.patterns[nr];
     if (kandidat) {
       livePattern = clonePattern(kandidat);
