@@ -310,7 +310,10 @@ function registerLiedIpc(win) {
       });
       const anfragePfad = path.join(basis, "anfrage.json");
       fs.writeFileSync(anfragePfad, JSON.stringify({ fenster: liste, ziel: basis }));
-      const skript = path.join(app.getAppPath(), "scripts", "stems.py");
+      // gepackt liegt stems.py als extraResource neben der App (asar kann Python nicht lesen)
+      const kandidaten = [path.join(app.getAppPath(), "scripts", "stems.py")];
+      if (process.resourcesPath) kandidaten.unshift(path.join(process.resourcesPath, "scripts", "stems.py"));
+      const skript = kandidaten.find((k) => fs.existsSync(k)) ?? kandidaten[kandidaten.length - 1];
       const { out } = await laufen(pythonPfad(), [skript, anfragePfad], {
         timeoutMs: 600000,
         cwd: app.getAppPath(),
