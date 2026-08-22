@@ -297,7 +297,9 @@ function renderPanel(): void {
 
   $("e2sLcdBpm").textContent = info.bpm.toFixed(1);
   clockTempoNachziehen();
-  $("e2sLcdNr").textContent = String(panelBridge.patternIndex + 1).padStart(3, "0");
+  // Live: Nummer des am Gerät angewählten Patterns; Prepare: Editor-Index.
+  const lcdNr = modus === "live" && zielPatternIdx !== null ? zielPatternIdx : panelBridge.patternIndex;
+  $("e2sLcdNr").textContent = String(lcdNr + 1).padStart(3, "0");
   $("e2sLcdName").textContent = info.name || "—";
   $("e2sLcdPart").textContent =
     `Part:${String(info.partNo).padStart(2, "0")}` +
