@@ -35,7 +35,7 @@ function startMidiWorker() {
   midiWorker = w;
   w.on("message", (m) => {
     if (m.type === "midi") {
-      if (midiWin && !midiWin.isDestroyed()) midiWin.webContents.send("midi:message", m.data);
+      if (midiWin && !midiWin.isDestroyed()) midiWin.webContents.send("midi:message", m.data, m.quelle || "geraet");
       return;
     }
     if (m.type === "fatal") {
@@ -104,6 +104,8 @@ function registerMidiIpc(win) {
   ipcMain.handle("midi:list", () => midiCall("list", {}, 3000));
   ipcMain.handle("midi:selectOut", (_e, id) => midiCall("openOut", { port: id }, 2500));
   ipcMain.handle("midi:selectIn", (_e, id) => midiCall("openIn", { port: id }, 2500));
+  // Zweiter Eingang fuer einen Controller (Pad-Deck); null/"" schliesst ihn.
+  ipcMain.handle("midi:selectIn2", (_e, id) => midiCall("openIn2", { port: id ?? null }, 2500));
   ipcMain.handle("midi:send", (_e, bytes) =>
     midiCall("send", { bytes: Array.isArray(bytes) ? bytes : Array.from(bytes) }, 2500),
   );

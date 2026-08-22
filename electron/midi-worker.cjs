@@ -22,6 +22,8 @@ try {
 
 let out = null;
 let input = null;
+/** Zweiter Eingang (Controller, z. B. MIDImix) — Nachrichten werden mit quelle:"controller" markiert. */
+let input2 = null;
 
 // ─── MIDI-Clock-Generator (0xF8, 24 ppqn) ─────────────────────────────────
 //
@@ -89,8 +91,18 @@ parentPort.on("message", (msg) => {
       if (input) input.closePort();
       input = new midi.Input();
       input.ignoreTypes(false, false, false); // SysEx NICHT ignorieren
-      input.on("message", (_dt, m) => parentPort.postMessage({ type: "midi", data: Array.from(m) }));
+      input.on("message", (_dt, m) => parentPort.postMessage({ type: "midi", data: Array.from(m), quelle: "geraet" }));
       input.openPort(Number(msg.port));
+      parentPort.postMessage({ id, ok: true });
+    } else if (cmd === "openIn2") {
+      if (input2) input2.closePort();
+      input2 = null;
+      if (msg.port !== null && msg.port !== undefined && msg.port !== "") {
+        input2 = new midi.Input();
+        input2.ignoreTypes(true, true, true); // Controller: kein SysEx/Clock/Sensing noetig
+        input2.on("message", (_dt, m) => parentPort.postMessage({ type: "midi", data: Array.from(m), quelle: "controller" }));
+        input2.openPort(Number(msg.port));
+      }
       parentPort.postMessage({ id, ok: true });
     } else if (cmd === "send") {
       if (!out) throw new Error("Kein MIDI-Ausgang geöffnet");

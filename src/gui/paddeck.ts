@@ -430,6 +430,7 @@ function baueDom(): void {
       <span class="pd-seiten" id="pdSeiten"></span>
       <span style="flex:1"></span>
       <label>Raster <select id="pdCols">${achsen}</select> × <select id="pdRows">${achsen}</select></label>
+      <label title="Zweiter MIDI-Eingang nur fürs Pad-Deck (z. B. MIDImix) — Nachrichten gehen nicht in die Gerätelogik">Controller <select id="pdController"><option value="">— keiner —</option></select></label>
       <button id="pdBearbeiten" class="ghost">✎ Bearbeiten</button>
       <button id="pdBeispiel" class="ghost" title="Start-Deck aus den Projekt-Patterns (ersetzt das aktuelle Deck)">Beispiel-Deck</button>
       <button id="pdExport" class="ghost">⇩ JSON</button>
@@ -464,10 +465,61 @@ function renderSeiten(): void {
   );
 }
 
+const CONTROLLER_KEY = "tekkforge.paddeck.controller";
+
+/** Controller-Auswahl füllen (Ports sind erst nach „MIDI aktivieren" bekannt). */
+function renderController(): void {
+  const sel = $("pdController") as HTMLSelectElement;
+  const midi = panelBridge.midi;
+  const ports = midi.available ? midi.inputs() : [];
+  const aktuell = midi.controllerInputId ?? "";
+  sel.innerHTML =
+    `<option value="">— keiner —</option>` +
+    ports.map((p) => `<option value="${escapeHtml(p.id)}"${p.id === aktuell ? " selected" : ""}>${escapeHtml(p.name ?? p.label ?? p.id)}</option>`).join("");
+  sel.disabled = !midi.controllerAvailable || ports.length === 0;
+  sel.title = midi.controllerAvailable
+    ? ports.length
+      ? "Zweiter MIDI-Eingang nur fürs Pad-Deck"
+      : `Erst im Editor-Tab „MIDI aktivieren"`
+    : "Controller-Eingang braucht die aktuelle Desktop-App";
+}
+
+async function waehleController(id: string): Promise<void> {
+  try {
+    await panelBridge.midi.selectControllerInput(id || null);
+    try {
+      localStorage.setItem(CONTROLLER_KEY, id);
+    } catch {
+      /* egal */
+    }
+    const name = panelBridge.midi.inputs().find((p) => p.id === id)?.name;
+    setStatus(id ? `Controller-Eingang: ${name ?? id} — Pads per MIDI-Learn belegen.` : "Controller-Eingang geschlossen.");
+  } catch (err) {
+    setStatus(`Controller-Eingang fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/** Gemerkten Controller wieder öffnen, sobald Ports bekannt sind (einmalig). */
+let controllerWiederhergestellt = false;
+function stelleControllerWiederHer(): void {
+  if (controllerWiederhergestellt || !panelBridge.midi.available || !panelBridge.midi.inputs().length) return;
+  controllerWiederhergestellt = true;
+  let gemerkt = "";
+  try {
+    gemerkt = localStorage.getItem(CONTROLLER_KEY) ?? "";
+  } catch {
+    /* egal */
+  }
+  // Port-IDs sind Indizes und können wandern — nur öffnen, wenn es den Port noch gibt.
+  if (gemerkt && panelBridge.midi.inputs().some((p) => p.id === gemerkt)) void waehleController(gemerkt).then(renderController);
+}
+
 export function padDeckWirdSichtbar(): void {
   deck = holeDeck();
   renderSeiten();
   renderGrid();
+  stelleControllerWiederHer();
+  renderController();
 }
 
 export function initPadDeck(istOffen: () => boolean): void {
@@ -537,8 +589,10 @@ export function initPadDeck(istOffen: () => boolean): void {
     }
   });
 
-  // MIDI: Learn oder Trigger (aktive Seite).
-  registriereEmpfaenger((bytes) => {
+  $("pdController").addEventListener("change", (e) => void waehleController((e.target as HTMLSelectElement).value).then(renderController));
+
+  // MIDI: Learn oder Trigger (aktive Seite) — vom Controller-Eingang UND vom Gerät.
+  const verarbeiteTrigger = (bytes: number[]) => {
     const st = bytes[0] & 0xf0;
     const kanal = bytes[0] & 0x0f;
     const istNote = st === 0x90 && bytes.length >= 3 && bytes[2] > 0;
@@ -559,5 +613,7 @@ export function initPadDeck(istOffen: () => boolean): void {
       (p) => p?.midi && p.midi.kanal === kanal && p.midi.nummer === bytes[1] && p.midi.art === (istNote ? "note" : "cc"),
     );
     if (i >= 0) void fuehrePadAus(i);
-  });
+  };
+  registriereEmpfaenger(verarbeiteTrigger);
+  panelBridge.midi.onController = verarbeiteTrigger;
 }

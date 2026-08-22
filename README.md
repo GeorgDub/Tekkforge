@@ -192,6 +192,14 @@ ein Start-Deck (Blockanfänge, Filter-/IFX-Varianten, Transport/Mutes, Morphs).
 ✔ Am Gerät geprüft 2026-08-22: Pattern-Pad, Kopie-Pad (Pattern 1 per 0x1C,
 Cutoff 40 → Edit-Buffer), Morph über 4 Takte.
 
+**Controller-Eingang:** Im Pad-Deck lässt sich ein zweiter MIDI-Eingang wählen
+(z. B. Akai MIDImix). Der läuft als eigener Port im Electron-Worker
+(`openIn2`), seine Nachrichten werden mit `quelle: "controller"` markiert und
+gehen **nur** ans Pad-Deck (Learn/Trigger) — nicht in SysEx-Parser,
+Regler-Spiegel oder Program-Change-Dekoder. Auswahl wird in `localStorage`
+gemerkt und nur wiederhergestellt, wenn der Port noch existiert. ✔ Geprüft
+2026-08-22 mit MIDImix: Learn („Note 3 Kanal 1") und Trigger (→ Pattern 1).
+
 ### Fernbedienung im E2S-Panel (Stock-MIDI)
 
 `src/core/e2Remote.ts` (Tests `tests/e2-remote.test.ts`) — alles über normale

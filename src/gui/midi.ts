@@ -12,10 +12,12 @@ interface TekkMidiBridge {
   list(): Promise<{ outputs: PortInfo[]; inputs: PortInfo[] }>;
   selectOut(id: string): Promise<boolean>;
   selectIn(id: string): Promise<boolean>;
+  /** Zweiter Eingang (Controller); null schließt ihn. Optional — ältere Bridges haben ihn nicht. */
+  selectIn2?(id: string | null): Promise<boolean>;
   send(bytes: number[]): Promise<boolean>;
   /** MIDI-Clock-Generator im Main-Prozess (optional — ältere Bridges haben ihn nicht). */
   clock?(opts: { action: "start" | "stop" | "bpm"; bpm?: number }): Promise<{ laeuft: boolean; bpm: number }>;
-  onMessage(cb: (bytes: number[]) => void): () => void;
+  onMessage(cb: (bytes: number[], quelle?: "geraet" | "controller") => void): () => void;
 }
 
 declare global {
@@ -56,6 +58,26 @@ export class MidiIO {
   /** Monitor-Callback: feuert bei JEDEM empfangenen Frame (auch Nicht-SysEx),
    *  unabhängig von requestSysex — für die Roh-Anzeige. */
   onAnyMessage: ((bytes: number[]) => void) | null = null;
+  /** Nachrichten vom Controller-Eingang (zweiter Port, z. B. MIDImix). */
+  onController: ((bytes: number[]) => void) | null = null;
+  private controllerId: string | null = null;
+
+  /** Kann diese Bridge einen zweiten Eingang öffnen? */
+  get controllerAvailable(): boolean {
+    return typeof bridge()?.selectIn2 === "function";
+  }
+
+  get controllerInputId(): string | null {
+    return this.controllerId;
+  }
+
+  /** Öffnet (oder schließt mit null) den Controller-Eingang. */
+  async selectControllerInput(id: string | null): Promise<void> {
+    const b = bridge();
+    if (!b?.selectIn2) throw new Error("Controller-Eingang braucht die aktuelle Desktop-App.");
+    await b.selectIn2(id);
+    this.controllerId = id;
+  }
   /** Monitor-Callback für AUSGEHENDE Nachrichten (Diagnose). */
   onSent: ((bytes: number[]) => void) | null = null;
   /** Callback bei Port-Änderungen (aktuell ungenutzt; API-kompatibel). */
@@ -87,7 +109,12 @@ export class MidiIO {
     // erste Ausgang oft auf „Microsoft GS Wavetable Synth" (kein E2S-Reply).
     if (!this.outId) this.outId = pickPort(outputs);
     if (!this.inId) this.inId = pickPort(inputs);
-    b.onMessage((bytes) => this.rx(bytes));
+    b.onMessage((bytes, quelle) => {
+      // Controller-Nachrichten (zweiter Eingang) gehen NICHT in die
+      // Geräte-Logik (SysEx-Parser, Regler-Spiegel, Program-Change-Dekoder).
+      if (quelle === "controller") this.onController?.(bytes);
+      else this.rx(bytes);
+    });
     this.started = true;
   }
 
