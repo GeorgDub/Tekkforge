@@ -38,6 +38,21 @@ import { requestSysex } from "./midi";
 import { buildPanelControl } from "../core/hacktribeNrpn";
 import { featureAvailable } from "../core/firmwareMode";
 import {
+  MIDI_START,
+  MIDI_STOP,
+  TRIGGER_NOTE,
+  buildNoteOff,
+  buildNoteOn,
+  buildProgramChange,
+  buildSchalterCc,
+  filterTypeNachBandKlick,
+  patternIndexFromProgram,
+  keyboardNote,
+  kippeSchalter,
+  patternSetIndex,
+  schritt,
+} from "../core/e2Remote";
+import {
   buildPatternFile,
   clonePattern,
   editorPatternFromBody,
@@ -47,7 +62,16 @@ import { displayInfo, partLeds, stepStates, taktAnzahl } from "../core/panelStat
 import { buildKnobCc, ccValueToParam, decodeKnobCc } from "../core/e2KnobCc";
 
 let modus: "live" | "prepare" = "prepare";
-let padModus: "mute" | "sequencer" = "mute";
+type PadModus = "mute" | "sequencer" | "erase" | "trigger" | "keyboard" | "patternset";
+let padModus: PadModus = "mute";
+const PAD_MODUS_BUTTON: Record<PadModus, string> = {
+  mute: "e2sPadMute",
+  sequencer: "e2sPadSeq",
+  erase: "e2sPartErase",
+  trigger: "e2sTrigger",
+  keyboard: "e2sKeyboard",
+  patternset: "e2sPatternSet",
+};
 let aktiverPart = 0;
 let takt = 0;
 /** Letzter Sync-Stand vom Gerät (nur Live-Modus). */
@@ -291,13 +315,13 @@ function renderPanel(): void {
   led("e2sLedAmpEg", leds.ampEg);
   led("e2sLedIfxOn", leds.ifxOn);
 
-  $("e2sPadMute").classList.toggle("aktiv", padModus === "mute");
-  $("e2sPadSeq").classList.toggle("aktiv", padModus === "sequencer");
+  for (const [m, id] of Object.entries(PAD_MODUS_BUTTON)) $(id).classList.toggle("aktiv", padModus === m);
   const takte = taktAnzahl(p);
   for (let t = 0; t < 4; t++) {
     const btn = $(`e2sTakt${t}`);
     btn.classList.toggle("aktiv", t === takt);
-    (btn as HTMLButtonElement).disabled = t >= takte;
+    // Im Pattern-Set-Modus sind die Takt-Buttons Seiten (Patterns 1–64), immer aktiv.
+    (btn as HTMLButtonElement).disabled = padModus !== "patternset" && t >= takte;
   }
   $("e2sModusLive").classList.toggle("aktiv", modus === "live");
   $("e2sModusPrepare").classList.toggle("aktiv", modus === "prepare");
@@ -305,11 +329,20 @@ function renderPanel(): void {
   const steps = stepStates(p, aktiverPart, takt);
   document.querySelectorAll<HTMLElement>("#e2sPads .e2s-pad").forEach((pad, i) => {
     pad.classList.remove("an", "sel");
-    if (padModus === "mute") {
+    if (padModus === "mute" || padModus === "erase" || padModus === "trigger") {
       const gemutet = !!p.parts[i]?.muted;
       if (i === aktiverPart) pad.classList.add("sel");
       else if (!gemutet) pad.classList.add("an");
-      pad.title = `${p.parts[i]?.label ?? `Part ${i + 1}`}${gemutet ? " (gemutet)" : ""}`;
+      const was = padModus === "erase" ? " — Klick löscht alle Steps" : padModus === "trigger" ? " — Klick spielt den Part" : "";
+      pad.title = `${p.parts[i]?.label ?? `Part ${i + 1}`}${gemutet ? " (gemutet)" : ""}${was}`;
+    } else if (padModus === "keyboard") {
+      pad.title = `Note ${keyboardNote(i)} auf Part ${aktiverPart + 1}`;
+    } else if (padModus === "patternset") {
+      const idx = patternSetIndex(takt, i);
+      const name = panelBridge.project.patterns[idx]?.name;
+      if (idx === panelBridge.patternIndex) pad.classList.add("sel");
+      else if (name) pad.classList.add("an");
+      pad.title = `Pattern ${idx + 1}${name ? ` „${name}"` : ""} — Klick wechselt (Program Change)`;
     } else {
       if (steps[i]) pad.classList.add("an");
       pad.title = `Step ${takt * 16 + i + 1}`;
@@ -333,8 +366,74 @@ async function syncVomGeraet(): Promise<void> {
   }
 }
 
+/** Pattern am Gerät wechseln (Program Change + Bank Select) und im Editor folgen. */
+function wechslePattern(idx: number): void {
+  if (!panelBridge.project.patterns[idx] && modus !== "live") {
+    setStatus(`Pattern ${idx + 1} gibt es im Projekt nicht.`);
+    return;
+  }
+  if (modus === "live") {
+    try {
+      for (const m of buildProgramChange(panelBridge.midiChannel, idx)) panelBridge.midi.send(m);
+      livePattern = null; // Stand ist unbekannt, bis der Sync ihn holt
+      planeAutoSync(600);
+      // Befund 2026-08-22: gestoppt + Clock Internal merkt das Gerät den Wechsel
+      // nur vor — der Edit-Buffer zeigt bis zum nächsten Start das alte Pattern.
+      setStatus(`Pattern ${idx + 1} → Gerät (Program Change) — greift am Gerät beim nächsten Start; Sync folgt.`);
+    } catch (err) {
+      setStatus(`Patternwechsel fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+    }
+  } else {
+    setStatus(`Pattern ${idx + 1} im Editor gewählt (Prepare).`);
+  }
+  if (panelBridge.project.patterns[idx]) panelBridge.patternIndex = idx;
+  renderPanel();
+}
+
+/** Kurzer Ton auf dem Kanal des Parts (Stock-MIDI: Part n hört auf Kanal n). */
+function spieleNote(part0: number, note: number): void {
+  try {
+    panelBridge.midi.send(buildNoteOn(part0, note, 110));
+    window.setTimeout(() => panelBridge.midi.send(buildNoteOff(part0, note)), 180);
+  } catch (err) {
+    setStatus(`Note senden fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI aktiviert?`);
+  }
+}
+
 function padKlick(i: number): void {
   const p = aktuellesPattern();
+  if (padModus === "trigger") {
+    aktiverPart = i;
+    spieleNote(i, TRIGGER_NOTE);
+    setStatus(`Part ${i + 1} angespielt (Note ${TRIGGER_NOTE}, Kanal ${i + 1}).`);
+    renderPanel();
+    return;
+  }
+  if (padModus === "keyboard") {
+    const note = keyboardNote(i);
+    spieleNote(aktiverPart, note);
+    setStatus(`Note ${note} auf Part ${aktiverPart + 1}.`);
+    return;
+  }
+  if (padModus === "patternset") {
+    wechslePattern(patternSetIndex(takt, i));
+    return;
+  }
+  if (padModus === "erase") {
+    const part = p.parts[i];
+    if (!part) return;
+    const vorher = part.steps.filter((s) => s.on).length;
+    for (const s of part.steps) s.on = false;
+    if (modus === "live") {
+      setStatus(`Part ${i + 1}: ${vorher} Steps gelöscht — wird gleich übertragen.`);
+      planeAutoUebertragung();
+    } else {
+      panelBridge.markDirty();
+      setStatus(`Part ${i + 1}: ${vorher} Steps gelöscht (Prepare — wirkt beim Übertragen).`);
+    }
+    renderPanel();
+    return;
+  }
   if (padModus === "mute") {
     const part = p.parts[i];
     if (!part) return;
@@ -521,6 +620,7 @@ async function aufSlotSchreiben(): Promise<void> {
  *  ein Stopp sicher erkannt ist (Dumps bei laufendem Sequencer kommen still
  *  beschädigt zurück, am Gerät gemessen). */
 let spieltGerade = true;
+let letzterBankLsb = 0;
 let letzteNoteUm = 0;
 let letzteLokaleAenderungUm = 0;
 let syncLaeuft = false;
@@ -535,12 +635,15 @@ function empfangeVomGeraet(bytes: number[]): void {
   } else if ((st & 0xf0) === 0x90 && bytes.length >= 3 && bytes[2] > 0) {
     spieltGerade = true;
     letzteNoteUm = Date.now();
+  } else if ((st & 0xf0) === 0xb0 && bytes.length >= 3 && bytes[1] === 0x20) {
+    letzterBankLsb = bytes[2]; // Bank Select LSB geht dem Program Change voraus
   } else if ((st & 0xf0) === 0xc0 && bytes.length >= 2 && modus === "live") {
-    // Patternwechsel: das Gerät sendet einen Program Change (am Gerät
-    // gemessen, 2026-08-15). Liegt im Editor dieselbe Bank, übernehmen wir
-    // das Pattern direkt als Kopie — exakt ohne Dump; sonst bleibt der
-    // Sync für den nächsten Stopp vorgemerkt.
-    const nr = bytes[1];
+    // Patternwechsel: das Gerät sendet Bank Select + Program Change (am Gerät
+    // gemessen, 2026-08-15). Nummern nach KORG-Konvention 1-basiert (e2Remote.ts).
+    // Liegt im Editor dieselbe Bank, übernehmen wir das Pattern direkt als
+    // Kopie — exakt ohne Dump; sonst bleibt der Sync für den nächsten Stopp vorgemerkt.
+    const nr = patternIndexFromProgram(letzterBankLsb, bytes[1]);
+    if (nr === null) return;
     const kandidat = panelBridge.project.patterns[nr];
     if (kandidat) {
       livePattern = clonePattern(kandidat);
@@ -620,6 +723,132 @@ function setzeReglerWert(def: { key: string; min: number; max: number }, wert: n
     setStatus(`${def.key} = ${geclampt} (Prepare — wirkt beim Übertragen).`);
   }
   renderPanel();
+}
+
+/**
+ * Schalter-Parameter (kein CC bekannt): Pattern-Zustand setzen; im Live-Modus
+ * per Auto-Übertragung (Edit-Buffer) ans Gerät — funktioniert auf Stock und
+ * Hacktribe gleichermaßen, nur eben mit ~1 s Verzögerung.
+ */
+function setzeSchalterParam(key: string, wert: number, was: string): void {
+  const part = aktuellesPattern().parts[aktiverPart];
+  if (!part) return;
+  letzteLokaleAenderungUm = Date.now();
+  part.params = { ...(part.params ?? {}), [key]: wert };
+  if (modus === "live") {
+    // IFX On / MFX Send haben Stock-CCs (104/105) — sofort senden; die
+    // Übertragung macht den Zustand zusätzlich im Edit-Buffer dauerhaft.
+    const cc = buildSchalterCc(aktiverPart, key, wert === 1);
+    if (cc) panelBridge.midi.send(cc);
+    planeAutoUebertragung();
+    setStatus(`${was} (Part ${aktiverPart + 1})${cc ? " — CC gesendet," : " —"} Übertragung folgt.`);
+  } else {
+    panelBridge.markDirty();
+    setStatus(`${was} (Part ${aktiverPart + 1}, Prepare — wirkt beim Übertragen).`);
+  }
+  renderPanel();
+}
+
+/** Auswahlregler: Ziehen schaltet den Wert schrittweise weiter (kein CC — Übertragung). */
+const AUSWAHL_BELEGUNG: Record<string, { key: string; min: number; max: number; label: string; anzeige?: (w: number) => string }> = {
+  e2sKnobIfxType: { key: "ifxType", min: 0, max: 48, label: "IFX-Typ" },
+  e2sKnobModType: { key: "modType", min: 0, max: 71, label: "Mod-Typ", anzeige: (w) => String(w + 1) },
+};
+
+function macheAuswahlDrehbar(): void {
+  for (const [id, def] of Object.entries(AUSWAHL_BELEGUNG)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.classList.add("drehbar");
+    el.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      el.setPointerCapture(ev.pointerId);
+      const startY = ev.clientY;
+      const part = aktuellesPattern().parts[aktiverPart];
+      const startWert = part?.params?.[def.key] ?? def.min;
+      let letzter = startWert;
+      const move = (m: PointerEvent) => {
+        // 8 Pixel je Schritt — Auswahlwerte sollen einzeln treffbar sein.
+        const ziel = Math.max(def.min, Math.min(def.max, startWert + Math.round((startY - m.clientY) / 8)));
+        if (ziel === letzter) return;
+        letzter = ziel;
+        setzeSchalterParam(def.key, ziel, `${def.label} = ${def.anzeige ? def.anzeige(ziel) : ziel}`);
+      };
+      const up = () => {
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+      };
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+    });
+  }
+  // Sample-Regler: durch den Sample-Pool des Projekts schalten.
+  const sampleEl = document.getElementById("e2sKnobSample");
+  if (sampleEl) {
+    sampleEl.classList.add("drehbar");
+    sampleEl.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      sampleEl.setPointerCapture(ev.pointerId);
+      const startY = ev.clientY;
+      const nummern = [...panelBridge.project.samples].map((s) => s.number).sort((a, b) => a - b);
+      const part = aktuellesPattern().parts[aktiverPart];
+      if (!part || !nummern.length) {
+        setStatus("Kein Sample im Pool — erst Samples importieren.");
+        return;
+      }
+      const startPos = Math.max(0, nummern.indexOf(part.sampleNumber ?? -1));
+      let letzte = startPos;
+      const move = (m: PointerEvent) => {
+        const pos = schritt(startPos, Math.round((startY - m.clientY) / 8), 0, nummern.length - 1);
+        if (pos === letzte) return;
+        letzte = pos;
+        letzteLokaleAenderungUm = Date.now();
+        part.sampleNumber = nummern[pos];
+        if (modus === "live") {
+          planeAutoUebertragung();
+          setStatus(`Sample ${nummern[pos]} (Part ${aktiverPart + 1}) — wird gleich übertragen.`);
+        } else {
+          panelBridge.markDirty();
+          setStatus(`Sample ${nummern[pos]} (Part ${aktiverPart + 1}, Prepare).`);
+        }
+        renderPanel();
+      };
+      const up = () => {
+        sampleEl.removeEventListener("pointermove", move);
+        sampleEl.removeEventListener("pointerup", up);
+      };
+      sampleEl.addEventListener("pointermove", move);
+      sampleEl.addEventListener("pointerup", up);
+    });
+  }
+  // Value-Regler: Pattern-Nummer (Live: Program Change).
+  const valueEl = document.getElementById("e2sValue");
+  if (valueEl) {
+    valueEl.classList.add("drehbar");
+    valueEl.title = "Pattern wählen (ziehen) — Live: Program Change ans Gerät";
+    valueEl.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      valueEl.setPointerCapture(ev.pointerId);
+      const startY = ev.clientY;
+      const start = panelBridge.patternIndex;
+      const max = Math.max(0, panelBridge.project.patterns.length - 1);
+      let ziel = start;
+      const move = (m: PointerEvent) => {
+        const n = Math.max(0, Math.min(max, start + Math.round((startY - m.clientY) / 8)));
+        if (n === ziel) return;
+        ziel = n;
+        $("e2sLcdNr").textContent = String(n + 1).padStart(3, "0");
+        $("e2sLcdName").textContent = panelBridge.project.patterns[n]?.name ?? "—";
+      };
+      const up = () => {
+        valueEl.removeEventListener("pointermove", move);
+        valueEl.removeEventListener("pointerup", up);
+        if (ziel !== start) wechslePattern(ziel);
+      };
+      valueEl.addEventListener("pointermove", move);
+      valueEl.addEventListener("pointerup", up);
+    });
+  }
 }
 
 function macheReglerDrehbar(): void {
@@ -737,14 +966,58 @@ export function initPanel(): void {
   $("e2sAnhoeren").addEventListener("click", () => void anhoeren());
   $("e2sSchreiben").addEventListener("click", () => void aufSlotSchreiben());
 
-  $("e2sPadMute").addEventListener("click", () => {
-    padModus = "mute";
-    renderPanel();
+  for (const [m, id] of Object.entries(PAD_MODUS_BUTTON)) {
+    $(id).addEventListener("click", () => {
+      padModus = m as PadModus;
+      const hinweis: Record<PadModus, string> = {
+        mute: "Part Mute — Pads schalten Parts stumm/aktiv.",
+        sequencer: "Sequencer — Pads sind die 16 Steps des aktiven Parts im gewählten Takt.",
+        erase: "Part Erase — Pad-Klick löscht alle Steps des Parts.",
+        trigger: "Trigger — Pad-Klick spielt den Part an (Note auf seinem Kanal).",
+        keyboard: `Keyboard — Pads spielen Part ${aktiverPart + 1} chromatisch ab C3.`,
+        patternset: "Pattern Set — Pads = Patterns, Takt-Buttons 1–4 = Seiten (1–64). Live: Program Change.",
+      };
+      setStatus(hinweis[padModus]);
+      renderPanel();
+    });
+  }
+  // LED-Buttons: Schalter des aktiven Parts (kein CC bekannt → Übertragung).
+  const bandKlick = (band: "lpf" | "hpf" | "bpf") => {
+    const leds = partLeds(aktuellesPattern(), aktiverPart);
+    const typ = filterTypeNachBandKlick(leds.band, band);
+    setzeSchalterParam("filterType", typ, typ === 0 ? "Filter aus" : `Filter ${band.toUpperCase()}`);
+  };
+  $("e2sLedLpf").addEventListener("click", () => bandKlick("lpf"));
+  $("e2sLedHpf").addEventListener("click", () => bandKlick("hpf"));
+  $("e2sLedBpf").addEventListener("click", () => bandKlick("bpf"));
+  const schalterKlick = (key: string, label: string) => {
+    const part = aktuellesPattern().parts[aktiverPart];
+    const neu = kippeSchalter(part?.params?.[key]);
+    setzeSchalterParam(key, neu, `${label} ${neu ? "an" : "aus"}`);
+  };
+  $("e2sLedIfxOn").addEventListener("click", () => schalterKlick("ifxOn", "IFX"));
+  $("e2sLedAmpEg").addEventListener("click", () => schalterKlick("ampEgOn", "Amp EG"));
+  $("e2sLedMfxSend").addEventListener("click", () => schalterKlick("mfxSend", "MFX Send"));
+  // Transport: MIDI Start/Stop — das Gerät folgt nur, wenn sein Clock auf Auto/Ext steht.
+  const transport = document.querySelectorAll<HTMLButtonElement>(".e2s-transport button");
+  const sendeRealtime = (byte: number, was: string) => {
+    try {
+      panelBridge.midi.send(Uint8Array.from([byte]));
+      setStatus(`${was} gesendet (MIDI Realtime) — wirkt nur bei Clock „Auto/Ext" am Gerät.`);
+    } catch (err) {
+      setStatus(`${was} fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI aktiviert?`);
+    }
+  };
+  transport.forEach((btn) => {
+    if (btn.classList.contains("play")) {
+      btn.title = "Play — MIDI Start ans Gerät";
+      btn.addEventListener("click", () => sendeRealtime(MIDI_START, "Start"));
+    } else if (btn.textContent?.trim() === "■") {
+      btn.title = "Stop — MIDI Stop ans Gerät";
+      btn.addEventListener("click", () => sendeRealtime(MIDI_STOP, "Stop"));
+    }
   });
-  $("e2sPadSeq").addEventListener("click", () => {
-    padModus = "sequencer";
-    renderPanel();
-  });
+  macheAuswahlDrehbar();
   $("e2sPartZurueck").addEventListener("click", () => {
     aktiverPart = (aktiverPart + 15) % 16;
     renderPanel();

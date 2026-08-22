@@ -151,6 +151,28 @@ das dazu.
 Logik in `src/core/firmwareMode.ts` (`featureAvailable`, `featureHint`,
 `firmwareFromProbe`), Tests in `tests/firmware-mode.test.ts`.
 
+### Fernbedienung im E2S-Panel (Stock-MIDI)
+
+`src/core/e2Remote.ts` (Tests `tests/e2-remote.test.ts`) — alles über normale
+MIDI-Nachrichten, also mit Stock **und** Hacktribe:
+
+| Bedienung im Panel | Weg zum Gerät |
+|---|---|
+| LED-Buttons IFX On / MFX Send | CC 104 / 105 auf dem Part-Kanal **+** Edit-Buffer-Übertragung |
+| LED-Buttons Amp EG, LPF/HPF/BPF (gleiches Band nochmal = Filter aus) | Edit-Buffer-Übertragung (kein CC bekannt) |
+| Auswahlregler Sample (Pool), Mod-Typ, IFX-Typ — ziehen | Edit-Buffer-Übertragung |
+| Value-Regler und Pad-Modus **Pattern Set** (Takt 1–4 = Seiten, Pads = Patterns 1–64) | Bank Select + Program Change, **1-basiert** nach KORG-Implementation (Pattern 1 = Program 1; ab 128 Bank-LSB 1) |
+| Pad-Modus **Trigger** (Part anspielen), **Keyboard** (Pads chromatisch ab C3 auf dem aktiven Part) | Note On/Off auf dem Part-Kanal |
+| Pad-Modus **Part Erase** | löscht alle Steps, Live per Übertragung |
+| Transport ▶ / ■ | MIDI Start / Stop — wirkt nur bei Global „Clock Mode" Auto/Ext |
+
+Befund 2026-08-22 am Gerät (gestoppt, Clock Internal, Receive-Filter Off):
+nach Program Change (alle Varianten, auch mit Bank Select) lieferte der
+Edit-Buffer-Dump weiterhin das alte Pattern — das Gerät merkt den Wechsel
+offenbar nur vor und lädt beim nächsten Start. Der Statustext sagt das so.
+Empfangene Program Changes werden mit der gleichen Konvention dekodiert
+(Bank-LSB wird aus CC 32 mitgeführt).
+
 ## NRPN / Live-FX (Hacktribe, experimentell)
 
 Neben dem SysEx-Pattern-Transfer versteht die Hacktribe-Firmware **NRPN** —
