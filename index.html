@@ -226,7 +226,16 @@
                   <select id="midiIn" style="min-width:200px"></select>
                 </div>
                 <button id="midiSearch" class="ghost">🔎 Gerät suchen</button>
+                <div>
+                  <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Firmware am Gerät</label>
+                  <select id="fwMode" title="Stock: nur SysEx/CC — Hacktribe: zusätzlich NRPN-Live-Steuerung und RAM-Zugriff">
+                    <option value="stock">Stock (KORG)</option>
+                    <option value="hacktribe">Hacktribe</option>
+                  </select>
+                </div>
+                <button id="fwDetect" class="ghost" title="Schickt eine harmlose 4-Byte-RAM-Leseanfrage: Antwort = Hacktribe, keine Antwort = Stock">🧪 Firmware erkennen</button>
               </div>
+              <div id="fwNote" class="sub" style="margin-top:4px"></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
                 <button id="midiSendCurrent" class="primary" title="In den Edit-Buffer — spielt sofort, überschreibt keinen Speicherplatz">▶ Pattern → Gerät (Live)</button>
                 <button id="midiSendSlot" class="ghost" title="Aktuelles Pattern dauerhaft speichern (Edit-Buffer + Write-Befehl)">Pattern → Slot…</button>
@@ -249,6 +258,10 @@
                 <pre id="midiMonitor" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;max-height:90px;overflow:auto;font-size:10px;color:var(--muted);margin:0">(noch nichts empfangen)</pre>
               </div>
 
+              <div id="fwRamNote" class="sub hidden" style="margin-top:12px">
+                Geräte-RAM lesen/schreiben ist nur mit <b>Hacktribe</b>-Firmware möglich —
+                oben bei „Firmware am Gerät" umstellen oder erkennen lassen.
+              </div>
               <details id="ramPanel" style="margin-top:12px;border:1px solid var(--accent);border-radius:6px;padding:8px">
                 <summary style="cursor:pointer;color:var(--accent);font-weight:600">
                   ⚠ Geräte-RAM lesen und schreiben (Hacktribe, gefährlich)

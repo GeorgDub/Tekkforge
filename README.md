@@ -131,6 +131,26 @@ Prüfen lässt sich eine gebaute Bank mit Omnitribes Geometrie-Check
 `OSC_0index`, und da TekkForge der Geräte-Konvention Index == OSC folgt, wird
 `Versatz: OK` erwartet.
 
+## Firmware-Modus: Stock oder Hacktribe
+
+TekkForge läuft mit der **Stock-KORG-Firmware** und mit **Hacktribe** — im
+MIDI-Panel steht die Auswahl „Firmware am Gerät" (gemerkt in `localStorage`,
+Default **Stock**). „🧪 Firmware erkennen" schickt eine harmlose 4-Byte-RAM-
+Leseanfrage (CMD 0x52): Antwort = Hacktribe, Timeout = Stock (am Gerät geprüft
+2026-08-22). Ein belegter MIDI-Port sieht wie Stock aus — der Statustext sagt
+das dazu.
+
+| Funktion | Stock | Hacktribe |
+|---|---|---|
+| Pattern → Edit-Buffer / Slot (SysEx, ACK-Prüfung), Pattern ← Gerät, Global | ✅ | ✅ |
+| E2S-Panel: Regler-CCs in beide Richtungen, Auto-Sync, Program Change, Alternate | ✅ | ✅ |
+| Panel-Live-Mute | per Edit-Buffer-Übertragung (~1 s) | sofort per NRPN |
+| IFX-Parameter live senden (Part-Popup) | ausgeblendet | ✅ (NRPN) |
+| Geräte-RAM lesen/schreiben, „FX-Puffer lesen" | ausgeblendet | ✅ |
+
+Logik in `src/core/firmwareMode.ts` (`featureAvailable`, `featureHint`,
+`firmwareFromProbe`), Tests in `tests/firmware-mode.test.ts`.
+
 ## NRPN / Live-FX (Hacktribe, experimentell)
 
 Neben dem SysEx-Pattern-Transfer versteht die Hacktribe-Firmware **NRPN** —

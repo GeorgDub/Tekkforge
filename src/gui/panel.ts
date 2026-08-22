@@ -34,6 +34,7 @@ import {
 } from "../core/e2sysex";
 import { requestSysex } from "./midi";
 import { buildPanelControl } from "../core/hacktribeNrpn";
+import { featureAvailable } from "../core/firmwareMode";
 import {
   buildPatternFile,
   clonePattern,
@@ -336,7 +337,12 @@ function padKlick(i: number): void {
     const part = p.parts[i];
     if (!part) return;
     part.muted = !part.muted;
-    if (modus === "live") {
+    if (modus === "live" && !featureAvailable(panelBridge.firmware, "nrpnPanel")) {
+      // Stock-Firmware: kein NRPN. Der Mute geht denselben Weg wie die Steps —
+      // gesammelt per Edit-Buffer-Übertragung, ~1 s später hörbar.
+      setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — Stock: wird gleich übertragen (kein NRPN).`);
+      planeAutoUebertragung();
+    } else if (modus === "live") {
       // Hacktribe-NRPN-Bedienfeldbefehl — ✔ am Gerät bestätigt (2026-08-15):
       // Part 1 wurde hörbar stumm- und wieder freigeschaltet.
       try {

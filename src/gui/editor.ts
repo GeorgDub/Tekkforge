@@ -50,6 +50,18 @@ import { PART_PARAMS, clampParamValue, type PartParam } from "../core/partParams
 import { fxTypeDef, decodeFxEditBuffer } from "../core/e2FxParams";
 import { buildSetFxParam, fxSlotForPart } from "../core/hacktribeNrpn";
 import {
+  FIRMWARE_LABEL,
+  FIRMWARE_PROBE,
+  FIRMWARE_STORAGE_KEY,
+  featureAvailable,
+  featureHint,
+  firmwareFromProbe,
+  parseFirmwareMode,
+  probeStatusText,
+  type FirmwareMode,
+  type ProbeOutcome,
+} from "../core/firmwareMode";
+import {
   E2_RAM_MAP,
   RAM_CMD,
   addressForSlot,
@@ -495,6 +507,18 @@ function renderPartFxSection(
     return;
   }
 
+  if (!featureAvailable(firmware, "nrpnFx")) {
+    // Stock: kein NRPN, kein RAM — nur Name und Parameterliste zeigen, kein
+    // Sende-/Leseknopf, der am Gerät ins Leere liefe.
+    host.innerHTML = `
+      <div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px">
+        <b style="color:var(--accent2);font-size:11px">IFX-Algorithmus: ${escapeHtml(def.name)}</b>
+        <div style="color:var(--muted);font-size:10px">Parameter: ${def.params.map((n, i) => `${i}: ${escapeHtml(n)}`).join(" · ")}</div>
+        <div class="sub" style="font-size:10px;margin-top:4px">${escapeHtml(featureHint(firmware, "nrpnFx"))}</div>
+      </div>`;
+    return;
+  }
+
   const opts = def.params
     .map((n, i) => `<option value="${i}">${i}: ${escapeHtml(n)}</option>`)
     .join("");
@@ -759,6 +783,75 @@ async function openProject(file: File): Promise<void> {
 
 const midi = new MidiIO();
 let midiChannel = 0;
+
+// ─── Firmware-Modus (Stock / Hacktribe) ──────────────────────────────────────
+//
+// Stock kann SysEx, Global, CC und Program Change; NRPN-Live-Steuerung und
+// RAM-Zugriff gibt es nur mit Hacktribe. Die Auswahl wird gemerkt; Default
+// ist Stock — im Zweifel lieber eine Funktion zu wenig anbieten als eine,
+// die am Gerät stumm ins Leere läuft.
+
+function loadFirmware(): FirmwareMode {
+  try {
+    return parseFirmwareMode(globalThis.localStorage?.getItem(FIRMWARE_STORAGE_KEY));
+  } catch {
+    return "stock";
+  }
+}
+
+let firmware: FirmwareMode = loadFirmware();
+
+/** Setzt den Modus, merkt ihn und blendet die Hacktribe-Bereiche ein/aus. */
+function setFirmware(mode: FirmwareMode, quelle: "auswahl" | "erkennung" | "start" = "auswahl"): void {
+  firmware = mode;
+  try {
+    globalThis.localStorage?.setItem(FIRMWARE_STORAGE_KEY, mode);
+  } catch {
+    /* kein Speicher — dann gilt die Auswahl nur für diese Sitzung */
+  }
+  const sel = document.getElementById("fwMode") as HTMLSelectElement | null;
+  if (sel && sel.value !== mode) sel.value = mode;
+  const ramOk = featureAvailable(mode, "ramAccess");
+  document.getElementById("ramPanel")?.classList.toggle("hidden", !ramOk);
+  document.getElementById("fwRamNote")?.classList.toggle("hidden", ramOk);
+  const note = document.getElementById("fwNote");
+  if (note) {
+    note.textContent =
+      mode === "hacktribe"
+        ? "Hacktribe: NRPN-Live-Steuerung (IFX, Part-Mute) und RAM-Zugriff freigeschaltet."
+        : "Stock: SysEx-Übertragung, Slot-Write, Global, Regler-CCs und Auto-Sync. " +
+          "IFX-Live-Senden, NRPN-Mute und RAM-Zugriff sind ausgeblendet (nur Hacktribe).";
+  }
+  if (quelle !== "start") setMidiStatus(`Firmware: ${FIRMWARE_LABEL[mode]}${quelle === "auswahl" ? " (manuell gewählt)" : ""}`);
+}
+
+/**
+ * Erkennung per harmloser RAM-Leseanfrage (4 Bytes im DDR2-Bereich): Stock
+ * kennt CMD 0x52 nicht und antwortet nie → Timeout → Stock. Ein belegter
+ * Port sieht genauso aus — der Statustext sagt das dazu.
+ */
+async function firmwareDetect(): Promise<void> {
+  if (!midi.available || !midi.outputs().length) {
+    setMidiStatus("Erkennung braucht ein verbundenes Gerät — erst MIDI aktivieren.");
+    return;
+  }
+  setMidiStatus("Firmware wird erkannt (RAM-Probe) …");
+  let outcome: ProbeOutcome;
+  try {
+    const reply = await requestSysex(
+      midi,
+      buildRamReadRequest(FIRMWARE_PROBE.addr, FIRMWARE_PROBE.len, midiOpts()),
+      (b) => b[6] === RAM_CMD.writeData && parseRamResponse(b)?.kind === "data",
+      FIRMWARE_PROBE.timeoutMs,
+    );
+    outcome = parseRamResponse(reply)?.kind === "data" ? "reply" : "error";
+  } catch {
+    outcome = "timeout";
+  }
+  const mode = firmwareFromProbe(outcome);
+  setFirmware(mode, "erkennung");
+  setMidiStatus(probeStatusText(outcome, mode));
+}
 let midiProductId = E2_PRODUCT_ID_SAMPLER;
 
 function midiOpts(): E2SysexOptions {
@@ -778,6 +871,10 @@ export const panelBridge = {
   onIncoming: null as ((bytes: number[]) => void) | null,
   get midiChannel(): number {
     return midiChannel;
+  },
+  /** Stock oder Hacktribe — entscheidet, ob das Panel NRPN senden darf. */
+  get firmware(): FirmwareMode {
+    return firmware;
   },
   get project(): EditorProject {
     return project;
@@ -1408,6 +1505,11 @@ function setupMidi(): void {
     midi.selectInput((e.target as HTMLSelectElement).value),
   );
   $("midiSearch").addEventListener("click", () => void midiSearchDevice());
+  $<HTMLSelectElement>("fwMode").addEventListener("change", (e) =>
+    setFirmware(parseFirmwareMode((e.target as HTMLSelectElement).value)),
+  );
+  $("fwDetect").addEventListener("click", () => void firmwareDetect());
+  setFirmware(firmware, "start"); // gemerkte Auswahl anwenden (RAM-Panel ein/aus)
   $("midiSendCurrent").addEventListener("click", midiSendCurrent);
   $("midiSendSlot").addEventListener("click", midiSendSlot);
   $("midiSendAll").addEventListener("click", () => void midiSendAll());
