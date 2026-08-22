@@ -1161,7 +1161,12 @@ export function initPanel(): void {
   $("e2sGoto").addEventListener("keydown", (ev) => {
     if ((ev as KeyboardEvent).key === "Enter") gehZu();
   });
-  const basisIdx = () => zielPatternIdx ?? panelBridge.patternIndex;
+  // Basis für ▲/▼: die eingetippte Nummer, sonst das zuletzt gewählte Pattern.
+  const basisIdx = () => {
+    const n = Number(($("e2sGoto") as HTMLInputElement).value);
+    if (Number.isFinite(n) && n >= 1 && n <= 250) return n - 1;
+    return zielPatternIdx ?? panelBridge.patternIndex;
+  };
   $("e2sPatPrev").addEventListener("click", () => wechslePattern(schritt(basisIdx(), -1, 0, 249)));
   $("e2sPatNext").addEventListener("click", () => wechslePattern(schritt(basisIdx(), 1, 0, 249)));
   zeigeZielPattern(panelBridge.patternIndex);
