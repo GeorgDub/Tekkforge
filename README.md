@@ -41,6 +41,10 @@ pnpm dist:win       # Windows-Installer (NSIS) + Portable nach release/
 
 Die gebaute `dist/index.html` ist selbsttragend (kein Server) und lässt sich auch einfach
 im Browser doppelklicken.
+5. **Generator** (Tab): Sample-Verzeichnis wählen → Scan zeigt Rollen, Tempo-Vorschlag und
+   RAM-Bedarf → „Bank bauen" (`.all` speichern, per SD laden) → Jam-Pattern, Mini-Set (6
+   gechainte Patterns) oder Pro Melo erzeugen → „→ Datei" oder „→ Editor". Melodien bleiben
+   ganz; die Beschreibung steuert Kick/Bass/Stab per Schlüsselwort (KI-Übersetzung folgt).
 
 ## Pattern-Editor — Workflow
 

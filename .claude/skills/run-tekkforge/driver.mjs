@@ -156,8 +156,10 @@ const COMMANDS = {
     const sel = arg.slice(0, i).trim();
     const datei = path.resolve(APP_DIR, arg.slice(i + 1).trim());
     if (!fs.existsSync(datei)) throw new Error("Datei fehlt: " + datei);
+    // Verzeichnis → Playwright reicht den Pfad an ein webkitdirectory-Feld (z. B. #genOrdner) durch
     await p.setInputFiles(sel, datei);
-    console.log("files", sel, "->", path.basename(datei));
+    const liste = fs.statSync(datei).isDirectory() ? fs.readdirSync(datei) : [datei];
+    console.log("files", sel, "->", liste.length === 1 ? path.basename(datei) : `${liste.length} Dateien aus ${path.basename(datei)}`);
   },
 
   async click(sel) {
