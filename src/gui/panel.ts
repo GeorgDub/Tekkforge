@@ -106,6 +106,7 @@ function modeButton(id: string, label: string): string {
 const PANEL_CSS = `
 #viewPanel { display: flex; flex-direction: column; gap: 12px; }
 .e2s-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.e2s-goto { display: inline-flex; gap: 4px; align-items: center; margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line); }
 .e2s-toolbar .aktiv { outline: 2px solid var(--accent); }
 .e2s { background: linear-gradient(175deg, #b8505a 0%, #a94550 55%, #933a44 100%);
   border: 3px solid #7e2f38; border-radius: 22px; padding: 18px 22px 22px;
@@ -188,6 +189,12 @@ function baueDom(): void {
     <label title="Zieht den Gerätezustand regelmäßig automatisch — bei laufendem Sequencer per Dreifach-Lesung mit Byte-Mehrheit"><input id="e2sAutoSync" type="checkbox" checked> Auto-Sync</label>
     <label title="▶ sendet MIDI-Clock (24 ppqn) im Pattern-Tempo plus Start — das Gerät folgt nur bei Global „Clock Mode" Auto/Ext"><input id="e2sClock" type="checkbox" checked> MIDI-Clock</label>
     <button id="e2sPanic" title="All Sound Off + All Notes Off auf allen 16 Kanälen (wirkt unabhängig vom Receive-Filter)">⛔ Panic</button>
+    <span class="e2s-goto" title="Pattern am Gerät wählen (Program Change — greift bei laufendem Sequencer am Taktende)">
+      <button id="e2sPatPrev" title="Vorheriges Pattern">▲</button>
+      <label>Pattern <input id="e2sGoto" type="number" min="1" max="250" value="1" style="width:60px"></label>
+      <button id="e2sGo">Gehe zu</button>
+      <button id="e2sPatNext" title="Nächstes Pattern">▼</button>
+    </span>
     <span class="e2s-status" id="e2sStatus">Prepare-Modus — Pattern aus dem Editor.</span>
   </div>
   <div class="e2s">
@@ -371,12 +378,23 @@ async function syncVomGeraet(): Promise<void> {
   }
 }
 
+/** Zuletzt am Gerät angewähltes Pattern (0-basiert) — Basis für ▲/▼, unabhängig vom Projekt. */
+let zielPatternIdx: number | null = null;
+
+function zeigeZielPattern(idx: number): void {
+  zielPatternIdx = idx;
+  const eingabe = document.getElementById("e2sGoto") as HTMLInputElement | null;
+  if (eingabe) eingabe.value = String(idx + 1);
+}
+
 /** Pattern am Gerät wechseln (Program Change + Bank Select) und im Editor folgen. */
 function wechslePattern(idx: number): void {
+  idx = Math.max(0, Math.min(249, Math.round(idx)));
   if (!panelBridge.project.patterns[idx] && modus !== "live") {
-    setStatus(`Pattern ${idx + 1} gibt es im Projekt nicht.`);
+    setStatus(`Pattern ${idx + 1} gibt es im Projekt nicht — im Live-Modus wird es trotzdem ans Gerät gesendet.`);
     return;
   }
+  zeigeZielPattern(idx);
   if (modus === "live") {
     try {
       for (const m of buildProgramChange(panelBridge.midiChannel, idx)) panelBridge.midi.send(m);
@@ -704,6 +722,7 @@ function empfangeVomGeraet(bytes: number[]): void {
     // Kopie — exakt ohne Dump; sonst bleibt der Sync für den nächsten Stopp vorgemerkt.
     const nr = patternIndexFromProgram(letzterBankLsb, bytes[1]);
     if (nr === null) return;
+    zeigeZielPattern(nr);
     const kandidat = panelBridge.project.patterns[nr];
     if (kandidat) {
       livePattern = clonePattern(kandidat);
@@ -1072,6 +1091,24 @@ export function initPanel(): void {
       btn.addEventListener("click", () => void transportStop());
     }
   });
+  // Gehe zu Pattern: Eingabe + ▲/▼ — Basis ist das zuletzt angewählte Pattern,
+  // sonst das Editor-Pattern.
+  const gehZu = () => {
+    const n = Number(($("e2sGoto") as HTMLInputElement).value);
+    if (!Number.isFinite(n) || n < 1 || n > 250) {
+      setStatus("Pattern-Nummer 1–250 eingeben.");
+      return;
+    }
+    wechslePattern(n - 1);
+  };
+  $("e2sGo").addEventListener("click", gehZu);
+  $("e2sGoto").addEventListener("keydown", (ev) => {
+    if ((ev as KeyboardEvent).key === "Enter") gehZu();
+  });
+  const basisIdx = () => zielPatternIdx ?? panelBridge.patternIndex;
+  $("e2sPatPrev").addEventListener("click", () => wechslePattern(schritt(basisIdx(), -1, 0, 249)));
+  $("e2sPatNext").addEventListener("click", () => wechslePattern(schritt(basisIdx(), 1, 0, 249)));
+  zeigeZielPattern(panelBridge.patternIndex);
   $("e2sPanic").addEventListener("click", () => {
     try {
       for (const m of buildPanic()) panelBridge.midi.send(m);
