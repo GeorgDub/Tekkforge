@@ -190,10 +190,10 @@ function baueDom(): void {
     <label title="▶ sendet MIDI-Clock (24 ppqn) im Pattern-Tempo plus Start — das Gerät folgt nur bei Global „Clock Mode" Auto/Ext"><input id="e2sClock" type="checkbox" checked> MIDI-Clock</label>
     <button id="e2sPanic" title="All Sound Off + All Notes Off auf allen 16 Kanälen (wirkt unabhängig vom Receive-Filter)">⛔ Panic</button>
     <span class="e2s-goto" title="Pattern am Gerät wählen (Program Change — greift bei laufendem Sequencer am Taktende)">
-      <button id="e2sPatPrev" title="Vorheriges Pattern">▲</button>
+      <button id="e2sPatPrev" title="Pattern runter (−1)">▼</button>
       <label>Pattern <input id="e2sGoto" type="number" min="1" max="250" value="1" style="width:60px"></label>
       <button id="e2sGo">Gehe zu</button>
-      <button id="e2sPatNext" title="Nächstes Pattern">▼</button>
+      <button id="e2sPatNext" title="Pattern hoch (+1)">▲</button>
     </span>
     <span class="e2s-status" id="e2sStatus">Prepare-Modus — Pattern aus dem Editor.</span>
   </div>
