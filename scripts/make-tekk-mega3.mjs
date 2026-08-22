@@ -1,31 +1,40 @@
 /**
- * Erzeugt TEKK_MEGA3.e2sallpat — "ROUND 1": 250 Patterns, 175 BPM, auf round1.all.
+ * Erzeugt TEKK_MEGA3<X>.e2sallpat — "ROUND 1": 250 Patterns, 175 BPM, je 8 Songs
+ * auf round1<x>.all (A: Songs 1–8, B: Songs 9–16).
  *
- * 16 Song-Bloecke a 15 Patterns (Slots 1–240) + 10 TRANS-Patterns (241–250).
+ * 8 Song-Bloecke a 30 Patterns (Slots 1–240) + 10 TRANS-Patterns (241–250).
  * Jeder Block baut einen Song aus „round 1" als Tekk nach — Melos im Fokus:
  *
- *   Part 13 MELO A = Takte 1–4 der 8-Takt-Hook (Demucs-Stem other+vocals,
- *   Part 14 MELO B = Takte 5–8   175 BPM, echte Tonart). Das Paar 13/14 ist
- *                    am Geraet ALTERNATE geschaltet: jeder Pattern-Durchlauf
- *                    spielt abwechselnd A und B → eine 8-Takt-Melodie loopt
- *                    in einem einzelnen Pattern.
+ *   Part 13 MELO A = Takte 1–4 der 8-Takt-Hook (UVR-Instrumental → Demucs ohne
+ *   Part 14 MELO B = Takte 5–8   Drums/Bass, 175 BPM, echte Tonart). Das Paar
+ *                    13/14 ist am Geraet ALTERNATE geschaltet: jeder Pattern-
+ *                    Durchlauf spielt abwechselnd A und B → eine 8-Takt-Melodie
+ *                    loopt in einem einzelnen Pattern.
+ *   Part 12 VOX    = 4-Takt-Vocal-Phrase aus der UVR-Vocals-Spur (Songs ohne
+ *                    Vocals: stattdessen der DROP-Loop)
+ *   Part  8 DROP   = 1-Takt-Loop aus dem Drop des Songs (Vollmix), je Takt
  *   Part 11 STAB   = Einzelklang aus dem Hook, spielt die erkannte Melodie
  *                    (transponiert relativ zur gemessenen Stab-Tonhoehe)
- *   Part 12 DROP   = 1-Takt-Loop aus dem Drop des Songs (Vollmix)
  *   Part 15 ARP    = STAB-Sample als Achtel-Arpeggio ueber die Song-Akkorde
  *   Part 16 SYN    = tekk4-PCM-Melo spielt dieselbe Melodie (ohne Loops —
  *                    Samplegrundton unbekannt, darum nie gleichzeitig)
- *   Parts 1–10     = Tekk-Drums + Bass (Bass folgt den Song-Akkordwurzeln)
+ *   Parts 1–7, 9–10 = Tekk-Drums + Bass (Bass folgt den Song-Akkordwurzeln)
  *
- * Blockverlauf (15): INTRO · AUF 1 · AUF 2 · ANLAUF · DROP 1 · DROP 2 · DROP 3 ·
- * RUHE 1 · RUHE 2 · LUFT · DROP 4 · DROP 5 · AUSKL · JAM SY · JAM (Kettenende).
- * TRANS = DJ-Uebergang: Takte 1–2 DROP-Loop Song A, Takte 3–4 DROP-Loop Song B.
+ * Blockverlauf (30): Durchlauf 1 (Melo-zentriert): INTRO · AUF 1 · AUF 2 · ANLAUF ·
+ * DROP 1 · DROP 2 · DROP 3 · RUHE 1 · RUHE 2 · LUFT · DROP 4 · DROP 5 · AUSKL ·
+ * JAM SY · JAM — Durchlauf 2 (Vocal-zentriert): VOX IN · VOX 1 · VOX 2 · BREAK ·
+ * DRP2 1–3 · RUHE 3 · RUHE 4 · LUFT 2 · DRP2 4 · DRP2 5 · AUSKL2 · JAM VX ·
+ * JAM 2 (Kettenende).
+ * TRANS = Mashup-Uebergang: VOX (bzw. DROP) von Song A ueber MELO A/B von Song B,
+ *         Bass folgt B.
  *
  * Eingaben: examples/e2s/round1/analyse.json (analyze-round1.py),
- *           examples/e2s/round1/mapping.json (make-round1-bank.mjs), round1.all.
- * Aufruf:   npx tsx scripts/make-tekk-mega3.mjs [ziel.e2sallpat] [bank.all]
+ *           examples/e2s/round1/mapping-<bank>.json (make-round1-bank.mjs), Bank.
+ * Aufruf:   npx tsx scripts/make-tekk-mega3.mjs <ziel.e2sallpat> <bank.all>
+ *           z. B. examples/e2s/TEKK_MEGA3A.e2sallpat examples/e2s/round1a.all
  */
 import * as fs from "node:fs";
+import * as path from "node:path";
 import { buildE2AllPatFile } from "../src/core/e2sExport.ts";
 import { parseE2sBank } from "../src/core/e2sBankReader.ts";
 import {
@@ -33,45 +42,47 @@ import {
   oscToDisplayNumber,
 } from "../src/core/e2sPatternSampleLink.ts";
 
-const ZIEL = process.argv[2] ?? "examples/e2s/TEKK_MEGA3.e2sallpat";
-const BANK = process.argv[3] ?? "examples/e2s/round1.all";
+const ZIEL = process.argv[2] ?? "examples/e2s/TEKK_MEGA3A.e2sallpat";
+const BANK = process.argv[3] ?? "examples/e2s/round1a.all";
 const ROUND1 = "examples/e2s/round1";
+const MAPPING = path.join(ROUND1, `mapping-${path.basename(BANK, ".all")}.json`);
 const BPM = 175;
 const N = 64;
 const SLOTS = 250;
-const PRO_BLOCK = 15;
+const PRO_BLOCK = 30;
+const SONGS_JE_BANK = 8;
 
 const MONO1 = 0, MONO2 = 1, POLY2 = 3;
 
 // Part-Indizes (0-basiert)
-const P_STAB = 10, P_DROP = 11, P_MELOA = 12, P_MELOB = 13, P_ARP = 14, P_SYN = 15;
+const P_DROP = 7, P_STAB = 10, P_VOX = 11, P_MELOA = 12, P_MELOB = 13, P_ARP = 14, P_SYN = 15;
 
 /** Songs, deren STAB-Tonhoehe nicht messbar war (Vollmix-Fenster ohne klare
  *  Einzelnoten): STAB- und ARP-Part bleiben stumm, sonst verstimmt gegen den Loop. */
 const OHNE_STAB = new Set([5, 10, 13]); // NewToday, Amphegott, Vorbild
 
 const analyse = JSON.parse(fs.readFileSync(`${ROUND1}/analyse.json`, "utf8")).filter((a) => !a.error);
-const mapping = JSON.parse(fs.readFileSync(`${ROUND1}/mapping.json`, "utf8"));
+const mapping = JSON.parse(fs.readFileSync(MAPPING, "utf8"));
 const songs = mapping.map((m) => {
   const a = analyse.find((x) => x.idx === m.idx);
   if (!a) throw new Error(`Song ${m.idx} ohne Analyse`);
   return { ...a, ...m };
 });
-if (songs.length !== 16) throw new Error(`${songs.length} Songs, erwartet 16`);
+if (songs.length !== SONGS_JE_BANK) throw new Error(`${songs.length} Songs in ${MAPPING}, erwartet ${SONGS_JE_BANK}`);
 
 // ─── Bank-Belegung ────────────────────────────────────────────────────────────
 
 const BELEGUNG = [
   ["Kick", "HaimKind"], ["Kick", "Jumpkick"], ["Snare", "clydesna"], ["Snare", "snarre-p"],
-  ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], ["Shots", "ZaHnI_To"],
+  ["HiHat", "closed 8"], ["HiHat", "707_hho"], ["Shots", "ED Close"], null /* DROP */,
   ["Analog", "Unison_Bass_C3"], ["Analog", "Bassdrum-01fd"],
 ];
 const SYNTH_MELOS = [
   ["PCM", "T-Mello"], ["PCM", "Tau-MeLo"], ["PCM", "HBsChE PaRa"], ["PCM", "Auf CrystaL"],
   ["PCM", "Holia-MeLo"], ["PCM", "melo6dk"], ["PCM", "Ha He MeLo"], ["PCM", "Krieger"],
 ];
-//            K1   K2   SN  SN2  HH  HHO  SH  SH2  BASS BAS2 STAB DROP MELA MELB ARP  SYN
-const VOLUME = [127, 108, 105, 94, 84, 88, 80, 78, 116, 100, 104, 108, 114, 114, 90, 96];
+//            K1   K2   SN  SN2  HH  HHO  SH  DROP BASS BAS2 STAB VOX  MELA MELB ARP  SYN
+const VOLUME = [127, 108, 105, 94, 84, 88, 80, 104, 116, 100, 104, 118, 114, 114, 90, 96];
 const VOICE = [MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1, MONO1,
                MONO2, MONO2, MONO1, MONO1, MONO1, MONO1, MONO1, POLY2];
 
@@ -90,14 +101,14 @@ function findeAnzeige(kat, wahl) {
   if (!s) throw new Error(`Kategorie "${kat}": "${wahl}" nicht gefunden`);
   return oscToDisplayNumber(s.sampleNumber);
 }
-const SAMPLES = BELEGUNG.map(([k, w]) => findeAnzeige(k, w));
+const SAMPLES = BELEGUNG.map((b) => (b ? findeAnzeige(b[0], b[1]) : null));
 const SYN_NR = SYNTH_MELOS.map(([k, w]) => findeAnzeige(k, w));
 for (const s of songs) {
-  for (const art of ["MELOA", "MELOB", "DROP", "STAB"]) {
+  for (const art of ["MELOA", "MELOB", "DROP", "STAB", ...(s.VOX ? ["VOX"] : [])]) {
     if (!vorhandeneNr.has(s[art])) throw new Error(`Song ${s.idx}: Sample #${s[art]} (${art}) fehlt in ${BANK}`);
   }
 }
-console.log(`Bank: ${BANK.split(/[\/]/).pop()} — ${belegt.length} Samples · MEGA3 ROUND 1 (${BPM} BPM, ${SLOTS} Patterns)`);
+console.log(`Bank: ${path.basename(BANK)} — ${belegt.length} Samples · ${path.basename(ZIEL, ".e2sallpat")} (${BPM} BPM, ${SLOTS} Patterns, Songs ${songs[0].idx}–${songs.at(-1).idx})`);
 
 // ─── Bausteine ────────────────────────────────────────────────────────────────
 
@@ -151,11 +162,12 @@ function songParts(song, intens, kickFigur, lagen) {
   const ev = melodie(song);
   const bass = song.bass;
   const akk = song.chords;
+  const hatVox = !!song.VOX;
 
   const steps = Array.from({ length: 16 }, leer);
   const wach = new Array(16).fill(false);
 
-  // Drums (0–7) — Intensitaetsstufen wie SET9–11
+  // Drums (0–6) — Intensitaetsstufen wie SET9–11
   steps[0] = KICK[kickFigur === "kein" ? "vier" : kickFigur]();
   wach[0] = !breakStelle && kickFigur !== "kein";
   steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 96, 22) : null));
@@ -174,8 +186,9 @@ function songParts(song, intens, kickFigur, lagen) {
   wach[5] = i >= 3;
   steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 13) : null));
   wach[6] = i >= 4;
-  steps[7] = baue((s) => (s % 8 === 7 ? hit([60], 72, 11) : null));
-  wach[7] = i >= 5;
+  // DROP-Loop (7), je Takt
+  steps[P_DROP] = baue((s) => (imTakt(s) === 0 ? hit([60], 120, 96) : null));
+  wach[P_DROP] = !!lagen.drop || (!!lagen.vox && !hatVox);
   // Bass (8–9) folgt den Akkordwurzeln des Songs (Takte 1–4)
   steps[8] = baue((s) => {
     if (s % 4 === 2) return hit([bass[takt(s)]], 108, 17);
@@ -192,8 +205,8 @@ function songParts(song, intens, kickFigur, lagen) {
     return e ? hit([fold(60 + (e[1] - ref), 40, 84)], 104, gateFuer(e[2])) : null;
   });
   wach[P_STAB] = !!lagen.stab && !OHNE_STAB.has(song.idx);
-  steps[P_DROP] = baue((s) => (imTakt(s) === 0 ? hit([60], 120, 96) : null));
-  wach[P_DROP] = !!lagen.drop;
+  steps[P_VOX] = baue((s) => (s === 0 ? hit([60], 127, 96) : null)); // 4 Takte, einmal triggern
+  wach[P_VOX] = !!lagen.vox && hatVox;
   steps[P_MELOA] = baue((s) => (s === 0 ? hit([60], 127, 96) : null)); // Alternate: Durchlauf 1, 3, …
   steps[P_MELOB] = baue((s) => (s === 0 ? hit([60], 127, 96) : null)); // Alternate: Durchlauf 2, 4, …
   wach[P_MELOA] = wach[P_MELOB] = !!lagen.melo;
@@ -209,9 +222,10 @@ function songParts(song, intens, kickFigur, lagen) {
 
   const synNr = SYN_NR[(song.idx - 1) % SYN_NR.length];
   const nrFuer = (idx) =>
-    idx < 10 ? SAMPLES[idx]
+    idx === P_DROP ? song.DROP
+      : idx < 10 ? SAMPLES[idx]
       : idx === P_STAB || idx === P_ARP ? song.STAB
-      : idx === P_DROP ? song.DROP
+      : idx === P_VOX ? (song.VOX ?? song.DROP)
       : idx === P_MELOA ? song.MELOA
       : idx === P_MELOB ? song.MELOB
       : synNr;
@@ -219,7 +233,7 @@ function songParts(song, intens, kickFigur, lagen) {
   return steps.map((st, idx) => {
     const params = { voiceAssign: VOICE[idx] };
     if (idx <= 1) Object.assign(params, { ifxOn: 1, ifxType: 8, ifxEdit: 127 });
-    if (idx === P_DROP || idx === P_MELOA || idx === P_MELOB) params.ampEgOn = 0; // Loops laufen durch
+    if (idx === P_DROP || idx === P_VOX || idx === P_MELOA || idx === P_MELOB) params.ampEgOn = 0; // Loops laufen durch
     return {
       sampleId: bankNumberToE2PatternRef(nrFuer(idx)),
       steps: st,
@@ -230,24 +244,18 @@ function songParts(song, intens, kickFigur, lagen) {
   });
 }
 
-/** TRANS: Takte 1–2 DROP von A, Takte 3–4 DROP von B, Drums dazwischen. Kein Alternate. */
+/** TRANS (Mashup): VOX/DROP von Song A ueber MELO A/B von Song B (Alternate an), Bass folgt B. */
 function transParts(a, b) {
-  const parts = songParts(a, 4, "hart", {});
-  parts[P_DROP].steps = baue((s) => (imTakt(s) === 0 && takt(s) < 2 ? hit([60], 120, 96) : null));
-  parts[P_DROP].muted = false;
-  parts[P_MELOA] = {
-    sampleId: bankNumberToE2PatternRef(b.DROP),
-    steps: baue((s) => (imTakt(s) === 0 && takt(s) >= 2 ? hit([60], 120, 96) : null)),
-    volume: VOLUME[P_DROP],
+  const parts = songParts(b, 4, "hart", { melo: 1 });
+  parts[P_VOX] = {
+    sampleId: bankNumberToE2PatternRef(a.VOX ?? a.DROP),
+    steps: a.VOX
+      ? baue((s) => (s === 0 ? hit([60], 120, 96) : null))
+      : baue((s) => (imTakt(s) === 0 ? hit([60], 120, 96) : null)),
+    volume: VOLUME[P_VOX],
     params: { voiceAssign: MONO1, ampEgOn: 0 },
     muted: false,
   };
-  parts[P_MELOB].muted = true;
-  parts[8].steps = baue((s) => {
-    const src = takt(s) < 2 ? a : b;
-    return s % 4 === 2 ? hit([src.bass[takt(s)]], 108, 17) : null;
-  });
-  parts[9].steps = baue((s) => (imTakt(s) === 0 ? hit([(takt(s) < 2 ? a : b).bass[takt(s)]], 98, 40) : null));
   return parts;
 }
 
@@ -255,6 +263,7 @@ function transParts(a, b) {
 
 //            Name      Intens Kick    Wdh  Lagen
 const BLOCK = [
+  // Durchlauf 1 — Melo-zentriert
   ["INTRO",   1, "vier", 2, { melo: 1 }],
   ["AUF 1",   2, "vier", 2, { melo: 1 }],
   ["AUF 2",   3, "hart", 2, { melo: 1, arp: 1 }],
@@ -266,14 +275,31 @@ const BLOCK = [
   ["RUHE 2",  3, "vier", 2, { syn: 1, arp: 1 }],
   ["LUFT",   -1, "kein", 2, { melo: 1 }],
   ["DROP 4",  5, "hart", 2, { melo: 1, stab: 1, arp: 1 }],
-  ["DROP 5",  5, "vier", 2, { stab: 1, arp: 1 }],
+  ["DROP 5",  5, "vier", 2, { drop: 1, stab: 1, arp: 1 }],
   ["AUSKL",   3, "vier", 2, { melo: 1 }],
   ["JAM SY",  2, "vier", 2, { syn: 1, arp: 1 }],
   ["JAM",     2, "vier", 2, { melo: 1, drop: 1, stab: 1, arp: 1 }],
+  // Durchlauf 2 — Vocal-zentriert
+  ["VOX IN",  1, "vier", 2, { vox: 1 }],
+  ["VOX 1",   3, "hart", 2, { vox: 1, arp: 1 }],
+  ["VOX 2",   4, "vier", 2, { vox: 1, melo: 1 }],
+  ["BREAK",  -1, "kein", 2, { vox: 1 }],
+  ["DRP2 1",  5, "hart", 2, { melo: 1, vox: 1, stab: 1 }],
+  ["DRP2 2",  5, "roll", 2, { melo: 1, arp: 1 }],
+  ["DRP2 3",  5, "hart", 2, { vox: 1, stab: 1, arp: 1 }],
+  ["RUHE 3",  2, "vier", 2, { syn: 1 }],
+  ["RUHE 4",  3, "vier", 2, { melo: 1, arp: 1 }],
+  ["LUFT 2", -1, "kein", 2, { melo: 1, vox: 1 }],
+  ["DRP2 4",  5, "hart", 2, { melo: 1, vox: 1, stab: 1, arp: 1 }],
+  ["DRP2 5",  5, "vier", 2, { melo: 1, stab: 1, drop: 1 }],
+  ["AUSKL2",  3, "vier", 2, { vox: 1 }],
+  ["JAM VX",  2, "vier", 2, { vox: 1, arp: 1 }],
+  ["JAM 2",   2, "vier", 2, { melo: 1, vox: 1, stab: 1, arp: 1 }],
 ];
-if (BLOCK.length !== PRO_BLOCK) throw new Error("Block hat nicht 15 Patterns");
+if (BLOCK.length !== PRO_BLOCK) throw new Error(`Block hat ${BLOCK.length} statt ${PRO_BLOCK} Patterns`);
 
-const TRANS = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [16, 1], [8, 9]];
+// Uebergaenge innerhalb der Bank (Indizes 1..8 relativ zur Bank)
+const TRANS = [[1, 2], [3, 4], [5, 6], [7, 8], [8, 1], [2, 3], [4, 5], [6, 7], [1, 5], [3, 7]];
 
 const patterns = [];
 for (const song of songs) {
@@ -301,7 +327,7 @@ for (const [ia, ib] of TRANS) {
     mfxType: 11,
     stepLength: 64,
     parts: transParts(a, b),
-    alternate13_14: false,
+    alternate13_14: true, // MELO A/B von Song B
     alternate15_16: false,
     chainTo: 0,
     chainRepeat: 2,
@@ -315,9 +341,9 @@ console.log(`${ZIEL} — ${out.length} Bytes · ${patterns.length} Patterns · $
 for (const [i, s] of songs.entries()) {
   const evA = (s.events ?? []).filter((e) => e[0] < N).length;
   console.log(
-    `  Block ${String(i + 1).padStart(2)}  Slots ${String(i * PRO_BLOCK + 1).padStart(3)}–${(i + 1) * PRO_BLOCK}  ${s.tag.padEnd(9)} ` +
+    `  Block ${String(i + 1)}  Slots ${String(i * PRO_BLOCK + 1).padStart(3)}–${String((i + 1) * PRO_BLOCK).padStart(3)}  ${s.tag.padEnd(9)} ` +
     `${s.key.padEnd(6)} ${String(s.bpm).padStart(5)}→175${s.varispeed ? ` VS${s.shift >= 0 ? "+" : ""}${s.shift}` : ""}  ` +
-    `${s.stems ? "Stem" : "Mix "}  Melo-Events ${String((s.events ?? []).length).padStart(2)} (A: ${String(evA).padStart(2)}${evA < 6 ? ", Arp-Ersatz" : ""})  Stab-Ref ${stabRef(s)}  #${s.MELOA}/${s.MELOB}/${s.DROP}/${s.STAB}`,
+    `${s.stems ? "Stem" : "Inst"}  ${s.VOX ? "VOX" : "—  "}  Melo-Events ${String((s.events ?? []).length).padStart(2)} (A: ${String(evA).padStart(2)}${evA < 6 ? ", Arp-Ersatz" : ""})  Stab ${OHNE_STAB.has(s.idx) ? "stumm" : "Ref " + stabRef(s)}  #${s.MELOA}–${s.STAB}`,
   );
 }
-console.log(`  Slots 241–250  TRANS ${TRANS.map(([a, b]) => `${a}>${b}`).join(" ")}`);
+console.log(`  Slots 241–250  TRANS ${TRANS.map(([a, b]) => `${songs[a - 1].idx}>${songs[b - 1].idx}`).join(" ")}`);

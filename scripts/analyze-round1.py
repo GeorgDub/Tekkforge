@@ -5,11 +5,14 @@ Je Song:
   * Tempo + Beat-Raster (librosa), Downbeat-Phase über Kick-Energie
   * Tonart (Krumhansl-Templates auf der Chroma-Summe)
   * MELO  = 8 Tekk-Takte (bei 175 BPM = 10,97 s) aus dem melodischsten,
-            perkussionsärmsten Abschnitt (Hook). Das Fenster wird mit Demucs
-            (htdemucs) in Stems getrennt; MELO = other + vocals — also ohne
-            Kick/Snare/Bass, die kommen vom Gerät. Geliefert als zwei Hälften
+            perkussionsärmsten Abschnitt (Hook). Quelle ist — wenn ein
+            Stem-Ordner angegeben ist — die (Instrumental)-Spur des Songs,
+            sonst der Vollmix; Demucs (htdemucs) nimmt daraus Drums und Bass
+            heraus (die kommen vom Gerät). Geliefert als zwei Hälften
             MELOA / MELOB à 4 Takte (Alternate-Paar 13/14 am Gerät → eine
             8-Takt-Melodie loopt in einem einzelnen Pattern).
+  * VOX   = 4 Tekk-Takte der stärksten Vocal-Phrase aus der (Vocals)-Spur
+            (nur mit Stem-Ordner; entfällt, wenn der Song keine Vocals hat)
   * DROP  = 1 Tekk-Takt aus dem lautesten melodischen Abschnitt (Vollmix)
   * STAB  = 0,6 s ab dem stärksten Onset im Melodie-Stem, mit Tonhöhe
   * Melodie des MELO-Fensters als 128 Sechzehntel (pyin auf dem Stem)
@@ -19,17 +22,22 @@ Tempo-Oktave: Rap (~90 BPM) wird als Half-Time behandelt (k=2), d. h. ein
 Rap-Beat = zwei Tekk-Beats; Stretch-Faktor bleibt damit nahe 1.
 
 Aufruf:  python scripts/analyze-round1.py [quellordner] [zielordner]
-             [--only 3,14] [--varispeed 14] [--varispeed all] [--no-stems]
+             [--stems-dir <ordner>] [--only 3,14] [--varispeed 14|all]
+             [--no-stems [5,8]]
+         --stems-dir Ordner mit "<nn>_<name>_(Instrumental).wav" und
+                     "..._(Vocals).wav" (UVR-Export, gleiche Länge wie Original)
          --only      nur diese Songs neu rechnen, Rest in analyse.json behalten
          --varispeed diese Songs per Resampling statt Phase-Vocoder auf Tempo
                      bringen (Tonhöhe geht mit; Noten/Akkorde/Bass werden
                      mitverschoben) — z. B. Stein zu Stein 129 → 175 = +5,26 HT
-         --no-stems  Demucs überspringen (MELO aus dem Vollmix)
-Ausgabe: <ziel>/<nn>-{MELOA,MELOB,DROP,STAB}.wav + <ziel>/analyse.json
+         --no-stems  Demucs überspringen (alle Songs, oder nur die genannten):
+                     MELO dann aus dem Instrumental (bzw. Vollmix) wie er ist
+Ausgabe: <ziel>/<nn>-{MELOA,MELOB,VOX,DROP,STAB}.wav + <ziel>/analyse.json
 """
 import json
 import io
 import os
+import re
 import sys
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace") if hasattr(sys.stdout, "buffer") else sys.stdout
 import numpy as np
@@ -37,10 +45,13 @@ import librosa
 import soundfile as sf
 from scipy.signal import butter, sosfiltfilt
 
+_FLAGS_MIT_WERT = {"--only", "--varispeed", "--stems-dir"}
 _POS = [a for i, a in enumerate(sys.argv[1:], 1)
-        if not a.startswith("--") and not sys.argv[i - 1].startswith("--")]
+        if not a.startswith("--") and sys.argv[i - 1] not in _FLAGS_MIT_WERT
+        and not (sys.argv[i - 1] == "--no-stems" and re.fullmatch(r"[\d,]+", a))]
 SRC = _POS[0] if len(_POS) > 0 else r"G:\Mukke Stuff\Musik für Sample\round 1"
 OUT = _POS[1] if len(_POS) > 1 else r"G:\IdeaProjects\TekkForge\examples\e2s\round1"
+STEMS_DIR = sys.argv[sys.argv.index("--stems-dir") + 1] if "--stems-dir" in sys.argv else None
 TARGET_BPM = 175.0
 SR = 44100
 SR_A = 22050  # Analyse-Rate
@@ -49,9 +60,11 @@ BAR_T = 4 * BEAT_T                  # 1.3714 s
 MELO_BARS = 8
 MELO_T = MELO_BARS * BAR_T          # 10.971 s
 HALF_T = MELO_T / 2                 # 5.486 s
+VOX_BARS = 4
+VOX_T = VOX_BARS * BAR_T
 STEPS = MELO_BARS * 16              # 128 Sechzehntel
 STAB_T = 0.6
-USE_STEMS = "--no-stems" not in sys.argv
+VOX_MIN_DBFS = -32.0                # darunter gilt: keine Vocals im Song
 
 os.makedirs(OUT, exist_ok=True)
 
@@ -81,6 +94,24 @@ def demucs_model():
         _MODEL = get_model("htdemucs")
         _MODEL.eval()
     return _MODEL
+
+
+def stem_dateien(idx):
+    """(Instrumental, Vocals)-Pfade für Song idx aus STEMS_DIR oder (None, None)."""
+    if not STEMS_DIR:
+        return None, None
+    inst = voc = None
+    for f in os.listdir(STEMS_DIR):
+        if not f.lower().endswith(".wav"):
+            continue
+        m = re.match(r"(\d+)_", f)
+        if not m or int(m.group(1)) != idx:
+            continue
+        if "(Instrumental)" in f:
+            inst = os.path.join(STEMS_DIR, f)
+        elif "(Vocals)" in f:
+            voc = os.path.join(STEMS_DIR, f)
+    return inst, voc
 
 
 def key_of(chroma_mean):
@@ -149,16 +180,21 @@ def stretch_to(seg, rate, n_target, varispeed=False, normalize=True):
     return seg
 
 
-def separate(path, t0, length_s):
+def lade_fenster(path, t0, length_s, stereo=True):
+    ys, _ = librosa.load(path, sr=SR, mono=not stereo, offset=max(0.0, t0), duration=length_s)
+    if stereo and ys.ndim == 1:
+        ys = np.stack([ys, ys])
+    return ys
+
+
+def separate(path, t0, length_s, sources=("other", "vocals")):
     """Demucs auf dem Fenster [t0, t0+length_s] (Stereo). Liefert
-    (melodie_stem_mono, mix_mono) ab t0, beide @SR."""
+    (stem_mono aus `sources`, mix_mono) ab t0, beide @SR."""
     import torch
     from demucs.apply import apply_model
     pad = 0.75
     start = max(0.0, t0 - pad)
-    ys, _ = librosa.load(path, sr=SR, mono=False, offset=start, duration=length_s + 2 * pad)
-    if ys.ndim == 1:
-        ys = np.stack([ys, ys])
+    ys = lade_fenster(path, start, length_s + 2 * pad)
     model = demucs_model()
     wav = torch.from_numpy(np.ascontiguousarray(ys, dtype=np.float32))[None]
     ref = wav.mean(0)
@@ -167,15 +203,21 @@ def separate(path, t0, length_s):
         out = apply_model(model, wav, device="cpu", progress=False, shifts=1, overlap=0.25)[0]
     out = out * (ref.std() + 1e-8) + ref.mean()
     src = dict(zip(model.sources, out.numpy()))
-    stem = (src["other"] + src["vocals"]).mean(axis=0)
+    stem = sum(src[s] for s in sources).mean(axis=0)
     mix = ys.mean(axis=0)
     off = int((t0 - start) * SR)
     return stem[off:], mix[off:]
 
 
-def analyse(path, idx, varispeed=False):
+def rms_db(x):
+    return float(20 * np.log10(np.sqrt(np.mean(x ** 2)) + 1e-9))
+
+
+def analyse(path, idx, varispeed=False, stems=True):
     name = os.path.basename(path)
-    log(f"\n[{idx:02d}] {name}{'  [VARISPEED]' if varispeed else ''}")
+    inst_pfad, voc_pfad = stem_dateien(idx)
+    log(f"\n[{idx:02d}] {name}{'  [VARISPEED]' if varispeed else ''}{'' if stems else '  [NO-STEMS]'}"
+        f"{'  [UVR: Inst+Vox]' if inst_pfad and voc_pfad else ''}")
     y, _ = librosa.load(path, sr=SR, mono=True)
     dur = len(y) / SR
     ya = librosa.resample(y, orig_sr=SR, target_sr=SR_A, res_type="polyphase")
@@ -213,11 +255,13 @@ def analyse(path, idx, varispeed=False):
         f1 = max(f0 + 1, int(t1 * SR_A / 512))
         return f0, f1
 
-    # MELO-Fenster = 8 Tekk-Takte = 32/k Quell-Beats
-    melo_src_bars = max(1, int(round(32 / k)) // 4)
-    drop_src_bars = max(1, melo_src_bars // MELO_BARS) if k <= 1 else 1  # 1 Tekk-Takt in Quelltakten (k=2: halber)
+    melo_src_bars = max(1, int(round(32 / k)) // 4)   # 8 Tekk-Takte in Quelltakten
+    vox_src_bars = max(1, int(round(16 / k)) // 4)    # 4 Tekk-Takte in Quelltakten
+    src_melo_len = MELO_T * rate
+    src_bar_len = BAR_T * rate
+    src_vox_len = VOX_T * rate
 
-    # Phrasenraster: Versatz, bei dem die Chroma-Neuheit an Fenstergrenzen maximal ist
+    # Phrasenraster
     cm = []
     for b in range(len(bars) - 1):
         f0, f1 = frames_between(bars[b], bars[b + 1])
@@ -248,23 +292,25 @@ def analyse(path, idx, varispeed=False):
         if c["h"] < h_thr:
             return -1
         return (c["h"] / (c["p"] + 1e-6)) * (0.5 + c["clarity"])
+
+    # Melodie-Quelle: Instrumental-Stem (UVR) oder Vollmix; Demucs nimmt Drums/Bass raus
+    melo_pfad = inst_pfad or path
+    quellen = ("other",) if inst_pfad else ("other", "vocals")
+
     # Top-4 nach HPSS, Entscheidung per Demucs: das Fenster mit dem lautesten Melodie-Stem
     top = sorted((c for c in cands if melo_score(c) > 0), key=melo_score, reverse=True)[:4] or [max(cands, key=melo_score)]
     melo = top[0]
     stem_cache = {}
-    if USE_STEMS and len(top) > 1:
-        src_melo_len_ = MELO_T * rate
+    if stems and len(top) > 1:
         for c in top:
             try:
-                st, mx = separate(path, c["t0"], src_melo_len_)
-                r_st = float(np.sqrt(np.mean(st ** 2)) + 1e-9)
-                r_mx = float(np.sqrt(np.mean(mx ** 2)) + 1e-9)
-                stem_cache[c["bar"]] = (st, mx, r_st, r_mx)
-                log(f"    Kandidat Takt {c['bar']:3d} @{c['t0']:6.1f}s: Stem {20*np.log10(r_st):6.1f} dBFS ({20*np.log10(r_st/r_mx):+.1f} dB zum Mix)")
+                st, mx = separate(melo_pfad, c["t0"], src_melo_len, quellen)
+                stem_cache[c["bar"]] = (st, mx)
+                log(f"    Kandidat Takt {c['bar']:3d} @{c['t0']:6.1f}s: Stem {rms_db(st):6.1f} dBFS ({rms_db(st)-rms_db(mx):+.1f} dB zur Quelle)")
             except Exception as e:
                 log(f"    Kandidat Takt {c['bar']}: Demucs fehlgeschlagen ({e})")
         if stem_cache:
-            melo = max((c for c in top if c["bar"] in stem_cache), key=lambda c: stem_cache[c["bar"]][2])
+            melo = max((c for c in top if c["bar"] in stem_cache), key=lambda c: rms_db(stem_cache[c["bar"]][0]))
 
     def drop_score(c):
         if c is melo:
@@ -277,30 +323,32 @@ def analyse(path, idx, varispeed=False):
     n_melo = int(round(MELO_T * SR))
     n_half = int(round(HALF_T * SR))
     n_bar = int(round(BAR_T * SR))
+    n_vox = int(round(VOX_T * SR))
     n_stab = int(round(STAB_T * SR))
-    src_melo_len = MELO_T * rate
-    src_bar_len = BAR_T * rate
 
     def cut(t0, length_s):
         a = int(t0 * SR)
         b_ = min(len(y), a + int(length_s * SR) + 2048)
         return y[a:b_]
 
-    # Stems fürs MELO-Fenster
     stem_ok = False
-    if USE_STEMS:
+    if stems:
         try:
             if melo["bar"] in stem_cache:
-                stem, mix, r_stem, r_mix = stem_cache[melo["bar"]]
+                stem, mix = stem_cache[melo["bar"]]
             else:
-                stem, mix = separate(path, melo["t0"], src_melo_len)
-                r_stem = float(np.sqrt(np.mean(stem ** 2)) + 1e-9)
-                r_mix = float(np.sqrt(np.mean(mix ** 2)) + 1e-9)
-            stem_ok = r_stem >= 0.05 * r_mix
-            log(f"  Demucs: Melodie-Stem {20*np.log10(r_stem/r_mix):+.1f} dB zum Mix{'' if stem_ok else ' → zu leise, nehme Vollmix'}")
+                stem, mix = separate(melo_pfad, melo["t0"], src_melo_len, quellen)
+            stem_ok = rms_db(stem) - rms_db(mix) >= -26.0
+            log(f"  Demucs: Melodie-Stem {rms_db(stem)-rms_db(mix):+.1f} dB zur Quelle{'' if stem_ok else ' → zu leise, nehme Quelle'}")
         except Exception as e:
-            log(f"  Demucs fehlgeschlagen ({e}) → Vollmix")
-    melo_src = stem if stem_ok else cut(melo["t0"], src_melo_len)
+            log(f"  Demucs fehlgeschlagen ({e}) → Quelle")
+    if stem_ok:
+        melo_src = stem
+    elif inst_pfad:
+        melo_src = lade_fenster(inst_pfad, melo["t0"], src_melo_len + 0.1, stereo=False)
+        log("  MELO-Quelle: Instrumental-Stem (ohne Demucs)")
+    else:
+        melo_src = cut(melo["t0"], src_melo_len)
 
     melo_seg = stretch_to(melo_src, rate, n_melo, varispeed)
     melo_a = fades(melo_seg[:n_half], 0.002, 0.003)
@@ -311,7 +359,39 @@ def analyse(path, idx, varispeed=False):
     if varispeed:
         log(f"  Varispeed: Tonhöhe {shift_exact:+.2f} Halbtöne (Noten {shift:+d})")
 
-    # Analysespur fürs Fenster: Melodie-Stem (oder Vollmix) → 22050, Mittenband
+    # ── VOX: stärkste 4-Takt-Vocal-Phrase aus der Vocals-Spur ──
+    vox = None
+    if voc_pfad:
+        yv, _ = librosa.load(voc_pfad, sr=SR_A, mono=True)
+        rms_v = librosa.feature.rms(y=yv, hop_length=512)[0]
+        best = None
+        for b in range(0, len(bars) - vox_src_bars):
+            f0, f1 = frames_between(bars[b], bars[b + vox_src_bars])
+            seg = rms_v[f0:f1]
+            if not len(seg):
+                continue
+            lvl = float(np.sqrt(np.mean(seg ** 2)))
+            dichte = float((seg > 0.02).mean())     # Anteil der Frames mit Stimme
+            score = lvl * (0.4 + dichte)
+            if best is None or score > best[0]:
+                best = (score, b, lvl, dichte)
+        if best:
+            _, vb, lvl, dichte = best
+            db = 20 * np.log10(lvl + 1e-9)
+            if db >= VOX_MIN_DBFS:
+                vox_src = lade_fenster(voc_pfad, bars[vb], src_vox_len + 0.1, stereo=False)
+                vox_seg = stretch_to(vox_src, rate, n_vox, varispeed)
+                vox = dict(t0=round(float(bars[vb]), 2), bar=int(vb), dbfs=round(float(db), 1), dichte=round(dichte, 2))
+                sf.write(os.path.join(OUT, f"{idx:02d}-VOX.wav"), vox_seg, SR, subtype="PCM_16")
+                log(f"  VOX {bars[vb]:.1f}s (Takt {vb}): {db:.1f} dBFS, Stimme in {dichte*100:.0f}% der Frames")
+            else:
+                log(f"  VOX: Vocals zu leise ({db:.1f} dBFS) → kein VOX-Sample")
+    if vox is None:
+        alt = os.path.join(OUT, f"{idx:02d}-VOX.wav")
+        if os.path.exists(alt):
+            os.remove(alt)
+
+    # Analysespur fürs Fenster: Melodie-Quelle → 22050, Mittenband
     win22 = librosa.resample(melo_src[: int(src_melo_len * SR)], orig_sr=SR, target_sr=SR_A, res_type="polyphase")
     sos = butter(4, [180, 5000], btype="bandpass", fs=SR_A, output="sos")
     win_mid = sosfiltfilt(sos, win22).astype(np.float32)
@@ -373,16 +453,15 @@ def analyse(path, idx, varispeed=False):
     sf.write(os.path.join(OUT, f"{stem_}-MELOB.wav"), melo_b, SR, subtype="PCM_16")
     sf.write(os.path.join(OUT, f"{stem_}-DROP.wav"), drop_seg, SR, subtype="PCM_16")
     sf.write(os.path.join(OUT, f"{stem_}-STAB.wav"), stab_seg, SR, subtype="PCM_16")
-    alt = os.path.join(OUT, f"{stem_}-MELO.wav")
-    if os.path.exists(alt):
-        os.remove(alt)
 
     return dict(
         idx=idx, file=name, duration=round(dur, 1), bpm=round(tempo, 1), k=k,
         eff_bpm=round(eff_bpm, 1), rate=round(rate, 4),
         varispeed=bool(varispeed), shift=round(float(shift_exact), 2), stems=bool(stem_ok),
+        quelle="instrumental" if inst_pfad else "mix",
         key=f"{NAMES[key_root]}{key_mode}", key_root=key_root, key_mode=key_mode,
         melo=dict(t0=round(melo["t0"], 2), bar=melo["bar"], bars=MELO_BARS),
+        vox=vox,
         drop=dict(t0=round(drop["t0"], 2), bar=drop["bar"]),
         stab=dict(t0=round(stab_t, 2), note=stab_note, voiced=round(stab_voiced, 2)),
         notes=notes, events=events, chords=chords, bass=bass,
@@ -392,10 +471,13 @@ def analyse(path, idx, varispeed=False):
 def _idx_liste(flag, n_max=99):
     """--only 3,14 bzw. --varispeed 14 / all → Menge."""
     if flag in sys.argv:
-        wert = sys.argv[sys.argv.index(flag) + 1]
+        i = sys.argv.index(flag) + 1
+        wert = sys.argv[i] if i < len(sys.argv) else ""
         if wert == "all":
             return set(range(1, n_max + 1))
-        return {int(x) for x in wert.split(",")}
+        if re.fullmatch(r"[\d,]+", wert):
+            return {int(x) for x in wert.split(",")}
+        return set(range(1, n_max + 1)) if flag == "--no-stems" else set()
     return set()
 
 
@@ -403,6 +485,7 @@ def main():
     files = sorted(f for f in os.listdir(SRC) if f.lower().endswith((".wav", ".mp3", ".flac", ".aiff", ".aif")))
     only = _idx_liste("--only")
     varispeed = _idx_liste("--varispeed")
+    no_stems = _idx_liste("--no-stems")
     json_pfad = os.path.join(OUT, "analyse.json")
     results = []
     if only and os.path.exists(json_pfad):  # Teil-Lauf: bestehende Ergebnisse behalten
@@ -412,7 +495,7 @@ def main():
         if only and i not in only:
             continue
         try:
-            r = analyse(os.path.join(SRC, f), i, varispeed=i in varispeed)
+            r = analyse(os.path.join(SRC, f), i, varispeed=i in varispeed, stems=i not in no_stems)
         except Exception as e:  # ein Song darf die Runde nicht abbrechen
             log(f"  FEHLER: {e}")
             r = dict(idx=i, file=f, error=str(e))

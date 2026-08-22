@@ -1,24 +1,29 @@
 /**
- * Erzeugt round1.all — eine EIGENSTAENDIGE Bank fuer TEKK_MEGA3:
- * die 18 tekk4-Samples, die MEGA3 nutzt (Drums, Bass, Synth-Melos —
- * mit ihren ORIGINALEN tekk4-Nummern, also lueckenhaft 501–577), plus die
- * Song-Slices aus „round 1" (scripts/analyze-round1.py → examples/e2s/round1).
+ * Erzeugt round1<x>.all — EIGENSTAENDIGE Baenke fuer TEKK_MEGA3<X>, je 8 Songs:
+ * die 18 tekk4-Samples, die MEGA3 nutzt (Drums, Bass, 8 Synth-Melos — mit ihren
+ * ORIGINALEN tekk4-Nummern, also lueckenhaft 501–562), plus die Song-Slices
+ * aus „round 1" (scripts/analyze-round1.py → examples/e2s/round1).
  *
- * Warum nicht tekk4 + Slices: tekk4.all belegt allein ~17,7 MB (≈220 s) vom
- * ~24-MB-Sample-RAM des Geraets; 16 Songs × 13 s Slices (≈18 MB) passen
- * da nicht mehr dazu. Die Auswahl (ohne Pads) haelt die Bank bei ~21 MB.
+ * Warum gesplittet: 16 Songs × 5 Slices (≈19 MB) + Basis sprengen das
+ * ~24-MB-Sample-RAM des Geraets. Zwei Baenke à 8 Songs liegen bei ~16 MB.
+ * Die Sample-Nummern sind ueber beide Baenke EINDEUTIG (A: 581–620,
+ * B: 621–660), damit eine falsch geladene Bank nicht stumm falsch spielt.
  *
- *   je Song drei Samples, fortlaufend ab Anzeige 581:
- *     <Tag> MA  = MELO Hälfte A, 4 Takte @175 BPM (5,486 s), 64 Slices, Kat. Phrase
- *     <Tag> MB  = MELO Hälfte B (Alternate-Paar 13/14 → 8-Takt-Loop),  Kat. Phrase
- *     <Tag> DR  = DROP, 1 Takt @175 BPM (1,371 s), 16 Slices,                Kat. Loop
- *     <Tag> ST  = STAB, 0,6 s Einzelklang aus dem Hook,                      Kat. Hits
+ *   je Song fuenf Samples (Anzeige = 581 + (Song-1)·5 + k):
+ *     <Tag> MA  = MELO Haelfte A, 4 Takte @175 BPM (5,486 s), 64 Slices, Kat. Phrase
+ *     <Tag> MB  = MELO Haelfte B (Alternate-Paar 13/14 → 8-Takt-Loop),  Kat. Phrase
+ *     <Tag> VX  = VOX, 4 Takte Vocal-Phrase @175 BPM (UVR-Vocals-Spur),  Kat. Voice
+ *     <Tag> DR  = DROP, 1 Takt @175 BPM (1,371 s), 16 Slices,            Kat. Loop
+ *     <Tag> ST  = STAB, 0,6 s Einzelklang aus dem Hook,                  Kat. Hits
+ *   Fehlt das VOX-WAV (Song ohne Vocals), bleibt die Nummer frei.
  *
  * Slice-Format nach Factory-Bank (sampler_full_501.all, HarpChord/Drum 1):
  * start/length in Frames, attackLength ≈ length/2, amplitude = Spitzenwert,
  * sliceSteps[i] = Slice-Nr oder 255, Metadaten numSteps/beat/numActive.
  *
- * Aufruf: npx tsx scripts/make-round1-bank.mjs [ziel.all] [round1-ordner]
+ * Aufruf: npx tsx scripts/make-round1-bank.mjs <ziel.all> <von>-<bis> [round1-ordner]
+ *         z. B. examples/e2s/round1a.all 1-8  ·  examples/e2s/round1b.all 9-16
+ * Schreibt <round1-ordner>/mapping-<zielname>.json fuer make-tekk-mega3.mjs.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -32,9 +37,13 @@ import {
 } from "../src/core/e2sPatternSampleLink.ts";
 
 const QUELLE = "examples/e2s/tekk4.all";
-const ZIEL = process.argv[2] ?? "examples/e2s/round1.all";
-const ROUND1 = process.argv[3] ?? "examples/e2s/round1";
+const ZIEL = process.argv[2] ?? "examples/e2s/round1a.all";
+const BEREICH = (process.argv[3] ?? "1-8").split("-").map(Number);
+const ROUND1 = process.argv[4] ?? "examples/e2s/round1";
 const ERSTE_NEUE = 581;
+const PRO_SONG = 5;
+const [VON, BIS] = BEREICH;
+if (!(VON >= 1 && BIS >= VON)) throw new Error(`Bereich "${process.argv[3]}" unverstaendlich (z. B. 1-8)`);
 
 /** Aus tekk4 uebernommene Samples (Name-Praefix, wie make-tekk-mega3.mjs sie sucht). */
 const BASIS = [
@@ -50,9 +59,10 @@ export const TAGS = [
   "Vorbild", "SteinStn", "Sturmmask", "WasnDas",
 ];
 
-const KAT = { MELOA: 14, MELOB: 14, DROP: 15, STAB: 7 }; // Phrase, Loop, Hits
-const SUFFIX = { MELOA: "MA", MELOB: "MB", DROP: "DR", STAB: "ST" };
-const SLICES = { MELOA: 64, MELOB: 64, DROP: 16, STAB: 0 };
+const ARTEN = ["MELOA", "MELOB", "VOX", "DROP", "STAB"];
+const KAT = { MELOA: 14, MELOB: 14, VOX: 9, DROP: 15, STAB: 7 }; // Phrase, Voice, Loop, Hits
+const SUFFIX = { MELOA: "MA", MELOB: "MB", VOX: "VX", DROP: "DR", STAB: "ST" };
+const SLICES = { MELOA: 64, MELOB: 64, VOX: 64, DROP: 16, STAB: 0 };
 
 const basis = parseE2sBank(new Uint8Array(fs.readFileSync(QUELLE)), QUELLE);
 const slots = [];
@@ -75,9 +85,9 @@ if (fehlt.length) throw new Error(`in ${QUELLE} nicht gefunden: ${fehlt.join(", 
 console.log(`${QUELLE}: ${slots.length} Basis-Samples uebernommen (Nummern unveraendert, bis ${hoechsteAnzeige})`);
 
 const analyse = JSON.parse(fs.readFileSync(path.join(ROUND1, "analyse.json"), "utf8"));
-const songs = analyse.filter((a) => !a.error);
-if (songs.length !== TAGS.length) {
-  console.warn(`WARNUNG: ${songs.length} analysierte Songs, ${TAGS.length} Tags`);
+const songs = analyse.filter((a) => !a.error && a.idx >= VON && a.idx <= BIS);
+if (songs.length !== BIS - VON + 1) {
+  throw new Error(`Songs ${VON}–${BIS}: nur ${songs.length} analysiert`);
 }
 
 /** Gleichmaessige Slices ueber das Sample; amplitude = Spitzenwert je Slice (int16). */
@@ -110,13 +120,18 @@ function slicesFuer(pcm, anzahl) {
 }
 
 const mapping = [];
-let nr = ERSTE_NEUE;
 let sekunden = 0;
+let letzteNr = 0;
 for (const song of songs) {
   const tag = TAGS[song.idx - 1] ?? `Song${song.idx}`;
   const eintrag = { idx: song.idx, tag, file: song.file };
-  for (const art of ["MELOA", "MELOB", "DROP", "STAB"]) {
+  ARTEN.forEach((art, k) => {
+    const nr = ERSTE_NEUE + (song.idx - 1) * PRO_SONG + k;
     const wavPfad = path.join(ROUND1, `${String(song.idx).padStart(2, "0")}-${art}.wav`);
+    if (!fs.existsSync(wavPfad)) {
+      if (art === "VOX") { console.log(`  #${nr}  VOX  — (Song ohne Vocals)`); return; }
+      throw new Error(`${wavPfad} fehlt`);
+    }
     const wav = parseWav(new Uint8Array(fs.readFileSync(wavPfad)));
     if (wav.channels !== 1 || wav.sampleRate !== 44100) throw new Error(`${wavPfad}: erwartet mono 44.1k`);
     const name = `${tag} ${SUFFIX[art]}`.slice(0, 16);
@@ -133,9 +148,9 @@ for (const song of songs) {
     });
     sekunden += wav.frames / wav.sampleRate;
     eintrag[art] = nr;
-    console.log(`  #${nr}  ${art.padEnd(4)} "${name}"  ${(wav.frames / wav.sampleRate).toFixed(2)}s`);
-    nr++;
-  }
+    letzteNr = Math.max(letzteNr, nr);
+    console.log(`  #${nr}  ${art.padEnd(5)} "${name}"  ${(wav.frames / wav.sampleRate).toFixed(2)}s`);
+  });
   mapping.push(eintrag);
 }
 
@@ -143,9 +158,10 @@ const bank = buildE2sBank(slots);
 for (const w of bank.warnings ?? []) console.warn("  ! " + w);
 const out = Buffer.from(bank.buffer ?? bank);
 fs.writeFileSync(ZIEL, out);
-console.log(`${ZIEL} — ${(out.length / 1024 / 1024).toFixed(1)} MB · ${slots.length} Samples (Anzeige 501–${nr - 1}) · neue Slices ${sekunden.toFixed(1)} s`);
+const zielName = path.basename(ZIEL, ".all");
+console.log(`${ZIEL} — ${(out.length / 1024 / 1024).toFixed(1)} MB · ${slots.length} Samples (Songs ${VON}–${BIS}, Slices bis #${letzteNr}) · Slices ${sekunden.toFixed(1)} s`);
 fs.writeFileSync(
   ZIEL.replace(/\.all$/, "-inhalt.txt"),
   slots.map((s) => `${oscToDisplayNumber(s.sampleNumber)}\t${s.name}`).join("\n") + "\n",
 );
-fs.writeFileSync(path.join(ROUND1, "mapping.json"), JSON.stringify(mapping, null, 1));
+fs.writeFileSync(path.join(ROUND1, `mapping-${zielName}.json`), JSON.stringify(mapping, null, 1));

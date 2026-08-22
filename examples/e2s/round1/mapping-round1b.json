@@ -1,0 +1,82 @@
+[
+ {
+  "idx": 9,
+  "tag": "KlarBengl",
+  "file": "Komm Klar Bengel_2308811354 - LuuZz.wav",
+  "MELOA": 621,
+  "MELOB": 622,
+  "VOX": 623,
+  "DROP": 624,
+  "STAB": 625
+ },
+ {
+  "idx": 10,
+  "tag": "Amphegott",
+  "file": "Nat3 - Amphegott_2313387911 - Nat3.wav",
+  "MELOA": 626,
+  "MELOB": 627,
+  "VOX": 628,
+  "DROP": 629,
+  "STAB": 630
+ },
+ {
+  "idx": 11,
+  "tag": "RoundWrld",
+  "file": "ROUND THE WORLD (BOVSKI Remix)_1899901812 - BOVSKI.wav",
+  "MELOA": 631,
+  "MELOB": 632,
+  "VOX": 633,
+  "DROP": 634,
+  "STAB": 635
+ },
+ {
+  "idx": 12,
+  "tag": "Schmettr",
+  "file": "SCHMETTERLING-SYNTEKKZ (ESX1)_2283250796 - SYNTEKKZ.wav",
+  "MELOA": 636,
+  "MELOB": 637,
+  "VOX": 638,
+  "DROP": 639,
+  "STAB": 640
+ },
+ {
+  "idx": 13,
+  "tag": "Vorbild",
+  "file": "Sido - Schlechtes Vorbild (Drickberg Bootleg)_1649736984 - Drickberg.wav",
+  "MELOA": 641,
+  "MELOB": 642,
+  "VOX": 643,
+  "DROP": 644,
+  "STAB": 645
+ },
+ {
+  "idx": 14,
+  "tag": "SteinStn",
+  "file": "SpongeBob Schwammkopf - Stein Zu Stein I Bausa & Badchieff - 9 bis 9 (128kbit_AAC).wav",
+  "MELOA": 646,
+  "MELOB": 647,
+  "VOX": 648,
+  "DROP": 649,
+  "STAB": 650
+ },
+ {
+  "idx": 15,
+  "tag": "Sturmmask",
+  "file": "Sturmmaske auf (District Red Remix) (128kbit_AAC).wav",
+  "MELOA": 651,
+  "MELOB": 652,
+  "VOX": 653,
+  "DROP": 654,
+  "STAB": 655
+ },
+ {
+  "idx": 16,
+  "tag": "WasnDas",
+  "file": "Wasn Das¿_2269937342 - LuuZz.wav",
+  "MELOA": 656,
+  "MELOB": 657,
+  "VOX": 658,
+  "DROP": 659,
+  "STAB": 660
+ }
+]

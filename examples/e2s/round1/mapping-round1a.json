@@ -1,0 +1,82 @@
+[
+ {
+  "idx": 1,
+  "tag": "Abovegrnd",
+  "file": "ABOVEGROUND 3 SESSION #07 - KKUBA102 (128kbit_AAC).wav",
+  "MELOA": 581,
+  "MELOB": 582,
+  "VOX": 583,
+  "DROP": 584,
+  "STAB": 585
+ },
+ {
+  "idx": 2,
+  "tag": "Drogen",
+  "file": "Ach ja...Die Drogen¿¿_218578260 - Black Out.wav",
+  "MELOA": 586,
+  "MELOB": 587,
+  "VOX": 588,
+  "DROP": 589,
+  "STAB": 590
+ },
+ {
+  "idx": 3,
+  "tag": "Amphegot2",
+  "file": "Amphegott v2.wav",
+  "MELOA": 591,
+  "MELOB": 592,
+  "VOX": 593,
+  "DROP": 594,
+  "STAB": 595
+ },
+ {
+  "idx": 4,
+  "tag": "Zuckerwat",
+  "file": "Andi Teller Vs Pappenheimer -Zuckerwatte_82806493 - AndiTeller.wav",
+  "MELOA": 596,
+  "MELOB": 597,
+  "VOX": 598,
+  "DROP": 599,
+  "STAB": 600
+ },
+ {
+  "idx": 5,
+  "tag": "NewToday",
+  "file": "Endymion & Art Of Fighters feat. Lilly Julian - A new today_15639260 - Endymion.wav",
+  "MELOA": 601,
+  "MELOB": 602,
+  "VOX": 603,
+  "DROP": 604,
+  "STAB": 605
+ },
+ {
+  "idx": 6,
+  "tag": "RawFloor",
+  "file": "Evil Activities & The Viper - Raw To The Floor (A-TONY & Kroefoe Bootleg)_1802311479 - A-TONY_OFFICIAL.wav",
+  "MELOA": 606,
+  "MELOB": 607,
+  "VOX": 608,
+  "DROP": 609,
+  "STAB": 610
+ },
+ {
+  "idx": 7,
+  "tag": "TuerkAmph",
+  "file": "HARDTEKK ¦ TÜRKISCHE AMPHETAMINE ¦ [LysergTEKK] (128kbit_AAC).wav",
+  "MELOA": 611,
+  "MELOB": 612,
+  "VOX": 613,
+  "DROP": 614,
+  "STAB": 615
+ },
+ {
+  "idx": 8,
+  "tag": "JajaVeve",
+  "file": "JAJA VEVE - Haftbefehl (Theo Sommer X V3it edit)_2232262325 - Theo Sommer.wav",
+  "MELOA": 616,
+  "MELOB": 617,
+  "VOX": 618,
+  "DROP": 619,
+  "STAB": 620
+ }
+]
