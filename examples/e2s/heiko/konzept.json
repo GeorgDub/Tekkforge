@@ -1,0 +1,16 @@
+{
+ "themes": [
+  {"tag": "H1",  "melo": "1MEHeiko",  "melo2": "1SPHeiko"},
+  {"tag": "H2",  "melo": "2MeHeiko",  "melo2": "2SPHeiko"},
+  {"tag": "H3",  "melo": "3MEHeiko",  "melo2": "3SpHeiko"},
+  {"tag": "H4",  "melo": "4MEHeiko",  "melo2": "4SPHeiko"},
+  {"tag": "H5",  "melo": "5MeHeiko",  "melo2": "5SpHeiko"},
+  {"tag": "H6",  "melo": "6MEHeiko",  "melo2": "6SPHeiko"},
+  {"tag": "H7",  "melo": "7MEHeiko",  "melo2": "7SPHeiko"},
+  {"tag": "H8",  "melo": "8MEHeiko",  "melo2": "8SPheiko"},
+  {"tag": "H9",  "melo": "9SpHeiko",  "melo2": "Melo2"},
+  {"tag": "H10", "melo": "10SPHEiko", "melo2": "Synth Deep"},
+  {"tag": "SYN", "melo": "SYNTHNNU",  "melo2": "Melo2 #3"},
+  {"tag": "DEEP","melo": "Synth Deep","melo2": "Melo2"}
+ ]
+}

@@ -1,0 +1,50 @@
+501	HaimKind
+502	Jumpkick
+506	707_hho-
+508	closed 8
+509	clydesna
+510	snarre-p
+517	ED Close
+530	ZaHnI_To
+534	Unison_Bass_C3
+535	Bassdrum-01fd
+601	10SPHEiko A
+602	10SPHEiko B
+603	1MEHeiko A
+604	1MEHeiko B
+605	1SPHeiko A
+606	1SPHeiko B
+607	2MeHeiko A
+608	2MeHeiko B
+609	2SPHeiko A
+610	2SPHeiko B
+611	3MEHeiko A
+612	3MEHeiko B
+613	3SpHeiko A
+614	3SpHeiko B
+615	4MEHeiko A
+616	4MEHeiko B
+617	4SPHeiko A
+618	4SPHeiko B
+619	5MeHeiko A
+620	5MeHeiko B
+621	5SpHeiko A
+622	5SpHeiko B
+623	6MEHeiko A
+624	6MEHeiko B
+625	6SPHeiko A
+626	6SPHeiko B
+627	7MEHeiko A
+628	7MEHeiko B
+629	7SPHeiko A
+630	7SPHeiko B
+631	8MEHeiko! A
+632	8MEHeiko! B
+633	8SPheiko A
+634	8SPheiko B
+635	9SpHeiko A
+636	9SpHeiko B
+637	Melo2 #3
+638	Melo2
+639	Synth Deep
+640	SYNTHNNU

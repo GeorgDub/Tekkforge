@@ -1,0 +1,203 @@
+501	0HuB KiCk8
+502	0HuB KiCk9
+503	11NumKick
+504	1Bilanz
+505	1DurchKick
+506	1HommKick
+507	1LuzKick
+508	1TetoKick
+509	1TropfKick
+510	1VINKICK
+511	22DurchKick
+512	2Bilanz
+513	2HommKick
+514	2TetoKick
+515	2VINKick
+516	3Bilanz
+517	3NumKick
+518	3TetoKick
+519	3VINKick
+520	4VINKick
+521	bumbug1
+522	DruffKick
+523	EmmaKi1
+524	EmmaKi3
+525	FrenchKiCk
+526	Hard French
+527	HarDcoRe TekKe K
+528	HardKi1
+529	HardKi2
+530	HommO KicK 2
+531	KanK2
+532	kick toumoux 03
+533	LuZZ1 16Bits
+534	Teetoo VoGeL Kic
+535	Teetoo VoGeL Ki2
+536	Teetoo VoGeL Ki3
+537	Teetoo VoGeL Ki4
+538	Teetoo VoGeL Ki5
+539	Teetoo VoGeL Ki6
+540	Teetoo VoGeL Ki7
+541	Teetoo VoGeL Ki8
+542	Teetoo VoGeL Ki9
+543	Teetoo VoGeL K10
+544	Teetoo VoGeL K11
+545	TetoKI (11)
+546	TetoKI (3)
+547	TetoKI (7)
+548	TetoKI (9)
+549	TrOpF 15
+550	TrOpF 16
+551	TrOpF TeKk41
+552	TrOpF-KicK
+553	Turbo KicK
+554	TaeTer DrUm
+555	VinK22
+556	ViNKick
+557	Basic 808 Snare
+558	ge-kick12-snarre
+559	Snare 03
+560	snarre-pack3
+561	snarre-pack36
+562	snarre-pack5
+563	snarre-pack75
+564	Tekk Snair (2)
+565	Tekk Snair (3)
+566	ZaHnI SnArrE-2
+567	ZaHnI SnArrE-4
+568	RY HADES CLAP 03
+569	3833r HaT
+570	Elster HaT 55
+571	Hammer HaT
+572	HaMpF-HaT
+573	HaTTe
+574	HD HaT
+575	KrIsStaLL-HaT
+576	RY HADES CLOSED
+577	s2s dt drm hat2
+578	T Quietscher-HaT
+579	TeKKnO HaT
+580	TraTT HaT
+581	vTv HaT
+582	ZaHnI1. 16Bits
+583	ZaHnI HaT-10
+584	ZinT HaT
+585	zlZZErHaT1
+586	zlZZErHaT3
+587	zlZZErHaT4
+588	zlZZErHaT6
+589	RY HADES PERC SH
+590	booo
+591	CarTooN ToN-1
+592	CarTooN ToN-14
+593	CarTooN ToN-21
+594	CarTooN ToN-28
+595	CarTooN ToN-4
+596	CarTooN ToN-8
+597	DHS TOn- 10
+598	DHS TOn- 11
+599	DHS TOn- 2
+600	DHS TOn- 3
+601	DHS TOn- 4
+602	DHS TOn- 5
+603	DHS TOn- 6
+604	DHS TOn- 8
+605	fuer Dunkeler Wa
+606	fuer einsam1und2
+607	fuer GeistesGoTT
+608	fuer Gluecklich1
+609	Fuer HoRRoR Erle
+610	Fuer HoRRoR Erl2
+611	fuer ich vermiss
+612	fuer LeX
+613	fuer Liebe1und2
+614	Fuer LuzziFer
+615	Fuer Metro
+616	fuer Metropole M
+617	fuer Nosa Midi1u
+618	fuer PartyHarD1u
+619	fuer RaZtE FaTzE
+620	fuer RaZziFaZzi
+621	fuer ScHrUpP MiC
+622	Fuer Sehn sucht1
+623	Fuer Sehn sucht2
+624	fuer super1
+625	fuer TriLLa MeLL
+626	fuer TriLLa MeL2
+627	fuer Ultimate
+628	fuer Zahni origi
+629	fuer ZeR(T)AkkT
+630	Morbid ToN 1
+631	Morbid ToN 10
+632	Morbid ToN 12
+633	Morbid ToN 14
+634	Morbid ToN 15
+635	Morbid ToN 17
+636	Morbid ToN 2
+637	Morbid ToN 20
+638	Morbid ToN 21
+639	Morbid ToN 23
+640	Morbid ToN 3
+641	Morbid ToN 5
+642	Morbid ToN 6
+643	Morbid ToN 7
+644	Morbid ToN 8
+645	RaTzZeL ToN-11
+646	RaTzZeL ToN-12
+647	RaTzZeL ToN-13
+648	RaTzZeL ToN-15
+649	RaTzZeL ToN-17
+650	RaTzZeL ToN-18
+651	RaTzZeL ToN-21
+652	RaTzZeL ToN-22
+653	RaTzZeL ToN-23
+654	RaTzZeL ToN-24
+655	RaTzZeL ToN-5
+656	Tab
+657	techno ton
+658	techno ton2
+659	TeeTON (1)
+660	TeeTON (11)
+661	TeeTON (13)
+662	TeeTON (14)
+663	TeeTON (16)
+664	TeeTON (17)
+665	TeeTON (20)
+666	TeeTON (3)
+667	TeeTON (5)
+668	TeeTON (7)
+669	TeeTON (9)
+670	TekKe ToN
+671	ToNTekK
+672	TTrt ToN 3
+673	ToeT ToN
+674	HarD BasS extrem
+675	marvbass 3
+676	#TekkNo AlarM
+677	fuer Alarmsignal
+678	fuer Alarmsigna2
+679	77378 Flick3r Pr
+680	Best of Hard 1
+681	Best of Hard 2
+682	Best of Hard 3
+683	Best of Hard 4
+684	Best of Hard 5
+685	Best of Hard 6
+686	Best of Hard 7
+687	Best of Hard 8
+688	Best of Hard 9
+689	Best of Hard 10
+690	Best of Hard 11
+691	jetzt gibs Tekk
+692	Numondo (2) - Pa
+693	Numondo (2)
+694	ancer jeds 6
+695	fuer ich vermis2
+696	fuer LSD Wunder
+697	fuer Zahni orig2
+698	Morbid ToN 18
+699	SyMe6 DEEP
+700	SyMe8 Mid
+701	SyMe8MiPitch
+702	Synth3ME
+703	SynthMid3

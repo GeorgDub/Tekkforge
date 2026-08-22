@@ -1,0 +1,37 @@
+501	HaimKind
+502	Jumpkick
+506	707_hho-
+508	closed 8
+509	clydesna
+510	snarre-p
+517	ED Close
+530	ZaHnI_To
+534	Unison_Bass_C3
+535	Bassdrum-01fd
+601	BaSsBiLaNz kiCk
+602	kiucker10
+603	kiucker11
+604	LivETekK-KicK
+605	ZaHnI kiCkeR-121
+606	ZaHnI SnArrE-4
+607	Basic 808 HiHat
+608	ZaHnI To[N]-154
+609	jfxb SweepDown A
+610	jfxb SweepDown B
+611	jfxb SweepDown 1
+612	jfxb SweepUp 06
+613	METATRACKEFFEC A
+614	Quietsch
+615	Liebestrank2
+616	Rg1 VAR A
+617	Rg1 VAR B
+618	Rg1 INTRO A
+619	Rg1 INTRO B
+620	Rg1 BREAK A
+621	Rg1 BREAK B
+622	Rg1 DROP A
+623	Rg1 DROP B
+624	Rg2 VX1
+625	Rg2 VX2
+626	Rg2 VX3
+627	Rg2 VX4

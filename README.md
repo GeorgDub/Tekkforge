@@ -384,6 +384,43 @@ Die frühere Annahme („Byte 1 = Velocity, Byte 2 = konstant 0x60") war falsch 
 gingen Melodien verloren und Velocity/Gate landeten im falschen Byte. Details in
 `src/core/electribeImport.ts`.
 
+## Sample-Ordner → Bank + Pattern-Set
+
+Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze
+Tracks, Stems) entsteht in drei Schritten ein Paar `<name>.all` + `<NAME>.e2sallpat`:
+
+```bash
+python scripts/prep-folder.py "<ordner>" examples/e2s/<name> --prefix Xx --bpm 180 [--overrides o.json]
+npx tsx scripts/make-folder-bank.mjs examples/e2s/<name> examples/e2s/<name>.all 501        # oder 601 --tekk-drums
+npx tsx scripts/make-folder-set.mjs examples/e2s/<name>/bank-<name>.json examples/e2s/<NAME>.e2sallpat --bpm 180 --prefix Xx [--konzept k.json]
+npx tsx scripts/check-folder-sets.mjs    # Referenzen/Mutes/Chains aller Paare
+```
+
+`prep-folder.py` ordnet jede Datei per Name/Länge/Pegel einer Rolle zu (kick,
+snare, clap, hat, perc, ton, bass, fx, vox, melo, track), bringt Loops per
+Varispeed auf ganze Takte und schneidet sie in 4-Takt-Chunks (A/B = Alternate-
+Paar am Gerät), zerlegt Vocal-Sammlungen an Pausen und holt aus ganzen Tracks
+per Demucs 8-Takt-Fenster (DROP/BREAK/VAR; MELO = bass+other, VOX = vocals).
+`make-folder-set.mjs` baut daraus 250 Patterns: je Thema (Melodie × Kick-
+Familie × Vocal-Loop/zweite Melodie) ein gechainter Arrangement-Block, dahinter
+KICKPARADE-Patterns (16 Kicks, jeder Beat ein anderer) und ALLES je Thema.
+Parts ohne Steps sind gemutet, Percs/Stabs/FX wandern je Pattern durch die Pools.
+
+Gebaute Sets (2026-08-22), Quelle `G:\Samples Numondo\Sampler USE`:
+
+| Set | Quelle | BPM | Inhalt |
+|---|---|---|---|
+| `korg3` / `KORG3` | Korg/Samples v3 | 180 | 16 Kicks (RoBBaFFerT …), 7 Melos (bgg, HyPer 8 Takte), GZUZ-Vocal als Vers |
+| `korg2` / `KORG2` | Korg/Samples v2 | 180 | LuZz-Kicks, MeTaLLiC-Hats, 5 Melos (varispeed auf 4 Takte), tekk4-Drums ab 501 |
+| `korg1` / `KORG1` | Korg/Samples | 180 | 40 Kicks in 12 Familien („Kick-Battle"), 8 Snares, 5 Bässe, HaWk/bush als Melo |
+| `heiko` / `HEIKO` | Korg Sampler TOP/Project1 DJHeiko | 180 | 10 Songs à ME + SP (8-Takt-Loops) als Melo/Melo2, tekk4-Drums |
+| `project5` / `PROJECT5` | Korg Sampler TOP/Project5 | 180 | 203 Samples: 56 Kicks/18 Familien, 80 Tons/Percs, Hardtekk-Vocal-Shots, 5 Synth-Loops |
+| `durchgetekkt` / `DURCHGETEKKT` | DURCHGETEKKTSAMPLEEEEPROJEKT | 165 | 26 Kick-Varianten, dhrc/Intro/melo 2 als Melo, Vocal-Phrasen |
+| `rauschgift` / `RAUSCHGIFT` | Korg/Rauschgift (Stems 88 BPM) | 176 | 4 × 8-Takt-Fenster des Other-Stems, 4 Vocal-Loops, Sweeps als Riser |
+| `tommi` / `TOMMI` | Korg/Tommi (Tracks 1/4/5, 95 BPM) | 190 | je Track DROP/BREAK/VAR (Demucs bass+other), WhatsApp-Vocals 4 Loops; Track 2 ist leer |
+
+Nicht verwertbar: fünf Hat-Dateien in Project5 (kein gültiges WAV), `katze.wav`/`sp.wav` (still).
+
 ## Entwicklung
 
 ```bash
