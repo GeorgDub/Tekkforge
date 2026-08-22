@@ -45,6 +45,10 @@ im Browser doppelklicken.
    RAM-Bedarf → „Bank bauen" (`.all` speichern, per SD laden) → Jam-Pattern, Mini-Set (6
    gechainte Patterns) oder Pro Melo erzeugen → „→ Datei" oder „→ Editor". Melodien bleiben
    ganz; die Beschreibung steuert Kick/Bass/Stab per Schlüsselwort (KI-Übersetzung folgt).
+   In der Desktop-App außerdem: „Projekt speichern" legt `<Verzeichnis>/TekkForge/<name>.all`
+   + `projekt.json` an, „auf SD kopieren" schreibt nach `<SD>6\`, „als geladen markieren"
+   merkt sich die Bank (überlebt Neustarts) und gibt „→ Gerät ab Slot N" frei — Patterns gehen
+   dann per 0x4C-Slot-Dump ans Gerät, ohne das laufende Pattern zu stören.
 
 ## Pattern-Editor — Workflow
 
