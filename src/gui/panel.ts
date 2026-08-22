@@ -388,7 +388,7 @@ function zeigeZielPattern(idx: number): void {
 }
 
 /** Pattern am Gerät wechseln (Program Change + Bank Select) und im Editor folgen. */
-function wechslePattern(idx: number): void {
+export function wechslePattern(idx: number): void {
   idx = Math.max(0, Math.min(249, Math.round(idx)));
   if (!panelBridge.project.patterns[idx] && modus !== "live") {
     setStatus(`Pattern ${idx + 1} gibt es im Projekt nicht — im Live-Modus wird es trotzdem ans Gerät gesendet.`);
@@ -421,8 +421,43 @@ function wechslePattern(idx: number): void {
 
 let clockLaeuft = false;
 let clockBpm = 0;
+let transportStartMs: number | null = null;
 
-async function transportStart(mitClock: boolean): Promise<void> {
+/** Für das Pad-Deck: läuft der Transport, seit wann, in welchem Tempo? */
+export function transportInfo(): { spielt: boolean; bpm: number; startMs: number | null; clock: boolean } {
+  return { spielt: spieltGerade, bpm: aktuellesPattern().bpm, startMs: transportStartMs, clock: clockLaeuft };
+}
+
+/** Das Pattern, das das Panel gerade zeigt (Live-Stand oder Editor-Pattern). */
+export function aktuellesPanelPattern(): EditorPattern {
+  return aktuellesPattern();
+}
+
+/**
+ * Mutes setzen wie ein Pad-Klick im Part-Mute-Modus: Live per NRPN (Hacktribe)
+ * oder Edit-Buffer-Übertragung (Stock), Prepare nur lokal.
+ */
+export function setzeMutes(parts: number[], muted: boolean): void {
+  const p = aktuellesPattern();
+  for (const i of parts) {
+    const part = p.parts[i];
+    if (!part) continue;
+    part.muted = muted;
+    if (modus === "live" && featureAvailable(panelBridge.firmware, "nrpnPanel")) {
+      try {
+        for (const triple of buildPanelControl(panelBridge.midiChannel, "mute", i, muted ? 1 : 0))
+          panelBridge.midi.send(new Uint8Array(triple));
+      } catch {
+        /* Übertragung unten fängt es auf */
+      }
+    }
+  }
+  if (modus === "live") planeAutoUebertragung();
+  else panelBridge.markDirty();
+  renderPanel();
+}
+
+export async function transportStart(mitClock: boolean): Promise<void> {
   const bpm = aktuellesPattern().bpm;
   try {
     if (mitClock) {
@@ -436,6 +471,7 @@ async function transportStart(mitClock: boolean): Promise<void> {
     }
     panelBridge.midi.send(Uint8Array.from([MIDI_START]));
     spieltGerade = true;
+    transportStartMs = performance.now();
     setStatus(
       `Start gesendet${clockLaeuft ? ` + MIDI-Clock ${bpm} BPM` : ""} — das Gerät folgt nur bei Global „Clock Mode" Auto/Ext (Internal ignoriert beides).`,
     );
@@ -444,7 +480,7 @@ async function transportStart(mitClock: boolean): Promise<void> {
   }
 }
 
-async function transportStop(): Promise<void> {
+export async function transportStop(): Promise<void> {
   try {
     panelBridge.midi.send(Uint8Array.from([MIDI_STOP]));
     if (clockLaeuft) {
@@ -452,6 +488,7 @@ async function transportStop(): Promise<void> {
       clockLaeuft = false;
     }
     spieltGerade = false;
+    transportStartMs = null;
     planeAutoSync(800);
     setStatus("Stop gesendet, MIDI-Clock aus — Sync folgt.");
   } catch (err) {
@@ -1023,9 +1060,28 @@ export function panelWirdSichtbar(): void {
   renderPanel();
 }
 
+/** Weitere Empfänger für eingehendes MIDI (Pad-Deck: MIDI-Learn/Trigger). */
+const zusatzEmpfaenger: ((bytes: number[]) => void)[] = [];
+export function registriereEmpfaenger(cb: (bytes: number[]) => void): () => void {
+  zusatzEmpfaenger.push(cb);
+  return () => {
+    const i = zusatzEmpfaenger.indexOf(cb);
+    if (i >= 0) zusatzEmpfaenger.splice(i, 1);
+  };
+}
+
 export function initPanel(): void {
   baueDom();
-  panelBridge.onIncoming = empfangeVomGeraet;
+  panelBridge.onIncoming = (bytes) => {
+    empfangeVomGeraet(bytes);
+    for (const cb of zusatzEmpfaenger) {
+      try {
+        cb(bytes);
+      } catch (e) {
+        console.error("Empfänger", e);
+      }
+    }
+  };
   macheReglerDrehbar();
 
   $("e2sModusLive").addEventListener("click", () => {

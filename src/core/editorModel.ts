@@ -10,6 +10,7 @@
  */
 
 import type { E2PatternInput } from "./electribePatternBuilder";
+import { deserialisiereDeck, type PadDeck } from "./padDeck";
 import { buildE2AllPatFile, buildE2PatternFileV2 } from "./e2sExport";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { convertToE2sSpec, downmixToMono } from "./audioProcessor";
@@ -139,6 +140,8 @@ export interface EditorProject {
   version: 1;
   patterns: EditorPattern[];
   samples: PoolSample[];
+  /** Pad-Deck (gui/paddeck.ts) — wandert mit dem Projekt; fehlt bei alten Dateien. */
+  padDeck?: PadDeck;
 }
 
 // ─── Factories ───────────────────────────────────────────────────────────────
@@ -584,12 +587,14 @@ interface SerializedProject {
   version: 1;
   patterns: SerializedPattern[];
   samples: SerializedSample[];
+  padDeck?: PadDeck;
 }
 
 export function serializeProject(project: EditorProject): string {
   const doc: SerializedProject = {
     app: "tekkforge",
     version: 1,
+    ...(project.padDeck ? { padDeck: project.padDeck } : {}),
     patterns: project.patterns.map((p) => {
       const { rawBody, ...rest } = p;
       return rawBody ? { ...rest, rawBodyB64: bytesToBase64(rawBody) } : { ...rest };
@@ -651,7 +656,15 @@ export function deserializeProject(text: string): EditorProject {
     return base;
   });
   if (patterns.length === 0) patterns.push(createPattern("PATTERN 1"));
-  return { version: 1, patterns, samples };
+  const project: EditorProject = { version: 1, patterns, samples };
+  if (doc.padDeck) {
+    try {
+      project.padDeck = deserialisiereDeck(doc.padDeck);
+    } catch {
+      /* kaputtes Deck → Projekt trotzdem laden, Deck wird neu angelegt */
+    }
+  }
+  return project;
 }
 
 // ─── Anzeige-Helper ──────────────────────────────────────────────────────────

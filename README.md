@@ -168,6 +168,30 @@ Zwei SysEx-Wege, beide am Gerät bei **laufendem Sequencer** geprüft (2026-08-2
 
 Kein „kurz wechseln, dumpen, zurück" nötig.
 
+### Pad-Deck (Tab)
+
+Frei konfigurierbares Pad-Raster (1–8 × 1–8, 4 Seiten); jedes Pad führt eine
+**Aktionsliste** aus (`src/core/padDeck.ts`, Tests `tests/pad-deck.test.ts`,
+GUI `src/gui/paddeck.ts`):
+
+| Aktion | Was passiert |
+|---|---|
+| Pattern wechseln | Program Change (s. o.; greift bei laufendem Sequencer am Taktende) |
+| Pattern-Kopie mit Änderungen | Slot per 0x1C vom Gerät holen (Fallback: Projekt), Part-Parameter/Volume/Pan/Mute/BPM ändern, als 0x40 in den Edit-Buffer — flüchtig, kein Slot wird überschrieben |
+| Regler-CC | Part-Regler (Cutoff, Reso, …), IFX On, MFX Send, Master-FX X/Y/On |
+| Mutes | Parts stumm/an (Hacktribe: NRPN sofort, Stock: Übertragung) |
+| Transport | Play (Clock + Start), Stop, Panic |
+| Morph | gewählte Regler über N Takte (tempo-synchron) oder Sekunden auf Zielwerte fahren, Fortschrittsbalken im Pad |
+
+Je Pad: Label, Farbe, Tastaturkürzel (Standard 1–0, q–p, a–l, y–m), MIDI-Learn
+(Note oder CC vom Controller), Quantisierung „sofort" oder „nächster Takt"
+(Basis: Panel-Transport + Pattern-Tempo). Das aktive Pattern wird im Pad
+hervorgehoben. Das Deck liegt im Projekt (`.tekkforge`) und lässt sich als
+JSON exportieren/importieren; „Beispiel-Deck" baut aus den Projekt-Patterns
+ein Start-Deck (Blockanfänge, Filter-/IFX-Varianten, Transport/Mutes, Morphs).
+✔ Am Gerät geprüft 2026-08-22: Pattern-Pad, Kopie-Pad (Pattern 1 per 0x1C,
+Cutoff 40 → Edit-Buffer), Morph über 4 Takte.
+
 ### Fernbedienung im E2S-Panel (Stock-MIDI)
 
 `src/core/e2Remote.ts` (Tests `tests/e2-remote.test.ts`) — alles über normale
