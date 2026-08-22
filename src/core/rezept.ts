@@ -83,7 +83,7 @@ export function pools(p: Projekt): Pools {
   const tonsShort = by("ton").filter((t) => t.sekunden < 0.6);
   const tonsLong = by("ton").filter((t) => t.sekunden >= 0.6);
   const meloLoops = by("melo", "loop");
-  const meloKurz = meloLoops.filter((m) => m.takte < 4 && !m.chunks);
+  const meloKurz = meloLoops.filter((m) => m.takte < 2 && !m.chunks);
   return {
     kicks,
     familien: gross,
@@ -97,7 +97,7 @@ export function pools(p: Projekt): Pools {
     fxShots: by("fx", "oneshot"),
     fxLoops: by("fx", "loop"),
     voxShots: by("vox", "oneshot"),
-    meloLoops: meloLoops.filter((m) => m.takte >= 4 || m.chunks),
+    meloLoops: meloLoops.filter((m) => m.takte >= 2 || m.chunks),
     voxLoops: by("vox", "loop"),
   };
 }
