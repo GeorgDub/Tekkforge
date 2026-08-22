@@ -52,7 +52,9 @@ im Browser doppelklicken.
    **KI (Premium):** Mit Anthropic-API-Key (Feld im Tab, gespeichert in den App-Einstellungen,
    nie im Projekt) übersetzt Claude (`claude-opus-5`, Server-Fallback) die Beschreibung in das
    Rezept-JSON; die Antwort läuft durch dieselbe Prüfung wie der Regel-Planer, bei Fehler oder
-   Timeout (25 s) greift der Regel-Planer mit Hinweis. Pro Melo bleibt regelbasiert.
+   Timeout (25 s) greift der Regel-Planer mit Hinweis. Pro Melo holt in einem Aufruf eine
+   Rezept-Liste (je Melodie eines, Timeout 5 min); fehlende Melodien füllt der Regel-Planer auf.
+   Modell-ID in der KI-Zeile wählbar (`claude-opus-5` Standard, Sonnet 5, Opus 4.8, Haiku 4.5 oder frei).
    **Lied analysieren:** Audiodatei wählen → Tempo messen (oder eintragen), Half-/Double-Time in
    die Tekk-Oktave, drei 8-Takt-Fenster DROP / BREAK / VAR als je ein Melodie-Sample; mit Python +
    Demucs („Stems per Demucs", `scripts/stems.py`) als bass+other plus Vocals als Vox-Loop, sonst
