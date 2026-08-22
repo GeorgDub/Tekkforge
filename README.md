@@ -180,6 +180,9 @@ Program Change vollständig** (mehrfach gemessen, Display und Edit-Buffer
 unverändert); der Wechsel greift nur während der Wiedergabe am Taktende. Der
 Statustext im Panel sagt das. Empfangene Program Changes werden mit derselben
 Konvention dekodiert (Bank-LSB aus CC 32).
+✔ **Ablauf aus dem Panel am Gerät abgenommen (2026-08-22, Clock Mode Auto):**
+▶ → Pattern-Set-Pad → ■ → Auto-Sync liefert das gewählte Pattern
+(Pattern 49 → „Dr T2 VOX 3", Pattern 2 → „Dr T1 AUF 1").
 
 ## NRPN / Live-FX (Hacktribe, experimentell)
 
