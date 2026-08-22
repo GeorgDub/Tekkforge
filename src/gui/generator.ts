@@ -52,7 +52,7 @@ interface Zustand {
   /** Python/Demucs-Probe (nur Electron) */
   python: { demucs: boolean; meldung: string } | null;
   /** zuletzt analysiertes Lied */
-  lied: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean } | null;
+  lied: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean; dateien: string[] } | null;
   liedLaeuft: boolean;
   liedStatus: string;
 }
@@ -341,7 +341,9 @@ async function scanneOrdner(files: FileList | null): Promise<void> {
 
 /** Ein Fenster (mono 44,1 k) als Scan-Eintrag — 8 Takte, ein Sample, Gruppe melo:<lied> <label>. */
 function fensterEintrag(liedName: string, label: string, pcm: Float32Array, rolle: "melo" | "vox"): ScanEintrag {
-  const stem = `${liedName} ${label}${rolle === "vox" ? " VX" : ""}`;
+  // 16-Zeichen-Namen: "<Lied> <LABEL>" bzw. "<Lied> <LABEL> VX" — Liedname so kuerzen, dass das VX-Kuerzel sichtbar bleibt
+  const kurz = rolle === "vox" ? liedName.slice(0, Math.max(3, 16 - label.length - 4)) : liedName.slice(0, Math.max(3, 16 - label.length - 1));
+  const stem = `${kurz} ${label}${rolle === "vox" ? " VX" : ""}`;
   return {
     datei: `${stem}.wav`, stem, rolle, familie: familie(stem), sekunden: pcm.length / 44100,
     rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100,
@@ -402,15 +404,16 @@ async function liedAnalysieren(): Promise<void> {
     } else {
       for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm, "melo"));
     }
-    // Eintraege desselben Lieds ersetzen, andere Samples behalten
-    z.eintraege = z.eintraege.filter((e) => !e.datei.startsWith(`${liedName} `)).concat(neue);
+    // Eintraege des vorherigen Lied-Laufs ersetzen, andere Samples behalten
+    const alt = new Set(z.lied?.dateien ?? []);
+    z.eintraege = z.eintraege.filter((e) => !alt.has(e.datei)).concat(neue);
     if (!z.ordner) z.ordner = liedName;
     z.zusammen = zusammenfassung(z.eintraege);
     z.projekt = null;
     z.bank = null;
     z.ergebnis = null;
     z.pool = [];
-    z.lied = { name: liedName, bpm: res.bpm, k: res.k, fenster: res.fenster.map((f) => f.label), stems: demucs };
+    z.lied = { name: liedName, bpm: res.bpm, k: res.k, fenster: res.fenster.map((f) => f.label), stems: demucs, dateien: neue.map((e) => e.datei) };
     z.liedStatus = `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)}) · Fenster ${res.fenster
       .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
       .join(", ")}${demucs ? " · Stems: bass+other als Melo, Vocals als Vox" : " · Vollmix (ohne Demucs)"} — jetzt „Bank bauen"`;
