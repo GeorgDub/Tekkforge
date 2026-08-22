@@ -1,0 +1,52 @@
+661	Dr HatS1
+662	Dr HatS2
+663	Dr PercS1
+664	Dr PercS2
+665	Dr SnareS1
+666	Dr SnareL1
+667	Dr HatL1
+668	Dr HatL2
+669	Dr PercL1
+670	Dr PercL2
+671	Dr SnareL2
+672	Dr KickS1
+673	Dr KickS2
+674	Dr KickL1
+675	Dr Bass1 A
+676	Dr Bass1 B
+677	Dr Bass1 C
+678	Dr Bass1 D
+679	Dr Bass1 E
+680	Dr Bass1 F
+681	Dr Bass1 G
+682	Dr Bass2 A
+683	Dr Bass2 B
+684	Dr Bass2 C
+685	Dr Bass2 D
+686	Dr Bass2 E
+687	Dr Bass2 F
+688	Dr Bass2 G
+689	Dr Bass2 H
+690	Dr Bass2 I
+691	Dr Stab1
+692	Dr Melo1 A
+693	Dr Melo1 B
+694	Dr Melo1 C
+695	Dr Melo2 A
+696	Dr Melo2 B
+697	Dr Melo2 C
+698	Dr Melo3 A
+699	Dr Melo4 A
+700	Dr Vers1 A
+701	Dr Vers1 B
+702	Dr Vers1 C
+703	Dr Vers1 D
+704	Dr Vox1
+705	Dr Vox2
+706	Dr Vox3
+707	Dr Vox4
+708	Dr Vox5
+709	Dr Vox6
+710	Dr Vox7
+711	Dr Vox8
+712	Dr Vox9
