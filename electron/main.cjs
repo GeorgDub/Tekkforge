@@ -208,16 +208,26 @@ function registerKiIpc() {
     schreibeSettings(s);
     return keyStatusAus(s);
   });
+  ipcMain.handle("ki:modellSetzen", (_e, modell) => {
+    const s = leseSettings();
+    const m = String(modell || "").trim();
+    if (!/^[a-z0-9][a-z0-9.-]{3,60}$/i.test(m)) throw new Error(`Keine gueltige Modell-ID: "${m}"`);
+    s.kiModell = m;
+    schreibeSettings(s);
+    return keyStatusAus(s);
+  });
+  // anfrage: { system, user, schema, maxTokens?, timeoutMs? }
   ipcMain.handle("ki:rezept", async (_e, anfrage) => {
     const s = leseSettings();
     if (!s.anthropicApiKey) throw new Error("Kein API-Key gesetzt");
     const Anthropic = require("@anthropic-ai/sdk").default ?? require("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: s.anthropicApiKey, timeout: 25_000, maxRetries: 1 });
+    const timeoutMs = Number(anfrage.timeoutMs) > 0 ? Number(anfrage.timeoutMs) : 25_000;
+    const client = new Anthropic({ apiKey: s.anthropicApiKey, timeout: timeoutMs, maxRetries: 1 });
     const modell = s.kiModell || KI_MODELL_STANDARD;
     try {
       const antwort = await client.beta.messages.create({
         model: modell,
-        max_tokens: 4096,
+        max_tokens: Number(anfrage.maxTokens) > 0 ? Number(anfrage.maxTokens) : 4096,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         system: String(anfrage.system),

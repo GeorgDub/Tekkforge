@@ -38,7 +38,9 @@ contextBridge.exposeInMainWorld("tekkKi", {
   keyStatus: () => ipcRenderer.invoke("ki:keyStatus"),
   /** Key speichern (leer = loeschen), optional Modell-ID. */
   keySetzen: (key, modell) => ipcRenderer.invoke("ki:keySetzen", key, modell),
-  /** { system, user, schema } → { text, modell, tokens }; wirft bei Fehlern mit deutscher Meldung. */
+  /** Modell-ID speichern (Key bleibt). */
+  modellSetzen: (modell) => ipcRenderer.invoke("ki:modellSetzen", modell),
+  /** { system, user, schema, maxTokens?, timeoutMs? } → { text, modell, tokens }; wirft bei Fehlern mit deutscher Meldung. */
   rezept: (anfrage) => ipcRenderer.invoke("ki:rezept", anfrage),
 });
 

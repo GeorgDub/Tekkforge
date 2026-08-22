@@ -6,9 +6,11 @@
  * Electron-Main-Prozess (electron/main.cjs, "ki:rezept").
  */
 import type { Projekt } from "./bankPlan";
-import { type Rezept, pools, meloKandidaten, pruefeRezept, regelRezept, KICK_FIGUREN, BASS_FIGUREN, STAB_FIGUREN, LAGEN } from "./rezept";
+import { type Rezept, pools, meloKandidaten, pruefeRezept, regelRezept, regelRezeptProMelo, KICK_FIGUREN, BASS_FIGUREN, STAB_FIGUREN, LAGEN } from "./rezept";
 
 export const KI_MODELL_STANDARD = "claude-opus-5";
+/** Auswahl in der KI-Zeile; freie IDs sind erlaubt. */
+export const KI_MODELLE = ["claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"];
 
 const STRING = { type: "string" };
 // Kardinalitaeten (genau 2, 1–8, 1–5) prueft pruefeRezept — output_config.format erlaubt kein minItems/maxItems/minimum/maximum
@@ -123,4 +125,59 @@ export function antwortZuRezept(text: string, p: Projekt): { rezept: Rezept; kor
     return { rezept: regelRezept(p, { modus: "jam" }), korrekturen: ["KI-Antwort war kein JSON → Regel-Planer"] };
   }
   return pruefeRezept(roh, p);
+}
+
+/** Schema fuer Pro Melo: eine Liste von Rezepten (je Melodie eines). */
+export const REZEPT_LISTE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["rezepte"],
+  properties: { rezepte: { type: "array", items: REZEPT_SCHEMA } },
+};
+
+export function promptFuerProMelo(p: Projekt, wunsch: { bpm: number; beschreibung: string }): { system: string; user: string } {
+  const { system } = promptFuer(p, { modus: "jam", bpm: wunsch.bpm, beschreibung: wunsch.beschreibung });
+  const melos = meloKandidaten(pools(p)).map((m) => `"${m.name}"`);
+  const user = [
+    `Modus: promelo — fuer JEDE der folgenden ${melos.length} Melodien genau ein Rezept (modus "jam", ein Abschnitt, thema.melo = diese Melodie,`,
+    "in derselben Reihenfolge). Kick-Familien und Figuren abwechseln, damit die Patterns unterscheidbar sind.",
+    `Melodien: ${melos.join(", ")}`,
+    `Tempo: ${wunsch.bpm} BPM (uebernehmen). Beschreibung des Nutzers: ${wunsch.beschreibung.trim() || "(keine — waehle selbst)"}`,
+    "",
+    "Bank:",
+    projektZusammenfassung(p),
+  ].join("\n");
+  return { system, user };
+}
+
+/** Antwort (Liste) → je Melodie ein geprueftes Rezept; fehlende oder falsch zugeordnete ergaenzt der Regel-Planer. */
+export function antwortZuRezepte(text: string, p: Projekt): { rezepte: Rezept[]; korrekturen: string[] } {
+  const regel = regelRezeptProMelo(p);
+  let liste: unknown[] = [];
+  const korrekturen: string[] = [];
+  try {
+    const start = text.indexOf("{");
+    const ende = text.lastIndexOf("}");
+    const roh = JSON.parse(start >= 0 && ende > start ? text.slice(start, ende + 1) : text) as { rezepte?: unknown };
+    liste = Array.isArray(roh.rezepte) ? roh.rezepte : [];
+  } catch {
+    return { rezepte: regel, korrekturen: ["KI-Antwort war kein JSON → Regel-Planer fuer alle Melodien"] };
+  }
+  const nachMelo = new Map<string, unknown>();
+  for (const r of liste) {
+    const melo = (r as { thema?: { melo?: unknown } })?.thema?.melo;
+    if (typeof melo === "string" && !nachMelo.has(melo)) nachMelo.set(melo, r);
+  }
+  const rezepte = regel.map((basis) => {
+    const melo = basis.thema.melo ?? "";
+    const roh = nachMelo.get(melo);
+    if (!roh) {
+      korrekturen.push(`"${melo}": kein KI-Rezept → Regel`);
+      return basis;
+    }
+    const { rezept, korrekturen: k } = pruefeRezept({ ...(roh as object), modus: "jam" }, p);
+    for (const x of k) korrekturen.push(`"${melo}": ${x}`);
+    return { ...rezept, modus: "promelo" as const, thema: { ...rezept.thema, melo } };
+  });
+  return { rezepte, korrekturen };
 }

@@ -63,11 +63,11 @@ export interface Erzeugt {
 
 export function erzeuge(
   projekt: Projekt,
-  wunsch: { modus: Modus; bpm: number; melo?: string; beschreibung?: string; startSlot?: number; rezept?: Rezept },
+  wunsch: { modus: Modus; bpm: number; melo?: string; beschreibung?: string; startSlot?: number; rezept?: Rezept; rezepte?: Rezept[] },
 ): Erzeugt {
   const basis = projekt.name.toUpperCase().replace(/[^A-Z0-9]+/g, "");
   if (wunsch.modus === "promelo") {
-    const rezepte = regelRezeptProMelo(projekt, wunsch.bpm);
+    const rezepte = wunsch.rezepte?.length ? wunsch.rezepte.map((r) => ({ ...r, bpm: wunsch.bpm })) : regelRezeptProMelo(projekt, wunsch.bpm);
     const { patterns, hinweise } = baueProMelo(rezepte, projekt);
     return {
       modus: "promelo",

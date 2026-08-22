@@ -8,7 +8,9 @@ export interface TekkKi {
   keyStatus(): Promise<{ gesetzt: boolean; modell: string; vorschau: string }>;
   /** wirft, wenn der Key nicht wie "sk-ant-…" aussieht */
   keySetzen(key: string, modell?: string): Promise<{ gesetzt: boolean; modell: string; vorschau: string }>;
-  rezept(anfrage: { system: string; user: string; schema: object }): Promise<{ text: string; modell: string; tokens: number }>;
+  /** Modell-ID speichern, Key bleibt. */
+  modellSetzen(modell: string): Promise<{ gesetzt: boolean; modell: string; vorschau: string }>;
+  rezept(anfrage: { system: string; user: string; schema: object; maxTokens?: number; timeoutMs?: number }): Promise<{ text: string; modell: string; tokens: number }>;
 }
 
 export function tekkKi(): TekkKi | undefined {

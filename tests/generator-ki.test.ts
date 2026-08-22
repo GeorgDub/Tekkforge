@@ -63,3 +63,33 @@ describe("kiPlaner", () => {
     expect(rezept.modus).toBe("jam");
   });
 });
+
+describe("kiPlaner Pro Melo", () => {
+  it("REZEPT_LISTE_SCHEMA verlangt rezepte", async () => {
+    const { REZEPT_LISTE_SCHEMA } = await import("../src/core/kiPlaner");
+    const sch = REZEPT_LISTE_SCHEMA as { required: string[]; properties: { rezepte: { type: string } } };
+    expect(sch.required).toEqual(["rezepte"]);
+    expect(sch.properties.rezepte.type).toBe("array");
+  });
+  it("promptFuerProMelo nennt jede Melodie und verlangt je eins", async () => {
+    const { promptFuerProMelo } = await import("../src/core/kiPlaner");
+    const { user } = promptFuerProMelo(P, { bpm: 180, beschreibung: "hart" });
+    expect(user).toContain("Melo Eins");
+    expect(user).toContain("Melo Zwei");
+    expect(user).toMatch(/genau ein Rezept/);
+  });
+  it("antwortZuRezepte: Liste wird je Melodie zugeordnet, Fehlende per Regel ergaenzt", async () => {
+    const { antwortZuRezepte } = await import("../src/core/kiPlaner");
+    const eins = regelRezept(P, { modus: "jam", melo: "Melo Eins" });
+    const { rezepte, korrekturen } = antwortZuRezepte(JSON.stringify({ rezepte: [eins] }), P);
+    expect(rezepte.map((r) => r.thema.melo)).toEqual(["Melo Eins", "Melo Zwei"]);
+    expect(rezepte.every((r) => r.modus === "promelo")).toBe(true);
+    expect(korrekturen.some((k) => k.includes("Melo Zwei"))).toBe(true);
+  });
+  it("antwortZuRezepte: kein JSON → komplett Regel", async () => {
+    const { antwortZuRezepte } = await import("../src/core/kiPlaner");
+    const { rezepte, korrekturen } = antwortZuRezepte("nix", P);
+    expect(rezepte).toHaveLength(2);
+    expect(korrekturen[0]).toContain("kein JSON");
+  });
+});
