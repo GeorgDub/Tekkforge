@@ -148,7 +148,7 @@ for (let i = 0; i < ANZ_THEMEN; i++) {
   const nMelo = Math.max(meloPaare.length, 1);
   const verschieden = (list, praefix, schritt) => such(list, praefix) ?? rot(list, i + Math.floor(i / nMelo) * schritt);
   const vers = voxPaare.length ? verschieden(voxPaare, k.vers, 1) : null;
-  const melo2 = !voxPaare.length && meloPaare.length >= 2 * ANZ_THEMEN
+  const melo2 = !voxPaare.length && meloPaare.length > ANZ_THEMEN
     ? such(meloPaare, k.melo2) ?? meloPaare[(i + ANZ_THEMEN) % meloPaare.length]
     : such(meloPaare, k.melo2) ?? null;
   const fam = familien.find((f) => k.kick && f.name.startsWith(String(k.kick).toLowerCase())) ?? rot(familien, i);

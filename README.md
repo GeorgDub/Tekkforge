@@ -420,6 +420,8 @@ Gebaute Sets (2026-08-22), Quelle `G:\Samples Numondo\Sampler USE`:
 | `tommi` / `TOMMI` | Korg/Tommi (Tracks 1/4/5, 95 BPM) | 190 | je Track DROP/BREAK/VAR (Demucs bass+other), WhatsApp-Vocals 4 Loops; Track 2 ist leer |
 | `neulee` / `NEULEE` | neulee (16 Horror-Sprachsamples, mp3) | 180 | 34 Sprach-Shots an Pausen, Takt-Chunks als Vers, Chor-Drone als Melo; tekk4-Drums |
 | `melopack` / `MELOPACK` | MeLo_PacK_2 (905 Dateien, 5,4 h) | 180 | **Volume 1 von 25**: 34 taktgenaue Melodien (je Namensfamilie die beste), 17 Themen à Melo + Melo2; weitere mit `--select --volume N` |
+| `melopack2` / `MELOPACK2` | MeLo_PacK_2, Volume 2 | 180 | 35 Melodien (Rangplätze 35–69), 18 Themen à Melo + Melo2 |
+| `melopack3` / `MELOPACK3` | MeLo_PacK_2, Volume 3 | 180 | 37 Melodien, 19 Themen à Melo + Melo2 |
 
 Nicht verwertbar: fünf Hat-Dateien in Project5 (kein gültiges WAV), `katze.wav`/`sp.wav` (still).
 Ordner, die das Sample-RAM sprengen (MeLo_PacK_2), nimmt `prep-folder.py --select` in
