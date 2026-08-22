@@ -183,7 +183,7 @@ function render(): void {
     ? `
       <div class="zeile"><b>${z.ergebnis.patterns.length} Pattern(s)</b> · ${escapeHtml(z.ergebnis.dateiname)}
         <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button>
-        <button id="genGeraet" ${sperre || z.sendet ? "disabled" : ""} title="${escapeHtml(sperre ?? "0x4C-Slot-Dump, laufendes Pattern bleibt unberuehrt")}">→ Geraet ab Slot <span id="genGeraetSlot">${z.ergebnis.patterns[0]?.chainTo ? z.ergebnis.patterns[0].chainTo - 1 : 1}</span></button>
+        <button id="genGeraet" ${sperre || z.sendet ? "disabled" : ""} title="${escapeHtml(sperre ?? "0x4C-Slot-Dump, laufendes Pattern bleibt unberuehrt")}">→ Geraet ab Slot <span id="genGeraetSlot">${z.ergebnis.startSlot}</span></button>
         ${sperre ? `<span class="fortschritt">${escapeHtml(sperre)}</span>` : ""}</div>
       <div class="liste">${z.ergebnis.patterns
         .map(
@@ -447,7 +447,7 @@ async function anGeraet(): Promise<void> {
     alert(sperre);
     return;
   }
-  const start = z.ergebnis.patterns[0]?.chainTo ? z.ergebnis.patterns[0].chainTo - 1 : Number(($("genSlot") as HTMLInputElement)?.value) || 1;
+  const start = z.ergebnis.startSlot;
   const n = z.ergebnis.patterns.length;
   if (start + n - 1 > 250) {
     alert(`Slots ${start}–${start + n - 1} liegen ueber 250.`);

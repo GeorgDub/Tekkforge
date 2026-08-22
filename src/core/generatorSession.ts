@@ -57,6 +57,8 @@ export interface Erzeugt {
   dateiname: string;
   hinweise: string[];
   warumSo: string;
+  /** erster Slot (1-basiert), auf den die Patterns zeigen */
+  startSlot: number;
 }
 
 export function erzeuge(
@@ -74,6 +76,7 @@ export function erzeuge(
       bytes: new Uint8Array(alsAllPat(patterns)),
       dateiname: `${basis}-promelo.e2sallpat`,
       hinweise,
+      startSlot: 1,
       warumSo: `${rezepte.length} Melodien, je ein Jam-Pattern; Kick-Familien rotieren: ${rezepte.map((r) => `${r.thema.melo} → ${r.thema.kickFamilie}`).join(", ")}.`,
     };
   }
@@ -92,6 +95,7 @@ export function erzeuge(
     dateiname: jam ? `${basis}-jam.e2spat` : `${basis}-miniset.e2sallpat`,
     hinweise,
     warumSo: rezept.begruendung,
+    startSlot: start,
   };
 }
 

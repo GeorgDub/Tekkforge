@@ -54,6 +54,7 @@ describe("generatorSession", () => {
     const e = erzeuge(projekt, { modus: "miniset", bpm: 176, startSlot: 10, beschreibung: "hart" });
     expect(e.patterns).toHaveLength(6);
     expect(e.dateiname).toBe("KORG3-miniset.e2sallpat");
+    expect(e.startSlot).toBe(10);
     const bank = parseElectribeAllPatBank(e.bytes);
     expect(bank.patterns[9].bpm).toBe(176);
     expect(bank.patterns[9].name.trim()).toBe("BaRe INTRO");
