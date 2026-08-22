@@ -33,17 +33,23 @@ function autokorrelationBeiLag(x: Float32Array, lag: number): number {
   return s;
 }
 
-/** BPM aus der Takt-Autokorrelation der Onset-Kurve (0,25er-Raster, Takt = 4 Beats). */
+/**
+ * BPM aus der Autokorrelation der Onset-Kurve (0,25er-Raster). Bewertet wird
+ * die Summe aus Beat-Lag und Takt-Lag (4 Beats) — nur der Beat-Lag faellt auf
+ * 5/4-Vielfache herein, nur der Takt-Lag auf 5-Beat-Abstaende; zusammen nicht.
+ */
 export function tempoSchaetzen(pcm: Float32Array, sampleRate: number, min = 80, max = 200): number {
   const hop = 256;
   const on = onsetKurve(pcm, sampleRate, hop);
   const fps = sampleRate / hop;
+  const ac0 = autokorrelationBeiLag(on, 0) || 1;
   let best = 180;
   let bestWert = -Infinity;
   for (let bpm = min; bpm <= max; bpm += 0.25) {
-    const lag = Math.round((4 * 60 * fps) / bpm);
-    if (lag <= 0 || lag >= on.length) continue;
-    const w = autokorrelationBeiLag(on, lag);
+    const beatLag = Math.round((60 * fps) / bpm);
+    const taktLag = Math.round((4 * 60 * fps) / bpm);
+    if (beatLag <= 0 || taktLag >= on.length) continue;
+    const w = autokorrelationBeiLag(on, beatLag) / ac0 + autokorrelationBeiLag(on, taktLag) / ac0;
     if (w > bestWert) {
       bestWert = w;
       best = bpm;
