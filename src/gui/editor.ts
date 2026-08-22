@@ -30,6 +30,8 @@ import {
 } from "../core/editorModel";
 import {
   buildCurrentPatternDump,
+  buildPatternDump,
+  buildPatternRequest,
   buildPatternWrite,
   buildCurrentPatternRequest,
   buildSearchDevice,
@@ -887,6 +889,7 @@ export const panelBridge = {
     renderAll();
   },
   writePatternToSlot,
+  writePatternToSlotDirect,
   markDirty,
 };
 
@@ -1056,8 +1059,31 @@ async function waitDeviceAck(timeoutMs: number): Promise<string> {
 }
 
 /**
+ * Schreibt EIN Pattern DIREKT auf einen Slot: 0x4C-Dump mit Slot-Nummer.
+ * KORG MIDI-Implementation (6): „Receive this message & data, save them to
+ * Internal Memory" — der Edit-Buffer und damit das laufende Pattern bleiben
+ * unberührt. Das ist der Weg für „Pattern vorbereiten, während ein anderes
+ * spielt". Wartet auf die Lade-Bestätigung (0x23) bzw. meldet Fehler (0x24).
+ * @returns true bei Geräte-Bestätigung, false bei Timeout (gesendet, unbestätigt).
+ */
+async function writePatternToSlotDirect(p: EditorPattern, slot1based: number): Promise<boolean> {
+  const body = new Uint8Array(buildPatternFile(p).slice(0x100));
+  const ack = waitDeviceAck(8000);
+  await midi.sendAsync(buildPatternDump(body, slot1based - 1, midiOpts()));
+  const result = await ack;
+  if (result.startsWith("error")) throw new Error(`Gerät meldet ${result.slice(6)} beim Slot-Dump`);
+  if (result === "timeout") {
+    await new Promise((r) => setTimeout(r, 900));
+    return false;
+  }
+  return true;
+}
+
+/**
  * Schreibt EIN Pattern dauerhaft auf einen Slot: 0x40 (Edit-Buffer) + 0x11
- * (Write-Buffer→Slot). Da der Rückkanal funktioniert, wird nach jedem Schritt
+ * (Write-Buffer→Slot). ⚠ Geht durch den Edit-Buffer — das gerade spielende
+ * Pattern wird dabei ersetzt. Für Slots, die nicht das aktive Pattern sind,
+ * `writePatternToSlotDirect` nehmen. Da der Rückkanal funktioniert, wird nach jedem Schritt
  * auf die Geräte-Bestätigung gewartet (0x23 nach Dump, 0x21 nach Write) —
  * das verhindert das Überrennen des Geräts bei Bulk-Transfers. Fällt bei
  * ACK-Timeout auf konservative Delays zurück.
@@ -1093,10 +1119,13 @@ async function midiSendSlot(): Promise<void> {
     return;
   setMidiStatus("sende …");
   try {
-    const confirmed = await writePatternToSlot(project.patterns[cur], slot);
+    // Direktweg (0x4C mit Slot-Nummer): laesst den Edit-Buffer und damit das
+    // spielende Pattern in Ruhe. Will man das Ergebnis sofort hoeren, danach
+    // „Pattern → Gerät (Live)" oder im Panel das Pattern anwaehlen.
+    const confirmed = await writePatternToSlotDirect(project.patterns[cur], slot);
     setMidiStatus(
-      `„${project.patterns[cur].name}" → Slot ${slot} ` +
-        (confirmed ? "geschrieben — vom Gerät bestätigt ✓" : "gesendet (keine Geräte-Bestätigung — am Gerät prüfen)"),
+      `„${project.patterns[cur].name}" → Slot ${slot} direkt ` +
+        (confirmed ? "geschrieben — vom Gerät bestätigt ✓ (Edit-Buffer unberührt)" : "gesendet (keine Geräte-Bestätigung — am Gerät prüfen)"),
     );
   } catch (err) {
     setMidiStatus(`Senden fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
@@ -1135,22 +1164,55 @@ async function midiSendAll(): Promise<void> {
   }
 }
 
-async function midiGetPattern(): Promise<void> {
+/**
+ * Holt ein Pattern vom Gerät ins Projekt.
+ *   quelle "slot":    0x1C-Request für die Slot-Nummer aus dem Feld → 0x4C-Dump
+ *                     aus dem internen Speicher. Laesst das spielende Pattern
+ *                     in Ruhe — der Weg für „Vorschau/Bearbeiten, während ein
+ *                     anderes Pattern laeuft". ✔ Am Gerät bei laufendem
+ *                     Sequencer geprüft (2026-08-22).
+ *   quelle "current": 0x10-Request → 0x40-Dump des Edit-Buffers (das, was
+ *                     gerade spielt; bei laufendem Sequencer unzuverlässig).
+ */
+async function midiGetPattern(quelle: "slot" | "current" = "slot"): Promise<void> {
+  const slot = Number($<HTMLInputElement>("midiSlot").value);
+  if (quelle === "slot" && (!Number.isFinite(slot) || slot < 1 || slot > 250)) {
+    setMidiStatus("Slot muss 1–250 sein.");
+    return;
+  }
   try {
-    setMidiStatus("fordere aktuelles Pattern an …");
-    const reply = await requestSysex(
-      midi,
-      buildCurrentPatternRequest(midiOpts()),
-      (b) => decodeDump(b) !== null,
-      2500,
-    );
-    const dump = decodeDump(reply)!;
+    // Bei laufendem Sequencer geht etwa jede vierte 16-KB-Antwort verloren
+    // (gemessen 2026-08-22) — bis zu drei Anläufe, bevor es ein Fehler ist.
+    let reply: Uint8Array | null = null;
+    for (let versuch = 1; versuch <= 3 && !reply; versuch++) {
+      setMidiStatus(
+        (quelle === "slot" ? `fordere Slot ${slot} an` : "fordere Edit-Buffer an") + (versuch > 1 ? ` (Versuch ${versuch}/3)` : "") + " …",
+      );
+      try {
+        reply = await requestSysex(
+          midi,
+          quelle === "slot" ? buildPatternRequest(slot - 1, midiOpts()) : buildCurrentPatternRequest(midiOpts()),
+          (b) => {
+            const d = decodeDump(b);
+            return d !== null && (quelle === "current" ? d.index === null : d.index === slot - 1);
+          },
+          4000,
+        );
+      } catch (e) {
+        if (versuch === 3) throw e;
+      }
+    }
+    const dump = decodeDump(reply!)!;
     const pattern = editorPatternFromBody(dump.body);
     project.patterns.splice(cur + 1, 0, pattern);
     cur += 1;
     markDirty();
     renderAll();
-    setMidiStatus(`Pattern „${pattern.name}" vom Gerät geholt`);
+    setMidiStatus(
+      quelle === "slot"
+        ? `Slot ${slot} „${pattern.name}" vom Gerät geholt (Edit-Buffer unberührt)`
+        : `Edit-Buffer „${pattern.name}" vom Gerät geholt`,
+    );
   } catch (err) {
     setMidiStatus(`Holen fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
   }
@@ -1513,7 +1575,8 @@ function setupMidi(): void {
   $("midiSendCurrent").addEventListener("click", midiSendCurrent);
   $("midiSendSlot").addEventListener("click", midiSendSlot);
   $("midiSendAll").addEventListener("click", () => void midiSendAll());
-  $("midiGet").addEventListener("click", () => void midiGetPattern());
+  $("midiGet").addEventListener("click", () => void midiGetPattern("slot"));
+  $("midiGetCurrent").addEventListener("click", () => void midiGetPattern("current"));
   $("midiGlobal").addEventListener("click", () => void midiGetGlobal());
 }
 

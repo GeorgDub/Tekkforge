@@ -241,7 +241,8 @@
                 <button id="midiSendSlot" class="ghost" title="Aktuelles Pattern dauerhaft speichern (Edit-Buffer + Write-Befehl)">Pattern → Slot…</button>
                 <button id="midiSendAll" class="ghost" title="Alle Projekt-Patterns nacheinander auf die Slots ab dieser Nummer schreiben">Alle → Slots ab…</button>
                 <input id="midiSlot" type="number" min="1" max="250" value="1" style="width:64px" title="Slot 1–250" />
-                <button id="midiGet" class="ghost">Pattern ← Gerät holen</button>
+                <button id="midiGet" class="ghost" title="Slot aus dem internen Speicher holen (SysEx 0x1C) — das spielende Pattern bleibt unberührt, geht auch bei laufendem Sequencer">Slot ← Gerät holen</button>
+                <button id="midiGetCurrent" class="ghost" title="Edit-Buffer holen (SysEx 0x10) — das, was gerade spielt; bei laufendem Sequencer unzuverlässig">Edit-Buffer ← Gerät</button>
                 <button id="midiGlobal" class="ghost" title="Global-Einstellungen des Geräts holen (SysEx 0x0E → 0x51)">Global ← Gerät</button>
                 <span style="flex:1"></span>
                 <span id="midiStatus" class="sub" style="margin:0">nicht verbunden</span>

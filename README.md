@@ -151,6 +151,23 @@ das dazu.
 Logik in `src/core/firmwareMode.ts` (`featureAvailable`, `featureHint`,
 `firmwareFromProbe`), Tests in `tests/firmware-mode.test.ts`.
 
+### Pattern vorbereiten, während ein anderes läuft
+
+Zwei SysEx-Wege, beide am Gerät bei **laufendem Sequencer** geprüft (2026-08-22):
+
+- **Slot ← Gerät holen** (0x1C → 0x4C mit Slot-Nummer): liest einen Slot aus dem
+  internen Speicher ins Projekt — Vorschau oder Bearbeiten von Pattern 50,
+  während 10 spielt. Das spielende Pattern bleibt unberührt. Bei laufendem
+  Gerät geht etwa jede vierte Antwort verloren, darum bis zu drei Anläufe.
+- **Pattern → Slot…** schreibt jetzt **direkt** (0x4C mit Slot-Nummer, „save to
+  Internal Memory" laut KORG) — nicht mehr über Edit-Buffer + 0x11. Das
+  laufende Pattern wird nicht ersetzt; der Slot ist fertig, wenn man per
+  Program Change hinwechselt.
+- **Edit-Buffer ← Gerät** (0x10) holt weiterhin das, was gerade spielt — bei
+  laufendem Sequencer unzuverlässig (Auto-Sync wartet deshalb auf den Stopp).
+
+Kein „kurz wechseln, dumpen, zurück" nötig.
+
 ### Fernbedienung im E2S-Panel (Stock-MIDI)
 
 `src/core/e2Remote.ts` (Tests `tests/e2-remote.test.ts`) — alles über normale
