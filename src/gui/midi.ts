@@ -13,6 +13,8 @@ interface TekkMidiBridge {
   selectOut(id: string): Promise<boolean>;
   selectIn(id: string): Promise<boolean>;
   send(bytes: number[]): Promise<boolean>;
+  /** MIDI-Clock-Generator im Main-Prozess (optional — ältere Bridges haben ihn nicht). */
+  clock?(opts: { action: "start" | "stop" | "bpm"; bpm?: number }): Promise<{ laeuft: boolean; bpm: number }>;
   onMessage(cb: (bytes: number[]) => void): () => void;
 }
 
@@ -169,6 +171,23 @@ export class MidiIO {
    */
   send(bytes: Uint8Array): void {
     void this.sendAsync(bytes).catch((e) => console.error("midi send", e));
+  }
+
+  /** Gibt es den Clock-Generator in dieser Bridge? */
+  get clockAvailable(): boolean {
+    return typeof bridge()?.clock === "function";
+  }
+
+  /**
+   * MIDI-Clock (0xF8, 24 ppqn) starten/stoppen/umstempeln. Läuft im
+   * Main-Prozess-Worker, damit der Renderer sie nicht verzerrt. Das Gerät
+   * folgt nur bei Global „Clock Mode" Auto/Ext.
+   */
+  async clock(action: "start" | "stop" | "bpm", bpm?: number): Promise<{ laeuft: boolean; bpm: number }> {
+    const b = bridge();
+    if (!b?.clock) throw new Error("MIDI-Clock braucht die aktuelle Desktop-App.");
+    if (action === "start") await this.ensureOutOpen();
+    return b.clock({ action, bpm });
   }
 
   /** Wie send(), aber awaitbar — resolved erst nach erfolgreichem Senden. */

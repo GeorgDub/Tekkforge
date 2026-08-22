@@ -41,6 +41,8 @@ import {
   MIDI_START,
   MIDI_STOP,
   TRIGGER_NOTE,
+  buildMfxCc,
+  buildPanic,
   buildNoteOff,
   buildNoteOn,
   buildProgramChange,
@@ -184,6 +186,8 @@ function baueDom(): void {
     <label>Slot <input id="e2sSlot" type="number" min="1" max="250" value="1" style="width:60px"></label>
     <button id="e2sSchreiben" title="Pattern dauerhaft auf den Geräte-Slot schreiben">💾 → Slot</button>
     <label title="Zieht den Gerätezustand regelmäßig automatisch — bei laufendem Sequencer per Dreifach-Lesung mit Byte-Mehrheit"><input id="e2sAutoSync" type="checkbox" checked> Auto-Sync</label>
+    <label title="▶ sendet MIDI-Clock (24 ppqn) im Pattern-Tempo plus Start — das Gerät folgt nur bei Global „Clock Mode" Auto/Ext"><input id="e2sClock" type="checkbox" checked> MIDI-Clock</label>
+    <button id="e2sPanic" title="All Sound Off + All Notes Off auf allen 16 Kanälen (wirkt unabhängig vom Receive-Filter)">⛔ Panic</button>
     <span class="e2s-status" id="e2sStatus">Prepare-Modus — Pattern aus dem Editor.</span>
   </div>
   <div class="e2s">
@@ -284,6 +288,7 @@ function renderPanel(): void {
   const leds = partLeds(p, aktiverPart);
 
   $("e2sLcdBpm").textContent = info.bpm.toFixed(1);
+  clockTempoNachziehen();
   $("e2sLcdNr").textContent = String(panelBridge.patternIndex + 1).padStart(3, "0");
   $("e2sLcdName").textContent = info.name || "—";
   $("e2sLcdPart").textContent =
@@ -392,6 +397,57 @@ function wechslePattern(idx: number): void {
   }
   if (panelBridge.project.patterns[idx]) panelBridge.patternIndex = idx;
   renderPanel();
+}
+
+// ─── Transport (MIDI-Clock + Start/Stop) ─────────────────────────────────────
+
+let clockLaeuft = false;
+let clockBpm = 0;
+
+async function transportStart(mitClock: boolean): Promise<void> {
+  const bpm = aktuellesPattern().bpm;
+  try {
+    if (mitClock) {
+      if (!panelBridge.midi.clockAvailable) {
+        setStatus("MIDI-Clock braucht die aktuelle Desktop-App (alte Bridge) — sende nur Start.");
+      } else {
+        await panelBridge.midi.clock("start", bpm);
+        clockLaeuft = true;
+        clockBpm = bpm;
+      }
+    }
+    panelBridge.midi.send(Uint8Array.from([MIDI_START]));
+    spieltGerade = true;
+    setStatus(
+      `Start gesendet${clockLaeuft ? ` + MIDI-Clock ${bpm} BPM` : ""} — das Gerät folgt nur bei Global „Clock Mode" Auto/Ext (Internal ignoriert beides).`,
+    );
+  } catch (err) {
+    setStatus(`Start fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI aktiviert?`);
+  }
+}
+
+async function transportStop(): Promise<void> {
+  try {
+    panelBridge.midi.send(Uint8Array.from([MIDI_STOP]));
+    if (clockLaeuft) {
+      await panelBridge.midi.clock("stop");
+      clockLaeuft = false;
+    }
+    spieltGerade = false;
+    planeAutoSync(800);
+    setStatus("Stop gesendet, MIDI-Clock aus — Sync folgt.");
+  } catch (err) {
+    setStatus(`Stop fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/** Pattern-Tempo geändert, während die Clock läuft → Clock nachziehen. */
+function clockTempoNachziehen(): void {
+  const bpm = aktuellesPattern().bpm;
+  if (clockLaeuft && bpm !== clockBpm) {
+    clockBpm = bpm;
+    void panelBridge.midi.clock("bpm", bpm).catch(() => {});
+  }
 }
 
 /** Kurzer Ton auf dem Kanal des Parts (Stock-MIDI: Part n hört auf Kanal n). */
@@ -1003,24 +1059,75 @@ export function initPanel(): void {
   $("e2sLedAmpEg").addEventListener("click", () => schalterKlick("ampEgOn", "Amp EG"));
   $("e2sLedMfxSend").addEventListener("click", () => schalterKlick("mfxSend", "MFX Send"));
   // Transport: MIDI Start/Stop — das Gerät folgt nur, wenn sein Clock auf Auto/Ext steht.
+  // Transport: MIDI-Clock + Start/Stop. Das Gerät folgt nur bei Global
+  // „Clock Mode" Auto/Ext (gemessen: bei Internal ignoriert es Start/Stop).
+  const clockGewuenscht = () => (document.getElementById("e2sClock") as HTMLInputElement | null)?.checked ?? true;
   const transport = document.querySelectorAll<HTMLButtonElement>(".e2s-transport button");
-  const sendeRealtime = (byte: number, was: string) => {
-    try {
-      panelBridge.midi.send(Uint8Array.from([byte]));
-      setStatus(`${was} gesendet (MIDI Realtime) — wirkt nur bei Clock „Auto/Ext" am Gerät.`);
-    } catch (err) {
-      setStatus(`${was} fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI aktiviert?`);
-    }
-  };
   transport.forEach((btn) => {
     if (btn.classList.contains("play")) {
-      btn.title = "Play — MIDI Start ans Gerät";
-      btn.addEventListener("click", () => sendeRealtime(MIDI_START, "Start"));
+      btn.title = "Play — MIDI-Clock im Pattern-Tempo + Start ans Gerät (Clock Mode Auto/Ext nötig)";
+      btn.addEventListener("click", () => void transportStart(clockGewuenscht()));
     } else if (btn.textContent?.trim() === "■") {
-      btn.title = "Stop — MIDI Stop ans Gerät";
-      btn.addEventListener("click", () => sendeRealtime(MIDI_STOP, "Stop"));
+      btn.title = "Stop — MIDI Stop ans Gerät, Clock aus";
+      btn.addEventListener("click", () => void transportStop());
     }
   });
+  $("e2sPanic").addEventListener("click", () => {
+    try {
+      for (const m of buildPanic()) panelBridge.midi.send(m);
+      setStatus("Panic gesendet: All Sound Off + All Notes Off auf allen 16 Kanälen.");
+    } catch (err) {
+      setStatus(`Panic fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI aktiviert?`);
+    }
+  });
+  // Master FX: Ein/Aus per CC 106, X/Y-Pad per CC 102/103 — auf dem Global-Kanal.
+  let masterFxAn = false;
+  $("e2sMasterFx").addEventListener("click", () => {
+    masterFxAn = !masterFxAn;
+    $("e2sMasterFx").classList.toggle("aktiv", masterFxAn);
+    try {
+      panelBridge.midi.send(buildMfxCc(panelBridge.midiChannel, "on", masterFxAn ? 127 : 0));
+      setStatus(`Master FX ${masterFxAn ? "an" : "aus"} (CC 106, Kanal ${panelBridge.midiChannel + 1}).`);
+    } catch (err) {
+      setStatus(`Master FX fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+    }
+  });
+  const xy = document.querySelector<HTMLElement>(".e2s-xy");
+  if (xy) {
+    xy.title = "Master-FX X/Y — ziehen sendet CC 102/103 (Global-Kanal)";
+    xy.style.cursor = "crosshair";
+    const punkt = document.createElement("div");
+    punkt.style.cssText = "position:absolute;width:10px;height:10px;border-radius:50%;background:#ff4d3d;box-shadow:0 0 8px #ff4d3d;pointer-events:none;display:none";
+    xy.style.position = "relative";
+    xy.appendChild(punkt);
+    let letztes = "";
+    const sende = (ev: PointerEvent) => {
+      const r = xy.getBoundingClientRect();
+      const x = Math.max(0, Math.min(127, Math.round(((ev.clientX - r.left) / r.width) * 127)));
+      const y = Math.max(0, Math.min(127, Math.round((1 - (ev.clientY - r.top) / r.height) * 127)));
+      punkt.style.display = "block";
+      punkt.style.left = `${ev.clientX - r.left - 5}px`;
+      punkt.style.top = `${ev.clientY - r.top - 5}px`;
+      const key = `${x},${y}`;
+      if (key === letztes) return;
+      letztes = key;
+      panelBridge.midi.send(buildMfxCc(panelBridge.midiChannel, "x", x));
+      panelBridge.midi.send(buildMfxCc(panelBridge.midiChannel, "y", y));
+      setStatus(`Master FX X=${x} Y=${y} (CC 102/103).`);
+    };
+    xy.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      xy.setPointerCapture(ev.pointerId);
+      sende(ev);
+      const move = (m: PointerEvent) => sende(m);
+      const up = () => {
+        xy.removeEventListener("pointermove", move);
+        xy.removeEventListener("pointerup", up);
+      };
+      xy.addEventListener("pointermove", move);
+      xy.addEventListener("pointerup", up);
+    });
+  }
   macheAuswahlDrehbar();
   $("e2sPartZurueck").addEventListener("click", () => {
     aktiverPart = (aktiverPart + 15) % 16;

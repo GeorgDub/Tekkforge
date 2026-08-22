@@ -7,7 +7,7 @@
  * der Main-Thread setzt jede Anfrage mit Timeout ab und kann den Worker bei
  * Hänger terminieren + neu starten.
  *
- * Nachrichten (vom Main): { id, cmd:"list"|"openOut"|"openIn"|"send", … }
+ * Nachrichten (vom Main): { id, cmd:"list"|"openOut"|"openIn"|"send"|"clock", … }
  * Antworten (an Main):    { id, ok, result?, error? }  bzw.  { type:"midi", data }
  */
 
@@ -22,6 +22,49 @@ try {
 
 let out = null;
 let input = null;
+
+// ─── MIDI-Clock-Generator (0xF8, 24 ppqn) ─────────────────────────────────
+//
+// Läuft im Worker, weil hier der Ausgang liegt und der Main-Thread nichts
+// blockieren soll. Drift-korrigiert: jeder Tick wird gegen die Sollzeit
+// (hrtime) geplant, nicht gegen den vorigen Timer — sonst läuft die Clock
+// mit der Timer-Latenz davon. Jitter einzelner Ticks bleibt (~1 ms); die
+// Electribe mittelt das Tempo über mehrere Ticks.
+const clock = { timer: null, bpm: 120, naechster: 0n, laeuft: false };
+
+function clockIntervalNs() {
+  return BigInt(Math.round((60_000_000_000 / (clock.bpm * 24))));
+}
+
+function clockTick() {
+  if (!clock.laeuft) return;
+  const jetzt = process.hrtime.bigint();
+  // Nachholen, falls der Timer spät dran war — aber höchstens ein paar Ticks,
+  // sonst flutet ein eingeschlafener Prozess das Gerät.
+  let gesendet = 0;
+  while (clock.naechster <= jetzt && gesendet < 4) {
+    try { if (out) out.sendMessage([0xf8]); } catch { /* Port weg — Clock läuft leer */ }
+    clock.naechster += clockIntervalNs();
+    gesendet++;
+  }
+  if (clock.naechster <= jetzt) clock.naechster = jetzt + clockIntervalNs();
+  const warteMs = Number(clock.naechster - process.hrtime.bigint()) / 1e6;
+  clock.timer = setTimeout(clockTick, Math.max(0, warteMs));
+}
+
+function clockStart(bpm) {
+  clock.bpm = Math.max(20, Math.min(300, Number(bpm) || 120));
+  if (clock.laeuft) return;
+  clock.laeuft = true;
+  clock.naechster = process.hrtime.bigint();
+  clockTick();
+}
+
+function clockStop() {
+  clock.laeuft = false;
+  if (clock.timer) clearTimeout(clock.timer);
+  clock.timer = null;
+}
 
 parentPort.on("message", (msg) => {
   const { id, cmd } = msg;
@@ -53,6 +96,19 @@ parentPort.on("message", (msg) => {
       if (!out) throw new Error("Kein MIDI-Ausgang geöffnet");
       out.sendMessage(msg.bytes);
       parentPort.postMessage({ id, ok: true });
+    } else if (cmd === "clock") {
+      // { action: "start"|"stop"|"bpm", bpm? }
+      if (msg.action === "start") {
+        if (!out) throw new Error("Kein MIDI-Ausgang geöffnet");
+        clockStart(msg.bpm);
+      } else if (msg.action === "stop") {
+        clockStop();
+      } else if (msg.action === "bpm") {
+        clock.bpm = Math.max(20, Math.min(300, Number(msg.bpm) || clock.bpm));
+      } else {
+        throw new Error("Unbekannte Clock-Aktion: " + msg.action);
+      }
+      parentPort.postMessage({ id, ok: true, result: { laeuft: clock.laeuft, bpm: clock.bpm } });
     } else {
       throw new Error("Unbekanntes MIDI-Kommando: " + cmd);
     }

@@ -164,7 +164,9 @@ MIDI-Nachrichten, also mit Stock **und** Hacktribe:
 | Value-Regler und Pad-Modus **Pattern Set** (Takt 1–4 = Seiten, Pads = Patterns 1–64) | Bank Select + Program Change — **0-basiert, Bank im LSB** (Pattern N → CC0 0, CC32 (N−1) div 128, Program (N−1) mod 128); **nur bei laufendem Sequencer** |
 | Pad-Modus **Trigger** (Part anspielen), **Keyboard** (Pads chromatisch ab C3 auf dem aktiven Part) | Note On/Off auf dem Part-Kanal |
 | Pad-Modus **Part Erase** | löscht alle Steps, Live per Übertragung |
-| Transport ▶ / ■ | MIDI Start / Stop — wirkt nur bei Global „Clock Mode" Auto/Ext |
+| Transport ▶ / ■ | ▶ = **MIDI-Clock** (0xF8, 24 ppqn, im Pattern-Tempo, drift-korrigiert im Electron-Worker) + Start; ■ = Stop + Clock aus. Schalter „MIDI-Clock" in der Toolbar. Das Gerät folgt nur bei Global „Clock Mode" **Auto/Ext** — bei Internal ignoriert es Start/Stop (gemessen) |
+| **Master Fx**-Button, **X/Y-Pad** | CC 106 (On/Off), CC 102/103 (X/Y) auf dem Global-Kanal |
+| **⛔ Panic** | All Sound Off (CC 120) + All Notes Off (CC 123) auf allen 16 Kanälen — Klasse A, unabhängig vom Receive-Filter |
 
 **Gemessen 2026-08-22** (E2 Sampler v2.2, Kanal 1, Receive-Filter Off, Display
 abgelesen): Program 100 → Pattern **101**, Program 1 → **2**, Program 2 → **3**;

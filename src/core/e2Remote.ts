@@ -46,7 +46,34 @@ export function patternIndexFromProgram(bankLsb: number, program: number): numbe
 import type { FilterBand } from "./panelState";
 
 export const MIDI_START = 0xfa;
+export const MIDI_CONTINUE = 0xfb;
 export const MIDI_STOP = 0xfc;
+export const MIDI_CLOCK = 0xf8;
+
+/** Abstand zweier Clock-Ticks (24 ppqn) in Millisekunden. */
+export function clockIntervalMs(bpm: number): number {
+  return 60000 / (Math.max(20, Math.min(300, bpm)) * 24);
+}
+
+/** Master-FX-CCs (KORG MIDI-Implementation, Klasse S) — auf dem Global-Kanal. */
+export const MFX_CC = { x: 102, y: 103, on: 106 } as const;
+
+export function buildMfxCc(globalChannel0: number, was: keyof typeof MFX_CC, value: number): Uint8Array {
+  return Uint8Array.from([0xb0 | (globalChannel0 & 0x0f), MFX_CC[was], Math.max(0, Math.min(127, Math.round(value)))]);
+}
+
+/**
+ * Panic: All Sound Off (CC 120) + All Notes Off (CC 123) auf allen 16
+ * Kanälen — Klasse A, also unabhängig vom Receive-Filter.
+ */
+export function buildPanic(): Uint8Array[] {
+  const out: Uint8Array[] = [];
+  for (let ch = 0; ch < 16; ch++) {
+    out.push(Uint8Array.from([0xb0 | ch, 120, 0]));
+    out.push(Uint8Array.from([0xb0 | ch, 123, 0]));
+  }
+  return out;
+}
 
 /** Filtertyp, den ein Band-Button setzt (Stock-Werte der drei Familien). */
 export const BAND_FILTER_TYPE: Record<Exclude<FilterBand, "off" | "ext">, number> = {

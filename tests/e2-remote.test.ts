@@ -6,8 +6,12 @@
 import { describe, it, expect } from "vitest";
 import {
   BAND_FILTER_TYPE,
+  MIDI_CLOCK,
   MIDI_START,
   MIDI_STOP,
+  buildMfxCc,
+  buildPanic,
+  clockIntervalMs,
   buildNoteOff,
   buildNoteOn,
   buildProgramChange,
@@ -78,6 +82,22 @@ describe("e2Remote — Noten und Transport", () => {
   it("Realtime-Bytes", () => {
     expect(MIDI_START).toBe(0xfa);
     expect(MIDI_STOP).toBe(0xfc);
+    expect(MIDI_CLOCK).toBe(0xf8);
+  });
+
+  it("Clock-Intervall: 175 BPM ≈ 14,29 ms, geklemmt auf 20–300 BPM", () => {
+    expect(clockIntervalMs(175)).toBeCloseTo(14.2857, 3);
+    expect(clockIntervalMs(120)).toBeCloseTo(20.8333, 3);
+    expect(clockIntervalMs(5)).toBe(clockIntervalMs(20));
+  });
+
+  it("Master-FX-CCs auf dem Global-Kanal, Panic auf allen 16 Kanälen", () => {
+    expect(Array.from(buildMfxCc(0, "x", 64))).toEqual([0xb0, 102, 64]);
+    expect(Array.from(buildMfxCc(3, "on", 999))).toEqual([0xb3, 106, 127]);
+    const p = buildPanic();
+    expect(p).toHaveLength(32);
+    expect(Array.from(p[0])).toEqual([0xb0, 120, 0]);
+    expect(Array.from(p[31])).toEqual([0xbf, 123, 0]);
   });
 });
 

@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld("tekkMidi", {
   selectIn: (id) => ipcRenderer.invoke("midi:selectIn", id),
   /** Sendet rohe Bytes (kompletter SysEx-Frame). */
   send: (bytes) => ipcRenderer.invoke("midi:send", bytes),
+  /** MIDI-Clock (0xF8, 24 ppqn) im Worker: { action: "start"|"stop"|"bpm", bpm? }. */
+  clock: (opts) => ipcRenderer.invoke("midi:clock", opts),
   /** Registriert einen Empfangs-Callback; gibt eine Unsubscribe-Funktion zurück. */
   onMessage: (cb) => {
     const handler = (_e, bytes) => cb(bytes);

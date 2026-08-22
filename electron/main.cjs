@@ -107,6 +107,10 @@ function registerMidiIpc(win) {
   ipcMain.handle("midi:send", (_e, bytes) =>
     midiCall("send", { bytes: Array.isArray(bytes) ? bytes : Array.from(bytes) }, 2500),
   );
+  // MIDI-Clock-Generator im Worker: { action: "start"|"stop"|"bpm", bpm? }
+  ipcMain.handle("midi:clock", (_e, opts) =>
+    midiCall("clock", { action: String(opts?.action ?? "stop"), bpm: Number(opts?.bpm) || undefined }, 2500),
+  );
 }
 
 // Muss VOR app-ready registriert werden: eigenes Schema als sicher + standard.
