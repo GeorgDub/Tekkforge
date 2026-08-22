@@ -1,20 +1,29 @@
 /**
  * generator.ts — Tab „Generator": Verzeichnis scannen, Bank bauen,
- * Jam / Mini-Set / Pro Melo erzeugen, Vorhoeren, → Datei, → Editor.
- * Duenne DOM-Schicht; Entscheidungen in core/generatorSession.ts.
+ * Jam / Mini-Set / Pro Melo erzeugen, Vorhoeren, → Datei, → Editor,
+ * Projekt auf Platte / SD, „als geladen markieren", → Geraet (Slot-Weg).
+ * Duenne DOM-Schicht; Entscheidungen in core/generatorSession.ts und
+ * core/projektStatus.ts.
  */
 import { $, download, escapeHtml } from "./shared";
 import { dekodiere } from "./audioDecode";
 import { PreviewPlayer } from "./preview";
+import { panelBridge } from "./editor";
+import { tekkFs, ordnerVon } from "./tekkFs";
 import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiArt, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import {
+  type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
+} from "../core/projektStatus";
 import { meloKandidaten, pools, type Modus } from "../core/rezept";
 import { alsAllPat } from "../core/patternGen";
 import { editorProjectFromE2Files, importSamplesFromAll, type EditorProject, type PoolSample } from "../core/editorModel";
 
 interface Zustand {
   ordner: string;
+  /** absoluter Pfad des gewaehlten Verzeichnisses (nur Electron) */
+  ordnerPfad: string;
   eintraege: ScanEintrag[];
   uebersprungen: { datei: string; grund: string }[];
   zusammen: Zusammenfassung | null;
@@ -23,18 +32,39 @@ interface Zustand {
   pool: PoolSample[];
   ergebnis: Erzeugt | null;
   fortschritt: string;
+  meldung: string;
+  marker: GeladenMarker | null;
+  sendeStatus: string;
+  sendet: boolean;
 }
 
 const z: Zustand = {
-  ordner: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [], ergebnis: null, fortschritt: "",
+  ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
+  ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false,
 };
 const player = new PreviewPlayer();
 let onEditor: (p: EditorProject) => void = () => {};
 let tekkBytes: Uint8Array | null = null;
 
-/** tekk4.all liegt im Repo unter examples/e2s — in der App relativ zum Renderer erreichbar. */
+function speicher(): { getItem(k: string): string | null; setItem(k: string, v: string): void } | null {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** tekk4.all: zuerst ueber die Electron-Bruecke (App-Verzeichnis), sonst per fetch (Browser/Vite). */
 async function ladeTekkDrums(): Promise<Uint8Array | null> {
   if (tekkBytes) return tekkBytes;
+  const fsb = tekkFs();
+  if (fsb) {
+    const b = await fsb.tekkDrums();
+    if (b) {
+      tekkBytes = Uint8Array.from(b);
+      return tekkBytes;
+    }
+  }
   for (const url of ["examples/e2s/tekk4.all", "../examples/e2s/tekk4.all"]) {
     try {
       const res = await fetch(url);
@@ -51,7 +81,9 @@ async function ladeTekkDrums(): Promise<Uint8Array | null> {
 function render(): void {
   const host = $("viewGenerator");
   const zs = z.zusammen;
+  const fsb = tekkFs();
   const melos = z.projekt ? meloKandidaten(pools(z.projekt)) : [];
+  const status = z.projekt ? statusMit(z.projekt, z.marker) : null;
   const rollen = zs
     ? Object.entries(zs.rollen)
         .sort((a, b) => b[1] - a[1])
@@ -63,7 +95,7 @@ function render(): void {
       <div class="zeile"><b>${escapeHtml(z.ordner)}</b> — ${zs.anzahl} Samples · ${zs.sekunden.toFixed(0)} s ≈ ${zs.megabyte.toFixed(1)} MB${
         zs.volumesNoetig > 1 ? ` · <span class="hinweis">zu viel fuers Sample-RAM → ${zs.volumesNoetig} Volumes</span>` : ""
       }</div>
-      <div class="zeile fortschritt">${escapeHtml(rollen)}</div>
+      <div class="zeile fortschritt">${escapeHtml(rollen)}${z.ordnerPfad ? ` · <span title="${escapeHtml(z.ordnerPfad)}">Pfad bekannt</span>` : ""}</div>
       ${
         z.uebersprungen.length
           ? `<div class="hinweis">${z.uebersprungen.length} Datei(en) uebersprungen: ${escapeHtml(
@@ -84,11 +116,21 @@ function render(): void {
       <div class="zeile"><button id="genBank" class="primary">Bank bauen</button>
         ${
           z.projekt
-            ? `<span>${escapeHtml(z.projekt.name)}.all · ${z.projekt.samples.length} Samples · Status <b>${z.projekt.status}</b></span>
-        <button id="genBankSpeichern">.all speichern</button><button id="genProjektSpeichern">projekt.json</button>`
+            ? `<span>${escapeHtml(z.projekt.name)}.all · ${z.projekt.samples.length} Samples · Status <b id="genStatus">${status}</b></span>`
             : ""
         }
+      </div>
+      ${
+        z.projekt
+          ? `<div class="zeile">
+        <button id="genBankSpeichern">.all herunterladen</button><button id="genProjektSpeichern">projekt.json</button>
+        ${fsb && z.ordnerPfad ? `<button id="genProjektOrdner" title="${escapeHtml(z.ordnerPfad)}\\TekkForge">Projekt speichern (TekkForge/)</button>` : ""}
+        ${fsb ? `<button id="genSd">auf SD kopieren</button>` : ""}
+        <button id="genGeladen" ${status === "geladen" ? "disabled" : ""}>als geladen markieren</button>
       </div>`
+          : ""
+      }
+      ${z.meldung ? `<div class="fortschritt" id="genMeldung">${escapeHtml(z.meldung)}</div>` : ""}`
     : "";
   const bauen = z.projekt
     ? `
@@ -115,10 +157,13 @@ function render(): void {
         )
         .join("")}</div>`
     : `<div class="fortschritt">Erst Verzeichnis waehlen und Bank bauen.</div>`;
+  const sperre = geraetSperrgrund(z.projekt, z.marker, panelBridge.midi.ready);
   const ergebnis = z.ergebnis
     ? `
       <div class="zeile"><b>${z.ergebnis.patterns.length} Pattern(s)</b> · ${escapeHtml(z.ergebnis.dateiname)}
-        <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button></div>
+        <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button>
+        <button id="genGeraet" ${sperre || z.sendet ? "disabled" : ""} title="${escapeHtml(sperre ?? "0x4C-Slot-Dump, laufendes Pattern bleibt unberuehrt")}">→ Geraet ab Slot <span id="genGeraetSlot">${z.ergebnis.patterns[0]?.chainTo ? z.ergebnis.patterns[0].chainTo - 1 : 1}</span></button>
+        ${sperre ? `<span class="fortschritt">${escapeHtml(sperre)}</span>` : ""}</div>
       <div class="liste">${z.ergebnis.patterns
         .map(
           (p, i) =>
@@ -126,7 +171,8 @@ function render(): void {
         )
         .join("")}</div>
       <div class="warum"><b>Warum so?</b> ${escapeHtml(z.ergebnis.warumSo)}</div>
-      ${z.ergebnis.hinweise.length ? `<div class="hinweis">${escapeHtml(z.ergebnis.hinweise.join(" · "))}</div>` : ""}`
+      ${z.ergebnis.hinweise.length ? `<div class="hinweis">${escapeHtml(z.ergebnis.hinweise.join(" · "))}</div>` : ""}
+      ${z.sendeStatus ? `<div class="fortschritt" id="genSendeStatus">${escapeHtml(z.sendeStatus)}</div>` : ""}`
     : `<div class="fortschritt">Noch nichts erzeugt.</div>`;
   host.innerHTML = `
     <div class="card">
@@ -164,6 +210,9 @@ function verdrahte(): void {
   knopf("genProjektSpeichern", () => {
     if (z.projekt) download(projektJson(z.projekt), "projekt.json", "application/json");
   });
+  knopf("genProjektOrdner", () => void projektSpeichern());
+  knopf("genSd", () => void aufSd());
+  knopf("genGeladen", alsGeladen);
   knopf("genLos", generieren);
   knopf("genHoeren", () => {
     const n = ($("genMelo") as HTMLSelectElement).value;
@@ -174,6 +223,7 @@ function verdrahte(): void {
     if (z.ergebnis) download(z.ergebnis.bytes, z.ergebnis.dateiname, "application/octet-stream");
   });
   knopf("genEditor", inEditor);
+  knopf("genGeraet", () => void anGeraet());
   for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genPlay")) {
     b.addEventListener("click", () => hoeren(Number(b.dataset.nr)));
   }
@@ -192,10 +242,16 @@ async function scanneOrdner(files: FileList | null): Promise<void> {
   // nur die oberste Ebene des gewaehlten Verzeichnisses, keine Unterordner
   const liste = alle.filter((f) => dateiArt(f.name) !== "skip" && (f.webkitRelativePath ?? "").split("/").length <= 2);
   z.ordner = (alle[0].webkitRelativePath ?? "").split("/")[0] || "Verzeichnis";
+  const fsb = tekkFs();
+  const erste = liste[0] ?? alle[0];
+  z.ordnerPfad = fsb && erste ? ordnerVon(fsb.pfadVon(erste)) : "";
+  if (z.ordnerPfad && z.ordner === "Verzeichnis") z.ordner = z.ordnerPfad.split(/[\\/]/).pop() || z.ordner;
   z.projekt = null;
   z.bank = null;
   z.ergebnis = null;
   z.pool = [];
+  z.meldung = "";
+  z.sendeStatus = "";
   const eingaben: ScanEingabe[] = [];
   const fehler: { datei: string; grund: string }[] = [];
   for (let i = 0; i < liste.length; i++) {
@@ -231,10 +287,72 @@ async function bankBauen(): Promise<void> {
     z.bank = new Uint8Array(bank);
     z.pool = importSamplesFromAll(z.bank);
     z.ergebnis = null;
+    z.meldung = "";
+    z.sendeStatus = "";
     if (warnungen.length) alert("Hinweise beim Bankbau:\n" + warnungen.join("\n"));
   } catch (e) {
     alert("Bank konnte nicht gebaut werden: " + (e instanceof Error ? e.message : String(e)));
   }
+  render();
+}
+
+function projektDateien(): { name: string; bytes: Uint8Array }[] {
+  if (!z.projekt || !z.bank) return [];
+  return [
+    { name: `${z.projekt.name}.all`, bytes: z.bank },
+    { name: "projekt.json", bytes: new TextEncoder().encode(projektJson(z.projekt)) },
+  ];
+}
+
+async function projektSpeichern(): Promise<void> {
+  const fsb = tekkFs();
+  if (!fsb || !z.projekt || !z.ordnerPfad) return;
+  try {
+    const res = await fsb.schreibe(`${z.ordnerPfad}\\TekkForge`, projektDateien());
+    z.meldung = `Projekt gespeichert: ${res.ordner} (${res.geschrieben.length} Dateien)`;
+  } catch (e) {
+    z.meldung = "Speichern fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
+  }
+  render();
+}
+
+async function aufSd(): Promise<void> {
+  const fsb = tekkFs();
+  if (!fsb || !z.projekt) return;
+  let medien: { pfad: string; label: string }[] = [];
+  try {
+    medien = await fsb.wechselmedien();
+  } catch (e) {
+    alert("Wechselmedien konnten nicht ermittelt werden: " + (e instanceof Error ? e.message : String(e)));
+    return;
+  }
+  if (!medien.length) {
+    alert("Keine SD-Karte gefunden (kein Wechselmedium). Karte einstecken, Schreibschutz pruefen.");
+    return;
+  }
+  let wahl = medien[0];
+  if (medien.length > 1) {
+    const antwort = prompt(medien.map((m, i) => `${i + 1}: ${m.pfad} ${m.label}`).join("\n") + "\n\nNummer der Karte:", "1");
+    const i = Number(antwort) - 1;
+    if (!(i >= 0 && i < medien.length)) return;
+    wahl = medien[i];
+  }
+  try {
+    const res = await fsb.schreibe(sdZielpfad(wahl.pfad), projektDateien());
+    z.projekt.status = "exportiert";
+    z.meldung = `Auf SD kopiert: ${res.ordner} — am Geraet erst die .all importieren, dann „als geladen markieren"`;
+  } catch (e) {
+    z.meldung = "SD-Kopie fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
+  }
+  render();
+}
+
+function alsGeladen(): void {
+  if (!z.projekt) return;
+  const sp = speicher();
+  if (sp) z.marker = markerSchreiben(sp, z.projekt);
+  else z.marker = { name: z.projekt.name, bankZeit: z.projekt.bankZeit };
+  z.meldung = `„${z.projekt.name}" gilt jetzt als im Geraet geladen — Patterns koennen live in Slots.`;
   render();
 }
 
@@ -246,6 +364,7 @@ function generieren(): void {
   const beschreibung = ($("genText") as HTMLTextAreaElement).value;
   const startSlot = Number(($("genSlot") as HTMLInputElement).value) || 1;
   z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot });
+  z.sendeStatus = "";
   render();
 }
 
@@ -255,11 +374,54 @@ function inEditor(): void {
   onEditor(editorProjectFromE2Files(allpat, z.bank));
 }
 
+/** Alle erzeugten Patterns nacheinander per 0x4C auf Slots ab dem Start-Slot schreiben. */
+async function anGeraet(): Promise<void> {
+  if (!z.ergebnis || z.sendet) return;
+  const sperre = geraetSperrgrund(z.projekt, z.marker, panelBridge.midi.ready);
+  if (sperre) {
+    alert(sperre);
+    return;
+  }
+  const start = z.ergebnis.patterns[0]?.chainTo ? z.ergebnis.patterns[0].chainTo - 1 : Number(($("genSlot") as HTMLInputElement)?.value) || 1;
+  const n = z.ergebnis.patterns.length;
+  if (start + n - 1 > 250) {
+    alert(`Slots ${start}–${start + n - 1} liegen ueber 250.`);
+    return;
+  }
+  z.sendet = true;
+  let bestaetigt = 0;
+  try {
+    for (let i = 0; i < n; i++) {
+      const p = z.ergebnis.patterns[i];
+      z.sendeStatus = `Sende ${i + 1}/${n}: „${p.name}" → Slot ${start + i} …`;
+      render();
+      const ok = await panelBridge.writePatternToSlotDirect(patternFuerGeraet(p), start + i);
+      if (ok) bestaetigt++;
+    }
+    z.sendeStatus = `Fertig: ${n} Pattern(s) auf Slots ${start}–${start + n - 1} geschrieben, ${bestaetigt} vom Geraet bestaetigt — am Geraet per Program Change hinwechseln.`;
+  } catch (e) {
+    z.sendeStatus = "Senden abgebrochen: " + (e instanceof Error ? e.message : String(e));
+  } finally {
+    z.sendet = false;
+    render();
+  }
+}
+
 export function initGenerator(cb: (p: EditorProject) => void): void {
   onEditor = cb;
+  const sp = speicher();
+  z.marker = sp ? markerLesen(sp) : null;
   render();
 }
 
 export function generatorWirdSichtbar(): void {
-  // Zustand lebt im Modul; gerendert wird bei jeder Aenderung.
+  // Sperrgrund haengt am MIDI-Zustand, der im Editor-Tab wechselt — nur den Knopf nachziehen,
+  // nicht neu rendern (sonst gehen Beschreibung und Auswahl verloren).
+  const knopf = document.getElementById("genGeraet") as HTMLButtonElement | null;
+  if (!knopf) return;
+  const sperre = geraetSperrgrund(z.projekt, z.marker, panelBridge.midi.ready);
+  knopf.disabled = !!sperre || z.sendet;
+  knopf.title = sperre ?? "0x4C-Slot-Dump, laufendes Pattern bleibt unberuehrt";
+  const grund = knopf.nextElementSibling;
+  if (grund && grund.classList.contains("fortschritt")) grund.textContent = sperre ?? "";
 }
