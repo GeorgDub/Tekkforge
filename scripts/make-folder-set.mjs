@@ -142,16 +142,22 @@ const tagAus = (paar, i) => {
 const ANZ_THEMEN = Number(ARG("--themes", KONZEPT.themes?.length || Math.min(Math.max(meloPaare.length, 8), 12)));
 const rot = (list, i) => (list.length ? list[i % list.length] : undefined);
 
+// Wenige Vocal-Loops, aber mehr Melodien als Themen → 15/16 bekommen Melodien, die Vocal-Loops werden Shots
+if (voxPaare.length < ANZ_THEMEN / 2 && meloPaare.length > ANZ_THEMEN) {
+  for (const vp of voxPaare.splice(0)) voxShots.push(vp.a, ...(vp.halves ? [vp.b] : []));
+}
 const THEMEN = [];
 for (let i = 0; i < ANZ_THEMEN; i++) {
   const k = KONZEPT.themes?.[i] ?? {};
   const melo = such(meloPaare, k.melo) ?? rot(meloPaare, i);
   const nMelo = Math.max(meloPaare.length, 1);
   const verschieden = (list, praefix, schritt) => such(list, praefix) ?? rot(list, i + Math.floor(i / nMelo) * schritt);
-  const vers = voxPaare.length ? verschieden(voxPaare, k.vers, 1) : null;
-  const melo2 = !voxPaare.length && meloPaare.length > ANZ_THEMEN
+  // 15/16: Vocal-Loops, wenn es genug davon gibt — sonst uebrige Melodien als zweite Lage
+  const wenigVox = voxPaare.length < ANZ_THEMEN / 2;
+  const melo2 = (wenigVox && meloPaare.length > ANZ_THEMEN)
     ? such(meloPaare, k.melo2) ?? meloPaare[(i + ANZ_THEMEN) % meloPaare.length]
     : such(meloPaare, k.melo2) ?? null;
+  const vers = voxPaare.length && !melo2 ? verschieden(voxPaare, k.vers, 1) : null;
   const fam = familien.find((f) => k.kick && f.name.startsWith(String(k.kick).toLowerCase())) ?? rot(familien, i);
   const kicks = fam.kicks.length >= 2 ? fam.kicks : fam.kicks.concat(rot(familien, i + 1).kicks.slice(0, 2));
   THEMEN.push({

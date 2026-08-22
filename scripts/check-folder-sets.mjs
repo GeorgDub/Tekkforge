@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import { parseElectribeAllPatBank } from "../src/core/electribeImport.ts";
 import { parseE2sBank } from "../src/core/e2sBankReader.ts";
 import { e2PatternRefToBankNumber, oscToDisplayNumber } from "../src/core/e2sPatternSampleLink.ts";
-const PAARE = [["korg3","KORG3"],["korg2","KORG2"],["korg1","KORG1"],["heiko","HEIKO"],["project5","PROJECT5"],["durchgetekkt","DURCHGETEKKT"],["rauschgift","RAUSCHGIFT"],["tommi","TOMMI"],["neulee","NEULEE"],["melopack","MELOPACK"],["melopack2","MELOPACK2"],["melopack3","MELOPACK3"],["melopack4","MELOPACK4"],["melopack5","MELOPACK5"]];
+const PAARE = [["korg3","KORG3"],["korg2","KORG2"],["korg1","KORG1"],["heiko","HEIKO"],["project5","PROJECT5"],["durchgetekkt","DURCHGETEKKT"],["rauschgift","RAUSCHGIFT"],["tommi","TOMMI"],["neulee","NEULEE"],["melopack","MELOPACK"],["melopack2","MELOPACK2"],["melopack3","MELOPACK3"],["melopack4","MELOPACK4"],["melopack5","MELOPACK5"],["melopack6","MELOPACK6"],["melopack7","MELOPACK7"]];
 let fehler = 0;
 for (const [b, p] of PAARE) {
   const bank = parseE2sBank(new Uint8Array(fs.readFileSync(`examples/e2s/${b}.all`)), `${b}.all`);
