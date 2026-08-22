@@ -15,7 +15,7 @@
  *
  * 8 Themen a 30 Patterns (Melo-Phrase × Bass-Spur × Strophen-Haelfte), je
  * Thema Durchlauf 1 melo-zentriert, Durchlauf 2 vocal-zentriert (wie MEGA3),
- * Slots 241–250 = JAM je Thema + 2 ACAPELLA.
+ * Slots 241–250 = ALLES je Thema + 2 ALLES VX. Keine Breaks (Nutzerwunsch 2026-08-22).
  *
  * Aufruf: npx tsx scripts/make-drogen.mjs [ziel.e2sallpat] [bank-json]
  */
@@ -177,7 +177,7 @@ const BLOCK = [
   ["DROP 3",  5, "hart", 2, { melo: 1, bass: 1, vers: 1 }],
   ["RUHE 1",  2, "vier", 2, { melo: 1, bass: 1 }],
   ["RUHE 2",  3, "vier", 2, { bass: 1, stab: "frage", shot: 2 }],
-  ["LUFT",   -1, "kein", 2, { melo: 1 }],
+  ["FAHRT",   4, "vier", 2, { melo: 1, bass: 1, shot: 2 }],
   ["DROP 4",  5, "hart", 2, { melo: 1, bass: 1, stab: "stab", shot: 1 }],
   ["DROP 5",  5, "vier", 2, { melo: 1, bass: 1, vers: 1, stab: "arp" }],
   ["AUSKL",   3, "vier", 2, { melo: 1, bass: 1 }],
@@ -187,13 +187,13 @@ const BLOCK = [
   ["VOX IN",  1, "vier", 2, { vers: 1 }],
   ["VOX 1",   3, "hart", 2, { vers: 1, bass: 1 }],
   ["VOX 2",   4, "vier", 2, { vers: 1, bass: 1, melo: 1 }],
-  ["BREAK",  -1, "kein", 2, { vers: 1 }],
+  ["VOX 3",   4, "hart", 2, { vers: 1, bass: 1, stab: "arp" }],
   ["DRP2 1",  5, "hart", 2, { melo: 1, vers: 1, bass: 1, stab: "stab" }],
   ["DRP2 2",  5, "roll", 2, { melo: 1, bass: 1, shot: 1 }],
   ["DRP2 3",  5, "hart", 2, { vers: 1, bass: 1, stab: "arp", shot: 2 }],
   ["RUHE 3",  2, "vier", 2, { bass: 1, stab: "ruhig", shot: 2 }],
   ["RUHE 4",  3, "vier", 2, { melo: 1, bass: 1, shot: 2 }],
-  ["LUFT 2", -1, "kein", 2, { melo: 1, vers: 1 }],
+  ["DRP2 6",  5, "roll", 2, { melo: 1, vers: 1, bass: 1 }],
   ["DRP2 4",  5, "hart", 2, { melo: 1, vers: 1, bass: 1, stab: "stab", shot: 1 }],
   ["DRP2 5",  5, "vier", 2, { melo: 1, bass: 1, stab: "frage", shot: 1 }],
   ["AUSKL2",  3, "vier", 2, { vers: 1, bass: 1 }],
@@ -225,8 +225,8 @@ for (const thema of THEMEN) {
 for (const thema of THEMEN) {
   patterns.push(pattern(`Dr ${thema.tag} ALLES`, thema, 5, "hart", { melo: 1, vers: 1, bass: 1, stab: "stab", shot: 1 }, 0, 0, 2));
 }
-patterns.push(pattern("Dr ACAPELLA 1", THEMEN[0], -1, "kein", { vers: 1, shot: 2 }, 0, 0, 2));
-patterns.push(pattern("Dr ACAPELLA 2", THEMEN[1], -1, "kein", { vers: 1, shot: 2 }, 0, 0, 2));
+patterns.push(pattern("Dr ALLES VX 1", THEMEN[0], 5, "vier", { vers: 1, bass: 1, shot: 1, stab: "arp" }, 2, 0, 2));
+patterns.push(pattern("Dr ALLES VX 2", THEMEN[2], 5, "vier", { vers: 1, bass: 1, shot: 1, stab: "arp" }, 3, 0, 2));
 if (patterns.length !== SLOTS) throw new Error(`${patterns.length} Patterns statt ${SLOTS}`);
 
 const out = Buffer.from(buildE2AllPatFile(patterns));
@@ -235,4 +235,4 @@ console.log(`${ZIEL} — ${out.length} Bytes · ${patterns.length} Patterns · $
 THEMEN.forEach((t, i) =>
   console.log(`  ${t.tag}  Slots ${String(i * PRO_BLOCK + 1).padStart(3)}–${String((i + 1) * PRO_BLOCK).padStart(3)}  Melo ${t.melo.join(" / ")} · Bass ${t.bass[0].slice(0, 8)} (${t.bass.length} Chunks) · Vers ${t.vers.join(" / ")} · Shots ${t.shots.join(", ")}`),
 );
-console.log(`  Slots 241–248  ALLES je Thema · 249–250 ACAPELLA`);
+console.log(`  Slots 241–248  ALLES je Thema · 249–250 ALLES VX`);
