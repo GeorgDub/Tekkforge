@@ -61,7 +61,7 @@ export interface Erzeugt {
 
 export function erzeuge(
   projekt: Projekt,
-  wunsch: { modus: Modus; bpm: number; melo?: string; beschreibung?: string; startSlot?: number },
+  wunsch: { modus: Modus; bpm: number; melo?: string; beschreibung?: string; startSlot?: number; rezept?: Rezept },
 ): Erzeugt {
   const basis = projekt.name.toUpperCase().replace(/[^A-Z0-9]+/g, "");
   if (wunsch.modus === "promelo") {
@@ -77,7 +77,10 @@ export function erzeuge(
       warumSo: `${rezepte.length} Melodien, je ein Jam-Pattern; Kick-Familien rotieren: ${rezepte.map((r) => `${r.thema.melo} → ${r.thema.kickFamilie}`).join(", ")}.`,
     };
   }
-  const rezept = regelRezept(projekt, { modus: wunsch.modus, bpm: wunsch.bpm, melo: wunsch.melo, beschreibung: wunsch.beschreibung });
+  const rezept =
+    wunsch.rezept && wunsch.rezept.modus === wunsch.modus
+      ? wunsch.rezept
+      : regelRezept(projekt, { modus: wunsch.modus, bpm: wunsch.bpm, melo: wunsch.melo, beschreibung: wunsch.beschreibung });
   const start = wunsch.startSlot ?? 1;
   const { patterns, hinweise } = baueRezept(rezept, projekt, { startSlot: start });
   const jam = wunsch.modus === "jam";

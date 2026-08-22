@@ -10,6 +10,8 @@ import { dekodiere } from "./audioDecode";
 import { PreviewPlayer } from "./preview";
 import { panelBridge } from "./editor";
 import { tekkFs, ordnerVon } from "./tekkFs";
+import { tekkKi } from "./tekkKi";
+import { promptFuer, antwortZuRezept, REZEPT_SCHEMA, KI_MODELL_STANDARD } from "../core/kiPlaner";
 import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiArt, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
@@ -36,11 +38,15 @@ interface Zustand {
   marker: GeladenMarker | null;
   sendeStatus: string;
   sendet: boolean;
+  /** API-Key-Status aus den App-Einstellungen (nur Electron) */
+  ki: { gesetzt: boolean; modell: string } | null;
+  kiLaeuft: boolean;
+  kiHinweis: string;
 }
 
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
-  ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false,
+  ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
 };
 const player = new PreviewPlayer();
 let onEditor: (p: EditorProject) => void = () => {};
@@ -148,8 +154,23 @@ function render(): void {
       </div>
       <div class="zeile"><label for="genSlot">Start-Slot</label><input id="genSlot" type="number" min="1" max="250" value="1" style="width:70px" /></div>
       <div class="zeile"><label for="genText">Beschreibung</label></div>
-      <textarea id="genText" placeholder="z. B. hart, rollende bass, arp stab — ohne API-Key wirken nur Schluesselwoerter (KI-Uebersetzung kommt mit Stufe 4)"></textarea>
-      <div class="zeile"><button id="genLos" class="primary">Generieren</button></div>
+      <textarea id="genText" placeholder="${
+        z.ki?.gesetzt
+          ? "z. B. duester, Aufbau ueber zwei Takte, Vocal nur im Break, Kick hart — Claude macht daraus das Rezept"
+          : "z. B. hart, rollende bass, arp stab — ohne API-Key wirken nur Schluesselwoerter"
+      }"></textarea>
+      ${
+        tekkKi()
+          ? `<div class="zeile"><label for="genKey">KI (Premium)</label>
+        ${
+          z.ki?.gesetzt
+            ? `<span class="ok">Key gesetzt · ${escapeHtml(z.ki.modell)}</span><button id="genKeyLoeschen">Key loeschen</button>`
+            : `<input id="genKey" type="password" placeholder="Anthropic API-Key" style="width:240px" /><button id="genKeySpeichern">Key speichern</button><span class="fortschritt">kein Key — Regel-Planer</span>`
+        }</div>`
+          : ""
+      }
+      <div class="zeile"><button id="genLos" class="primary" ${z.kiLaeuft ? "disabled" : ""}>${z.kiLaeuft ? "KI denkt …" : "Generieren"}</button>
+        ${z.kiHinweis ? `<span class="fortschritt">${escapeHtml(z.kiHinweis)}</span>` : ""}</div>
       <div class="liste" id="genMeloListe">${melos
         .map(
           (m) =>
@@ -213,7 +234,9 @@ function verdrahte(): void {
   knopf("genProjektOrdner", () => void projektSpeichern());
   knopf("genSd", () => void aufSd());
   knopf("genGeladen", alsGeladen);
-  knopf("genLos", generieren);
+  knopf("genLos", () => void generieren());
+  knopf("genKeySpeichern", () => void keySpeichern(($("genKey") as HTMLInputElement).value));
+  knopf("genKeyLoeschen", () => void keySpeichern(""));
   knopf("genHoeren", () => {
     const n = ($("genMelo") as HTMLSelectElement).value;
     const s = z.projekt?.samples.find((x) => x.name === n);
@@ -356,16 +379,58 @@ function alsGeladen(): void {
   render();
 }
 
-function generieren(): void {
-  if (!z.projekt) return;
+async function keySpeichern(key: string): Promise<void> {
+  const ki = tekkKi();
+  if (!ki) return;
+  try {
+    z.ki = await ki.keySetzen(key, KI_MODELL_STANDARD);
+    z.kiHinweis = z.ki.gesetzt ? "Key gespeichert (App-Einstellungen, nicht im Projekt)" : "Key geloescht";
+  } catch (e) {
+    z.kiHinweis = "Key konnte nicht gespeichert werden: " + (e instanceof Error ? e.message : String(e));
+  }
+  render();
+}
+
+async function generieren(): Promise<void> {
+  if (!z.projekt || z.kiLaeuft) return;
   const modus = (document.querySelector<HTMLInputElement>("input[name=genModus]:checked")?.value ?? "jam") as Modus;
   const bpm = Number(($("genBpm") as HTMLInputElement).value) || z.projekt.bpm;
   const melo = ($("genMelo") as HTMLSelectElement).value || undefined;
   const beschreibung = ($("genText") as HTMLTextAreaElement).value;
   const startSlot = Number(($("genSlot") as HTMLInputElement).value) || 1;
-  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot });
+  const ki = tekkKi();
+  let rezept;
+  z.kiHinweis = "";
+  if (ki && z.ki?.gesetzt && (modus === "jam" || modus === "miniset")) {
+    z.kiLaeuft = true;
+    render();
+    try {
+      const { system, user } = promptFuer(z.projekt, { modus, bpm, beschreibung, melo });
+      const antwort = await ki.rezept({ system, user, schema: REZEPT_SCHEMA });
+      const res = antwortZuRezept(antwort.text, z.projekt);
+      rezept = res.rezept;
+      z.kiHinweis = `Rezept von ${antwort.modell} (${antwort.tokens} Token)${res.korrekturen.length ? ` · ${res.korrekturen.length} Feld(er) korrigiert: ${res.korrekturen.slice(0, 3).join("; ")}` : ""}`;
+    } catch (e) {
+      z.kiHinweis = "KI nicht erreichbar (" + (e instanceof Error ? e.message : String(e)) + ") — Regel-Planer";
+    } finally {
+      z.kiLaeuft = false;
+    }
+  } else if (ki && z.ki?.gesetzt && modus === "promelo") {
+    z.kiHinweis = "Pro Melo nutzt den Regel-Planer (ein Rezept je Melodie)";
+  }
+  // Beschreibung und Auswahl bleiben nach dem Rendern erhalten
+  const text = beschreibung;
+  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept });
   z.sendeStatus = "";
   render();
+  const ta = document.getElementById("genText") as HTMLTextAreaElement | null;
+  if (ta) ta.value = text;
+  const radio = document.querySelector<HTMLInputElement>(`input[name=genModus][value=${modus}]`);
+  if (radio) radio.checked = true;
+  const sel = document.getElementById("genMelo") as HTMLSelectElement | null;
+  if (sel && melo) sel.value = melo;
+  const slot = document.getElementById("genSlot") as HTMLInputElement | null;
+  if (slot) slot.value = String(startSlot);
 }
 
 function inEditor(): void {
@@ -412,6 +477,15 @@ export function initGenerator(cb: (p: EditorProject) => void): void {
   const sp = speicher();
   z.marker = sp ? markerLesen(sp) : null;
   render();
+  const ki = tekkKi();
+  if (ki) {
+    void ki.keyStatus().then((s) => {
+      z.ki = s;
+      render();
+    }).catch(() => {
+      z.ki = { gesetzt: false, modell: KI_MODELL_STANDARD };
+    });
+  }
 }
 
 export function generatorWirdSichtbar(): void {

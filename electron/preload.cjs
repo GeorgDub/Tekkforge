@@ -31,6 +31,17 @@ contextBridge.exposeInMainWorld("tekkMidi", {
   },
 });
 
+// ── KI-Bruecke fuer den Generator-Tab (Key in userData, Rezept-Aufruf im Main-Prozess) ──
+contextBridge.exposeInMainWorld("tekkKi", {
+  available: true,
+  /** { gesetzt, modell } */
+  keyStatus: () => ipcRenderer.invoke("ki:keyStatus"),
+  /** Key speichern (leer = loeschen), optional Modell-ID. */
+  keySetzen: (key, modell) => ipcRenderer.invoke("ki:keySetzen", key, modell),
+  /** { system, user, schema } → { text, modell, tokens }; wirft bei Fehlern mit deutscher Meldung. */
+  rezept: (anfrage) => ipcRenderer.invoke("ki:rezept", anfrage),
+});
+
 // ── Dateibruecke fuer den Generator-Tab (Projekt auf Platte, SD-Karte, tekk4-Drums) ──
 contextBridge.exposeInMainWorld("tekkFs", {
   available: true,

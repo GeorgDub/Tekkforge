@@ -153,6 +153,66 @@ function registerFsIpc() {
   });
 }
 
+// ── KI-Bruecke (Generator-Tab): API-Key in userData/settings.json, Rezept-Aufruf ueber das offizielle SDK ──
+function settingsPfad() {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+function leseSettings() {
+  try {
+    return JSON.parse(fs.readFileSync(settingsPfad(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+function schreibeSettings(s) {
+  fs.mkdirSync(path.dirname(settingsPfad()), { recursive: true });
+  fs.writeFileSync(settingsPfad(), JSON.stringify(s, null, 1));
+}
+const KI_MODELL_STANDARD = "claude-opus-5";
+
+function registerKiIpc() {
+  ipcMain.handle("ki:keyStatus", () => {
+    const s = leseSettings();
+    return { gesetzt: typeof s.anthropicApiKey === "string" && s.anthropicApiKey.length > 10, modell: s.kiModell || KI_MODELL_STANDARD };
+  });
+  ipcMain.handle("ki:keySetzen", (_e, key, modell) => {
+    const s = leseSettings();
+    const k = String(key || "").trim();
+    if (k) s.anthropicApiKey = k;
+    else delete s.anthropicApiKey;
+    if (typeof modell === "string" && modell.trim()) s.kiModell = modell.trim();
+    schreibeSettings(s);
+    return { gesetzt: !!s.anthropicApiKey, modell: s.kiModell || KI_MODELL_STANDARD };
+  });
+  ipcMain.handle("ki:rezept", async (_e, anfrage) => {
+    const s = leseSettings();
+    if (!s.anthropicApiKey) throw new Error("Kein API-Key gesetzt");
+    const Anthropic = require("@anthropic-ai/sdk").default ?? require("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: s.anthropicApiKey, timeout: 25_000, maxRetries: 1 });
+    const modell = s.kiModell || KI_MODELL_STANDARD;
+    try {
+      const antwort = await client.beta.messages.create({
+        model: modell,
+        max_tokens: 4096,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        system: String(anfrage.system),
+        messages: [{ role: "user", content: String(anfrage.user) }],
+        output_config: { format: { type: "json_schema", schema: anfrage.schema } },
+      });
+      if (antwort.stop_reason === "refusal") throw new Error("Anfrage wurde vom Modell abgelehnt");
+      const text = (antwort.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+      if (!text) throw new Error("Leere Antwort");
+      return { text, modell: antwort.model || modell, tokens: antwort.usage ? antwort.usage.input_tokens + antwort.usage.output_tokens : 0 };
+    } catch (err) {
+      if (err instanceof Anthropic.AuthenticationError) throw new Error("API-Key ungueltig");
+      if (err instanceof Anthropic.RateLimitError) throw new Error("Rate-Limit — spaeter noch einmal");
+      if (err instanceof Anthropic.APIError) throw new Error(`API-Fehler ${err.status}: ${err.message}`);
+      throw new Error(err && err.message ? err.message : String(err));
+    }
+  });
+}
+
 function registerMidiIpc(win) {
   midiWin = win;
   startMidiWorker();
@@ -236,6 +296,7 @@ app.whenReady().then(() => {
   const win = createWindow();
   registerMidiIpc(win);
   registerFsIpc();
+  registerKiIpc();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();
