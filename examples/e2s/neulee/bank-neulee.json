@@ -214,36 +214,18 @@
    "nr": 615
   },
   {
-   "file": "du bistgottlos A.wav",
-   "name": "du bistgottlos A",
+   "file": "du bistgottlos -.wav",
+   "name": "du bistgottlos -",
    "category": 9,
    "role": "vox",
    "group": "vox:du bistgottlos kopie kopie",
    "family": "du bistgottlos kopie kopie",
    "kind": "loop",
-   "bars": 4,
+   "bars": 7,
    "source": "du bistgottlos - Kopie - Kopie.mp3",
-   "seconds": 5.333,
-   "rms": -16.8,
-   "chunk": 0,
-   "chunks": 2,
+   "seconds": 9.333,
+   "rms": -17.6,
    "nr": 616
-  },
-  {
-   "file": "du bistgottlos B.wav",
-   "name": "du bistgottlos B",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:du bistgottlos kopie kopie",
-   "family": "du bistgottlos kopie kopie",
-   "kind": "loop",
-   "bars": 2,
-   "source": "du bistgottlos - Kopie - Kopie.mp3",
-   "seconds": 2.667,
-   "rms": -18.7,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 617
   },
   {
    "file": "fearStreat gra A.wav",
@@ -253,13 +235,13 @@
    "group": "vox:fearstreat grab einfach weiter",
    "family": "fearstreat grab einfach weiter",
    "kind": "loop",
-   "bars": 4,
+   "bars": 12,
    "source": "fearStreat grab einfach weiter.mp3",
-   "seconds": 5.333,
-   "rms": -22.8,
+   "seconds": 16.115,
+   "rms": -22,
    "chunk": 0,
-   "chunks": 6,
-   "nr": 618
+   "chunks": 2,
+   "nr": 617
   },
   {
    "file": "fearStreat gra B.wav",
@@ -269,77 +251,13 @@
    "group": "vox:fearstreat grab einfach weiter",
    "family": "fearstreat grab einfach weiter",
    "kind": "loop",
-   "bars": 4,
+   "bars": 12,
    "source": "fearStreat grab einfach weiter.mp3",
-   "seconds": 5.333,
-   "rms": -18.9,
+   "seconds": 16.115,
+   "rms": -21.8,
    "chunk": 1,
-   "chunks": 6,
-   "nr": 619
-  },
-  {
-   "file": "fearStreat gra C.wav",
-   "name": "fearStreat gra C",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:fearstreat grab einfach weiter",
-   "family": "fearstreat grab einfach weiter",
-   "kind": "loop",
-   "bars": 4,
-   "source": "fearStreat grab einfach weiter.mp3",
-   "seconds": 5.333,
-   "rms": -17.7,
-   "chunk": 2,
-   "chunks": 6,
-   "nr": 620
-  },
-  {
-   "file": "fearStreat gra D.wav",
-   "name": "fearStreat gra D",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:fearstreat grab einfach weiter",
-   "family": "fearstreat grab einfach weiter",
-   "kind": "loop",
-   "bars": 4,
-   "source": "fearStreat grab einfach weiter.mp3",
-   "seconds": 5.333,
-   "rms": -20.5,
-   "chunk": 3,
-   "chunks": 6,
-   "nr": 621
-  },
-  {
-   "file": "fearStreat gra E.wav",
-   "name": "fearStreat gra E",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:fearstreat grab einfach weiter",
-   "family": "fearstreat grab einfach weiter",
-   "kind": "loop",
-   "bars": 4,
-   "source": "fearStreat grab einfach weiter.mp3",
-   "seconds": 5.333,
-   "rms": -21.5,
-   "chunk": 4,
-   "chunks": 6,
-   "nr": 622
-  },
-  {
-   "file": "fearStreat gra F.wav",
-   "name": "fearStreat gra F",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:fearstreat grab einfach weiter",
-   "family": "fearstreat grab einfach weiter",
-   "kind": "loop",
-   "bars": 4,
-   "source": "fearStreat grab einfach weiter.mp3",
-   "seconds": 5.333,
-   "rms": -20.4,
-   "chunk": 5,
-   "chunks": 6,
-   "nr": 623
+   "chunks": 2,
+   "nr": 618
   },
   {
    "file": "glaubst du an de.wav",
@@ -353,7 +271,7 @@
    "source": "glaubst du an den teufel.mp3",
    "seconds": 2.113,
    "rms": -19.8,
-   "nr": 624
+   "nr": 619
   },
   {
    "file": "hail satan a 1.wav",
@@ -367,7 +285,7 @@
    "source": "hail satan arschloch.mp3",
    "seconds": 1.279,
    "rms": -14.6,
-   "nr": 625
+   "nr": 620
   },
   {
    "file": "hail satan a 2.wav",
@@ -381,7 +299,7 @@
    "source": "hail satan arschloch.mp3",
    "seconds": 3.52,
    "rms": -17.4,
-   "nr": 626
+   "nr": 621
   },
   {
    "file": "hail satan a 3.wav",
@@ -395,7 +313,7 @@
    "source": "hail satan arschloch.mp3",
    "seconds": 2.475,
    "rms": -15.2,
-   "nr": 627
+   "nr": 622
   },
   {
    "file": "hail satan a 4.wav",
@@ -409,23 +327,21 @@
    "source": "hail satan arschloch.mp3",
    "seconds": 3.372,
    "rms": -22.4,
-   "nr": 628
+   "nr": 623
   },
   {
-   "file": "humancentepide A.wav",
-   "name": "humancentepide A",
+   "file": "humancentepide1.wav",
+   "name": "humancentepide1",
    "category": 9,
    "role": "vox",
    "group": "vox:humancentepide1 kopie",
    "family": "humancentepide1 kopie",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "humancentepide1 - Kopie.mp3",
-   "seconds": 5.333,
-   "rms": -14.7,
-   "chunk": 0,
-   "chunks": 1,
-   "nr": 629
+   "seconds": 6.667,
+   "rms": -14.6,
+   "nr": 624
   },
   {
    "file": "in diesem ha 1.wav",
@@ -439,7 +355,7 @@
    "source": "in diesem haus.mp3",
    "seconds": 1.327,
    "rms": -13.1,
-   "nr": 630
+   "nr": 625
   },
   {
    "file": "in diesem ha 2.wav",
@@ -453,7 +369,7 @@
    "source": "in diesem haus.mp3",
    "seconds": 1.058,
    "rms": -14.2,
-   "nr": 631
+   "nr": 626
   },
   {
    "file": "in diesem ha 3.wav",
@@ -467,7 +383,7 @@
    "source": "in diesem haus.mp3",
    "seconds": 1.496,
    "rms": -12,
-   "nr": 632
+   "nr": 627
   },
   {
    "file": "juhu satan 1.wav",
@@ -481,7 +397,7 @@
    "source": "juhu satan.mp3",
    "seconds": 1.71,
    "rms": -15.7,
-   "nr": 633
+   "nr": 628
   },
   {
    "file": "juhu satan 2.wav",
@@ -495,7 +411,7 @@
    "source": "juhu satan.mp3",
    "seconds": 2.962,
    "rms": -16.1,
-   "nr": 634
+   "nr": 629
   },
   {
    "file": "juhu satan 3.wav",
@@ -509,7 +425,7 @@
    "source": "juhu satan.mp3",
    "seconds": 2.069,
    "rms": -13.1,
-   "nr": 635
+   "nr": 630
   },
   {
    "file": "LoBbeTSAtaAN.wav",
@@ -523,23 +439,7 @@
    "source": "LoBbeTSAtaAN.mp3",
    "seconds": 5.333,
    "rms": -19.2,
-   "nr": 636
-  },
-  {
-   "file": "Lords of Chaos A.wav",
-   "name": "Lords of Chaos A",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:lords of chaos brannten die kirchen",
-   "family": "lords of chaos brannten die kirchen",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Lords of Chaos Brannten die Kirchen.mp3",
-   "seconds": 5.333,
-   "rms": -16,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 637
+   "nr": 631
   },
   {
    "file": "Lords of Chaos B.wav",
@@ -549,45 +449,25 @@
    "group": "vox:lords of chaos brannten die kirchen",
    "family": "lords of chaos brannten die kirchen",
    "kind": "loop",
-   "bars": 2,
+   "bars": 6,
    "source": "Lords of Chaos Brannten die Kirchen.mp3",
-   "seconds": 2.667,
-   "rms": -15.6,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 638
+   "seconds": 8,
+   "rms": -16.4,
+   "nr": 632
   },
   {
-   "file": "Lords of Chaos2.wav",
-   "name": "Lords of Chaos2",
+   "file": "Lords of Chaos G.wav",
+   "name": "Lords of Chaos G",
    "category": 9,
    "role": "vox",
    "group": "vox:lords of chaos gedenkminute",
    "family": "lords of chaos gedenkminute",
    "kind": "loop",
-   "bars": 4,
+   "bars": 6,
    "source": "Lords of Chaos Gedenkminute.mp3",
-   "seconds": 5.333,
-   "rms": -18.2,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 639
-  },
-  {
-   "file": "Lords of Chaos3.wav",
-   "name": "Lords of Chaos3",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:lords of chaos gedenkminute",
-   "family": "lords of chaos gedenkminute",
-   "kind": "loop",
-   "bars": 2,
-   "source": "Lords of Chaos Gedenkminute.mp3",
-   "seconds": 2.667,
-   "rms": -18.4,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 640
+   "seconds": 8,
+   "rms": -18.9,
+   "nr": 633
   },
   {
    "file": "Lords of Chaos H.wav",
@@ -601,39 +481,21 @@
    "source": "Lords of Chaos Hail Satan Mein Gott.mp3",
    "seconds": 2.377,
    "rms": -17.2,
-   "nr": 641
+   "nr": 634
   },
   {
-   "file": "Lords of Chaos4.wav",
-   "name": "Lords of Chaos4",
+   "file": "Lords of Chaos2.wav",
+   "name": "Lords of Chaos2",
    "category": 9,
    "role": "vox",
    "group": "vox:lords of chaos hail satan",
    "family": "lords of chaos hail satan",
    "kind": "loop",
-   "bars": 4,
+   "bars": 6,
    "source": "Lords of Chaos Hail Satan.mp3",
-   "seconds": 5.333,
-   "rms": -15.6,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 642
-  },
-  {
-   "file": "Lords of Chaos5.wav",
-   "name": "Lords of Chaos5",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:lords of chaos hail satan",
-   "family": "lords of chaos hail satan",
-   "kind": "loop",
-   "bars": 2,
-   "source": "Lords of Chaos Hail Satan.mp3",
-   "seconds": 2.667,
-   "rms": -13,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 643
+   "seconds": 8,
+   "rms": -15.8,
+   "nr": 635
   },
   {
    "file": "Lords of Cha 1.wav",
@@ -647,7 +509,7 @@
    "source": "Lords of Chaos Kinder Essen.mp3",
    "seconds": 1.395,
    "rms": -21.9,
-   "nr": 644
+   "nr": 636
   },
   {
    "file": "Lords of Cha 2.wav",
@@ -661,7 +523,7 @@
    "source": "Lords of Chaos Kinder Essen.mp3",
    "seconds": 0.315,
    "rms": -20.4,
-   "nr": 645
+   "nr": 637
   },
   {
    "file": "Lords of Cha 3.wav",
@@ -675,39 +537,21 @@
    "source": "Lords of Chaos Kinder Essen.mp3",
    "seconds": 1.813,
    "rms": -19.8,
-   "nr": 646
+   "nr": 638
   },
   {
-   "file": "Eerie dark hor A.wav",
-   "name": "Eerie dark hor A",
+   "file": "Eerie dark horro.wav",
+   "name": "Eerie dark horro",
    "category": 15,
    "role": "melo",
    "group": "melo:eerie dark horror choir music creates an unsettling atmosphere kopie kopie kopie",
    "family": "eerie dark horror choir music creates an unsettling atmosphere kopie kopie kopie",
    "kind": "loop",
-   "bars": 4,
+   "bars": 7,
    "source": "Eerie_dark_horror_choir_music_creates_an_unsettling_atmosphere. (1) - Kopie - Kopie - Kopie.wav",
-   "seconds": 5.333,
-   "rms": -13.3,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 647
-  },
-  {
-   "file": "Eerie dark hor B.wav",
-   "name": "Eerie dark hor B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:eerie dark horror choir music creates an unsettling atmosphere kopie kopie kopie",
-   "family": "eerie dark horror choir music creates an unsettling atmosphere kopie kopie kopie",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Eerie_dark_horror_choir_music_creates_an_unsettling_atmosphere. (1) - Kopie - Kopie - Kopie.wav",
-   "seconds": 5.333,
-   "rms": -21.2,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 648
+   "seconds": 9.333,
+   "rms": -14.9,
+   "nr": 639
   },
   {
    "file": null,

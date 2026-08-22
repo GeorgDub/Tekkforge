@@ -23,36 +23,27 @@
 613	der krumme m 13
 614	der krumme m 14
 615	der teufel steht
-616	du bistgottlos A
-617	du bistgottlos B
-618	fearStreat gra A
-619	fearStreat gra B
-620	fearStreat gra C
-621	fearStreat gra D
-622	fearStreat gra E
-623	fearStreat gra F
-624	glaubst du an de
-625	hail satan a 1
-626	hail satan a 2
-627	hail satan a 3
-628	hail satan a 4
-629	humancentepide A
-630	in diesem ha 1
-631	in diesem ha 2
-632	in diesem ha 3
-633	juhu satan 1
-634	juhu satan 2
-635	juhu satan 3
-636	LoBbeTSAtaAN
-637	Lords of Chaos A
-638	Lords of Chaos B
-639	Lords of Chaos2
-640	Lords of Chaos3
-641	Lords of Chaos H
-642	Lords of Chaos4
-643	Lords of Chaos5
-644	Lords of Cha 1
-645	Lords of Cha 2
-646	Lords of Cha 3
-647	Eerie dark hor A
-648	Eerie dark hor B
+616	du bistgottlos -
+617	fearStreat gra A
+618	fearStreat gra B
+619	glaubst du an de
+620	hail satan a 1
+621	hail satan a 2
+622	hail satan a 3
+623	hail satan a 4
+624	humancentepide1
+625	in diesem ha 1
+626	in diesem ha 2
+627	in diesem ha 3
+628	juhu satan 1
+629	juhu satan 2
+630	juhu satan 3
+631	LoBbeTSAtaAN
+632	Lords of Chaos B
+633	Lords of Chaos G
+634	Lords of Chaos H
+635	Lords of Chaos2
+636	Lords of Cha 1
+637	Lords of Cha 2
+638	Lords of Cha 3
+639	Eerie dark horro

@@ -4,19 +4,17 @@
  "source": "G:/Samples Numondo/MeLo_PacK_2",
  "samples": [
   {
-   "file": "Brooklyn Bounc A.wav",
-   "name": "Brooklyn Bounc A",
+   "file": "Brooklyn Bounce.wav",
+   "name": "Brooklyn Bounce",
    "category": 0,
    "role": "bass",
    "group": "bass:brooklyn bounce bass, beats & melody bxiq",
    "family": "brooklyn bounce bass, beats & melody bxiq",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "Brooklyn Bounce - Bass, Beats & Melody_bxiq.wav",
-   "seconds": 5.333,
-   "rms": -13.8,
-   "chunk": 0,
-   "chunks": 1,
+   "seconds": 6.667,
+   "rms": -13.5,
    "nr": 601
   },
   {
@@ -122,13 +120,13 @@
    "name": "Cymatics - 20202",
    "category": 15,
    "role": "melo",
-   "group": "melo",
+   "group": "melo:cymatics 2020 nostalgic melody loop 4 147 bpm a min",
    "family": "cymatics 2020 nostalgic melody loop 4 147 bpm a min",
-   "kind": "oneshot",
-   "bars": 0,
+   "kind": "loop",
+   "bars": 5,
    "source": "Cymatics - 2020 Nostalgic Melody Loop 4 - 147 BPM A# Min.wav",
-   "seconds": 6.531,
-   "rms": -13.4,
+   "seconds": 6.667,
+   "rms": -13.5,
    "nr": 609
   },
   {
@@ -136,46 +134,28 @@
    "name": "Cymatics - 20203",
    "category": 15,
    "role": "melo",
-   "group": "melo",
+   "group": "melo:cymatics 2020 nostalgic melody loop 5 150 bpm c min",
    "family": "cymatics 2020 nostalgic melody loop 5 150 bpm c min",
-   "kind": "oneshot",
-   "bars": 0,
+   "kind": "loop",
+   "bars": 5,
    "source": "Cymatics - 2020 Nostalgic Melody Loop 5 - 150 BPM C# Min.wav",
-   "seconds": 6.4,
-   "rms": -12.5,
+   "seconds": 6.667,
+   "rms": -12.9,
    "nr": 610
   },
   {
-   "file": "Cymatics - 202 A.wav",
-   "name": "Cymatics - 202 A",
+   "file": "Cymatics - 20204.wav",
+   "name": "Cymatics - 20204",
    "category": 15,
    "role": "melo",
    "group": "melo:cymatics 2020 various melody loop 1 100 bpm f min",
    "family": "cymatics 2020 various melody loop 1 100 bpm f min",
    "kind": "loop",
-   "bars": 4,
+   "bars": 7,
    "source": "Cymatics - 2020 Various Melody Loop 1 - 100 BPM F Min.wav",
-   "seconds": 5.333,
-   "rms": -14.5,
-   "chunk": 0,
-   "chunks": 2,
+   "seconds": 9.333,
+   "rms": -13.9,
    "nr": 611
-  },
-  {
-   "file": "Cymatics - 202 B.wav",
-   "name": "Cymatics - 202 B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:cymatics 2020 various melody loop 1 100 bpm f min",
-   "family": "cymatics 2020 various melody loop 1 100 bpm f min",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Cymatics - 2020 Various Melody Loop 1 - 100 BPM F Min.wav",
-   "seconds": 5.333,
-   "rms": -15.1,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 612
   },
   {
    "file": "Cz KLaNg MeLo.wav",
@@ -189,7 +169,7 @@
    "source": "Cz KLaNg MeLo.wav",
    "seconds": 5.994,
    "rms": -12.2,
-   "nr": 613
+   "nr": 612
   },
   {
    "file": "ED27 Seq.wav",
@@ -203,7 +183,7 @@
    "source": "ED27_Seq.wav",
    "seconds": 5.333,
    "rms": -12.8,
-   "nr": 614
+   "nr": 613
   },
   {
    "file": "EFN MeffO MeLo.wav",
@@ -217,7 +197,7 @@
    "source": "EFN_MeffO_MeLo.wav",
    "seconds": 2.667,
    "rms": -8.1,
-   "nr": 615
+   "nr": 614
   },
   {
    "file": "Game.wav",
@@ -231,71 +211,35 @@
    "source": "Game.wav",
    "seconds": 5.333,
    "rms": -10.7,
+   "nr": 615
+  },
+  {
+   "file": "GootigkeiT 3.wav",
+   "name": "GootigkeiT 3",
+   "category": 15,
+   "role": "melo",
+   "group": "melo:gootigkeit",
+   "family": "gootigkeit",
+   "kind": "loop",
+   "bars": 8,
+   "source": "GootigkeiT 3.wav",
+   "seconds": 10.667,
+   "rms": -15.1,
    "nr": 616
   },
   {
-   "file": "GootigkeiT 3 A.wav",
-   "name": "GootigkeiT 3 A",
+   "file": "GtGsaNg MeLo 1.wav",
+   "name": "GtGsaNg MeLo 1",
    "category": 15,
    "role": "melo",
-   "group": "melo:gootigkeit",
-   "family": "gootigkeit",
+   "group": "melo:gtgsang melo",
+   "family": "gtgsang melo",
    "kind": "loop",
-   "bars": 4,
-   "source": "GootigkeiT 3.wav",
-   "seconds": 5.333,
-   "rms": -13.5,
-   "chunk": 0,
-   "chunks": 2,
+   "bars": 6,
+   "source": "GtGsaNg MeLo 1.wav",
+   "seconds": 8,
+   "rms": -13.6,
    "nr": 617
-  },
-  {
-   "file": "GootigkeiT 3 B.wav",
-   "name": "GootigkeiT 3 B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:gootigkeit",
-   "family": "gootigkeit",
-   "kind": "loop",
-   "bars": 4,
-   "source": "GootigkeiT 3.wav",
-   "seconds": 5.333,
-   "rms": -14.4,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 618
-  },
-  {
-   "file": "GtGsaNg MeLo 1 A.wav",
-   "name": "GtGsaNg MeLo 1 A",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:gtgsang melo",
-   "family": "gtgsang melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "GtGsaNg MeLo 1.wav",
-   "seconds": 5.333,
-   "rms": -12.8,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 619
-  },
-  {
-   "file": "GtGsaNg MeLo 1 B.wav",
-   "name": "GtGsaNg MeLo 1 B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:gtgsang melo",
-   "family": "gtgsang melo",
-   "kind": "loop",
-   "bars": 2,
-   "source": "GtGsaNg MeLo 1.wav",
-   "seconds": 2.667,
-   "rms": -14.1,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 620
   },
   {
    "file": "Ha He MeLo.wav",
@@ -309,7 +253,7 @@
    "source": "Ha He MeLo.wav",
    "seconds": 5.333,
    "rms": -14.6,
-   "nr": 621
+   "nr": 618
   },
   {
    "file": "HaMMeR MeLo.wav",
@@ -323,71 +267,35 @@
    "source": "HaMMeR MeLo.wav",
    "seconds": 4,
    "rms": -12.5,
-   "nr": 622
+   "nr": 619
   },
   {
-   "file": "HaWk 2 A.wav",
-   "name": "HaWk 2 A",
+   "file": "HaWk 2.wav",
+   "name": "HaWk 2",
    "category": 15,
    "role": "melo",
    "group": "melo:hawk",
    "family": "hawk",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "HaWk 2.wav",
-   "seconds": 5.333,
-   "rms": -16,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 623
+   "seconds": 10.667,
+   "rms": -16.6,
+   "nr": 620
   },
   {
-   "file": "HaWk 2 B.wav",
-   "name": "HaWk 2 B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:hawk",
-   "family": "hawk",
-   "kind": "loop",
-   "bars": 4,
-   "source": "HaWk 2.wav",
-   "seconds": 5.333,
-   "rms": -15.4,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 624
-  },
-  {
-   "file": "Kirche A.wav",
-   "name": "Kirche A",
+   "file": "Kirche.wav",
+   "name": "Kirche",
    "category": 15,
    "role": "melo",
    "group": "melo:kirche",
    "family": "kirche",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "Kirche.wav",
-   "seconds": 5.333,
-   "rms": -15.2,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 625
-  },
-  {
-   "file": "Kirche B.wav",
-   "name": "Kirche B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:kirche",
-   "family": "kirche",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Kirche.wav",
-   "seconds": 5.333,
-   "rms": -16.4,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 626
+   "seconds": 10.667,
+   "rms": -16.8,
+   "nr": 621
   },
   {
    "file": "KluGeL MeLo.wav",
@@ -401,7 +309,7 @@
    "source": "KluGeL MeLo.wav",
    "seconds": 2.667,
    "rms": -19.3,
-   "nr": 627
+   "nr": 622
   },
   {
    "file": "OhOO MeLo 1.wav",
@@ -415,7 +323,7 @@
    "source": "OhOO MeLo 1.wav",
    "seconds": 5.333,
    "rms": -13.7,
-   "nr": 628
+   "nr": 623
   },
   {
    "file": "Pia No MeLo 22.wav",
@@ -429,39 +337,21 @@
    "source": "Pia No MeLo 22.wav",
    "seconds": 5.333,
    "rms": -19.5,
-   "nr": 629
+   "nr": 624
   },
   {
-   "file": "Salem A.wav",
-   "name": "Salem A",
+   "file": "Salem.wav",
+   "name": "Salem",
    "category": 15,
    "role": "melo",
    "group": "melo:salem",
    "family": "salem",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "Salem.wav",
-   "seconds": 5.333,
-   "rms": -14.3,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 630
-  },
-  {
-   "file": "Salem B.wav",
-   "name": "Salem B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:salem",
-   "family": "salem",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Salem.wav",
-   "seconds": 5.333,
-   "rms": -13.5,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 631
+   "seconds": 10.667,
+   "rms": -16.3,
+   "nr": 625
   },
   {
    "file": "sAnD bANkmElO.wav",
@@ -475,39 +365,21 @@
    "source": "sAnD bANkmElO.wav",
    "seconds": 5.333,
    "rms": -16,
-   "nr": 632
+   "nr": 626
   },
   {
-   "file": "Summer MeLo A.wav",
-   "name": "Summer MeLo A",
+   "file": "Summer MeLo.wav",
+   "name": "Summer MeLo",
    "category": 15,
    "role": "melo",
    "group": "melo:summer melo",
    "family": "summer melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "Summer MeLo.wav",
-   "seconds": 5.333,
-   "rms": -17.6,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 633
-  },
-  {
-   "file": "Summer MeLo B.wav",
-   "name": "Summer MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:summer melo",
-   "family": "summer melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Summer MeLo.wav",
-   "seconds": 5.333,
-   "rms": -17.6,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 634
+   "seconds": 10.667,
+   "rms": -17.7,
+   "nr": 627
   },
   {
    "file": "Tau-MeLo 2.wav",
@@ -521,7 +393,7 @@
    "source": "Tau-MeLo 2.wav",
    "seconds": 5.333,
    "rms": -18.1,
-   "nr": 635
+   "nr": 628
   },
   {
    "file": "TaUbO MeLo.wav",
@@ -535,55 +407,35 @@
    "source": "TaUbO MeLo.wav",
    "seconds": 5.99,
    "rms": -17.4,
-   "nr": 636
+   "nr": 629
   },
   {
-   "file": "TFX Super Echo A.wav",
-   "name": "TFX Super Echo A",
+   "file": "TFX Super Echo S.wav",
+   "name": "TFX Super Echo S",
    "category": 15,
    "role": "melo",
    "group": "melo:tfx super echo sample pack",
    "family": "tfx super echo sample pack",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "TFX_Super_Echo_Sample_Pack45.wav",
-   "seconds": 5.333,
-   "rms": -15.8,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 637
+   "seconds": 10.667,
+   "rms": -17.7,
+   "nr": 630
   },
   {
-   "file": "TFX Super Echo B.wav",
-   "name": "TFX Super Echo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:tfx super echo sample pack",
-   "family": "tfx super echo sample pack",
-   "kind": "loop",
-   "bars": 4,
-   "source": "TFX_Super_Echo_Sample_Pack45.wav",
-   "seconds": 5.333,
-   "rms": -18.9,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 638
-  },
-  {
-   "file": "tRaMM MeLo 11 A.wav",
-   "name": "tRaMM MeLo 11 A",
+   "file": "tRaMM MeLo 11.wav",
+   "name": "tRaMM MeLo 11",
    "category": 15,
    "role": "melo",
    "group": "melo:tramm melo",
    "family": "tramm melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "tRaMM MeLo 11.wav",
-   "seconds": 5.333,
-   "rms": -12.8,
-   "chunk": 0,
-   "chunks": 1,
-   "nr": 639
+   "seconds": 6.667,
+   "rms": -12.7,
+   "nr": 631
   },
   {
    "file": "unb Mrlo.wav",
@@ -597,39 +449,21 @@
    "source": "unb_Mrlo.wav",
    "seconds": 5.333,
    "rms": -13.1,
-   "nr": 640
+   "nr": 632
   },
   {
-   "file": "untitled1 16 A.wav",
-   "name": "untitled1 16 A",
+   "file": "untitled1 16.wav",
+   "name": "untitled1 16",
    "category": 15,
    "role": "melo",
    "group": "melo:untitled",
    "family": "untitled",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "untitled1_16.wav",
-   "seconds": 5.333,
-   "rms": -14.8,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 641
-  },
-  {
-   "file": "untitled1 16 B.wav",
-   "name": "untitled1 16 B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:untitled",
-   "family": "untitled",
-   "kind": "loop",
-   "bars": 4,
-   "source": "untitled1_16.wav",
-   "seconds": 5.333,
-   "rms": -13.9,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 642
+   "seconds": 10.667,
+   "rms": -14.5,
+   "nr": 633
   },
   {
    "file": "vis.wav",
@@ -643,7 +477,7 @@
    "source": "vis.wav",
    "seconds": 5.333,
    "rms": -13.2,
-   "nr": 643
+   "nr": 634
   },
   {
    "file": null,

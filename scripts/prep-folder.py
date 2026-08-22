@@ -10,16 +10,16 @@ ganze Tracks, Stems) fuer eine Electribe-2-Sampler-Bank aufbereiten.
     JSON {"<datei>": "<rolle>"} oder {"<datei>": {"role": .., "name": ..}}.
   * One-Shots: mono 44,1 k, Stille weg, Fades, normalisiert auf 0,95.
   * Loops/Phrasen (>= 2,5 s): wenn die Laenge bis auf ±12 % ganze Takte beim
-    Bank-Tempo ergibt → per Varispeed exakt auf Takte gebracht; laenger als
-    4 Takte → 4-Takt-Chunks A, B, C … (Rest >= 2 Takte bleibt, sonst weg).
+    Bank-Tempo ergibt → per Varispeed exakt auf Takte gebracht. Bis 8 Takte
+    bleibt die Melodie GANZ (8-Takter laufen am Geraet ueber das Alternate-
+    Paar: 13 spielt, 14 schweigt); laenger → genau zwei Haelften A/B.
   * Vocal-Sammlungen (Stimme, 12–60 s ohne BPM im Namen) werden an Pausen
     in Shots zerlegt (die lautesten 16).
   * Tracks (> 60 s) und Stems ("-other-"/"-vocals-" im Namen, "<n>bpm"):
     Tempo aus dem Namen oder gemessen, Half-/Double-Time auf das Bank-Tempo,
     Varispeed, Downbeat-Raster, dann 8-Takt-Fenster ausgewaehlt (DROP =
     lautestes, BREAK = leisestes in der Mitte, VAR = harmonisch am weitesten
-    vom DROP, INTRO = erstes hoerbare) → Haelften A/B (Alternate-Paar am
-    Geraet). Vollmixe gehen dafuer durch Demucs (htdemucs): MELO = "other",
+    vom DROP, INTRO = erstes hoerbare), jedes Fenster als EIN Sample. Vollmixe gehen dafuer durch Demucs (htdemucs): MELO = "other",
     VOX = "vocals" (nur wenn hoerbar). --no-demucs nimmt den Vollmix.
   * Ergebnis: <ziel>/<Name>.wav + <ziel>/manifest.json (file, name,
     category, group, family, role, kind, bars, seconds …) — Eingabe fuer
@@ -354,7 +354,7 @@ def oneshot(e):
     schreibe(e["name_ov"] or e["stem"], y, e["rolle"], "oneshot", e["datei"], fam=familie(e["stem"]))
 
 
-def auf_takte(y, bars_ist, erlaubt=(1, 2, 3, 4, 6, 8, 10, 12, 16)):
+def auf_takte(y, bars_ist, erlaubt=tuple(range(1, 17))):
     """Naechste ganze Taktzahl in Toleranz → (y_varispeed, bars) oder (y, 0)."""
     kand = min(erlaubt, key=lambda b: abs(bars_ist - b))
     if abs(bars_ist - kand) / kand <= TAKT_TOLERANZ:
@@ -368,24 +368,16 @@ def auf_takte(y, bars_ist, erlaubt=(1, 2, 3, 4, 6, 8, 10, 12, 16)):
 
 
 def chunks_schreiben(basisname, y, bars, rolle, quelle, fam, gruppe):
-    """4-Takt-Chunks A, B, … aus einem exakt `bars` Takte langen Loop."""
-    if bars <= CHUNK_BARS:
+    """Bis 8 Takte bleibt die Melodie ganz; laenger → genau zwei Haelften A/B."""
+    if bars <= 8:
         schreibe(basisname, normalisiere(fades(y, 0.002, 0.004)), rolle, "loop", quelle, bars=bars, fam=fam, gruppe=gruppe)
         return
-    n = int(round(CHUNK_BARS * BAR_T * SR))
-    anzahl = bars // CHUNK_BARS
-    rest_bars = bars - anzahl * CHUNK_BARS
-    teile = [(c * n, (c + 1) * n, CHUNK_BARS) for c in range(anzahl)]
-    if rest_bars >= 2:
-        teile.append((anzahl * n, anzahl * n + int(round(rest_bars * BAR_T * SR)), rest_bars))
+    h = len(y) // 2
     base = saubere(basisname, 14)
-    for i, (a, b, tb) in enumerate(teile):
-        seg = y[a:b]
-        if rms_db(seg) < -45:
-            log(f"    Chunk {chr(65 + i)} still — weg")
-            continue
+    log(f"    {bars} Takte → zwei Haelften a {bars / 2:g} Takte")
+    for i, seg in enumerate((y[:h], y[h:])):
         schreibe(f"{base} {chr(65 + i)}", normalisiere(fades(seg, 0.002, 0.004)), rolle, "loop", quelle,
-                 bars=tb, fam=fam, gruppe=gruppe, extra=dict(chunk=i, chunks=len(teile)))
+                 bars=round(bars / 2), fam=fam, gruppe=gruppe, extra=dict(chunk=i, chunks=2))
 
 
 def loop_oder_phrase(e):
@@ -404,11 +396,10 @@ def loop_oder_phrase(e):
     if bars:
         log(f"  {e['datei']}: {bars_ist:.2f} → {bars} Takte (Varispeed {len(e['y']) / len(y):.3f})")
         chunks_schreiben(name, y, bars, e["rolle"], e["datei"], fam, f"{e['rolle']}:{fam}")
-    elif bars_ist > CHUNK_BARS + 1:
-        # keine ganze Taktzahl — trotzdem in 4-Takt-Stuecke schneiden (beim Bank-Tempo)
-        ganz = int(bars_ist)
-        log(f"  {e['datei']}: {bars_ist:.2f} Takte, kein Raster → {ganz} Takte geschnitten")
-        chunks_schreiben(name, y[: int(ganz * BAR_T * SR)], ganz, e["rolle"], e["datei"], fam, f"{e['rolle']}:{fam}")
+    elif bars_ist > 8:
+        # keine ganze Taktzahl, aber lang — ganz lassen bzw. halbieren, nicht zerstueckeln
+        log(f"  {e['datei']}: {bars_ist:.2f} Takte, kein Raster → als Ganzes ({round(bars_ist)} Takte)")
+        chunks_schreiben(name, y, round(bars_ist), e["rolle"], e["datei"], fam, f"{e['rolle']}:{fam}")
     else:
         log(f"  {e['datei']}: {bars_ist:.2f} Takte → Phrase (One-Shot)")
         schreibe(name, normalisiere(fades(y, 0.002, 0.01)), e["rolle"], "oneshot", e["datei"], fam=fam)
@@ -575,14 +566,8 @@ def track(e):
                 continue
             rolle = "vox" if art2 == "vox" else "melo"
             basis = f"{tag} {label}" + ("" if art2 != "vox" or art == "vox" else " VX")
-            if fenster_bars == 8:
-                h = n // 2
-                for c, (a, b) in enumerate(((0, h), (h, n))):
-                    schreibe(f"{saubere(basis, 14)} {chr(65 + c)}", normalisiere(fades(sg[a:b], 0.002, 0.004)), rolle, "loop", quelle,
-                             bars=4, fam=fam, gruppe=f"{rolle}:{tag} {label}", extra=dict(track=trk_nr, chunk=c, chunks=2, label=label))
-            else:
-                schreibe(basis, normalisiere(fades(sg, 0.002, 0.004)), rolle, "loop", quelle, bars=4, fam=fam,
-                         gruppe=f"{rolle}:{tag} {label}", extra=dict(track=trk_nr, label=label))
+            schreibe(basis, normalisiere(fades(sg, 0.002, 0.004)), rolle, "loop", quelle, bars=fenster_bars, fam=fam,
+                     gruppe=f"{rolle}:{tag} {label}", extra=dict(track=trk_nr, label=label))
 
 
 # ── Durchlauf ──────────────────────────────────────────────────────────────

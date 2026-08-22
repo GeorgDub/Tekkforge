@@ -2,6 +2,10 @@
  * make-folder-set.mjs — 250-Pattern-Bank (.e2sallpat) aus einer mit
  * prep-folder.py + make-folder-bank.mjs gebauten Sample-Bank.
  *
+ * Melodien bleiben ganz: bis 4 Takte triggern 13 und 14, ueber 4 Takte nur 13
+ * (14 schweigt) — das Alternate-Paar laesst so 8 Takte durchlaufen. Lange
+ * Dateien liegen als zwei Haelften vor; B spielt in der zweiten Block-Haelfte.
+ *
  * Idee: Jedes Thema = eine Melodie (Alternate-Paar 13/14) × eine Kick-Familie
  * × ein Vocal-Loop bzw. zweite Melodie (Alternate-Paar 15/16), dazu Snare/
  * Clap/Hats/Percs/Bass/Stab/Shots aus den Pools der Bank, rotierend, damit
@@ -80,7 +84,7 @@ const voxLoops = byRole("vox", "loop");
 const meloLoops = byRole("melo", "loop");
 if (!kicksAlle.length || !hatsSort.length) throw new Error("Bank ohne Kick oder Hat — make-folder-bank mit --tekk-drums bauen");
 
-/** Loops zu Paaren [A, B] je Gruppe (Chunks einer Phrase); 4-Takt-Chunks bevorzugt. */
+/** Loops je Gruppe: ein ganzes Sample → {a, b: a}; zwei Haelften A/B → {a, b, halves} (B spielt in der zweiten Block-Haelfte). */
 function paare(loops) {
   const gruppen = new Map();
   for (const l of loops) {
@@ -88,18 +92,13 @@ function paare(loops) {
     if (!gruppen.has(g)) gruppen.set(g, []);
     gruppen.get(g).push(l);
   }
-  const out = [], rest = [];
+  const out = [];
   for (const [g, list] of gruppen) {
-    const vier = list.filter((l) => l.bars === 4);
-    const kurz = list.filter((l) => l.bars !== 4);
-    if (vier.length >= 2) {
-      for (let i = 0; i + 1 < vier.length; i += 2) out.push({ tag: g, a: vier[i], b: vier[i + 1] });
-      if (vier.length % 2) out.push({ tag: g, a: vier[vier.length - 1], b: vier[vier.length - 1] });
-      rest.push(...kurz);
-    } else if (vier.length === 1) { out.push({ tag: g, a: vier[0], b: vier[0] }); rest.push(...kurz); }
-    else out.push({ tag: g, a: list[0], b: list[0] }); // 2-/3-Takt-Loop auf beiden
+    const sortiert = list.slice().sort((x, y) => (x.chunk ?? 0) - (y.chunk ?? 0));
+    if (sortiert.length >= 2 && sortiert[0].chunks === 2) out.push({ tag: g, a: sortiert[0], b: sortiert[1], halves: true });
+    else for (const l of sortiert) out.push({ tag: g, a: l, b: l });
   }
-  return { paare: out, rest };
+  return { paare: out, rest: [] };
 }
 const { paare: meloPaare, rest: meloRest } = paare(meloLoops);
 const { paare: voxPaare, rest: voxRest } = paare(voxLoops);
@@ -127,7 +126,9 @@ const familien = kickFamilien();
 
 // ─── Themen ───────────────────────────────────────────────────────────────────
 const such = (liste, praefix) =>
-  praefix == null ? undefined : liste.find((s) => (s.tag ?? s.name ?? s.a?.name).toLowerCase().startsWith(String(praefix).toLowerCase()))
+  praefix == null ? undefined
+    : liste.find((s) => (s.a?.name ?? s.name ?? "").toLowerCase() === String(praefix).toLowerCase())
+    ?? liste.find((s) => (s.tag ?? s.name ?? s.a?.name).toLowerCase().startsWith(String(praefix).toLowerCase()))
     ?? liste.find((s) => (s.a?.name ?? s.name ?? "").toLowerCase().startsWith(String(praefix).toLowerCase()));
 const tagsVergeben = new Map();
 const tagAus = (paar, i) => {
@@ -180,7 +181,7 @@ const baue = (fn) => Array.from({ length: N }, (_, s) => fn(s) ?? { active: fals
 /** Loop-Trigger nach Taktlaenge: 4 → Step 0, 2 → 0/32, 1 → jeder Takt, 3 → 0. */
 const loopHit = (sample, vel = 127) => {
   const b = sample?.bars || 4;
-  const alle = b === 1 ? 16 : b === 2 ? 32 : 64;
+  const alle = b === 1 ? 16 : b === 2 ? 32 : 64; // >= 4 Takte: einmal je Pattern-Durchlauf
   return baue((s) => (s % alle === 0 ? hit([60], vel, 96) : null));
 };
 
@@ -253,13 +254,20 @@ function parts(thema, intens, kickFigur, lagen, blockPos) {
   const shotB = lagen.riser && thema.riser ? thema.riser : thema.shotB;
   steps[P_SHB] = lagen.riser && thema.riser ? loopHit(thema.riser, 110) : SHOT_FIG[lagen.shot === 2 ? "b2" : "b"]();
   wach[P_SHB] = (!!lagen.riser && !!thema.riser) || (lagen.shot === 1 && !!thema.shotB);
-  steps[P_MELA] = loopHit(thema.melo?.a);
-  steps[P_MELB] = loopHit(thema.melo?.b);
-  wach[P_MELA] = wach[P_MELB] = !!lagen.melo && !!thema.melo;
+  const zweiteHaelfte = blockPos >= Math.ceil(BLOCK.length / 2);
+  const wahl = (paar) => (paar ? (paar.halves && zweiteHaelfte ? paar.b : paar.a) : undefined);
+  const meloS = wahl(thema.melo);
+  const lang = (s) => (s?.bars || 4) > 4; // > 4 Takte: nur Part A triggert, Part B schweigt → Alternate laesst 8 Takte durchlaufen
+  steps[P_MELA] = loopHit(meloS);
+  steps[P_MELB] = lang(meloS) ? leer() : loopHit(meloS);
+  wach[P_MELA] = !!lagen.melo && !!meloS;
+  wach[P_MELB] = wach[P_MELA] && !lang(meloS);
   const zweite = thema.vers ?? thema.melo2;
-  steps[P_VRA] = loopHit(zweite?.a);
-  steps[P_VRB] = loopHit(zweite?.b);
-  wach[P_VRA] = wach[P_VRB] = !!lagen.vers && !!zweite;
+  const zweiteS = wahl(zweite);
+  steps[P_VRA] = loopHit(zweiteS);
+  steps[P_VRB] = lang(zweiteS) ? leer() : loopHit(zweiteS);
+  wach[P_VRA] = !!lagen.vers && !!zweiteS;
+  wach[P_VRB] = wach[P_VRA] && !lang(zweiteS);
 
   // Percs/Tons und FX-Shots wandern je Block-Position durch die Pools, damit grosse Sammlungen ganz zu hoeren sind
   const pc = percs.length > 2 * ANZ_THEMEN ? rot(percs, thema.idx * 2 + blockPos * 2 * ANZ_THEMEN) : thema.pc;
@@ -268,7 +276,7 @@ function parts(thema, intens, kickFigur, lagen, blockPos) {
   const shotBx = !(lagen.riser && thema.riser) && fxShots.length > ANZ_THEMEN ? rot(fxShots, thema.idx + Math.floor(blockPos / 2) * ANZ_THEMEN) : shotB;
   const sampleFuer = [
     thema.kicks[0], kick2, thema.snare, thema.clap, thema.hh, thema.hh2, pc, pc2,
-    thema.bass, stab, shotA, shotBx, thema.melo?.a, thema.melo?.b, zweite?.a, zweite?.b,
+    thema.bass, stab, shotA, shotBx, meloS, meloS, zweiteS, zweiteS,
   ];
   return steps.map((st, idx) => {
     const smp = sampleFuer[idx];

@@ -398,9 +398,12 @@ npx tsx scripts/check-folder-sets.mjs    # Referenzen/Mutes/Chains aller Paare
 
 `prep-folder.py` ordnet jede Datei per Name/Länge/Pegel einer Rolle zu (kick,
 snare, clap, hat, perc, ton, bass, fx, vox, melo, track), bringt Loops per
-Varispeed auf ganze Takte und schneidet sie in 4-Takt-Chunks (A/B = Alternate-
-Paar am Gerät), zerlegt Vocal-Sammlungen an Pausen und holt aus ganzen Tracks
+Varispeed auf ganze Takte und lässt sie **ganz** (bis 8 Takte; länger → genau
+zwei Hälften A/B), zerlegt Vocal-Sammlungen an Pausen und holt aus ganzen Tracks
 per Demucs 8-Takt-Fenster (DROP/BREAK/VAR; MELO = bass+other, VOX = vocals).
+8-Takter laufen am Gerät über das Alternate-Paar: Part 13 triggert, Part 14
+schweigt, so läuft das Sample zwei Pattern-Durchläufe durch; Hälften B spielen
+in der zweiten Hälfte des Arrangement-Blocks.
 `make-folder-set.mjs` baut daraus 250 Patterns: je Thema (Melodie × Kick-
 Familie × Vocal-Loop/zweite Melodie) ein gechainter Arrangement-Block, dahinter
 KICKPARADE-Patterns (16 Kicks, jeder Beat ein anderer) und ALLES je Thema.

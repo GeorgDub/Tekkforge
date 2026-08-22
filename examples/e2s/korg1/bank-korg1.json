@@ -998,36 +998,18 @@
    "nr": 571
   },
   {
-   "file": "HaWk 2 A.wav",
-   "name": "HaWk 2 A",
+   "file": "HaWk 2.wav",
+   "name": "HaWk 2",
    "category": 15,
    "role": "melo",
    "group": "melo:hawk",
    "family": "hawk",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "HaWk 2.wav",
-   "seconds": 5.333,
-   "rms": -14.6,
-   "chunk": 0,
-   "chunks": 2,
+   "seconds": 10.667,
+   "rms": -15.2,
    "nr": 572
-  },
-  {
-   "file": "HaWk 2 B.wav",
-   "name": "HaWk 2 B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:hawk",
-   "family": "hawk",
-   "kind": "loop",
-   "bars": 4,
-   "source": "HaWk 2.wav",
-   "seconds": 5.333,
-   "rms": -15.3,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 573
   }
  ]
 }

@@ -407,34 +407,17 @@
    "rms": -13.3
   },
   {
-   "file": "#WEFFEKT11 A.wav",
-   "name": "#WEFFEKT11 A",
+   "file": "#WEFFEKT11.wav",
+   "name": "#WEFFEKT11",
    "category": 11,
    "role": "fx",
    "group": "fx:weffekt",
    "family": "weffekt",
    "kind": "loop",
-   "bars": 4,
+   "bars": 7,
    "source": "#WEFFEKT11.wav",
-   "seconds": 5.333,
-   "rms": -12.3,
-   "chunk": 0,
-   "chunks": 2
-  },
-  {
-   "file": "#WEFFEKT11 B.wav",
-   "name": "#WEFFEKT11 B",
-   "category": 11,
-   "role": "fx",
-   "group": "fx:weffekt",
-   "family": "weffekt",
-   "kind": "loop",
-   "bars": 4,
-   "source": "#WEFFEKT11.wav",
-   "seconds": 5.333,
-   "rms": -17.0,
-   "chunk": 1,
-   "chunks": 2
+   "seconds": 9.333,
+   "rms": -13.7
   },
   {
    "file": "GZUZ GHETTO KI A.wav",
@@ -444,12 +427,12 @@
    "group": "vox:gzuz ghetto king",
    "family": "gzuz ghetto king",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "GZUZ GHETTO KING.wav",
-   "seconds": 5.333,
-   "rms": -15.5,
+   "seconds": 6.667,
+   "rms": -16.0,
    "chunk": 0,
-   "chunks": 3
+   "chunks": 2
   },
   {
    "file": "GZUZ GHETTO KI B.wav",
@@ -459,27 +442,12 @@
    "group": "vox:gzuz ghetto king",
    "family": "gzuz ghetto king",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "GZUZ GHETTO KING.wav",
-   "seconds": 5.333,
-   "rms": -13.6,
+   "seconds": 6.667,
+   "rms": -14.3,
    "chunk": 1,
-   "chunks": 3
-  },
-  {
-   "file": "GZUZ GHETTO KI C.wav",
-   "name": "GZUZ GHETTO KI C",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:gzuz ghetto king",
-   "family": "gzuz ghetto king",
-   "kind": "loop",
-   "bars": 2,
-   "source": "GZUZ GHETTO KING.wav",
-   "seconds": 2.667,
-   "rms": -15.1,
-   "chunk": 2,
-   "chunks": 3
+   "chunks": 2
   },
   {
    "file": "BaReTT MeLo.wav",
@@ -495,34 +463,17 @@
    "rms": -14.7
   },
   {
-   "file": "bgg A.wav",
-   "name": "bgg A",
+   "file": "bgg.wav",
+   "name": "bgg",
    "category": 15,
    "role": "melo",
    "group": "melo:bgg",
    "family": "bgg",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "bgg.wav",
-   "seconds": 5.333,
-   "rms": -8.1,
-   "chunk": 0,
-   "chunks": 2
-  },
-  {
-   "file": "bgg B.wav",
-   "name": "bgg B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:bgg",
-   "family": "bgg",
-   "kind": "loop",
-   "bars": 4,
-   "source": "bgg.wav",
-   "seconds": 5.333,
-   "rms": -8.9,
-   "chunk": 1,
-   "chunks": 2
+   "seconds": 10.667,
+   "rms": -8.5
   },
   {
    "file": "biese4.wav",
@@ -577,34 +528,17 @@
    "rms": -13.6
   },
   {
-   "file": "HyPer MeLo A.wav",
-   "name": "HyPer MeLo A",
+   "file": "HyPer MeLo.wav",
+   "name": "HyPer MeLo",
    "category": 15,
    "role": "melo",
    "group": "melo:hyper melo",
    "family": "hyper melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "HyPer__MeLo.wav",
-   "seconds": 5.333,
-   "rms": -14.2,
-   "chunk": 0,
-   "chunks": 2
-  },
-  {
-   "file": "HyPer MeLo B.wav",
-   "name": "HyPer MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:hyper melo",
-   "family": "hyper melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "HyPer__MeLo.wav",
-   "seconds": 5.333,
-   "rms": -13.0,
-   "chunk": 1,
-   "chunks": 2
+   "seconds": 10.667,
+   "rms": -13.6
   },
   {
    "file": "Metropole MeLo2.wav",

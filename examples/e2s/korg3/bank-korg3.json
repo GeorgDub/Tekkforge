@@ -438,36 +438,18 @@
    "nr": 531
   },
   {
-   "file": "#WEFFEKT11 A.wav",
-   "name": "#WEFFEKT11 A",
+   "file": "#WEFFEKT11.wav",
+   "name": "#WEFFEKT11",
    "category": 11,
    "role": "fx",
    "group": "fx:weffekt",
    "family": "weffekt",
    "kind": "loop",
-   "bars": 4,
+   "bars": 7,
    "source": "#WEFFEKT11.wav",
-   "seconds": 5.333,
-   "rms": -12.3,
-   "chunk": 0,
-   "chunks": 2,
+   "seconds": 9.333,
+   "rms": -13.7,
    "nr": 532
-  },
-  {
-   "file": "#WEFFEKT11 B.wav",
-   "name": "#WEFFEKT11 B",
-   "category": 11,
-   "role": "fx",
-   "group": "fx:weffekt",
-   "family": "weffekt",
-   "kind": "loop",
-   "bars": 4,
-   "source": "#WEFFEKT11.wav",
-   "seconds": 5.333,
-   "rms": -17,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 533
   },
   {
    "file": "GZUZ GHETTO KI A.wav",
@@ -477,13 +459,13 @@
    "group": "vox:gzuz ghetto king",
    "family": "gzuz ghetto king",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "GZUZ GHETTO KING.wav",
-   "seconds": 5.333,
-   "rms": -15.5,
+   "seconds": 6.667,
+   "rms": -16,
    "chunk": 0,
-   "chunks": 3,
-   "nr": 534
+   "chunks": 2,
+   "nr": 533
   },
   {
    "file": "GZUZ GHETTO KI B.wav",
@@ -493,29 +475,13 @@
    "group": "vox:gzuz ghetto king",
    "family": "gzuz ghetto king",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "GZUZ GHETTO KING.wav",
-   "seconds": 5.333,
-   "rms": -13.6,
+   "seconds": 6.667,
+   "rms": -14.3,
    "chunk": 1,
-   "chunks": 3,
-   "nr": 535
-  },
-  {
-   "file": "GZUZ GHETTO KI C.wav",
-   "name": "GZUZ GHETTO KI C",
-   "category": 9,
-   "role": "vox",
-   "group": "vox:gzuz ghetto king",
-   "family": "gzuz ghetto king",
-   "kind": "loop",
-   "bars": 2,
-   "source": "GZUZ GHETTO KING.wav",
-   "seconds": 2.667,
-   "rms": -15.1,
-   "chunk": 2,
-   "chunks": 3,
-   "nr": 536
+   "chunks": 2,
+   "nr": 534
   },
   {
    "file": "BaReTT MeLo.wav",
@@ -529,39 +495,21 @@
    "source": "BaReTT MeLo.wav",
    "seconds": 5.333,
    "rms": -14.7,
-   "nr": 537
+   "nr": 535
   },
   {
-   "file": "bgg A.wav",
-   "name": "bgg A",
+   "file": "bgg.wav",
+   "name": "bgg",
    "category": 15,
    "role": "melo",
    "group": "melo:bgg",
    "family": "bgg",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "bgg.wav",
-   "seconds": 5.333,
-   "rms": -8.1,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 538
-  },
-  {
-   "file": "bgg B.wav",
-   "name": "bgg B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:bgg",
-   "family": "bgg",
-   "kind": "loop",
-   "bars": 4,
-   "source": "bgg.wav",
-   "seconds": 5.333,
-   "rms": -8.9,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 539
+   "seconds": 10.667,
+   "rms": -8.5,
+   "nr": 536
   },
   {
    "file": "biese4.wav",
@@ -575,7 +523,7 @@
    "source": "biese4.wav",
    "seconds": 5.333,
    "rms": -15.4,
-   "nr": 540
+   "nr": 537
   },
   {
    "file": "HiBlieBe MeLo.wav",
@@ -589,7 +537,7 @@
    "source": "HiBlieBe MeLo.wav",
    "seconds": 2.667,
    "rms": -11.7,
-   "nr": 541
+   "nr": 538
   },
   {
    "file": "HoniG MeLo.wav",
@@ -603,7 +551,7 @@
    "source": "HoniG MeLo.wav",
    "seconds": 1.3,
    "rms": -14.1,
-   "nr": 542
+   "nr": 539
   },
   {
    "file": "HpBe MeLo GeisT.wav",
@@ -617,39 +565,21 @@
    "source": "HpBe MeLo GeisT 1.wav",
    "seconds": 5.333,
    "rms": -13.6,
-   "nr": 543
+   "nr": 540
   },
   {
-   "file": "HyPer MeLo A.wav",
-   "name": "HyPer MeLo A",
+   "file": "HyPer MeLo.wav",
+   "name": "HyPer MeLo",
    "category": 15,
    "role": "melo",
    "group": "melo:hyper melo",
    "family": "hyper melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "HyPer__MeLo.wav",
-   "seconds": 5.333,
-   "rms": -14.2,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 544
-  },
-  {
-   "file": "HyPer MeLo B.wav",
-   "name": "HyPer MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:hyper melo",
-   "family": "hyper melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "HyPer__MeLo.wav",
-   "seconds": 5.333,
-   "rms": -13,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 545
+   "seconds": 10.667,
+   "rms": -13.6,
+   "nr": 541
   },
   {
    "file": "Metropole MeLo2.wav",
@@ -663,7 +593,7 @@
    "source": "Metropole_MeLo2.wav",
    "seconds": 5.333,
    "rms": -18.9,
-   "nr": 546
+   "nr": 542
   }
  ]
 }

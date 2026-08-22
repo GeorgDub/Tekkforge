@@ -32,36 +32,18 @@
    "nr": 602
   },
   {
-   "file": "Ai Eh MeLo A.wav",
-   "name": "Ai Eh MeLo A",
+   "file": "Ai Eh MeLo.wav",
+   "name": "Ai Eh MeLo",
    "category": 15,
    "role": "melo",
    "group": "melo:ai eh melo",
    "family": "ai eh melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 7,
    "source": "Ai Eh MeLo.wav",
-   "seconds": 5.333,
+   "seconds": 9.333,
    "rms": -11.1,
-   "chunk": 0,
-   "chunks": 2,
    "nr": 603
-  },
-  {
-   "file": "Ai Eh MeLo B.wav",
-   "name": "Ai Eh MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:ai eh melo",
-   "family": "ai eh melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Ai Eh MeLo.wav",
-   "seconds": 5.333,
-   "rms": -12.8,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 604
   },
   {
    "file": "AloneWiThDruGs 5.wav",
@@ -75,71 +57,35 @@
    "source": "AloneWiThDruGs_5.wav",
    "seconds": 5.333,
    "rms": -14.8,
+   "nr": 604
+  },
+  {
+   "file": "Also Komm MeLo.wav",
+   "name": "Also Komm MeLo",
+   "category": 15,
+   "role": "melo",
+   "group": "melo:also komm melo",
+   "family": "also komm melo",
+   "kind": "loop",
+   "bars": 8,
+   "source": "Also Komm MeLo.wav",
+   "seconds": 10.667,
+   "rms": -17.4,
    "nr": 605
   },
   {
-   "file": "Also Komm MeLo A.wav",
-   "name": "Also Komm MeLo A",
+   "file": "BaRe TekK MeLo.wav",
+   "name": "BaRe TekK MeLo",
    "category": 15,
    "role": "melo",
-   "group": "melo:also komm melo",
-   "family": "also komm melo",
+   "group": "melo:bare tekk melo",
+   "family": "bare tekk melo",
    "kind": "loop",
-   "bars": 4,
-   "source": "Also Komm MeLo.wav",
-   "seconds": 5.333,
-   "rms": -16.5,
-   "chunk": 0,
-   "chunks": 2,
+   "bars": 8,
+   "source": "BaRe TekK MeLo.wav",
+   "seconds": 10.667,
+   "rms": -16,
    "nr": 606
-  },
-  {
-   "file": "Also Komm MeLo B.wav",
-   "name": "Also Komm MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:also komm melo",
-   "family": "also komm melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Also Komm MeLo.wav",
-   "seconds": 5.333,
-   "rms": -18.1,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 607
-  },
-  {
-   "file": "BaRe TekK MeLo A.wav",
-   "name": "BaRe TekK MeLo A",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:bare tekk melo",
-   "family": "bare tekk melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "BaRe TekK MeLo.wav",
-   "seconds": 5.333,
-   "rms": -14.4,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 608
-  },
-  {
-   "file": "BaRe TekK MeLo B.wav",
-   "name": "BaRe TekK MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:bare tekk melo",
-   "family": "bare tekk melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "BaRe TekK MeLo.wav",
-   "seconds": 5.333,
-   "rms": -15.4,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 609
   },
   {
    "file": "be melo 2.wav",
@@ -153,7 +99,7 @@
    "source": "be melo_2.wav",
    "seconds": 5.333,
    "rms": -17.7,
-   "nr": 610
+   "nr": 607
   },
   {
    "file": "Bewunderungs MeL.wav",
@@ -167,71 +113,35 @@
    "source": "Bewunderungs_MeLo.wav",
    "seconds": 5.333,
    "rms": -15.5,
-   "nr": 611
+   "nr": 608
   },
   {
-   "file": "bgg A.wav",
-   "name": "bgg A",
+   "file": "bgg.wav",
+   "name": "bgg",
    "category": 15,
    "role": "melo",
    "group": "melo:bgg",
    "family": "bgg",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "bgg.wav",
-   "seconds": 5.333,
-   "rms": -10.3,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 612
+   "seconds": 10.667,
+   "rms": -11.1,
+   "nr": 609
   },
   {
-   "file": "bgg B.wav",
-   "name": "bgg B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:bgg",
-   "family": "bgg",
-   "kind": "loop",
-   "bars": 4,
-   "source": "bgg.wav",
-   "seconds": 5.333,
-   "rms": -11.6,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 613
-  },
-  {
-   "file": "CandyMan Melo A.wav",
-   "name": "CandyMan Melo A",
+   "file": "CandyMan Melo.wav",
+   "name": "CandyMan Melo",
    "category": 15,
    "role": "melo",
    "group": "melo:candyman melo",
    "family": "candyman melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "CandyMan Melo.wav",
-   "seconds": 5.333,
-   "rms": -18.7,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 614
-  },
-  {
-   "file": "CandyMan Melo B.wav",
-   "name": "CandyMan Melo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:candyman melo",
-   "family": "candyman melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "CandyMan Melo.wav",
-   "seconds": 5.333,
-   "rms": -17.1,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 615
+   "seconds": 10.667,
+   "rms": -18.5,
+   "nr": 610
   },
   {
    "file": "CC MeLo.wav",
@@ -245,7 +155,7 @@
    "source": "CC MeLo.wav",
    "seconds": 2.667,
    "rms": -7.4,
-   "nr": 616
+   "nr": 611
   },
   {
    "file": "Claudia MeLo.wav",
@@ -259,71 +169,35 @@
    "source": "Claudia MeLo.wav",
    "seconds": 5.333,
    "rms": -14.4,
-   "nr": 617
+   "nr": 612
   },
   {
-   "file": "DreAm MeLo A.wav",
-   "name": "DreAm MeLo A",
+   "file": "DreAm MeLo.wav",
+   "name": "DreAm MeLo",
    "category": 15,
    "role": "melo",
    "group": "melo:dream melo",
    "family": "dream melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "DreAm MeLo.wav",
-   "seconds": 5.333,
-   "rms": -9.2,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 618
+   "seconds": 10.667,
+   "rms": -9.4,
+   "nr": 613
   },
   {
-   "file": "DreAm MeLo B.wav",
-   "name": "DreAm MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:dream melo",
-   "family": "dream melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "DreAm MeLo.wav",
-   "seconds": 5.333,
-   "rms": -8.8,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 619
-  },
-  {
-   "file": "Einsamkeit MeL A.wav",
-   "name": "Einsamkeit MeL A",
+   "file": "Einsamkeit MeLo.wav",
+   "name": "Einsamkeit MeLo",
    "category": 15,
    "role": "melo",
    "group": "melo:einsamkeit melo",
    "family": "einsamkeit melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "Einsamkeit MeLo.wav",
-   "seconds": 5.333,
-   "rms": -15.2,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 620
-  },
-  {
-   "file": "Einsamkeit MeL B.wav",
-   "name": "Einsamkeit MeL B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:einsamkeit melo",
-   "family": "einsamkeit melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "Einsamkeit MeLo.wav",
-   "seconds": 5.333,
-   "rms": -14.6,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 621
+   "seconds": 10.667,
+   "rms": -15.9,
+   "nr": 614
   },
   {
    "file": "EngelchenBleib-M.wav",
@@ -337,7 +211,7 @@
    "source": "EngelchenBleib-MeLo1.wav",
    "seconds": 5.333,
    "rms": -16.1,
-   "nr": 622
+   "nr": 615
   },
   {
    "file": "FroeHlicHkeiTs M.wav",
@@ -351,7 +225,7 @@
    "source": "FröHlicHkeiTs MeLo 1.wav",
    "seconds": 5.333,
    "rms": -13.7,
-   "nr": 623
+   "nr": 616
   },
   {
    "file": "GeZeiTen MeLo.wav",
@@ -365,7 +239,7 @@
    "source": "GeZeiTen MeLo.wav",
    "seconds": 5.333,
    "rms": -13.3,
-   "nr": 624
+   "nr": 617
   },
   {
    "file": "HnPOo MeLo.wav",
@@ -379,7 +253,7 @@
    "source": "HnPOo MeLo.wav",
    "seconds": 5.333,
    "rms": -12.2,
-   "nr": 625
+   "nr": 618
   },
   {
    "file": "HZHuebsche-MeLo.wav",
@@ -393,39 +267,21 @@
    "source": "HZHübsche-MeLo.wav",
    "seconds": 5.333,
    "rms": -15.7,
-   "nr": 626
+   "nr": 619
   },
   {
-   "file": "Jobbi MeLo 1 A.wav",
-   "name": "Jobbi MeLo 1 A",
+   "file": "Jobbi MeLo 1.wav",
+   "name": "Jobbi MeLo 1",
    "category": 15,
    "role": "melo",
    "group": "melo:jobbi melo",
    "family": "jobbi melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 7,
    "source": "Jobbi MeLo 1.wav",
-   "seconds": 5.333,
-   "rms": -9.5,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 627
-  },
-  {
-   "file": "Jobbi MeLo 1 B.wav",
-   "name": "Jobbi MeLo 1 B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:jobbi melo",
-   "family": "jobbi melo",
-   "kind": "loop",
-   "bars": 2,
-   "source": "Jobbi MeLo 1.wav",
-   "seconds": 2.667,
-   "rms": -9,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 628
+   "seconds": 9.333,
+   "rms": -11.6,
+   "nr": 620
   },
   {
    "file": "KriSStaLL GoTT2.wav",
@@ -439,7 +295,7 @@
    "source": "KriSStaLL GoTT2.wav",
    "seconds": 5.333,
    "rms": -12.7,
-   "nr": 629
+   "nr": 621
   },
   {
    "file": "KroSSi MeLo 1.wav",
@@ -453,7 +309,7 @@
    "source": "KroSSi MeLo 1.wav",
    "seconds": 5.333,
    "rms": -9.2,
-   "nr": 630
+   "nr": 622
   },
   {
    "file": "Liebes-MeLo.wav",
@@ -467,7 +323,7 @@
    "source": "Liebes-MeLo.wav",
    "seconds": 5.333,
    "rms": -12.5,
-   "nr": 631
+   "nr": 623
   },
   {
    "file": "Nahtoderfahrung.wav",
@@ -481,7 +337,7 @@
    "source": "Nahtoderfahrung MeLo.wav",
    "seconds": 5.333,
    "rms": -15.4,
-   "nr": 632
+   "nr": 624
   },
   {
    "file": "Nelly Furtado -.wav",
@@ -495,7 +351,7 @@
    "source": "Nelly Furtado - Turn Off The Light.wav",
    "seconds": 5.333,
    "rms": -14.6,
-   "nr": 633
+   "nr": 625
   },
   {
    "file": "New stuff melo 3.wav",
@@ -509,7 +365,7 @@
    "source": "New stuff melo_3.wav",
    "seconds": 5.333,
    "rms": -14.4,
-   "nr": 634
+   "nr": 626
   },
   {
    "file": "Od DaT MeLo.wav",
@@ -523,7 +379,7 @@
    "source": "Od DaT MeLo.wav",
    "seconds": 5.333,
    "rms": -14.5,
-   "nr": 635
+   "nr": 627
   },
   {
    "file": "Rad MeLo 1.wav",
@@ -537,7 +393,7 @@
    "source": "Rad MeLo 1.wav",
    "seconds": 4,
    "rms": -13.5,
-   "nr": 636
+   "nr": 628
   },
   {
    "file": "SaMoN MeLo 1.wav",
@@ -551,7 +407,7 @@
    "source": "SaMoN MeLo 1.wav",
    "seconds": 5.333,
    "rms": -15.7,
-   "nr": 637
+   "nr": 629
   },
   {
    "file": "TaUboG HoRRoR Me.wav",
@@ -565,7 +421,7 @@
    "source": "TaUboG HoRRoR MeLo.wav",
    "seconds": 5.333,
    "rms": -15.9,
-   "nr": 638
+   "nr": 630
   },
   {
    "file": "TuttyMeLo.wav",
@@ -579,7 +435,7 @@
    "source": "TuttyMeLo.wav",
    "seconds": 5.333,
    "rms": -14.4,
-   "nr": 639
+   "nr": 631
   },
   {
    "file": "WaffeN MeLo.wav",
@@ -593,39 +449,21 @@
    "source": "WaffeN_MeLo.wav",
    "seconds": 5.333,
    "rms": -16,
-   "nr": 640
+   "nr": 632
   },
   {
-   "file": "WEltRaUm MeLo A.wav",
-   "name": "WEltRaUm MeLo A",
+   "file": "WEltRaUm MeLo.wav",
+   "name": "WEltRaUm MeLo",
    "category": 15,
    "role": "melo",
    "group": "melo:weltraum melo",
    "family": "weltraum melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 8,
    "source": "WEltRaUm MeLo.wav",
-   "seconds": 5.333,
-   "rms": -12.9,
-   "chunk": 0,
-   "chunks": 2,
-   "nr": 641
-  },
-  {
-   "file": "WEltRaUm MeLo B.wav",
-   "name": "WEltRaUm MeLo B",
-   "category": 15,
-   "role": "melo",
-   "group": "melo:weltraum melo",
-   "family": "weltraum melo",
-   "kind": "loop",
-   "bars": 4,
-   "source": "WEltRaUm MeLo.wav",
-   "seconds": 5.333,
-   "rms": -14.4,
-   "chunk": 1,
-   "chunks": 2,
-   "nr": 642
+   "seconds": 10.667,
+   "rms": -13.8,
+   "nr": 633
   },
   {
    "file": "West Berlin.wav",
@@ -639,7 +477,7 @@
    "source": "West Berlin.wav",
    "seconds": 5.333,
    "rms": -11.7,
-   "nr": 643
+   "nr": 634
   },
   {
    "file": "Zerstoert MeLo.wav",
@@ -653,7 +491,7 @@
    "source": "Zerstört MeLo.wav",
    "seconds": 5.333,
    "rms": -16.1,
-   "nr": 644
+   "nr": 635
   },
   {
    "file": null,

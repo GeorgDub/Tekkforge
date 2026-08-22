@@ -511,19 +511,17 @@
    "rms": -13.7
   },
   {
-   "file": "Durchgetekkt m A.wav",
-   "name": "Durchgetekkt m A",
+   "file": "Durchgetekkt me2.wav",
+   "name": "Durchgetekkt me2",
    "category": 15,
    "role": "melo",
    "group": "melo:durchgetekkt melo",
    "family": "durchgetekkt melo",
    "kind": "loop",
-   "bars": 4,
+   "bars": 5,
    "source": "Durchgetekkt melo 2.wav",
-   "seconds": 5.818,
-   "rms": -10.2,
-   "chunk": 0,
-   "chunks": 1
+   "seconds": 7.273,
+   "rms": -10.1
   },
   {
    "file": "durchgetekkt sou.wav",

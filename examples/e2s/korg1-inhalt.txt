@@ -69,5 +69,4 @@
 569	communications-p
 570	bush
 571	devillache
-572	HaWk 2 A
-573	HaWk 2 B
+572	HaWk 2
