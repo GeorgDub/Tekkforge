@@ -1,0 +1,265 @@
+/**
+ * generator.ts — Tab „Generator": Verzeichnis scannen, Bank bauen,
+ * Jam / Mini-Set / Pro Melo erzeugen, Vorhoeren, → Datei, → Editor.
+ * Duenne DOM-Schicht; Entscheidungen in core/generatorSession.ts.
+ */
+import { $, download, escapeHtml } from "./shared";
+import { dekodiere } from "./audioDecode";
+import { PreviewPlayer } from "./preview";
+import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
+import { planeBank, type Projekt } from "../core/bankPlan";
+import { zusammenfassung, erzeuge, projektJson, dateiArt, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import { meloKandidaten, pools, type Modus } from "../core/rezept";
+import { alsAllPat } from "../core/patternGen";
+import { editorProjectFromE2Files, importSamplesFromAll, type EditorProject, type PoolSample } from "../core/editorModel";
+
+interface Zustand {
+  ordner: string;
+  eintraege: ScanEintrag[];
+  uebersprungen: { datei: string; grund: string }[];
+  zusammen: Zusammenfassung | null;
+  projekt: Projekt | null;
+  bank: Uint8Array | null;
+  pool: PoolSample[];
+  ergebnis: Erzeugt | null;
+  fortschritt: string;
+}
+
+const z: Zustand = {
+  ordner: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [], ergebnis: null, fortschritt: "",
+};
+const player = new PreviewPlayer();
+let onEditor: (p: EditorProject) => void = () => {};
+let tekkBytes: Uint8Array | null = null;
+
+/** tekk4.all liegt im Repo unter examples/e2s — in der App relativ zum Renderer erreichbar. */
+async function ladeTekkDrums(): Promise<Uint8Array | null> {
+  if (tekkBytes) return tekkBytes;
+  for (const url of ["examples/e2s/tekk4.all", "../examples/e2s/tekk4.all"]) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      tekkBytes = new Uint8Array(await res.arrayBuffer());
+      return tekkBytes;
+    } catch {
+      /* naechste URL */
+    }
+  }
+  return null;
+}
+
+function render(): void {
+  const host = $("viewGenerator");
+  const zs = z.zusammen;
+  const melos = z.projekt ? meloKandidaten(pools(z.projekt)) : [];
+  const rollen = zs
+    ? Object.entries(zs.rollen)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${k} ${v}`)
+        .join(" · ")
+    : "";
+  const quelle = zs
+    ? `
+      <div class="zeile"><b>${escapeHtml(z.ordner)}</b> — ${zs.anzahl} Samples · ${zs.sekunden.toFixed(0)} s ≈ ${zs.megabyte.toFixed(1)} MB${
+        zs.volumesNoetig > 1 ? ` · <span class="hinweis">zu viel fuers Sample-RAM → ${zs.volumesNoetig} Volumes</span>` : ""
+      }</div>
+      <div class="zeile fortschritt">${escapeHtml(rollen)}</div>
+      ${
+        z.uebersprungen.length
+          ? `<div class="hinweis">${z.uebersprungen.length} Datei(en) uebersprungen: ${escapeHtml(
+              z.uebersprungen.slice(0, 3).map((u) => `${u.datei} (${u.grund})`).join(", "),
+            )}${z.uebersprungen.length > 3 ? " …" : ""}</div>`
+          : ""
+      }
+      <div class="zeile">
+        <label for="genBpm">Tempo</label>
+        <input id="genBpm" type="number" min="60" max="300" value="${z.projekt?.bpm ?? zs.tempoVorschlag}" style="width:80px" />
+        <span class="fortschritt">Vorschlag aus der Taktanalyse: ${zs.tempoVorschlag} BPM</span>
+      </div>
+      <div class="zeile">
+        <label for="genVolume">Volume</label>
+        <select id="genVolume">${Array.from({ length: zs.volumesNoetig }, (_, i) => `<option value="${i + 1}"${z.projekt?.volume === i + 1 ? " selected" : ""}>${i + 1} / ${zs.volumesNoetig}</option>`).join("")}</select>
+        <label><input id="genTekk" type="checkbox" ${z.projekt ? (z.projekt.tekkDrums ? "checked" : "") : zs.tekkEmpfohlen ? "checked" : ""} /> tekk4-Drums dazu (501–535)${zs.tekkEmpfohlen ? " — empfohlen, Drums fehlen" : ""}</label>
+      </div>
+      <div class="zeile"><button id="genBank" class="primary">Bank bauen</button>
+        ${
+          z.projekt
+            ? `<span>${escapeHtml(z.projekt.name)}.all · ${z.projekt.samples.length} Samples · Status <b>${z.projekt.status}</b></span>
+        <button id="genBankSpeichern">.all speichern</button><button id="genProjektSpeichern">projekt.json</button>`
+            : ""
+        }
+      </div>`
+    : "";
+  const bauen = z.projekt
+    ? `
+      <div class="zeile">
+        <label>Modus</label>
+        <label><input type="radio" name="genModus" value="jam" checked /> Jam-Pattern</label>
+        <label><input type="radio" name="genModus" value="miniset" /> Mini-Set (6)</label>
+        <label><input type="radio" name="genModus" value="promelo" /> Pro Melo (${melos.length})</label>
+      </div>
+      <div class="zeile"><label for="genMelo">Melodie</label>
+        <select id="genMelo"><option value="">Regel waehlt</option>${melos
+          .map((m) => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${m.takte} T)</option>`)
+          .join("")}</select>
+        <button id="genHoeren" title="Vorhoeren">▶</button>
+      </div>
+      <div class="zeile"><label for="genSlot">Start-Slot</label><input id="genSlot" type="number" min="1" max="250" value="1" style="width:70px" /></div>
+      <div class="zeile"><label for="genText">Beschreibung</label></div>
+      <textarea id="genText" placeholder="z. B. hart, rollende bass, arp stab — ohne API-Key wirken nur Schluesselwoerter (KI-Uebersetzung kommt mit Stufe 4)"></textarea>
+      <div class="zeile"><button id="genLos" class="primary">Generieren</button></div>
+      <div class="liste" id="genMeloListe">${melos
+        .map(
+          (m) =>
+            `<div><span class="rolle">melo</span><span class="takte">${m.takte} T</span><span style="flex:1">${escapeHtml(m.name)}</span><button data-nr="${m.nr}" class="genPlay" title="Vorhoeren">▶</button></div>`,
+        )
+        .join("")}</div>`
+    : `<div class="fortschritt">Erst Verzeichnis waehlen und Bank bauen.</div>`;
+  const ergebnis = z.ergebnis
+    ? `
+      <div class="zeile"><b>${z.ergebnis.patterns.length} Pattern(s)</b> · ${escapeHtml(z.ergebnis.dateiname)}
+        <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button></div>
+      <div class="liste">${z.ergebnis.patterns
+        .map(
+          (p, i) =>
+            `<div><span class="takte">${i + 1}</span><span style="flex:1">${escapeHtml(p.name)}</span><span class="fortschritt">${p.parts.filter((x) => !x.muted).length} Parts · ${p.bpm} BPM${p.chainTo ? ` → ${p.chainTo}` : ""}</span></div>`,
+        )
+        .join("")}</div>
+      <div class="warum"><b>Warum so?</b> ${escapeHtml(z.ergebnis.warumSo)}</div>
+      ${z.ergebnis.hinweise.length ? `<div class="hinweis">${escapeHtml(z.ergebnis.hinweise.join(" · "))}</div>` : ""}`
+    : `<div class="fortschritt">Noch nichts erzeugt.</div>`;
+  host.innerHTML = `
+    <div class="card">
+      <h3>1 · Quelle</h3>
+      <div class="zeile">
+        <label for="genOrdner">Sample-Verzeichnis</label>
+        <input id="genOrdner" type="file" multiple />
+      </div>
+      <div class="fortschritt" id="genFortschritt">${escapeHtml(z.fortschritt)}</div>
+      ${quelle}
+    </div>
+    <div class="card">
+      <h3>2 · Was bauen</h3>
+      ${bauen}
+    </div>
+    <div class="card" style="grid-column: 1 / -1">
+      <h3>3 · Ergebnis</h3>
+      ${ergebnis}
+    </div>`;
+  ($("genOrdner") as HTMLInputElement).setAttribute("webkitdirectory", "");
+  verdrahte();
+}
+
+function knopf(id: string, fn: () => void): void {
+  document.getElementById(id)?.addEventListener("click", fn);
+}
+
+function verdrahte(): void {
+  const ordner = $("genOrdner") as HTMLInputElement;
+  ordner.addEventListener("change", () => void scanneOrdner(ordner.files));
+  knopf("genBank", () => void bankBauen());
+  knopf("genBankSpeichern", () => {
+    if (z.bank && z.projekt) download(z.bank, `${z.projekt.name}.all`, "application/octet-stream");
+  });
+  knopf("genProjektSpeichern", () => {
+    if (z.projekt) download(projektJson(z.projekt), "projekt.json", "application/json");
+  });
+  knopf("genLos", generieren);
+  knopf("genHoeren", () => {
+    const n = ($("genMelo") as HTMLSelectElement).value;
+    const s = z.projekt?.samples.find((x) => x.name === n);
+    if (s) hoeren(s.nr);
+  });
+  knopf("genDatei", () => {
+    if (z.ergebnis) download(z.ergebnis.bytes, z.ergebnis.dateiname, "application/octet-stream");
+  });
+  knopf("genEditor", inEditor);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genPlay")) {
+    b.addEventListener("click", () => hoeren(Number(b.dataset.nr)));
+  }
+}
+
+function hoeren(nr: number): void {
+  const s = z.pool.find((p) => p.number === nr);
+  if (s) player.audition(s);
+}
+
+type DateiMitPfad = File & { webkitRelativePath?: string };
+
+async function scanneOrdner(files: FileList | null): Promise<void> {
+  if (!files?.length) return;
+  const alle = Array.from(files) as DateiMitPfad[];
+  // nur die oberste Ebene des gewaehlten Verzeichnisses, keine Unterordner
+  const liste = alle.filter((f) => dateiArt(f.name) !== "skip" && (f.webkitRelativePath ?? "").split("/").length <= 2);
+  z.ordner = (alle[0].webkitRelativePath ?? "").split("/")[0] || "Verzeichnis";
+  z.projekt = null;
+  z.bank = null;
+  z.ergebnis = null;
+  z.pool = [];
+  const eingaben: ScanEingabe[] = [];
+  const fehler: { datei: string; grund: string }[] = [];
+  for (let i = 0; i < liste.length; i++) {
+    z.fortschritt = `Dekodiere ${i + 1}/${liste.length}: ${liste[i].name}`;
+    const el = document.getElementById("genFortschritt");
+    if (el) el.textContent = z.fortschritt;
+    try {
+      eingaben.push(await dekodiere(liste[i]));
+    } catch (e) {
+      fehler.push({ datei: liste[i].name, grund: e instanceof Error ? e.message : String(e) });
+    }
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  const res = scanne(eingaben);
+  z.eintraege = res.eintraege;
+  z.uebersprungen = [...fehler, ...res.uebersprungen];
+  z.zusammen = zusammenfassung(z.eintraege);
+  z.fortschritt = "";
+  render();
+}
+
+async function bankBauen(): Promise<void> {
+  if (!z.eintraege.length || !z.zusammen) return;
+  const bpm = Number(($("genBpm") as HTMLInputElement).value) || z.zusammen.tempoVorschlag;
+  const volume = Number(($("genVolume") as HTMLSelectElement).value) || 1;
+  const tekkGewuenscht = ($("genTekk") as HTMLInputElement).checked;
+  const tekk = tekkGewuenscht ? await ladeTekkDrums() : null;
+  if (tekkGewuenscht && !tekk) alert("tekk4.all nicht gefunden (examples/e2s/tekk4.all) — Bank ohne tekk-Drums.");
+  const name = z.ordner.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 12) || "projekt";
+  try {
+    const { projekt, bank, warnungen } = planeBank(z.eintraege, { name, bpm, volume, tekkDrumsBank: tekk ?? undefined });
+    z.projekt = projekt;
+    z.bank = new Uint8Array(bank);
+    z.pool = importSamplesFromAll(z.bank);
+    z.ergebnis = null;
+    if (warnungen.length) alert("Hinweise beim Bankbau:\n" + warnungen.join("\n"));
+  } catch (e) {
+    alert("Bank konnte nicht gebaut werden: " + (e instanceof Error ? e.message : String(e)));
+  }
+  render();
+}
+
+function generieren(): void {
+  if (!z.projekt) return;
+  const modus = (document.querySelector<HTMLInputElement>("input[name=genModus]:checked")?.value ?? "jam") as Modus;
+  const bpm = Number(($("genBpm") as HTMLInputElement).value) || z.projekt.bpm;
+  const melo = ($("genMelo") as HTMLSelectElement).value || undefined;
+  const beschreibung = ($("genText") as HTMLTextAreaElement).value;
+  const startSlot = Number(($("genSlot") as HTMLInputElement).value) || 1;
+  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot });
+  render();
+}
+
+function inEditor(): void {
+  if (!z.ergebnis || !z.bank) return;
+  const allpat = new Uint8Array(alsAllPat(z.ergebnis.patterns));
+  onEditor(editorProjectFromE2Files(allpat, z.bank));
+}
+
+export function initGenerator(cb: (p: EditorProject) => void): void {
+  onEditor = cb;
+  render();
+}
+
+export function generatorWirdSichtbar(): void {
+  // Zustand lebt im Modul; gerendert wird bei jeder Aenderung.
+}

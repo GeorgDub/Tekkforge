@@ -8,9 +8,10 @@ import { initEditor, loadProject } from "./editor";
 import { initConverter } from "./converter";
 import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
+import { initGenerator, generatorWirdSichtbar } from "./generator";
 import type { EditorProject } from "../core/editorModel";
 
-type Tab = "editor" | "converter" | "panel" | "paddeck";
+type Tab = "editor" | "converter" | "panel" | "paddeck" | "generator";
 
 const TABS: Record<Tab, { view: string; knopf: string; sichtbar?: () => void }> = {
   editor: { view: "viewEditor", knopf: "tabEditor" },
@@ -18,6 +19,7 @@ const TABS: Record<Tab, { view: string; knopf: string; sichtbar?: () => void }> 
   // Panel und Pad-Deck zeigen Editor-Daten — beim Umschalten frisch rendern.
   panel: { view: "viewPanel", knopf: "tabPanel", sichtbar: panelWirdSichtbar },
   paddeck: { view: "viewPadDeck", knopf: "tabPadDeck", sichtbar: padDeckWirdSichtbar },
+  generator: { view: "viewGenerator", knopf: "tabGenerator", sichtbar: generatorWirdSichtbar },
 };
 
 let aktiverTab: Tab = "editor";
@@ -50,5 +52,12 @@ initConverter((project: EditorProject) => {
     alert(
       `In den Editor geladen: ${project.patterns.length} Pattern(s), ${project.samples.length} Sample(s).`,
     );
+  }
+});
+// Generator-Handoff: erzeugte Patterns + Bank in den Editor laden + Tab wechseln.
+initGenerator((project: EditorProject) => {
+  if (loadProject(project)) {
+    switchTab("editor");
+    alert(`Generator → Editor: ${project.patterns.length} Pattern(s), ${project.samples.length} Sample(s).`);
   }
 });
