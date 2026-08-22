@@ -58,7 +58,8 @@ im Browser doppelklicken.
    **Lied analysieren:** Audiodatei wählen → Tempo messen (oder eintragen), Half-/Double-Time in
    die Tekk-Oktave, drei 8-Takt-Fenster DROP / BREAK / VAR als je ein Melodie-Sample; mit Python +
    Demucs („Stems per Demucs", `scripts/stems.py`) als bass+other plus Vocals als Vox-Loop, sonst
-   Vollmix. Dann wie gewohnt Bank bauen (tekk4-Drums kommen automatisch dazu).
+   Vollmix. Die Fenster lassen sich vor dem Bankbau vorhören (▶/■). Dann wie gewohnt Bank bauen
+   (tekk4-Drums kommen automatisch dazu).
 
 ## Pattern-Editor — Workflow
 
