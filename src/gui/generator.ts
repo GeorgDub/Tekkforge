@@ -63,6 +63,50 @@ const z: Zustand = {
   python: null, lied: null, liedLaeuft: false, liedStatus: "",
 };
 const player = new PreviewPlayer();
+
+// Vorhoeren der Lied-Fenster (8 Takte) mit Stopp — eigener Context, damit ein laufendes Fenster abbrechbar ist
+let fensterCtx: AudioContext | null = null;
+let fensterQuelle: AudioBufferSourceNode | null = null;
+let fensterSpielt: string | null = null;
+
+function fensterStopp(): void {
+  try {
+    fensterQuelle?.stop();
+  } catch {
+    /* schon zu Ende */
+  }
+  fensterQuelle = null;
+  fensterSpielt = null;
+}
+
+function fensterHoeren(datei: string): void {
+  if (fensterSpielt === datei) {
+    fensterStopp();
+    render();
+    return;
+  }
+  fensterStopp();
+  const e = z.eintraege.find((x) => x.datei === datei);
+  if (!e) return;
+  fensterCtx = fensterCtx ?? new AudioContext();
+  void fensterCtx.resume();
+  const buf = fensterCtx.createBuffer(1, Math.max(1, e.pcm.length), e.sampleRate);
+  buf.getChannelData(0).set(e.pcm);
+  const src = fensterCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(fensterCtx.destination);
+  src.onended = () => {
+    if (fensterQuelle === src) {
+      fensterQuelle = null;
+      fensterSpielt = null;
+      render();
+    }
+  };
+  src.start();
+  fensterQuelle = src;
+  fensterSpielt = datei;
+  render();
+}
 let onEditor: (p: EditorProject) => void = () => {};
 let tekkBytes: Uint8Array | null = null;
 
@@ -232,6 +276,18 @@ function render(): void {
         <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
       </div>
       ${z.liedStatus ? `<div class="fortschritt" id="genLiedStatus">${escapeHtml(z.liedStatus)}</div>` : ""}
+      ${
+        z.lied?.dateien.length
+          ? `<div class="liste" id="genFensterListe">${z.lied.dateien
+              .map((d) => z.eintraege.find((e) => e.datei === d))
+              .filter((e): e is ScanEintrag => !!e)
+              .map(
+                (e) =>
+                  `<div><span class="rolle">${e.rolle}</span><span class="takte">${(e.sekunden / (240 / (z.zusammen?.tempoVorschlag || 180))).toFixed(0)} T</span><span style="flex:1">${escapeHtml(e.stem)}</span><span class="fortschritt">${e.rmsDb.toFixed(0)} dB</span><button class="genFensterPlay" data-datei="${escapeHtml(e.datei)}" title="${fensterSpielt === e.datei ? "Stopp" : "Vorhoeren (8 Takte)"}">${fensterSpielt === e.datei ? "■" : "▶"}</button></div>`,
+              )
+              .join("")}</div>`
+          : ""
+      }
       ${quelle}
     </div>
     <div class="card">
@@ -292,6 +348,9 @@ function verdrahte(): void {
   knopf("genGeraet", () => void anGeraet());
   for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genPlay")) {
     b.addEventListener("click", () => hoeren(Number(b.dataset.nr)));
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genFensterPlay")) {
+    b.addEventListener("click", () => fensterHoeren(b.dataset.datei ?? ""));
   }
 }
 
