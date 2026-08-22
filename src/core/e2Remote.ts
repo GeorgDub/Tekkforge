@@ -7,17 +7,17 @@
  * Gerätestand (gemessen, siehe partParams.ts / panelState.ts):
  *   filterType 0 = aus, 1–6 LPF, 7–11 HPF, 12–16 BPF — Stock nutzt 1/7/12.
  *   Part n hört auf MIDI-Kanal n (Regler-CCs so gemessen, e2KnobCc.ts).
- *   Patternwechsel (KORG „electribe sampler MIDI Implementation" Rev 1.00,
- *   Note *2/*6 — Programmnummern sind 1-BASIERT, Program 0 gibt es nicht):
- *     Pattern 001–127 → Bank MSB 0, LSB 0, Program 1–127
- *     Pattern 128–250 → Bank MSB 0, LSB 1, Program 1–123 (KORGs Tabelle sagt
- *                       „1–121", das deckt aber nur 248 Patterns — wir bilden
- *                       lückenlos N−127 ab)
- *   Gilt nur, wenn der Global-RECEIVE-FILTER auf „Off" oder „Short" steht.
- *   Befund 2026-08-22 am Nutzergerät (gestoppt, Clock Internal, Filter Off):
- *   nach dem Program Change lieferte der Edit-Buffer-Dump (0x10) weiterhin
- *   das alte Pattern — das Gerät merkt den Wechsel offenbar nur vor und lädt
- *   beim nächsten Start. Am laufenden Gerät noch nicht gemessen.
+ *   Patternwechsel — ✔ AM GERÄT GEMESSEN 2026-08-22 (E2 Sampler v2.2, Display
+ *   abgelesen, Sequencer LÄUFT): das Gerät zählt 0-BASIERT, entgegen KORGs
+ *   MIDI-Implementation (die „Pattern 001 = Program 1" behauptet):
+ *     Program 100 → Pattern 101 · Program 1 → Pattern 2 · Program 2 → Pattern 3
+ *     Bank MSB 0, dann LSB 1, dann Program 0 → Pattern 129
+ *   Also: Pattern-Index i (0..249) → CC0=0, CC32=i div 128, Program=i mod 128,
+ *   als drei getrennte Nachrichten in dieser Reihenfolge. Bank im MSB wird
+ *   ignoriert. Gilt nur bei Global-RECEIVE-FILTER „Off"/„Short".
+ *   ⚠ Bei GESTOPPTEM Sequencer ignoriert das Gerät den Program Change komplett
+ *   (mehrfach gemessen: Display bleibt, Edit-Buffer bleibt) — Wechsel per MIDI
+ *   funktioniert nur während der Wiedergabe (greift am Taktende).
  *   IFX On/Off = CC 104, MFX Send = CC 105, Master FX On/Off = CC 106 (Stock).
  */
 
@@ -34,10 +34,9 @@ export function buildSchalterCc(part0: number, key: string, an: boolean): Uint8A
   return Uint8Array.from([0xb0 | (part0 & 0x0f), cc, an ? 127 : 0]);
 }
 
-/** Bank-LSB + Program (1-basiert) → Pattern-Index 0..249, oder null bei Program 0. */
+/** Bank-LSB + Program (0-basiert, gemessen) → Pattern-Index 0..249, sonst null. */
 export function patternIndexFromProgram(bankLsb: number, program: number): number | null {
-  if (program < 1) return null;
-  const idx = (bankLsb ? 127 : 0) + program - 1;
+  const idx = (bankLsb & 1) * 128 + (program & 0x7f);
   return idx <= 249 ? idx : null;
 }
 
@@ -72,12 +71,10 @@ export function buildProgramChange(globalChannel0: number, patternIdx0: number):
     throw new RangeError(`Pattern-Index ${patternIdx0} außerhalb 0..249`);
   }
   const ch = globalChannel0 & 0x0f;
-  const bankLsb = patternIdx0 >= 127 ? 1 : 0;
-  const program = bankLsb ? patternIdx0 - 127 + 1 : patternIdx0 + 1;
   return [
     Uint8Array.from([0xb0 | ch, 0x00, 0x00]),
-    Uint8Array.from([0xb0 | ch, 0x20, bankLsb]),
-    Uint8Array.from([0xc0 | ch, program]),
+    Uint8Array.from([0xb0 | ch, 0x20, Math.floor(patternIdx0 / 128)]),
+    Uint8Array.from([0xc0 | ch, patternIdx0 % 128]),
   ];
 }
 

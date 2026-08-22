@@ -21,30 +21,27 @@ import {
 } from "../src/core/e2Remote";
 import { filterBand } from "../src/core/panelState";
 
-describe("e2Remote — Program Change (KORG-Konvention, 1-basiert)", () => {
-  it("Pattern 1 → Bank 0/0, Program 1 auf dem Global-Kanal", () => {
+describe("e2Remote — Program Change (am Gerät gemessen: 0-basiert, Bank im LSB)", () => {
+  it("Pattern 1 → Bank 0/0, Program 0 auf dem Global-Kanal", () => {
     const m = buildProgramChange(0, 0).map((u) => Array.from(u));
-    expect(m).toEqual([[0xb0, 0, 0], [0xb0, 0x20, 0], [0xc0, 1]]);
+    expect(m).toEqual([[0xb0, 0, 0], [0xb0, 0x20, 0], [0xc0, 0]]);
   });
 
-  it("Pattern 127 → LSB 0, Program 127; Pattern 128 → LSB 1, Program 1; Pattern 250 → LSB 1, Program 123", () => {
-    // KORGs Tabelle nennt für 128–250 „01~79" (1–121) — das sind aber 123
-    // Patterns; wir bilden lückenlos ab (N − 127), 250 → 123 (0x7B).
-    expect(Array.from(buildProgramChange(0, 126)[2])).toEqual([0xc0, 127]);
-    expect(Array.from(buildProgramChange(0, 127)[1])).toEqual([0xb0, 0x20, 1]);
-    expect(Array.from(buildProgramChange(0, 127)[2])).toEqual([0xc0, 1]);
+  it("Messwerte 2026-08-22: Program 100 → Pattern 101, LSB 1 + Program 0 → Pattern 129", () => {
+    expect(Array.from(buildProgramChange(0, 100)[2])).toEqual([0xc0, 100]);
+    expect(Array.from(buildProgramChange(0, 128)[1])).toEqual([0xb0, 0x20, 1]);
+    expect(Array.from(buildProgramChange(0, 128)[2])).toEqual([0xc0, 0]);
     expect(Array.from(buildProgramChange(0, 249)[1])).toEqual([0xb0, 0x20, 1]);
-    expect(Array.from(buildProgramChange(0, 249)[2])).toEqual([0xc0, 123]);
+    expect(Array.from(buildProgramChange(0, 249)[2])).toEqual([0xc0, 121]);
   });
 
-  it("Empfang ist die Umkehrung — Program 0 ist ungültig", () => {
-    for (const idx of [0, 5, 126, 127, 200, 249]) {
+  it("Empfang ist die Umkehrung; jenseits 250 → null", () => {
+    for (const idx of [0, 5, 100, 127, 128, 200, 249]) {
       const [, lsb, pc] = buildProgramChange(0, idx);
       expect(patternIndexFromProgram(lsb[2], pc[1])).toBe(idx);
     }
-    expect(patternIndexFromProgram(0, 0)).toBeNull();
-    expect(patternIndexFromProgram(1, 123)).toBe(249);
-    expect(patternIndexFromProgram(1, 124)).toBeNull();
+    expect(patternIndexFromProgram(1, 0)).toBe(128);
+    expect(patternIndexFromProgram(1, 122)).toBeNull();
   });
 
   it("Schalter-CCs: IFX On 104, MFX Send 105 auf dem Part-Kanal; unbekannt → null", () => {

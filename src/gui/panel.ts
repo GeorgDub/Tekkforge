@@ -377,9 +377,13 @@ function wechslePattern(idx: number): void {
       for (const m of buildProgramChange(panelBridge.midiChannel, idx)) panelBridge.midi.send(m);
       livePattern = null; // Stand ist unbekannt, bis der Sync ihn holt
       planeAutoSync(600);
-      // Befund 2026-08-22: gestoppt + Clock Internal merkt das Gerät den Wechsel
-      // nur vor — der Edit-Buffer zeigt bis zum nächsten Start das alte Pattern.
-      setStatus(`Pattern ${idx + 1} → Gerät (Program Change) — greift am Gerät beim nächsten Start; Sync folgt.`);
+      // Gemessen 2026-08-22: das Gerät nimmt den Program Change nur bei
+      // LAUFENDEM Sequencer an (Wechsel am Taktende); gestoppt ignoriert es ihn.
+      setStatus(
+        spieltGerade
+          ? `Pattern ${idx + 1} → Gerät (Program Change) — wechselt am Taktende; Sync folgt nach dem Stopp.`
+          : `Pattern ${idx + 1} → Gerät gesendet — ⚠ das Gerät übernimmt Program Change nur bei laufendem Sequencer (erst Play drücken).`,
+      );
     } catch (err) {
       setStatus(`Patternwechsel fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
     }
@@ -639,7 +643,7 @@ function empfangeVomGeraet(bytes: number[]): void {
     letzterBankLsb = bytes[2]; // Bank Select LSB geht dem Program Change voraus
   } else if ((st & 0xf0) === 0xc0 && bytes.length >= 2 && modus === "live") {
     // Patternwechsel: das Gerät sendet Bank Select + Program Change (am Gerät
-    // gemessen, 2026-08-15). Nummern nach KORG-Konvention 1-basiert (e2Remote.ts).
+    // gemessen, 2026-08-15). Nummern 0-basiert, Bank im LSB (gemessen 2026-08-22, e2Remote.ts).
     // Liegt im Editor dieselbe Bank, übernehmen wir das Pattern direkt als
     // Kopie — exakt ohne Dump; sonst bleibt der Sync für den nächsten Stopp vorgemerkt.
     const nr = patternIndexFromProgram(letzterBankLsb, bytes[1]);

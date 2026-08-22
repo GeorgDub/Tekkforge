@@ -161,17 +161,20 @@ MIDI-Nachrichten, also mit Stock **und** Hacktribe:
 | LED-Buttons IFX On / MFX Send | CC 104 / 105 auf dem Part-Kanal **+** Edit-Buffer-Übertragung |
 | LED-Buttons Amp EG, LPF/HPF/BPF (gleiches Band nochmal = Filter aus) | Edit-Buffer-Übertragung (kein CC bekannt) |
 | Auswahlregler Sample (Pool), Mod-Typ, IFX-Typ — ziehen | Edit-Buffer-Übertragung |
-| Value-Regler und Pad-Modus **Pattern Set** (Takt 1–4 = Seiten, Pads = Patterns 1–64) | Bank Select + Program Change, **1-basiert** nach KORG-Implementation (Pattern 1 = Program 1; ab 128 Bank-LSB 1) |
+| Value-Regler und Pad-Modus **Pattern Set** (Takt 1–4 = Seiten, Pads = Patterns 1–64) | Bank Select + Program Change — **0-basiert, Bank im LSB** (Pattern N → CC0 0, CC32 (N−1) div 128, Program (N−1) mod 128); **nur bei laufendem Sequencer** |
 | Pad-Modus **Trigger** (Part anspielen), **Keyboard** (Pads chromatisch ab C3 auf dem aktiven Part) | Note On/Off auf dem Part-Kanal |
 | Pad-Modus **Part Erase** | löscht alle Steps, Live per Übertragung |
 | Transport ▶ / ■ | MIDI Start / Stop — wirkt nur bei Global „Clock Mode" Auto/Ext |
 
-Befund 2026-08-22 am Gerät (gestoppt, Clock Internal, Receive-Filter Off):
-nach Program Change (alle Varianten, auch mit Bank Select) lieferte der
-Edit-Buffer-Dump weiterhin das alte Pattern — das Gerät merkt den Wechsel
-offenbar nur vor und lädt beim nächsten Start. Der Statustext sagt das so.
-Empfangene Program Changes werden mit der gleichen Konvention dekodiert
-(Bank-LSB wird aus CC 32 mitgeführt).
+**Gemessen 2026-08-22** (E2 Sampler v2.2, Kanal 1, Receive-Filter Off, Display
+abgelesen): Program 100 → Pattern **101**, Program 1 → **2**, Program 2 → **3**;
+Bank MSB 0 + LSB 1 + Program 0 → **129**. Das Gerät zählt also 0-basiert —
+KORGs MIDI-Implementation („Pattern 001 = Program 1") stimmt hier nicht.
+Bank im MSB wird ignoriert. **Bei gestopptem Sequencer ignoriert das Gerät
+Program Change vollständig** (mehrfach gemessen, Display und Edit-Buffer
+unverändert); der Wechsel greift nur während der Wiedergabe am Taktende. Der
+Statustext im Panel sagt das. Empfangene Program Changes werden mit derselben
+Konvention dekodiert (Bank-LSB aus CC 32).
 
 ## NRPN / Live-FX (Hacktribe, experimentell)
 
