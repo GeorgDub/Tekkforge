@@ -396,6 +396,20 @@ npx tsx scripts/make-folder-set.mjs examples/e2s/<name>/bank-<name>.json example
 npx tsx scripts/check-folder-sets.mjs    # Referenzen/Mutes/Chains aller Paare
 ```
 
+Der neue Weg ohne Python (Kern des kommenden Generator-Tabs, nur WAV):
+
+```bash
+npx tsx scripts/generator-cli.mjs "<ordner>" --modus jam|miniset|promelo [--bpm 180] [--melo "Name"] [--beschreibung "hart, arp"] [--tekk-drums] [--out <ordner>]
+```
+
+Schreibt `<ordner>/TekkForge/<name>.all` + `projekt.json` und das Pattern als
+`.e2spat` (Jam: ein Pattern, alle Lagen, Arrangement per Part-Mute am Gerät) bzw.
+`.e2sallpat` (Mini-Set: 6 Patterns Intro → Aufbau → Drop → Break → Drop 2 → Outro
+gechaint; Pro Melo: ein Jam-Pattern je Melodie). Melodien bleiben ganz (bis 8 Takte
+ein Sample, 8-Takter über Alternate 13/14 mit schweigendem Part 14). Module:
+`src/core/{tempoAnalyse,sampleScan,bankPlan,rezept,patternGen}.ts`, Spec
+`docs/superpowers/specs/2026-08-22-generator-design.md`.
+
 `prep-folder.py` ordnet jede Datei per Name/Länge/Pegel einer Rolle zu (kick,
 snare, clap, hat, perc, ton, bass, fx, vox, melo, track), bringt Loops per
 Varispeed auf ganze Takte und lässt sie **ganz** (bis 8 Takte; länger → genau
