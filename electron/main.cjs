@@ -237,6 +237,96 @@ function registerKiIpc() {
   });
 }
 
+// ── Lied-Bruecke (Generator-Tab): Python/Demucs-Probe und Stems ueber scripts/stems.py ──
+const { spawn } = require("child_process");
+
+function pythonPfad() {
+  const s = leseSettings();
+  return typeof s.pythonPfad === "string" && s.pythonPfad.trim() ? s.pythonPfad.trim() : "python";
+}
+
+function laufen(cmd, args, opts) {
+  return new Promise((resolve, reject) => {
+    let out = "";
+    let err = "";
+    let kind;
+    try {
+      kind = spawn(cmd, args, { windowsHide: true, cwd: opts.cwd });
+    } catch (e) {
+      reject(e);
+      return;
+    }
+    const timer = setTimeout(() => {
+      kind.kill();
+      reject(new Error(`Zeitueberschreitung nach ${Math.round(opts.timeoutMs / 1000)} s`));
+    }, opts.timeoutMs);
+    kind.stdout.on("data", (d) => (out += d.toString("utf8")));
+    kind.stderr.on("data", (d) => {
+      const t = d.toString("utf8");
+      err += t;
+      if (opts.onStderr) opts.onStderr(t);
+    });
+    kind.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    kind.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve({ out, err });
+      else reject(new Error(err.trim().split(/\r?\n/).slice(-3).join(" | ") || `Exit-Code ${code}`));
+    });
+  });
+}
+
+function registerLiedIpc(win) {
+  ipcMain.handle("lied:pythonStatus", async () => {
+    const py = pythonPfad();
+    try {
+      const { out } = await laufen(py, ["-c", "import demucs, sys; print(getattr(demucs, '__version__', 'ok'))"], { timeoutMs: 20000 });
+      return { python: py, demucs: true, version: out.trim(), meldung: `Python gefunden, Demucs ${out.trim()}` };
+    } catch (e) {
+      return { python: null, demucs: false, version: "", meldung: `Kein Demucs: ${e.message}` };
+    }
+  });
+  // anfrage: { fenster: [{ id, bytes:number[] (mono 44,1 k float32 als Int16-WAV) }] } → { fenster: [{ id, melo: number[], vox: number[]|null, voxDb }] }
+  ipcMain.handle("lied:stems", async (_e, anfrage) => {
+    const basis = path.join(app.getPath("userData"), "tmp", `stems-${Date.now()}`);
+    fs.mkdirSync(basis, { recursive: true });
+    try {
+      const liste = anfrage.fenster.map((f) => {
+        const wav = path.join(basis, `${String(f.id).replace(/[^A-Za-z0-9_-]/g, "_")}-mix.wav`);
+        fs.writeFileSync(wav, Buffer.from(f.bytes));
+        return { id: f.id, wav };
+      });
+      const anfragePfad = path.join(basis, "anfrage.json");
+      fs.writeFileSync(anfragePfad, JSON.stringify({ fenster: liste, ziel: basis }));
+      const skript = path.join(app.getAppPath(), "scripts", "stems.py");
+      const { out } = await laufen(pythonPfad(), [skript, anfragePfad], {
+        timeoutMs: 600000,
+        cwd: app.getAppPath(),
+        onStderr: (t) => {
+          if (win && !win.isDestroyed()) win.webContents.send("lied:fortschritt", t.trim());
+        },
+      });
+      const ergebnis = JSON.parse(out.trim().split(/\r?\n/).pop());
+      return {
+        fenster: ergebnis.fenster.map((f) => ({
+          id: f.id,
+          melo: Array.from(fs.readFileSync(f.melo)),
+          vox: f.vox ? Array.from(fs.readFileSync(f.vox)) : null,
+          voxDb: f.voxDb,
+        })),
+      };
+    } finally {
+      try {
+        fs.rmSync(basis, { recursive: true, force: true });
+      } catch {
+        /* Temp bleibt liegen — unkritisch */
+      }
+    }
+  });
+}
+
 function registerMidiIpc(win) {
   midiWin = win;
   startMidiWorker();
@@ -321,6 +411,7 @@ app.whenReady().then(() => {
   registerMidiIpc(win);
   registerFsIpc();
   registerKiIpc();
+  registerLiedIpc(win);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();

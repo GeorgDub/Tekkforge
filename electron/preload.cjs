@@ -42,6 +42,21 @@ contextBridge.exposeInMainWorld("tekkKi", {
   rezept: (anfrage) => ipcRenderer.invoke("ki:rezept", anfrage),
 });
 
+// ── Lied-Bruecke fuer den Generator-Tab (Python/Demucs-Probe, Stems) ──
+contextBridge.exposeInMainWorld("tekkLied", {
+  available: true,
+  /** { python, demucs, version, meldung } */
+  pythonStatus: () => ipcRenderer.invoke("lied:pythonStatus"),
+  /** { fenster: [{ id, bytes }] } (WAV-Bytes) → { fenster: [{ id, melo, vox|null, voxDb }] } (WAV-Bytes) */
+  stems: (anfrage) => ipcRenderer.invoke("lied:stems", anfrage),
+  /** Fortschrittszeilen von stems.py (stderr); gibt eine Unsubscribe-Funktion zurueck. */
+  onFortschritt: (cb) => {
+    const handler = (_e, text) => cb(text);
+    ipcRenderer.on("lied:fortschritt", handler);
+    return () => ipcRenderer.removeListener("lied:fortschritt", handler);
+  },
+});
+
 // ── Dateibruecke fuer den Generator-Tab (Projekt auf Platte, SD-Karte, tekk4-Drums) ──
 contextBridge.exposeInMainWorld("tekkFs", {
   available: true,

@@ -1,0 +1,18 @@
+/**
+ * tekkLied — typisierter Zugriff auf die Lied-Bruecke (preload.cjs):
+ * Python/Demucs-Probe und Stems ueber scripts/stems.py. Im Browser undefined.
+ */
+export interface TekkLied {
+  available: boolean;
+  pythonStatus(): Promise<{ python: string | null; demucs: boolean; version: string; meldung: string }>;
+  /** Fenster als WAV-Bytes rein, Stems als WAV-Bytes raus (vox null, wenn leiser als −32 dB). */
+  stems(anfrage: { fenster: { id: string; bytes: number[] }[] }): Promise<{
+    fenster: { id: string; melo: number[]; vox: number[] | null; voxDb: number }[];
+  }>;
+  onFortschritt(cb: (text: string) => void): () => void;
+}
+
+export function tekkLied(): TekkLied | undefined {
+  const w = globalThis as unknown as { tekkLied?: TekkLied };
+  return w.tekkLied?.available ? w.tekkLied : undefined;
+}
