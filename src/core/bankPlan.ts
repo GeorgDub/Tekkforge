@@ -39,6 +39,8 @@ export interface ProjektSample {
   chunks?: 2;
   /** Melo-Loops: Onset/Bass je 16tel-Step (64 Werte) fuer melo-passende Steps */
   raster?: MeloRaster;
+  /** Lied-Kuerzel, wenn das Sample aus einer Lied-Analyse stammt (Multi-Select-Zuordnung) */
+  lied?: string;
 }
 export interface Projekt {
   name: string;
@@ -122,7 +124,9 @@ export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
   const basis = sauberName(e.stem);
   const oneshot = (pcm: Float32Array): Teil => ({ name: basis, pcm: peakNormalize(fades(trimme(pcm), 0.002, 0.01), 0.95), kind: "oneshot", takte: 0 });
   if (e.sekunden < LANG_AB || !LOOP_ROLLEN.includes(e.rolle)) return { teile: [oneshot(e.pcm)] };
-  let y = e.rolle === "melo" ? e.pcm : trimme(e.pcm, 45);
+  // Melo- und Vocal-Fenster sind schon taktgenau geschnitten — ein Silence-Trim
+  // wuerde das 8-Takt-Raster verschieben und Segmente aus der Abdeckung kegeln
+  let y = e.rolle === "melo" || e.rolle === "vox" ? e.pcm : trimme(e.pcm, 45);
   let { takte, abweichung } = taktPassung(y.length / SR, bpm);
   if (abweichung > TAKT_TOLERANZ) {
     // Melos, die das Bank-Raster verfehlen, laufen sonst als One-Shot asynchron —
@@ -171,19 +175,39 @@ export function waehleVolumes(eintraege: ScanEintrag[], bpm: number, budgetSekun
     (gesehen.has(e.familie) ? zweite : erste).push(e);
     gesehen.add(e.familie);
   }
+  // Vocals fressen sonst mit ihrem Punkte-Bonus das ganze Budget der ersten
+  // Volume (vocal-lastiges Lied -> keine Melos/Drums -> null Patterns): je
+  // Scheibe hoechstens ~45 % Vox (das erste Vocal darf immer), der Rest kommt
+  // in eigene Folge-Scheiben.
+  const voxDeckel = budgetSekunden * 0.45;
   const scheiben: ScanEintrag[][] = [];
   let akt: ScanEintrag[] = [];
   let summe = 0;
-  for (const e of [...erste, ...zweite]) {
-    if (summe + e.sekunden > budgetSekunden && akt.length) {
-      scheiben.push(akt);
-      akt = [];
-      summe = 0;
+  let voxSumme = 0;
+  const warten: ScanEintrag[] = [];
+  const schliesse = (): void => {
+    if (!akt.length) return;
+    scheiben.push(akt);
+    akt = [];
+    summe = 0;
+    voxSumme = 0;
+  };
+  const packe = (liste: ScanEintrag[], voxDeckeln: boolean): void => {
+    for (const e of liste) {
+      if (voxDeckeln && e.rolle === "vox" && voxSumme > 0 && voxSumme + e.sekunden > voxDeckel) {
+        warten.push(e);
+        continue;
+      }
+      if (summe + e.sekunden > budgetSekunden && akt.length) schliesse();
+      akt.push(e);
+      summe += e.sekunden;
+      if (e.rolle === "vox") voxSumme += e.sekunden;
     }
-    akt.push(e);
-    summe += e.sekunden;
-  }
-  if (akt.length) scheiben.push(akt);
+  };
+  packe([...erste, ...zweite], true);
+  schliesse();
+  packe(warten, false);
+  schliesse();
   return scheiben;
 }
 
@@ -243,6 +267,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
         gruppe: t.kind === "loop" ? `${e.rolle}:${e.familie}` : e.rolle,
         ...(t.chunk !== undefined ? { chunk: t.chunk, chunks: 2 as const } : {}),
         ...(e.rolle === "melo" && t.kind === "loop" ? { raster: meloRaster(t.pcm, SR, t.takte) } : {}),
+        ...(e.lied ? { lied: e.lied } : {}),
       });
       nr++;
     }

@@ -9,6 +9,8 @@ import { baueRezept, baueProMelo, baueAufbau, baueProMeloAufbau, alsAllPat, alsP
 import { parseElectribeAllPatBank, parseElectribePattern } from "../src/core/electribeImport";
 import { e2PatternRefToBankNumber } from "../src/core/e2sPatternSampleLink";
 import { voxSegmentEintrag } from "../src/core/generatorSession";
+import { voxPaare } from "../src/core/patternGen";
+import { E2S_ALLPAT_PREFIX_SIZE, E2S_BODY_SIZE, PATTERN_CHAIN_TO_OFF } from "../src/core/e2sExport";
 
 const KORG3 = path.resolve("examples/e2s/korg3");
 const eingaben = fs
@@ -196,6 +198,30 @@ describe("patternGen", () => {
     // VRS-Extras haengen hoechstens an der LETZTEN Kette
     const vrsIdx = patterns.map((p, i) => (/ VRS\d+$/.test(p.name) ? i : -1)).filter((i) => i >= 0);
     for (const i of vrsIdx) expect(i).toBeGreaterThan(dropIdx[dropIdx.length - 1]);
+  });
+  it("alsAllPat: Ketten ueber Slot 250 werden gekappt statt Selbstschleife", () => {
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv, { startSlot: 248 });
+    expect(patterns.length).toBeGreaterThanOrEqual(4);
+    const buf = new Uint8Array(alsAllPat(patterns, 248));
+    // Slot 250 (Index 249) darf nicht auf sich selbst oder ueber 250 zeigen —
+    // chainTo als u16 LE direkt aus dem Pattern-Body gelesen
+    const off = E2S_ALLPAT_PREFIX_SIZE + 249 * E2S_BODY_SIZE + PATTERN_CHAIN_TO_OFF;
+    const chainTo = buf[off] | (buf[off + 1] << 8);
+    expect(chainTo).toBe(0);
+  });
+  it("voxPaare: nur Paare des eigenen Lieds; fremdes Lied ohne Vocals bekommt keine", () => {
+    const frames = Math.round(8 * (240 / 180) * 44100);
+    const pcmVon = (f: number) => new Float32Array(frames).map((_, i) => Math.sin(i / f) * 0.5);
+    const voxA = [1, 2].map((n) => ({ ...voxSegmentEintrag("LiedA", n, pcmVon(20 + n)), lied: "LiedA" }));
+    const voxB = [1].map((n) => ({ ...voxSegmentEintrag("LiedB", n, pcmVon(30)), lied: "LiedB" }));
+    const eintr = scanne(eingaben).eintraege.map((e) => ({ ...e, lied: "LiedB" }));
+    const { projekt: pv } = planeBank(eintr.concat(voxA, voxB), { name: "zwei", bpm: 180, bankZeit: "x" });
+    const meloB = pv.samples.find((s) => s.rolle === "melo" && s.kind === "loop")!;
+    expect(meloB.lied).toBe("LiedB");
+    const paareB = voxPaare(pv, meloB.name);
+    expect(paareB.length).toBe(1);
+    expect(paareB[0].name.startsWith("LiedB")).toBe(true);
   });
   it("golden: gleiches Rezept → gleiche Bytes", () => {
     const r = regelRezept(projekt, { modus: "miniset" });

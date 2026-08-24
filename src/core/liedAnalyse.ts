@@ -114,9 +114,20 @@ export function analysiereLied(
       if (![...gewaehlt.values()].includes(i)) gewaehlt.set(`PART${part++}`, i);
     }
   }
+  // Ein normalisierter Puffer je Segment — Fenster und Segmente teilen ihn
+  // (sonst haelt eine 5-Minuten-Analyse ueber 50 MB an Doppelkopien)
+  const norm = new Map<number, Float32Array>();
+  const normFuer = (i: number): Float32Array => {
+    let p = norm.get(i);
+    if (!p) {
+      p = peakNormalize(segs[i], 0.95);
+      norm.set(i, p);
+    }
+    return p;
+  };
   const fenster: LiedFenster[] = [...gewaehlt.entries()]
     .sort((a, b) => a[1] - b[1])
-    .map(([label, i]) => ({ label, startSek: starts[i] / sr, pcm: peakNormalize(segs[i], 0.95), pegelDb: pegel[i], index: i }));
-  const segmente: LiedSegment[] = hoerbar.map((i) => ({ index: i, startSek: starts[i] / sr, pcm: peakNormalize(segs[i], 0.95), pegelDb: pegel[i] }));
+    .map(([label, i]) => ({ label, startSek: starts[i] / sr, pcm: normFuer(i), pegelDb: pegel[i], index: i }));
+  const segmente: LiedSegment[] = hoerbar.map((i) => ({ index: i, startSek: starts[i] / sr, pcm: normFuer(i), pegelDb: pegel[i] }));
   return { bpm, k, rate, offsetSek, fenster, segmente };
 }

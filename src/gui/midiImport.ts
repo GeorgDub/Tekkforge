@@ -222,17 +222,30 @@ function rollMausZieht(ev: MouseEvent): void {
   rollZeichnen();
 }
 
+/** Nach einem Zug die Abwahl-Markierung mitnehmen — der Key traegt Tick/Note. */
+function zugAbschliessen(): void {
+  const lied = z.lied;
+  if (!zug || !lied) return;
+  const alt = `${z.rollSpur}:${zug.tick0}:${zug.note0}`;
+  if (z.weg.has(alt)) {
+    z.weg.delete(alt);
+    z.weg.add(notenKey(z.rollSpur, zug.note));
+  }
+  lied.spuren[z.rollSpur].noten.sort((a, b) => a.tick - b.tick || a.note - b.note);
+  rollZeichnen();
+}
+
 function rollMausHoch(): void {
   const lied = z.lied;
   if (!zug || !lied) return;
   const treffer = zug.note;
   const bewegt = zug.bewegt;
-  zug = null;
   if (bewegt) {
-    lied.spuren[z.rollSpur].noten.sort((a, b) => a.tick - b.tick || a.note - b.note);
-    rollZeichnen();
+    zugAbschliessen();
+    zug = null;
     return;
   }
+  zug = null;
   const key = notenKey(z.rollSpur, treffer);
   if (z.weg.has(key)) z.weg.delete(key);
   else z.weg.add(key);
@@ -243,14 +256,9 @@ function rollMausHoch(): void {
 
 /** Maus verlaesst den Roll: Zug beenden, aber nie als Klick werten. */
 function rollMausWeg(): void {
-  const lied = z.lied;
-  if (!zug || !lied) return;
-  const bewegt = zug.bewegt;
+  if (!zug || !z.lied) return;
+  if (zug.bewegt) zugAbschliessen();
   zug = null;
-  if (bewegt) {
-    lied.spuren[z.rollSpur].noten.sort((a, b) => a.tick - b.tick || a.note - b.note);
-    rollZeichnen();
-  }
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────

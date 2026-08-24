@@ -61,7 +61,7 @@ interface Zustand {
   lieder: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean; dateien: string[]; zeile: string }[];
   liedLaeuft: boolean;
   liedStatus: string;
-  /** Aufbau-Kette: identische Steps in allen Patterns, entmutet wird stufenweise */
+  /** Aufbau-Kette: Steps ueberall gesetzt, entmutet wird stufenweise; Drop kickt haerter, Vocal-Paare wandern ueber die Kette */
   aufbau: boolean;
   /** eigene Drums (tekk/Ordner) statt aus dem Lied geschnittener Kick/Snare/Hat */
   liedDrumsEigene: boolean;
@@ -231,7 +231,7 @@ function render(): void {
         <label><input type="radio" name="genModus" value="miniset" /> Mini-Set (6)</label>
         <label><input type="radio" name="genModus" value="promelo" /> Pro Melo (${melos.length})</label>
       </div>
-      <div class="zeile"><label title="Alle Patterns tragen dieselben vollen Steps; entmutet wird stufenweise (Melo+Snare → Hats → … → Drop mit Kick). Spielweise: am Geraet Parts entmuten.">
+      <div class="zeile"><label title="Steps in allen Patterns gesetzt; entmutet wird stufenweise (Melo+Snare → Hats → … → Drop mit Kick). Aufbau leicht gedimmt, Snare-Fill vor dem Drop, Drop-Kicks auf Maximum; die Vocal-Paare des Lieds wandern ueber die Kette (AUF → DROP → VRS). Spielweise: am Geraet Parts entmuten.">
         <input id="genAufbau" type="checkbox" ${z.aufbau ? "checked" : ""} /> Aufbau-Kette (Mute/Unmute-Spielweise)</label>
       </div>
       <div class="zeile"><label for="genMelo">Melodie</label>
@@ -480,7 +480,7 @@ function fensterEintrag(liedName: string, label: string, pcm: Float32Array): Sca
   const stem = `${kurz} ${label}`;
   return {
     datei: `${stem}.wav`, stem, rolle: "melo", familie: familie(stem), sekunden: pcm.length / 44100,
-    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName,
   };
 }
 
@@ -493,7 +493,7 @@ function drumEintrag(liedName: string, t: DrumTreffer, nr: number): ScanEintrag 
   const stem = `${kurz} ${label}`;
   return {
     datei: `${stem}.wav`, stem, rolle: t.rolle, familie: familie(stem), sekunden: t.pcm.length / 44100,
-    rmsDb: t.rmsDb, peak: peakVon(t.pcm), pcm: t.pcm, sampleRate: 44100,
+    rmsDb: t.rmsDb, peak: peakVon(t.pcm), pcm: t.pcm, sampleRate: 44100, lied: liedName,
   };
 }
 

@@ -25,6 +25,8 @@ export interface ScanEintrag {
   pcm: Float32Array;
   sampleRate: number;
   hinweis?: string;
+  /** Lied-Kuerzel, wenn der Eintrag aus einer Lied-Analyse stammt */
+  lied?: string;
 }
 
 export const LANG_AB = 2.5;

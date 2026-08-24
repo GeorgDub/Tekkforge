@@ -399,8 +399,10 @@ function registerLiedIpc(win) {
       // Datei als cwd stirbt unter Windows mit ENOENT, obwohl Python da ist
       // (so fiel der Demucs-Pfad im Installer 0.4.0/0.5.0 aus; unverpackt lief er).
       // stems.py braucht kein Arbeitsverzeichnis, alle Pfade sind absolut.
+      // Vocal-Vollabdeckung schickt ALLE 8-Takt-Abschnitte durch Demucs —
+      // Timeout nach Segmentzahl skalieren (90 s je Abschnitt, mindestens 10 min)
       const { out } = await laufen(pythonPfad(), [skript, anfragePfad], {
-        timeoutMs: 600000,
+        timeoutMs: Math.max(600000, liste.length * 90000),
         onStderr: (t) => {
           if (win && !win.isDestroyed()) win.webContents.send("lied:fortschritt", t.trim());
         },

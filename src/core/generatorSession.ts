@@ -85,7 +85,7 @@ export function voxSegmentEintrag(liedName: string, nr: number, pcm: Float32Arra
   const stem = `${kurz} ${label}`;
   return {
     datei: `${stem}.wav`, stem, rolle: "vox", familie: stem.toLowerCase(), sekunden: pcm.length / 44100,
-    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName,
   };
 }
 
@@ -184,7 +184,8 @@ export function erzeuge(
       hinweise,
       warumSo:
         rezept.begruendung +
-        ` Aufbau-Kette: ${patterns.length} Patterns, alle Steps ueberall gesetzt, entmutet wird stufenweise — Kick erst im Drop; am Geraet frei weiter entmuten.`,
+        ` Aufbau-Kette: ${patterns.length} Patterns, Steps ueberall gesetzt, entmutet wird stufenweise — Kick erst im Drop; ` +
+        `Aufbau leicht gedimmt, Snare-Fill vor dem Drop, Drop-Kicks auf Maximum; Vocal-Paare wandern ueber die Kette. Am Geraet frei weiter entmuten.`,
       startSlot: start,
     };
   }

@@ -12,11 +12,18 @@ Themes unter „Einstellungen"):
    oder `.e2sallpat` + `.all` (Bank + Sample-Bank). Der Sample-Pool ist eine kleine
    Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken (~24 MB).
 2. **ESX-Converter** — ein ESX-1-All-Backup (`.esx`) in importfertige E2-Dateien wandeln.
-3. **MIDI zu Korg** — SMF-Dateien (.mid/.kar/.rmi) laden, Spuren den Parts zuordnen,
-   Noten im Piano Roll sichten/abwaehlen, als 4-Takt-Patterns in den Editor uebernehmen.
+3. **MIDI zu Korg** — SMF-Dateien (.mid/.kar/.rmi) ODER Audio laden (Audio wird
+   einstimmig zu Noten transkribiert), Spuren den Parts zuordnen, Noten im Piano
+   Roll sichten/abwaehlen/verschieben, als 4-Takt-Patterns in den Editor uebernehmen.
 4. **Generator** — Bank + Patterns aus einem Sample-Ordner oder direkt aus einem Lied
    (Demucs-Stems, Drum-Schnitt, Tonart/Camelot-Anzeige); Lieder auch per
    YouTube-/SoundCloud-Link holen (braucht `pip install yt-dlp imageio-ffmpeg`).
+   Mit Demucs deckt die Aufbau-Kette die **ganze Vocalspur** ab: alle hoerbaren
+   8-Takt-Abschnitte werden getrennt, die Vocal-Paare wandern ueber die Kette
+   (AUF → DROP → VRS-Patterns), der Drop kickt hoerbar haerter als der Aufbau.
+
+Dazu: Hilfe-Chat-Assistent auf dem Start-Tab (nutzt den API-Key aus den
+Einstellungen) und GitHub-Update-Check unter „Einstellungen → Über TekkForge".
 
 Beim Speichern auf Platte/SD sichert die App den alten Stand automatisch nach
 `backups/` (20 Staende je Datei; Manager unter „Einstellungen").

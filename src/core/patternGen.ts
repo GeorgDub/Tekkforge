@@ -67,8 +67,10 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   // Vocal-Paar (4-Takt-Chunks A/B): A auf Part 15, B auf Part 16 — Alternate
   // spielt beide als durchgehende 8 Takte, einzeln entmuten geht am Geraet
   const versRoh = byName(t.vers);
+  // Partner strukturell ueber gruppe+chunk (wie haelfte()) — Namens-Chirurgie
+  // bricht, sobald eindeutig() bei Kollisionen umbenennt
   const versB = versRoh?.chunk === 0 && versRoh.takte === 4
-    ? projekt.samples.find((x) => x.chunk === 1 && x.name === versRoh.name.replace(/ A$/, " B"))
+    ? projekt.samples.find((x) => x.gruppe === versRoh.gruppe && x.chunk === 1)
     : undefined;
   const vers = versB ? versRoh : haelfte(versRoh);
   const stab = byName(t.stab);
@@ -185,6 +187,12 @@ export function voxPaare(projekt: Projekt, meloName?: string): ProjektSample[] {
   const alle = projekt.samples
     .filter((s) => s.rolle === "vox" && s.kind === "loop" && s.chunk === 0 && s.takte === 4)
     .sort((a, b) => a.nr - b.nr);
+  // Lied-Zuordnung strukturell (sample.lied), NIE ueber Namen mischen: bei
+  // Multi-Select bekommt jedes Lied nur die eigenen Vocals — ein Lied ohne
+  // eigene bleibt instrumental, statt fremde Verse zu singen
+  const melo = meloName ? projekt.samples.find((s) => s.name === meloName) : undefined;
+  if (melo?.lied && alle.some((s) => s.lied)) return alle.filter((s) => s.lied === melo.lied);
+  // Ordner-Scans ohne Lied-Info: Namensstamm als Naeherung, sonst alle
   const stamm = meloName?.split(/\s+/)[0]?.toLowerCase();
   const eigene = stamm ? alle.filter((s) => s.name.toLowerCase().startsWith(stamm)) : [];
   return eigene.length ? eigene : alle;
@@ -320,11 +328,16 @@ export function baueProMelo(rezepte: Rezept[], projekt: Projekt): { patterns: E2
 
 const LEER: E2PatternInput = { name: "-", bpm: 120, stepLength: 16, parts: [] };
 
-/** 250-Slot-Bank: Patterns ab `startSlot` (1-basiert), Rest leere Init-Patterns. */
+/**
+ * 250-Slot-Bank: Patterns ab `startSlot` (1-basiert), Rest leere Init-Patterns.
+ * Ketten, die ueber Slot 250 hinauszeigen, werden gekappt (chainTo 0) — sonst
+ * klemmt der Export chainTo auf 250 und Slot 250 verkettet sich mit sich selbst
+ * (Endlosschleife am Geraet).
+ */
 export function alsAllPat(patterns: E2PatternInput[], startSlot = 1): ArrayBuffer {
   const alle: E2PatternInput[] = Array.from({ length: 250 }, () => LEER);
   patterns.forEach((p, i) => {
-    if (startSlot - 1 + i < 250) alle[startSlot - 1 + i] = p;
+    if (startSlot - 1 + i < 250) alle[startSlot - 1 + i] = p.chainTo && p.chainTo > 250 ? { ...p, chainTo: 0 } : p;
   });
   return buildE2AllPatFile(alle);
 }

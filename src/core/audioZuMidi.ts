@@ -6,6 +6,7 @@
  * unveraendert durch Piano Roll und Pattern-Bau des MIDI-Wizards.
  */
 import type { SmfNote, SmfLied } from "./midiImport";
+import { polyPhaseResample } from "./audioProcessor";
 
 export const AUDIO_TPQ = 480;
 const T16 = AUDIO_TPQ / 4;
@@ -57,17 +58,29 @@ function f0Schaetzen(fenster: Float32Array, sr: number, minHz: number, maxHz: nu
       break;
     }
   }
-  const a = r[wahl - 1] ?? r[wahl];
-  const b = r[wahl];
-  const c = r[wahl + 1] ?? r[wahl];
-  const nenner = a - 2 * b + c;
-  const delta = nenner ? (a - c) / (2 * nenner) : 0;
-  const lagFein = wahl + (Math.abs(delta) < 1 ? delta : 0);
-  return { hz: sr / lagFein, klarheit: r[wahl] };
+  // Verfeinerung nur mit ECHTEN Nachbarn: ausserhalb [minLag, maxLag] steht in
+  // der Float32Array eine unberechnete 0, kein undefined — die wuerde die
+  // Parabel an den Raendern um bis zu einen halben Lag verziehen
+  let delta = 0;
+  if (wahl > minLag && wahl < maxLag) {
+    const a = r[wahl - 1];
+    const b = r[wahl];
+    const c = r[wahl + 1];
+    const nenner = a - 2 * b + c;
+    const roh = nenner ? (a - c) / (2 * nenner) : 0;
+    if (Math.abs(roh) < 1) delta = roh;
+  }
+  return { hz: sr / (wahl + delta), klarheit: r[wahl] };
 }
 
 /** Mono-PCM → Notenliste im 16tel-Raster (Ticks: AUDIO_TPQ pro Viertel). */
 export function transkribiereAudio(pcm: Float32Array, sr: number, opts: TranskriptionOpts): SmfNote[] {
+  // Runter auf 22,05 kHz: der Suchbereich endet bei ~1 kHz, und die
+  // Autokorrelation wird dadurch rund vierfach billiger (UI bleibt fluessig)
+  if (sr > 24000) {
+    pcm = polyPhaseResample(pcm, sr, 22050, 1);
+    sr = 22050;
+  }
   const minHz = opts.minHz ?? 55;
   const maxHz = opts.maxHz ?? 1050;
   const klarheitMin = opts.klarheit ?? 0.5;

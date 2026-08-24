@@ -113,6 +113,35 @@ describe("bankPlan", () => {
     const vol = waehleVolumes(eintraege, 180, dauer + 0.5);
     expect(vol[0][0].rolle).toBe("vox");
   });
+  it("waehleVolumes: Vocals fressen hoechstens ~45 % des Budgets — Melo/Drums bleiben in Volume 1", () => {
+    const sr = 44100;
+    const frames = Math.round(8 * (240 / 180) * sr);
+    // 20 Vocal-Segmente (je ~10,7 s) + eine Melo + eine Kick bei knappem Budget
+    const voxE = Array.from({ length: 20 }, (_, n) => {
+      const pcm = new Float32Array(frames).map((_, i) => Math.sin(i / (15 + n)) * 0.5);
+      return { datei: `L V${n + 1}.wav`, stem: `L V${n + 1}`, rolle: "vox" as const, familie: `l v${n + 1}`, sekunden: frames / sr, rmsDb: -12, peak: 0.5, pcm, sampleRate: sr };
+    });
+    const { eintraege } = scanne(eingaben(["BaReTT MeLo.wav", "Kick 4.wav"]));
+    const budget = 60;
+    const vol = waehleVolumes(eintraege.concat(voxE), 180, budget);
+    const erste = vol[0];
+    const voxSek = erste.filter((e) => e.rolle === "vox").reduce((s, e) => s + e.sekunden, 0);
+    expect(voxSek).toBeLessThanOrEqual(budget * 0.5);
+    expect(erste.some((e) => e.rolle === "melo")).toBe(true);
+    expect(erste.some((e) => e.rolle === "kick")).toBe(true);
+  });
+  it("bereiteAuf: Vocal-Segment mit stillen Raendern behaelt sein 8-Takt-Fenster (kein Trim)", () => {
+    const sr = 44100;
+    const frames = Math.round(8 * (240 / 180) * sr);
+    const taktFrames = Math.round((240 / 180) * sr);
+    // Vocals nur in den Takten 2-7 — Takt 1 und 8 sind still
+    const pcm = new Float32Array(frames);
+    for (let i = taktFrames; i < 7 * taktFrames; i++) pcm[i] = Math.sin(i / 18) * 0.5;
+    const { eintraege } = scanne([{ name: "GZUZ V03.wav", pcm, sampleRate: sr }], { "GZUZ V03.wav": "vox" });
+    const t = bereiteAuf(eintraege[0], 180).teile;
+    expect(t.map((x) => x.takte)).toEqual([4, 4]);
+    expect(t[0].pcm.length + t[1].pcm.length).toBe(frames);
+  });
   it("waehleVolumes: Budget teilt in Scheiben, nichts geht verloren", () => {
     const { eintraege } = scanne(eingaben(alle));
     const vol = waehleVolumes(eintraege, 180, 30);
