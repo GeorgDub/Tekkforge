@@ -25,7 +25,7 @@ import { merkeLetzteDatei } from "./start";
 import { tekkUrl } from "./tekkUrl";
 import { tonartErkennen } from "../core/keyAnalyse";
 import { planeBank, type Projekt } from "../core/bankPlan";
-import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import {
   type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
 } from "../core/projektStatus";
@@ -70,13 +70,24 @@ interface Zustand {
   urlLaeuft: boolean;
   /** Per URL geholtes Lied — render() leert File-Inputs, darum liegt die Datei hier. */
   urlDatei: File | null;
+  /** Aufgeteilte Multi-Lied-Sets (je eigene .all + .e2sallpat), wenn 250 Slots nicht reichen. */
+  sets: {
+    name: string;
+    lieder: string[];
+    bank: Uint8Array;
+    bankName: string;
+    pat: Uint8Array;
+    patName: string;
+    patterns: number;
+    samples: number;
+  }[];
 }
 
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
   python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false,
-  url: null, urlLaeuft: false, urlDatei: null,
+  url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
 
@@ -260,7 +271,20 @@ function render(): void {
         .join("")}</div>`
     : `<div class="fortschritt">Erst Verzeichnis waehlen und Bank bauen.</div>`;
   const sperre = geraetSperrgrund(z.projekt, z.marker, panelBridge.midi.ready);
-  const ergebnis = z.ergebnis
+  const setAnsicht = z.sets.length
+    ? `
+      <div class="zeile"><b>${z.sets.length} Set(s)</b> — je Set erst die .all importieren, dann die .e2sallpat
+        ${fsb ? `<button id="genSetsSd" class="primary">alle auf SD kopieren</button>` : ""}</div>
+      <div class="liste">${z.sets
+        .map(
+          (s, i) =>
+            `<div><span class="takte">${i + 1}</span><span class="rolle">${escapeHtml(s.name)}</span><span style="flex:1">${escapeHtml(s.lieder.join(" + "))}</span><span class="fortschritt">${s.patterns} Patterns · ${s.samples} Samples</span><button class="genSetAll" data-set="${i}" title="${escapeHtml(s.bankName)}">⬇ .all</button><button class="genSetPat" data-set="${i}" title="${escapeHtml(s.patName)}">⬇ .e2sallpat</button></div>`,
+        )
+        .join("")}</div>`
+    : "";
+  const ergebnis = z.sets.length
+    ? setAnsicht
+    : z.ergebnis
     ? `
       <div class="zeile"><b>${z.ergebnis.patterns.length} Pattern(s)</b> · ${escapeHtml(z.ergebnis.dateiname)}
         <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button>
@@ -341,6 +365,19 @@ function verdrahte(): void {
   knopf("genLiedLos", () => void liedAnalysieren());
   knopf("genLiedAlles", () => void alleAusLied());
   knopf("genUrlHolen", () => void urlHolen());
+  knopf("genSetsSd", () => void aufSd());
+  for (const b of document.querySelectorAll<HTMLButtonElement>(".genSetAll")) {
+    b.addEventListener("click", () => {
+      const s = z.sets[Number(b.dataset.set)];
+      if (s) download(s.bank, s.bankName, "application/octet-stream");
+    });
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>(".genSetPat")) {
+    b.addEventListener("click", () => {
+      const s = z.sets[Number(b.dataset.set)];
+      if (s) download(s.pat, s.patName, "application/octet-stream");
+    });
+  }
   document.getElementById("genLiedEigene")?.addEventListener("change", (e) => {
     z.liedDrumsEigene = (e.target as HTMLInputElement).checked;
   });
@@ -588,6 +625,7 @@ async function liedAnalysieren(): Promise<void> {
     z.bank = null;
     z.ergebnis = null;
     z.pool = [];
+    z.sets = [];
     z.lieder = neueLieder;
     z.liedStatus =
       (gewaehlt.length > 1 ? `${gewaehlt.length} Lieder, gemeinsames Ziel ${zielBpm} BPM · ` : "") +
@@ -614,11 +652,76 @@ async function alleAusLied(): Promise<void> {
   if (z.lieder.length > 1) {
     const radio = document.querySelector<HTMLInputElement>('input[name=genModus][value="promelo"]');
     if (radio) radio.checked = true;
+    // 250-Slot-Deckel: je Melo-Kette entstehen bis zu 6 Patterns — reisst die
+    // Schaetzung den Deckel, VOR dem Generieren fragen und an Liedgrenzen teilen.
+    const melosJeLied = z.lieder.map((l) => z.eintraege.filter((e) => l.dateien.includes(e.datei) && e.rolle === "melo").length);
+    const gruppen = teileLieder(melosJeLied, 6, 250);
+    if (gruppen.length > 1) {
+      const erste = gruppen[0];
+      const geschaetzt = gruppen.reduce((a, g) => a + g.patterns, 0);
+      const ja = confirm(
+        `Rund ${geschaetzt} Patterns aus ${z.lieder.length} Liedern — mehr als 250 passen nicht in eine .e2sallpat.\n\n` +
+          `Bis Lied ${erste.bisLied + 1} („${z.lieder[erste.bisLied].name}") in die erste Datei packen und die uebrigen ` +
+          `${z.lieder.length - erste.bisLied - 1} Lieder auf ${gruppen.length - 1} weitere(s) Set(s) verteilen (je eigene .all + .e2sallpat)?\n\n` +
+          `Abbrechen = alles in eine Datei, nur die ersten 250 Slots werden gefuellt.`,
+      );
+      if (ja) {
+        await setsBauen(gruppen);
+        return;
+      }
+    }
   }
   await generieren();
+  const gedeckelt = (z.ergebnis?.patterns.length ?? 0) > 250 ? " — Achtung: nur die ersten 250 landen in der Datei" : "";
   z.liedStatus = `${z.liedStatus.replace(/ — jetzt „Bank bauen"$/, "")} — Bank gebaut, ${z.ergebnis?.patterns.length ?? 0} Pattern(s) erzeugt${
     z.lieder.length > 1 ? ` (Pro Melo ueber ${z.lieder.length} Lieder in einer Datei)` : ""
-  }`;
+  }${gedeckelt}`;
+  render();
+}
+
+/**
+ * Multi-Lied-Split: je Gruppe eine eigene Bank (.all) + Pattern-Datei
+ * (.e2sallpat), Rezepte per Regel-Planer (kein KI-Aufruf je Gruppe).
+ */
+async function setsBauen(gruppen: LiedGruppe[]): Promise<void> {
+  const bpm = Number(($("genBpm") as HTMLInputElement | null)?.value) || z.zusammen?.tempoVorschlag || 180;
+  const tekkGewuenscht = (document.getElementById("genTekk") as HTMLInputElement | null)?.checked ?? false;
+  const tekk = tekkGewuenscht ? await ladeTekkDrums() : null;
+  const basis = z.ordner.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 10) || "multi";
+  z.sets = [];
+  const probleme: string[] = [];
+  for (let g = 0; g < gruppen.length; g++) {
+    const gruppe = gruppen[g];
+    const lieder = z.lieder.slice(gruppe.vonLied, gruppe.bisLied + 1);
+    const dateien = new Set(lieder.flatMap((l) => l.dateien));
+    const eintraege = z.eintraege.filter((e) => dateien.has(e.datei));
+    const name = `${basis}${g + 1}`;
+    z.liedStatus = `Set ${g + 1}/${gruppen.length} („${name}"): Bank + Patterns …`;
+    render();
+    await new Promise((r) => setTimeout(r, 0));
+    try {
+      const { projekt, bank } = planeBank(eintraege, { name, bpm, volume: 1, tekkDrumsBank: tekk ?? undefined });
+      const ergebnis = erzeuge(projekt, { modus: "promelo", bpm, aufbau: z.aufbau, startSlot: 1 });
+      z.sets.push({
+        name,
+        lieder: lieder.map((l) => l.name),
+        bank: new Uint8Array(bank),
+        bankName: `${name}.all`,
+        pat: ergebnis.bytes,
+        patName: ergebnis.dateiname,
+        patterns: ergebnis.patterns.length,
+        samples: projekt.samples.length,
+      });
+    } catch (e) {
+      probleme.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  z.ergebnis = null;
+  z.projekt = null;
+  z.bank = null;
+  z.liedStatus = `${z.sets.length} Set(s) gebaut (${z.sets.map((s) => `${s.name}: ${s.lieder.join("+")} → ${s.patterns} Patterns`).join(" · ")})${
+    probleme.length ? ` — Probleme: ${probleme.join("; ")}` : ""
+  } — je Set erst die .all importieren, dann die .e2sallpat`;
   render();
 }
 
@@ -636,6 +739,7 @@ async function bankBauen(): Promise<void> {
     z.bank = new Uint8Array(bank);
     z.pool = importSamplesFromAll(z.bank);
     z.ergebnis = null;
+    z.sets = [];
     z.meldung = "";
     z.sendeStatus = "";
     if (warnungen.length) alert("Hinweise beim Bankbau:\n" + warnungen.join("\n"));
@@ -672,7 +776,7 @@ async function projektSpeichern(): Promise<void> {
 
 async function aufSd(): Promise<void> {
   const fsb = tekkFs();
-  if (!fsb || !z.projekt) return;
+  if (!fsb || (!z.projekt && !z.sets.length)) return;
   let medien: { pfad: string; label: string }[] = [];
   try {
     medien = await fsb.wechselmedien();
@@ -692,9 +796,16 @@ async function aufSd(): Promise<void> {
     wahl = medien[i];
   }
   try {
-    const res = await fsb.schreibe(sdZielpfad(wahl.pfad), projektDateien());
-    z.projekt.status = "exportiert";
-    z.meldung = `Auf SD kopiert: ${res.ordner} — am Geraet erst die .all importieren, dann „als geladen markieren"`;
+    // Sets: alle .all/.e2sallpat-Paare; sonst Projekt + (falls erzeugt) die Pattern-Datei
+    const dateien = z.sets.length
+      ? z.sets.flatMap((s) => [
+          { name: s.bankName, bytes: s.bank },
+          { name: s.patName, bytes: s.pat },
+        ])
+      : [...projektDateien(), ...(z.ergebnis ? [{ name: z.ergebnis.dateiname, bytes: z.ergebnis.bytes }] : [])];
+    const res = await fsb.schreibe(sdZielpfad(wahl.pfad), dateien);
+    if (z.projekt) z.projekt.status = "exportiert";
+    z.meldung = `Auf SD kopiert: ${res.ordner} (${res.geschrieben.length} Datei(en)) — am Geraet erst die .all importieren, dann die .e2sallpat`;
   } catch (e) {
     z.meldung = "SD-Kopie fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
   }

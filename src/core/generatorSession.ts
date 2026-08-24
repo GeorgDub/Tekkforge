@@ -74,6 +74,36 @@ export function eindeutigeKuerzel(dateinamen: readonly string[]): string[] {
   });
 }
 
+export interface LiedGruppe {
+  vonLied: number;
+  bisLied: number;
+  /** geschaetzte Patternzahl der Gruppe */
+  patterns: number;
+}
+
+/**
+ * Teilt Lieder in Gruppen, deren geschaetzte Patternzahl (Melos x
+ * patternsProMelo) je Gruppe hoechstens max betraegt — Schnitt immer an der
+ * Liedgrenze. Ein einzelnes Lied ueber dem Deckel bildet eine eigene Gruppe
+ * (und wird spaeter beim Packen auf 250 gedeckelt).
+ */
+export function teileLieder(melosJeLied: readonly number[], patternsProMelo: number, max: number): LiedGruppe[] {
+  const gruppen: LiedGruppe[] = [];
+  let von = 0;
+  let summe = 0;
+  for (let i = 0; i < melosJeLied.length; i++) {
+    const kosten = melosJeLied[i] * patternsProMelo;
+    if (i > von && summe + kosten > max) {
+      gruppen.push({ vonLied: von, bisLied: i - 1, patterns: summe });
+      von = i;
+      summe = 0;
+    }
+    summe += kosten;
+  }
+  if (von < melosJeLied.length) gruppen.push({ vonLied: von, bisLied: melosJeLied.length - 1, patterns: summe });
+  return gruppen;
+}
+
 export interface Erzeugt {
   modus: Modus;
   rezepte: Rezept[];
