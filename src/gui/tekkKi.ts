@@ -11,6 +11,13 @@ export interface TekkKi {
   /** Modell-ID speichern, Key bleibt. */
   modellSetzen(modell: string): Promise<{ gesetzt: boolean; modell: string; vorschau: string }>;
   rezept(anfrage: { system: string; user: string; schema: object; maxTokens?: number; timeoutMs?: number }): Promise<{ text: string; modell: string; tokens: number }>;
+  /** Hilfe-Chat: freier Text mit Verlauf. */
+  chat(anfrage: {
+    system: string;
+    messages: { role: "user" | "assistant"; content: string }[];
+    maxTokens?: number;
+    timeoutMs?: number;
+  }): Promise<{ text: string; modell: string; tokens: number }>;
 }
 
 export function tekkKi(): TekkKi | undefined {

@@ -5,6 +5,8 @@
 
 import { $ } from "./shared";
 import { dateiMerken, dateienLesen, dateienSchreiben, type DateiArt, type LetzteDatei } from "../core/letzteDateien";
+import { baueChatAnfrage, type ChatEintrag } from "../core/hilfeChat";
+import { tekkKi } from "./tekkKi";
 
 const KEY = "tekkforge.letzteDateien";
 
@@ -22,6 +24,9 @@ interface StartHooks {
 }
 
 let hooks: StartHooks | null = null;
+
+// Hilfe-Chat (Assistent) — Verlauf lebt fuer die Session
+const chat: { verlauf: ChatEintrag[]; laeuft: boolean; fehler: string } = { verlauf: [], laeuft: false, fehler: "" };
 
 function lesen(): LetzteDatei[] {
   try {
@@ -104,6 +109,31 @@ function render(): void {
         }
       </div>
       <div class="card">
+        <h2>Assistent</h2>
+        ${
+          tekkKi()
+            ? `
+        <div id="stChatVerlauf" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+          ${
+            chat.verlauf.length
+              ? chat.verlauf
+                  .map(
+                    (e) =>
+                      `<div class="sub" style="margin:0;white-space:pre-wrap;${e.rolle === "nutzer" ? "opacity:.85" : "border-left:2px solid var(--accent);padding-left:8px"}"><b>${e.rolle === "nutzer" ? "Du" : "KI"}:</b> ${escapeHtml(e.text)}</div>`,
+                  )
+                  .join("")
+              : `<p class="sub" style="margin:0">Fragen zu TekkForge oder zur Electribe — z. B. „Wie kommt eine Bank aufs Gerät?"</p>`
+          }
+        </div>
+        <div class="zeileEinst">
+          <input id="stChatFrage" type="text" placeholder="${chat.laeuft ? "Antwort kommt …" : "Frage stellen …"}" ${chat.laeuft ? "disabled" : ""} style="flex:1" />
+          <button id="stChatLos" class="ghost" ${chat.laeuft ? "disabled" : ""}>Fragen</button>
+        </div>
+        ${chat.fehler ? `<p class="warn" style="margin:6px 0 0">${escapeHtml(chat.fehler)}</p>` : ""}`
+            : `<p class="sub" style="margin:0">Nur in der Desktop-App — der Assistent nutzt den API-Key aus den Einstellungen.</p>`
+        }
+      </div>
+      <div class="card">
         <h2>Gerät &amp; Kompatibilität</h2>
         <div class="startGeraet">
           <div class="geraetIcon">🎛</div>
@@ -119,6 +149,39 @@ function render(): void {
   for (const b of host.querySelectorAll<HTMLButtonElement>("[data-ziel]")) {
     b.addEventListener("click", () => hooks?.oeffne(b.dataset.ziel!));
   }
+  const frage = document.getElementById("stChatFrage") as HTMLInputElement | null;
+  const los = document.getElementById("stChatLos");
+  if (frage && los) {
+    const senden = (): void => {
+      if (frage.value.trim()) void chatFragen(frage.value.trim());
+    };
+    los.addEventListener("click", senden);
+    frage.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") senden();
+    });
+  }
+  const verlaufEl = document.getElementById("stChatVerlauf");
+  if (verlaufEl) verlaufEl.scrollTop = verlaufEl.scrollHeight;
+}
+
+async function chatFragen(text: string): Promise<void> {
+  const ki = tekkKi();
+  if (!ki || chat.laeuft) return;
+  chat.verlauf.push({ rolle: "nutzer", text });
+  chat.laeuft = true;
+  chat.fehler = "";
+  render();
+  try {
+    const anfrage = baueChatAnfrage(chat.verlauf);
+    const res = await ki.chat({ system: anfrage.system, messages: anfrage.messages });
+    chat.verlauf.push({ rolle: "ki", text: res.text.trim() });
+  } catch (e) {
+    const meldung = e instanceof Error ? e.message : String(e);
+    chat.fehler = /API-Key/.test(meldung) ? `${meldung} — Key unter Einstellungen → KI eintragen.` : meldung;
+  } finally {
+    chat.laeuft = false;
+  }
+  render();
 }
 
 export function initStart(h: StartHooks): void {

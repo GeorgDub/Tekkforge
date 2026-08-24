@@ -276,23 +276,23 @@ function registerKiIpc() {
     schreibeSettings(s);
     return keyStatusAus(s);
   });
-  // anfrage: { system, user, schema, maxTokens?, timeoutMs? }
-  ipcMain.handle("ki:rezept", async (_e, anfrage) => {
+  // Gemeinsamer Claude-Aufruf fuer ki:rezept (JSON-Schema) und ki:chat (freier Text)
+  async function kiAufruf(anfrage, { maxTokensStandard, timeoutStandard, messages, extra }) {
     const s = leseSettings();
     if (!s.anthropicApiKey) throw new Error("Kein API-Key gesetzt");
     const Anthropic = require("@anthropic-ai/sdk").default ?? require("@anthropic-ai/sdk");
-    const timeoutMs = Number(anfrage.timeoutMs) > 0 ? Number(anfrage.timeoutMs) : 25_000;
+    const timeoutMs = Number(anfrage.timeoutMs) > 0 ? Number(anfrage.timeoutMs) : timeoutStandard;
     const client = new Anthropic({ apiKey: s.anthropicApiKey, timeout: timeoutMs, maxRetries: 1 });
     const modell = s.kiModell || KI_MODELL_STANDARD;
     try {
       const antwort = await client.beta.messages.create({
         model: modell,
-        max_tokens: Number(anfrage.maxTokens) > 0 ? Number(anfrage.maxTokens) : 4096,
+        max_tokens: Number(anfrage.maxTokens) > 0 ? Number(anfrage.maxTokens) : maxTokensStandard,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         system: String(anfrage.system),
-        messages: [{ role: "user", content: String(anfrage.user) }],
-        output_config: { format: { type: "json_schema", schema: anfrage.schema } },
+        messages,
+        ...extra,
       });
       if (antwort.stop_reason === "refusal") throw new Error("Anfrage wurde vom Modell abgelehnt");
       const text = (antwort.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
@@ -304,7 +304,28 @@ function registerKiIpc() {
       if (err instanceof Anthropic.APIError) throw new Error(`API-Fehler ${err.status}: ${err.message}`);
       throw new Error(err && err.message ? err.message : String(err));
     }
-  });
+  }
+  // anfrage: { system, user, schema, maxTokens?, timeoutMs? }
+  ipcMain.handle("ki:rezept", (_e, anfrage) =>
+    kiAufruf(anfrage, {
+      maxTokensStandard: 4096,
+      timeoutStandard: 25_000,
+      messages: [{ role: "user", content: String(anfrage.user) }],
+      extra: { output_config: { format: { type: "json_schema", schema: anfrage.schema } } },
+    }),
+  );
+  // anfrage: { system, messages: [{ role, content }], maxTokens?, timeoutMs? } — Hilfe-Chat, freier Text
+  ipcMain.handle("ki:chat", (_e, anfrage) =>
+    kiAufruf(anfrage, {
+      maxTokensStandard: 700,
+      timeoutStandard: 60_000,
+      messages: (Array.isArray(anfrage.messages) ? anfrage.messages : []).map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content),
+      })),
+      extra: {},
+    }),
+  );
 }
 
 // ── Lied-Bruecke (Generator-Tab): Python/Demucs-Probe und Stems ueber scripts/stems.py ──

@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld("tekkKi", {
   modellSetzen: (modell) => ipcRenderer.invoke("ki:modellSetzen", modell),
   /** { system, user, schema, maxTokens?, timeoutMs? } → { text, modell, tokens }; wirft bei Fehlern mit deutscher Meldung. */
   rezept: (anfrage) => ipcRenderer.invoke("ki:rezept", anfrage),
+  /** { system, messages, maxTokens?, timeoutMs? } → { text, modell, tokens } — Hilfe-Chat, freier Text. */
+  chat: (anfrage) => ipcRenderer.invoke("ki:chat", anfrage),
 });
 
 // ── Lied-Bruecke fuer den Generator-Tab (Python/Demucs-Probe, Stems) ──
