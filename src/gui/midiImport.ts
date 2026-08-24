@@ -5,7 +5,7 @@
  */
 
 import { $, escapeHtml } from "./shared";
-import { parseSmf, baueMidiPatterns, MIDI_PATTERN_MAX, type SmfLied, type SmfNote } from "../core/midiImport";
+import { parseSmf, baueMidiPatterns, verschiebeNote, MIDI_PATTERN_MAX, type SmfLied, type SmfNote } from "../core/midiImport";
 import { transkribiereAudio, alsSmfLied } from "../core/audioZuMidi";
 import { tempoSchaetzen } from "../core/tempoAnalyse";
 import { dateiArt } from "../core/generatorSession";
@@ -183,10 +183,9 @@ function rollZeichnen(): void {
   }
 }
 
-function rollKlick(ev: MouseEvent): void {
-  const canvas = ev.currentTarget as HTMLCanvasElement;
+function notenTreffer(canvas: HTMLCanvasElement, ev: MouseEvent): SmfNote | undefined {
   const lied = z.lied;
-  if (!lied) return;
+  if (!lied) return undefined;
   const spur = lied.spuren[z.rollSpur];
   const rect = canvas.getBoundingClientRect();
   const t16 = lied.ticksProViertel / 4;
@@ -196,14 +195,62 @@ function rollKlick(ev: MouseEvent): void {
   const y = ev.clientY - rect.top;
   const note = hoch - Math.floor(y / ROLL_NOTE_PX);
   const tick = (x / ROLL_STEP_PX) * t16;
-  const treffer = spur.noten.find((n) => n.note === note && tick >= n.tick && tick <= n.tick + Math.max(n.dauer, t16 / 2));
+  void tief;
+  return spur.noten.find((n) => n.note === note && tick >= n.tick && tick <= n.tick + Math.max(n.dauer, t16 / 2));
+}
+
+/** Klick = ab-/anwaehlen, Ziehen = verschieben (x: 16tel-Steps, y: Halbtoene). */
+let zug: { note: SmfNote; tick0: number; note0: number; x0: number; y0: number; bewegt: boolean } | null = null;
+
+function rollMausRunter(ev: MouseEvent): void {
+  const canvas = ev.currentTarget as HTMLCanvasElement;
+  const treffer = notenTreffer(canvas, ev);
   if (!treffer) return;
+  zug = { note: treffer, tick0: treffer.tick, note0: treffer.note, x0: ev.clientX, y0: ev.clientY, bewegt: false };
+  ev.preventDefault();
+}
+
+function rollMausZieht(ev: MouseEvent): void {
+  const lied = z.lied;
+  if (!zug || !lied) return;
+  const dSteps = Math.round((ev.clientX - zug.x0) / ROLL_STEP_PX);
+  const dSemis = -Math.round((ev.clientY - zug.y0) / ROLL_NOTE_PX);
+  if (dSteps || dSemis) zug.bewegt = true;
+  zug.note.tick = zug.tick0;
+  zug.note.note = zug.note0;
+  verschiebeNote(zug.note, dSteps, dSemis, lied.ticksProViertel);
+  rollZeichnen();
+}
+
+function rollMausHoch(): void {
+  const lied = z.lied;
+  if (!zug || !lied) return;
+  const treffer = zug.note;
+  const bewegt = zug.bewegt;
+  zug = null;
+  if (bewegt) {
+    lied.spuren[z.rollSpur].noten.sort((a, b) => a.tick - b.tick || a.note - b.note);
+    rollZeichnen();
+    return;
+  }
   const key = notenKey(z.rollSpur, treffer);
   if (z.weg.has(key)) z.weg.delete(key);
   else z.weg.add(key);
   rollZeichnen();
   const info = document.getElementById("miWegInfo");
   if (info) info.textContent = z.weg.size ? `${z.weg.size} Note(n) abgewaehlt` : "";
+}
+
+/** Maus verlaesst den Roll: Zug beenden, aber nie als Klick werten. */
+function rollMausWeg(): void {
+  const lied = z.lied;
+  if (!zug || !lied) return;
+  const bewegt = zug.bewegt;
+  zug = null;
+  if (bewegt) {
+    lied.spuren[z.rollSpur].noten.sort((a, b) => a.tick - b.tick || a.note - b.note);
+    rollZeichnen();
+  }
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
@@ -261,7 +308,7 @@ function render(): void {
     </div>
     <div class="card">
       <h2>3 · Piano Roll — ${escapeHtml(lied.spuren[z.rollSpur]?.name || `Spur ${z.rollSpur + 1}`)}</h2>
-      <p class="sub" style="margin-top:0">Klick auf eine Note nimmt sie aus dem Import (nochmal Klick holt sie zurueck). Orange Linien = Pattern-Fenster.</p>
+      <p class="sub" style="margin-top:0">Klick nimmt eine Note aus dem Import (nochmal Klick holt sie zurueck); Ziehen verschiebt sie — waagrecht in 16teln, senkrecht in Halbtoenen. Orange Linien = Pattern-Fenster.</p>
       <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px"><canvas id="miRoll"></canvas></div>
       <div id="miWegInfo" class="sub" style="margin:4px 0 0">${z.weg.size ? `${z.weg.size} Note(n) abgewaehlt` : ""}</div>
     </div>
@@ -312,7 +359,10 @@ function render(): void {
     });
     $("miLos").addEventListener("click", inEditor);
     const canvas = document.getElementById("miRoll") as HTMLCanvasElement;
-    canvas.addEventListener("click", rollKlick);
+    canvas.addEventListener("mousedown", rollMausRunter);
+    canvas.addEventListener("mousemove", rollMausZieht);
+    canvas.addEventListener("mouseup", rollMausHoch);
+    canvas.addEventListener("mouseleave", rollMausWeg);
     rollZeichnen();
   }
 }

@@ -216,6 +216,13 @@ export function rasterisiere(noten: readonly SmfNote[], ticksProViertel: number)
   });
 }
 
+/** Note im Piano Roll verschieben: Steps im 16tel-Raster, Halbtoene geklemmt. */
+export function verschiebeNote(n: SmfNote, dSteps: number, dHalbtoene: number, ticksProViertel: number): void {
+  const t16 = ticksProViertel / 4;
+  n.tick = Math.max(0, n.tick + Math.round(dSteps) * t16);
+  n.note = Math.max(0, Math.min(127, n.note + Math.round(dHalbtoene)));
+}
+
 // ─── Fenster → Editor-Patterns ───────────────────────────────────────────────
 
 export interface SpurZuordnung {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSmf, rasterisiere, baueMidiPatterns } from "../src/core/midiImport";
+import { parseSmf, rasterisiere, baueMidiPatterns, verschiebeNote } from "../src/core/midiImport";
 
 // ─── SMF-Fixture von Hand: Format 1, 480 Ticks/Viertel ──────────────────────
 
@@ -116,6 +116,17 @@ describe("baueMidiPatterns", () => {
     expect(patterns.length).toBe(2);
     expect(patterns[0].parts[0].steps.filter((s) => s.on).length).toBe(16);
     expect(patterns[1].parts[0].steps.filter((s) => s.on).length).toBe(4);
+  });
+
+  it("verschiebeNote: rastert Ticks, klemmt Tonhoehe und laesst nichts vor den Anfang", () => {
+    const n = { tick: 480, dauer: 240, note: 60, velocity: 100, kanal: 0 };
+    verschiebeNote(n, 2, -1, 480); // +2 Steps, -1 Halbton
+    expect(n.tick).toBe(480 + 2 * 120);
+    expect(n.note).toBe(59);
+    verschiebeNote(n, -100, 0, 480);
+    expect(n.tick).toBe(0);
+    verschiebeNote(n, 0, 200, 480);
+    expect(n.note).toBe(127);
   });
 
   it("meldet Hinweis und deckelt bei mehr als 16 Fenstern", () => {
