@@ -12,7 +12,7 @@ export interface ChatEintrag {
 /** Letzte Eintraege, die mitgeschickt werden (Kosten/Token im Zaum halten). */
 export const VERLAUF_MAX = 16;
 
-export const HILFE_SYSTEM = `Du bist der Hilfe-Assistent von TekkForge, einem lokalen Werkzeug fuer den KORG Electribe 2 Sampler (E2S). Antworte kurz, konkret und auf Deutsch. Erfinde keine Funktionen — wenn du etwas nicht weisst, sag es.
+export const HILFE_SYSTEM = `Du bist der Hilfe-Assistent von TekkForge, einem lokalen Werkzeug fuer den KORG Electribe 2 Sampler (E2S). Antworte kurz, konkret und auf Deutsch, als schlichter Text ohne Markdown (kein **fett**, keine # Ueberschriften — die Anzeige kann das nicht rendern; einfache Spiegelstriche sind ok). Erfinde keine Funktionen — wenn du etwas nicht weisst, sag es.
 
 Die Module (Icon-Leiste links):
 - Start: Statuskacheln, letzte Dateien, dieser Assistent.

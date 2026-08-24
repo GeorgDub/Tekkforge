@@ -98,16 +98,22 @@ export interface LiedGruppe {
 
 /**
  * Teilt Lieder in Gruppen, deren geschaetzte Patternzahl (Melos x
- * patternsProMelo) je Gruppe hoechstens max betraegt — Schnitt immer an der
- * Liedgrenze. Ein einzelnes Lied ueber dem Deckel bildet eine eigene Gruppe
- * (und wird spaeter beim Packen auf 250 gedeckelt).
+ * patternsProMelo + Extras des Lieds, z. B. VRS-Patterns der Vocal-Abdeckung)
+ * je Gruppe hoechstens max betraegt — Schnitt immer an der Liedgrenze. Ein
+ * einzelnes Lied ueber dem Deckel bildet eine eigene Gruppe (und wird spaeter
+ * beim Packen auf 250 gedeckelt).
  */
-export function teileLieder(melosJeLied: readonly number[], patternsProMelo: number, max: number): LiedGruppe[] {
+export function teileLieder(
+  melosJeLied: readonly number[],
+  patternsProMelo: number,
+  max: number,
+  extrasJeLied: readonly number[] = [],
+): LiedGruppe[] {
   const gruppen: LiedGruppe[] = [];
   let von = 0;
   let summe = 0;
   for (let i = 0; i < melosJeLied.length; i++) {
-    const kosten = melosJeLied[i] * patternsProMelo;
+    const kosten = melosJeLied[i] * patternsProMelo + (extrasJeLied[i] ?? 0);
     if (i > von && summe + kosten > max) {
       gruppen.push({ vonLied: von, bisLied: i - 1, patterns: summe });
       von = i;

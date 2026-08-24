@@ -663,10 +663,15 @@ async function alleAusLied(): Promise<void> {
   if (z.lieder.length > 1) {
     const radio = document.querySelector<HTMLInputElement>('input[name=genModus][value="promelo"]');
     if (radio) radio.checked = true;
-    // 250-Slot-Deckel: je Melo-Kette entstehen bis zu 6 Patterns — reisst die
-    // Schaetzung den Deckel, VOR dem Generieren fragen und an Liedgrenzen teilen.
+    // 250-Slot-Deckel: je Melo-Kette entstehen bis zu 6 Patterns, dazu die
+    // VRS-Extras der Vocal-Abdeckung (Paare, die nicht in AUF/DROP der Ketten
+    // passen) — reisst die Schaetzung den Deckel, VOR dem Generieren fragen.
     const melosJeLied = z.lieder.map((l) => z.eintraege.filter((e) => l.dateien.includes(e.datei) && e.rolle === "melo").length);
-    const gruppen = teileLieder(melosJeLied, 6, 250);
+    const extrasJeLied = z.lieder.map((l, i) => {
+      const vox = z.eintraege.filter((e) => l.dateien.includes(e.datei) && e.rolle === "vox").length;
+      return Math.max(0, vox - 2 * Math.max(1, melosJeLied[i]));
+    });
+    const gruppen = teileLieder(melosJeLied, 6, 250, extrasJeLied);
     if (gruppen.length > 1) {
       const erste = gruppen[0];
       const geschaetzt = gruppen.reduce((a, g) => a + g.patterns, 0);

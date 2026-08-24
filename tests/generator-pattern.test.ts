@@ -179,6 +179,24 @@ describe("patternGen", () => {
     expect(drop.parts[2].steps.slice(48).filter((s) => s.active).length).toBeLessThan(fill);
     expect(drop.parts[8].volume!).toBeGreaterThan(auf1.parts[8].volume!);
   });
+  it("vocal-abdeckung pro melo: Paare laufen ueber die Ketten weiter, Extras nur am Ende", () => {
+    const { projekt: pv, paarA } = projektMitVox();
+    const rezepte = regelRezeptProMelo(pv);
+    expect(rezepte.length).toBeGreaterThanOrEqual(2);
+    const { patterns } = baueProMeloAufbau(rezepte, pv);
+    const nrVon = (p: (typeof patterns)[0]) => e2PatternRefToBankNumber(p.parts[14].sampleId!);
+    const dropIdx = patterns.map((p, i) => (p.name.endsWith("DROP") ? i : -1)).filter((i) => i >= 0);
+    // Kette 1: AUF -> Paar 1, DROP -> Paar 2; Kette 2 macht bei Paar 3 weiter
+    expect(nrVon(patterns[0])).toBe(paarA[0].nr);
+    expect(nrVon(patterns[dropIdx[0]])).toBe(paarA[1].nr);
+    expect(nrVon(patterns[dropIdx[0] + 1])).toBe(paarA[2 % paarA.length].nr);
+    // jedes Paar ist irgendwo hoerbar (AUF5/DROP/VRS zusammen decken alles ab)
+    const getragen = new Set(patterns.map(nrVon));
+    for (const p of paarA) expect(getragen.has(p.nr)).toBe(true);
+    // VRS-Extras haengen hoechstens an der LETZTEN Kette
+    const vrsIdx = patterns.map((p, i) => (/ VRS\d+$/.test(p.name) ? i : -1)).filter((i) => i >= 0);
+    for (const i of vrsIdx) expect(i).toBeGreaterThan(dropIdx[dropIdx.length - 1]);
+  });
   it("golden: gleiches Rezept → gleiche Bytes", () => {
     const r = regelRezept(projekt, { modus: "miniset" });
     const a = alsAllPat(baueRezept(r, projekt).patterns);

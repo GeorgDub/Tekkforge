@@ -204,14 +204,17 @@ const AUFBAU_DIMM = 0.85;
 export function baueAufbau(
   rezept: Rezept,
   projekt: Projekt,
-  opts: { startSlot?: number; mfxType?: number } = {},
+  opts: { startSlot?: number; mfxType?: number; versAb?: number; versExtras?: boolean } = {},
 ): { patterns: E2PatternInput[]; hinweise: string[] } {
   const start = opts.startSlot ?? 1;
   const hinweise: string[] = [];
   const tag = tagAus(rezept);
   const t = rezept.thema;
   const paare = voxPaare(projekt, t.melo ?? t.vers);
-  const versFuer = (i: number) => (paare.length ? paare[Math.min(i, paare.length - 1)].name : t.vers);
+  // versAb: bei mehreren Ketten eines Lieds laufen die Paare ueber die Ketten
+  // weiter (Kette 2 beginnt beim dritten Paar usw., Modulo wickelt um)
+  const ab = opts.versAb ?? 0;
+  const versFuer = (i: number) => (paare.length ? paare[(ab + i) % paare.length].name : t.vers);
   const lagen: Lage[] = (["melo", "vers", "bass", "stab", "shot"] as Lage[]).filter((l) =>
     l === "melo" ? !!t.melo : l === "vers" ? !!t.vers || paare.length > 0 : l === "bass" ? !!t.bass : l === "stab" ? !!t.stab : !!t.shots,
   );
@@ -259,7 +262,7 @@ export function baueAufbau(
     chainTo: start + i + 1,
     chainRepeat: 2,
   }));
-  const extras = Math.max(0, paare.length - 2);
+  const extras = opts.versExtras === false ? 0 : Math.max(0, paare.length - ab - 2);
   patterns.push({
     ...basis,
     name: `${tag} DROP`.slice(0, 16),
@@ -267,13 +270,14 @@ export function baueAufbau(
     chainTo: extras ? start + patterns.length + 1 : 0,
     chainRepeat: 4,
   });
-  // Rest der Vocalspur: je Paar ein Drop-Vollbild hinter dem Drop
-  for (let k = 2; k < paare.length; k++) {
+  // Rest der Vocalspur: je Paar ein Drop-Vollbild hinter dem Drop (nur an der
+  // letzten Kette eines Lieds — versExtras: false laesst sie weg)
+  for (let k = 0; k < extras; k++) {
     patterns.push({
       ...basis,
-      name: `${tag} VRS${k + 1}`.slice(0, 16),
-      parts: punch(mitMutes(partsFuer(versFuer(k)), null)),
-      chainTo: k < paare.length - 1 ? start + patterns.length + 1 : 0,
+      name: `${tag} VRS${ab + k + 3}`.slice(0, 16),
+      parts: punch(mitMutes(partsFuer(versFuer(2 + k)), null)),
+      chainTo: k < extras - 1 ? start + patterns.length + 1 : 0,
       chainRepeat: 2,
     });
   }
@@ -285,11 +289,21 @@ export function baueAufbau(
 export function baueProMeloAufbau(rezepte: Rezept[], projekt: Projekt): { patterns: E2PatternInput[]; hinweise: string[] } {
   const out: E2PatternInput[] = [];
   const hinweise: string[] = [];
-  for (const r of rezepte) {
-    const res = baueAufbau(r, projekt, { startSlot: out.length + 1 });
+  // Die Vocal-Paare eines Lieds laufen ueber dessen Ketten weiter (Kette 1:
+  // Paar 1+2, Kette 2: Paar 3+4 …); uebrige Paare haengen als VRS-Patterns an
+  // der LETZTEN Kette des Lieds — so wird die Vocalspur genau einmal gespielt.
+  const schluessel = rezepte.map((r) => voxPaare(projekt, r.thema.melo ?? r.thema.vers).map((p) => p.nr).join(","));
+  const letzte = new Map<string, number>();
+  schluessel.forEach((k, i) => letzte.set(k, i));
+  const versAb = new Map<string, number>();
+  rezepte.forEach((r, i) => {
+    const k = schluessel[i];
+    const ab = versAb.get(k) ?? 0;
+    const res = baueAufbau(r, projekt, { startSlot: out.length + 1, versAb: ab, versExtras: letzte.get(k) === i });
+    versAb.set(k, ab + 2);
     out.push(...res.patterns);
     hinweise.push(...res.hinweise);
-  }
+  });
   return { patterns: out, hinweise };
 }
 
