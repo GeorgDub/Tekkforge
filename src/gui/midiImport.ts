@@ -1,10 +1,15 @@
 /**
- * midiImport.ts (GUI) — Tab „MIDI zu Korg": SMF laden → Spuren den Parts
- * zuordnen → Piano Roll (ansehen, Noten abwaehlen) → Patterns in den Editor.
+ * midiImport.ts (GUI) — Tab „MIDI zu Korg": SMF ODER Audio laden (Audio wird
+ * einstimmig transkribiert) → Spuren den Parts zuordnen → Piano Roll (ansehen,
+ * Noten abwaehlen) → Patterns in den Editor.
  */
 
 import { $, escapeHtml } from "./shared";
 import { parseSmf, baueMidiPatterns, MIDI_PATTERN_MAX, type SmfLied, type SmfNote } from "../core/midiImport";
+import { transkribiereAudio, alsSmfLied } from "../core/audioZuMidi";
+import { tempoSchaetzen } from "../core/tempoAnalyse";
+import { dateiArt } from "../core/generatorSession";
+import { dekodiere } from "./audioDecode";
 import { PART_LAYOUT_LABELS, type EditorProject } from "../core/editorModel";
 import { merkeLetzteDatei } from "./start";
 
@@ -20,10 +25,15 @@ interface Zustand {
   rollSpur: number;
   stepLength: 16 | 32 | 64;
   hinweise: string[];
+  /** dekodiertes Audio fuer die Transkription (null = echte MIDI-Datei) */
+  audio: { pcm: Float32Array; name: string } | null;
+  audioBpm: number;
+  audioLaeuft: boolean;
 }
 
 const z: Zustand = {
   lied: null, dateiname: "", fehler: "", ziel: new Map(), weg: new Set(), rollSpur: 0, stepLength: 64, hinweise: [],
+  audio: null, audioBpm: 120, audioLaeuft: false,
 };
 
 let uebergabe: ((p: EditorProject) => void) | null = null;
@@ -47,19 +57,50 @@ function vorschlagZiel(lied: SmfLied): void {
   z.rollSpur = lied.spuren.findIndex((s) => s.noten.length > 0);
 }
 
+const MIDI_ENDUNGEN = /\.(mid|midi|kar|rmi|rmid|smf)$/i;
+
+/** Audio einstimmig transkribieren und als Pseudo-SMF in den Wizard legen. */
+function transkribieren(): void {
+  if (!z.audio) return;
+  const noten = transkribiereAudio(z.audio.pcm, 44100, { bpm: z.audioBpm });
+  z.lied = alsSmfLied(noten, z.audioBpm, z.audio.name.replace(/\.[^.]+$/, "").slice(0, 12) || "Audio");
+  z.weg.clear();
+  z.hinweise = noten.length
+    ? [`${noten.length} Noten transkribiert (einstimmig, 16tel-Raster bei ${z.audioBpm} BPM) — im Piano Roll pruefen.`]
+    : ["keine Tonhoehen gefunden — anderes BPM probieren oder stimmhafteres Material (Melodie/Bass-Stem statt Vollmix)."];
+  vorschlagZiel(z.lied);
+}
+
 async function dateiLaden(f: File): Promise<void> {
   try {
-    const lied = parseSmf(new Uint8Array(await f.arrayBuffer()));
-    z.lied = lied;
-    z.dateiname = f.name;
-    z.fehler = "";
-    z.weg.clear();
-    z.hinweise = [];
-    vorschlagZiel(lied);
+    if (MIDI_ENDUNGEN.test(f.name) || dateiArt(f.name) === "skip") {
+      const lied = parseSmf(new Uint8Array(await f.arrayBuffer()));
+      z.lied = lied;
+      z.audio = null;
+      z.dateiname = f.name;
+      z.fehler = "";
+      z.weg.clear();
+      z.hinweise = [];
+      vorschlagZiel(lied);
+    } else {
+      // Audio-zu-MIDI: dekodieren, Tempo schaetzen, transkribieren
+      z.audioLaeuft = true;
+      z.fehler = "";
+      render();
+      const { pcm } = await dekodiere(f);
+      const bpm = Math.round(tempoSchaetzen(pcm, 44100));
+      z.audioBpm = bpm >= 60 && bpm <= 300 ? bpm : 120;
+      z.audio = { pcm, name: f.name };
+      z.dateiname = f.name;
+      transkribieren();
+    }
     merkeLetzteDatei(f.name, "midi");
   } catch (e) {
     z.lied = null;
+    z.audio = null;
     z.fehler = e instanceof Error ? e.message : String(e);
+  } finally {
+    z.audioLaeuft = false;
   }
   render();
 }
@@ -172,13 +213,24 @@ function render(): void {
   const lied = z.lied;
   host.innerHTML = `
     <div class="card">
-      <h2>1 · MIDI-Datei</h2>
+      <h2>1 · MIDI- oder Audio-Datei</h2>
       <div class="zeileEinst">
-        <input id="miDatei" type="file" accept=".mid,.midi,.kar,.rmi,.rmid,.smf" />
-        ${lied ? `<span class="sub" style="margin:0">${escapeHtml(z.dateiname)} · Format ${lied.format} · ${lied.spuren.length} Spur(en) · ${Math.round(lied.bpm)} BPM</span>` : ""}
+        <input id="miDatei" type="file" accept=".mid,.midi,.kar,.rmi,.rmid,.smf,.wav,.mp3,.m4a,.aac,.ogg,.flac,.aif,.aiff" />
+        ${lied ? `<span class="sub" style="margin:0">${escapeHtml(z.dateiname)}${z.audio ? " · transkribiert" : ` · Format ${lied.format}`} · ${lied.spuren.length} Spur(en) · ${Math.round(lied.bpm)} BPM</span>` : ""}
       </div>
+      ${
+        z.audio
+          ? `<div class="zeileEinst" style="margin-top:6px">
+              <label for="miAudioBpm">Audio-BPM</label>
+              <input id="miAudioBpm" type="number" min="60" max="300" value="${z.audioBpm}" style="width:80px" />
+              <button id="miNeu" class="ghost">Neu transkribieren</button>
+              <span class="sub" style="margin:0">einstimmig — am besten Melodie- oder Bass-Stem, kein Vollmix</span>
+            </div>`
+          : ""
+      }
+      ${z.audioLaeuft ? `<p class="sub" style="margin:6px 0 0">Dekodiere und transkribiere …</p>` : ""}
       ${z.fehler ? `<p class="warn">${escapeHtml(z.fehler)}</p>` : ""}
-      ${!lied && !z.fehler ? `<p class="sub" style="margin:6px 0 0">SMF 0/1 (.mid, .kar, .rmi) — Audio-zu-MIDI gibt es hier nicht, nur echte MIDI-Dateien.</p>` : ""}
+      ${!lied && !z.fehler && !z.audioLaeuft ? `<p class="sub" style="margin:6px 0 0">SMF 0/1 (.mid, .kar, .rmi) — oder eine Audio-Datei: die wird einstimmig zu Noten transkribiert (Audio zu Korg).</p>` : ""}
     </div>
     ${
       lied
@@ -235,6 +287,13 @@ function render(): void {
     const f = ($("miDatei") as HTMLInputElement).files?.[0];
     if (f) void dateiLaden(f);
   });
+  if (z.audio) {
+    $("miNeu").addEventListener("click", () => {
+      z.audioBpm = Math.min(300, Math.max(60, Number(($("miAudioBpm") as HTMLInputElement).value) || z.audioBpm));
+      transkribieren();
+      render();
+    });
+  }
   if (lied) {
     for (const sel of host.querySelectorAll<HTMLSelectElement>(".miZiel")) {
       sel.addEventListener("change", () => {
