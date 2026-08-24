@@ -374,9 +374,12 @@ function registerLiedIpc(win) {
       const kandidaten = [path.join(app.getAppPath(), "scripts", "stems.py")];
       if (process.resourcesPath) kandidaten.unshift(path.join(process.resourcesPath, "scripts", "stems.py"));
       const skript = kandidaten.find((k) => fs.existsSync(k)) ?? kandidaten[kandidaten.length - 1];
+      // KEIN cwd: gepackt ist app.getAppPath() die DATEI app.asar — spawn mit einer
+      // Datei als cwd stirbt unter Windows mit ENOENT, obwohl Python da ist
+      // (so fiel der Demucs-Pfad im Installer 0.4.0/0.5.0 aus; unverpackt lief er).
+      // stems.py braucht kein Arbeitsverzeichnis, alle Pfade sind absolut.
       const { out } = await laufen(pythonPfad(), [skript, anfragePfad], {
         timeoutMs: 600000,
-        cwd: app.getAppPath(),
         onStderr: (t) => {
           if (win && !win.isDestroyed()) win.webContents.send("lied:fortschritt", t.trim());
         },
