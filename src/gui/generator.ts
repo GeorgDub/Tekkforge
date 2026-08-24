@@ -21,6 +21,7 @@ import {
 } from "../core/kiPlaner";
 import type { Rezept } from "../core/rezept";
 import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
+import { merkeLetzteDatei } from "./start";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiRelevant, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import {
@@ -450,6 +451,7 @@ async function liedAnalysieren(): Promise<void> {
   }
   if (z.liedLaeuft) return;
   z.liedLaeuft = true;
+  merkeLetzteDatei(datei.name, "lied");
   z.liedStatus = `Dekodiere ${datei.name} …`;
   render();
   const lied = tekkLied();

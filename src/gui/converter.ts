@@ -14,6 +14,7 @@ import {
 import { editorProjectFromE2Files, type EditorProject } from "../core/editorModel";
 import type { EsxToE2sResult } from "../core/esxToE2sBank";
 import { $, download, escapeHtml } from "./shared";
+import { merkeLetzteDatei } from "./start";
 
 let bank: EsxBank | null = null;
 let stem = "esx";
@@ -108,6 +109,7 @@ async function loadFile(file: File): Promise<void> {
       return;
     }
     bank = esx;
+    merkeLetzteDatei(file.name, "esx");
     stem =
       file.name.replace(/\.(esx|ess)$/i, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 50) ||
       "esx";

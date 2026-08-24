@@ -30,17 +30,113 @@
         font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
         min-height: 100vh;
       }
-      .wrap { max-width: 1400px; margin: 0 auto; padding: 14px 16px 48px; }
-      header.top { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+      /* ── Shell: Icon-Leiste links + Inhalt + Statuszeile ───── */
+      .shell { display: flex; min-height: 100vh; }
+      .rail {
+        position: sticky; top: 0; height: 100vh; width: 58px; flex: none;
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        padding: 10px 0; background: var(--panel); border-right: 1px solid var(--border);
+        z-index: 20;
+      }
+      .railLogo {
+        width: 36px; height: 36px; border-radius: 10px; margin-bottom: 8px;
+        display: grid; place-items: center; font-weight: 800; font-size: 15px;
+        color: #16100a; background: linear-gradient(135deg, var(--accent), var(--accent2));
+        user-select: none;
+      }
+      .railBtn {
+        width: 40px; height: 40px; border-radius: 10px; border: 1px solid transparent;
+        background: none; color: var(--muted); font-size: 17px; cursor: pointer;
+        display: grid; place-items: center; position: relative;
+      }
+      .railBtn:hover { color: var(--text); background: var(--elevated); }
+      .railBtn.active {
+        color: var(--text); background: var(--elevated); border-color: var(--border);
+      }
+      .railBtn.active::before {
+        content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px;
+        width: 3px; border-radius: 2px; background: var(--accent);
+      }
+      .railSpacer { flex: 1; }
+      .railVersion { color: var(--dim); font-size: 10px; }
+      .mainCol { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .wrap { max-width: 1400px; width: 100%; margin: 0 auto; padding: 6px 16px 24px; flex: 1; }
+      header.top { padding: 12px 16px 0; max-width: 1400px; width: 100%; margin: 0 auto; }
       h1 { font-size: 20px; margin: 0; letter-spacing: 0.5px; }
       h1 .forge { color: var(--accent); }
-      .tabs { display: flex; gap: 4px; }
-      .tabs button {
-        background: none; border: 0; color: var(--muted); font: inherit;
-        padding: 6px 14px; cursor: pointer; border-bottom: 2px solid transparent;
-      }
-      .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
       .sub { color: var(--muted); font-size: 12px; margin: 2px 0 14px; }
+      .statusbar {
+        position: sticky; bottom: 0; z-index: 20;
+        display: flex; gap: 8px; align-items: center;
+        padding: 6px 16px; font-size: 12px; color: var(--muted);
+        background: var(--panel); border-top: 1px solid var(--border);
+      }
+      .statusDot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+      .statusDot.an { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+      /* ── Start-Dashboard ───────────────────────────────────── */
+      .startHero {
+        display: flex; gap: 18px; align-items: center; justify-content: space-between;
+        background: linear-gradient(120deg, var(--panel), var(--elevated));
+        border-color: var(--border);
+      }
+      .startHero h2 { margin: 2px 0; font-size: 24px; }
+      .startTag { color: var(--accent2); font-size: 10px; letter-spacing: 2px; font-weight: 700; }
+      .startHeroLogo {
+        width: 92px; height: 92px; border-radius: 22px; flex: none;
+        display: grid; place-items: center; font-weight: 800; font-size: 34px; color: #16100a;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+      }
+      .startPills { display: flex; gap: 8px; flex-wrap: wrap; }
+      .pill {
+        border: 1px solid var(--border); border-radius: 999px; padding: 3px 12px;
+        font-size: 11px; color: var(--muted); background: var(--bg);
+      }
+      .pill.pillOk { color: var(--success); border-color: var(--success); }
+      .startKacheln { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
+      .kachel {
+        background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+        padding: 12px 14px;
+      }
+      .kachel b { display: block; font-size: 22px; }
+      .kachel small { font-size: 13px; color: var(--muted); }
+      .kachel span { color: var(--muted); font-size: 11px; }
+      .kachel.kachelOk b { color: var(--success); }
+      .startCols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: start; }
+      .startSchnell { display: grid; gap: 8px; }
+      .startSchnell button { text-align: left; display: block; width: 100%; }
+      .startSchnell button small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+      .startListe > div {
+        display: flex; gap: 8px; align-items: center; padding: 4px 2px;
+        border-bottom: 1px solid var(--border); font-size: 12px;
+      }
+      .startListe > div:last-child { border-bottom: 0; }
+      .startListe .rolle { color: var(--accent); min-width: 52px; font-size: 11px; }
+      .startWann { color: var(--dim); font-size: 11px; }
+      .startGeraet { display: flex; gap: 10px; align-items: center; margin: 8px 0; }
+      .geraetIcon {
+        width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center;
+        font-size: 20px; background: var(--elevated); border: 1px solid var(--border);
+      }
+      @media (max-width: 1100px) { .startCols { grid-template-columns: 1fr; } .startKacheln { grid-template-columns: repeat(2, 1fr); } }
+
+      /* ── Einstellungen ─────────────────────────────────────── */
+      .themeKacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+      .themeKachel {
+        background: var(--elevated); border: 1px solid var(--border); border-radius: 10px;
+        padding: 8px; cursor: pointer; font: inherit; color: var(--text); text-align: left;
+      }
+      .themeKachel:hover { border-color: var(--accent2); }
+      .themeKachel.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+      .themeVorschau {
+        display: block; border-radius: 6px; padding: 10px; margin-bottom: 6px;
+      }
+      .themeVorschau > span { display: flex; gap: 4px; border-radius: 4px; padding: 6px; }
+      .themeVorschau i { display: block; width: 18px; height: 8px; border-radius: 3px; }
+      .themeTitel { font-size: 12px; }
+      .zeileEinst { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+      .zeileEinst label { color: var(--muted); font-size: 12px; }
       .hidden { display: none !important; }
       #viewGenerator { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
       #viewGenerator .card h3 { margin: 0 0 8px; font-size: 15px; }
@@ -189,24 +285,34 @@
     </style>
   </head>
   <body>
-    <div class="wrap">
+    <div class="shell">
+      <aside class="rail">
+        <div class="railLogo" title="TekkForge">TF</div>
+        <button id="tabStart" class="railBtn active" title="Start">⌂</button>
+        <button id="tabEditor" class="railBtn" title="Pattern-Editor">✎</button>
+        <button id="tabConverter" class="railBtn" title="ESX-Converter">⇄</button>
+        <button id="tabPanel" class="railBtn" title="E2S Panel">▦</button>
+        <button id="tabPadDeck" class="railBtn" title="Pad-Deck">▤</button>
+        <button id="tabGenerator" class="railBtn" title="Generator">✦</button>
+        <span class="railSpacer"></span>
+        <button id="tabSettings" class="railBtn" title="Einstellungen">⚙</button>
+        <span class="railVersion">v0.4</span>
+      </aside>
+      <div class="mainCol">
       <header class="top">
         <h1>Tekk<span class="forge">Forge</span></h1>
-        <nav class="tabs">
-          <button id="tabEditor" class="active">Pattern-Editor</button>
-          <button id="tabConverter">ESX-Converter</button>
-          <button id="tabPanel">E2S Panel</button>
-          <button id="tabPadDeck">Pad-Deck</button>
-          <button id="tabGenerator">Generator</button>
-        </nav>
+        <p class="sub" style="margin-bottom:0">
+          Electribe 2 Sampler &amp; ESX-1 Toolkit — Patterns bauen, Banks konvertieren,
+          Generator &amp; Gerätesteuerung. Alles lokal, keine Datei verlässt den Rechner.
+        </p>
       </header>
-      <p class="sub">
-        Electribe-2-Sampler-Patterns am PC bauen (.e2spat / .e2sallpat / .all) und
-        ESX-1-Backups konvertieren — alles lokal, keine Datei verlässt den Rechner.
-      </p>
+      <div class="wrap">
+
+      <!-- ═══════════ START ═══════════ -->
+      <section id="viewStart"></section>
 
       <!-- ═══════════ EDITOR ═══════════ -->
-      <section id="viewEditor">
+      <section id="viewEditor" class="hidden">
         <div class="toolbar">
           <button id="projNew" class="ghost">Neues Projekt</button>
           <button id="projOpen" class="ghost">Projekt öffnen…</button>
@@ -475,10 +581,19 @@
       <section id="viewPadDeck" class="hidden"></section>
       <section id="viewGenerator" class="hidden"></section>
 
-      <footer>
-        TekkForge · Step-Layout verifiziert gegen KORG-Factory-Files (BodyTalk1, e2s-2016) +
-        hardware-getestete Hardtekk-Patterns · Import am Gerät: erst .all, dann .e2sallpat
+      <!-- ═══════════ EINSTELLUNGEN ═══════════ -->
+      <section id="viewSettings" class="hidden"></section>
+
+      </div>
+      <footer class="statusbar">
+        <span id="statusDot" class="statusDot"></span>
+        <span id="statusModul">Start</span>
+        <span>·</span>
+        <span id="statusMidi">MIDI aus</span>
+        <span style="flex:1"></span>
+        <span>Import am Gerät: erst .all, dann .e2sallpat</span>
       </footer>
+      </div>
     </div>
     <script type="module" src="/src/gui/main.ts"></script>
   </body>

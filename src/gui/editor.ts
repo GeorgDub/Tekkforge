@@ -28,6 +28,8 @@ import {
   type EditorStep,
   type PoolSample,
 } from "../core/editorModel";
+import { merkeLetzteDatei } from "./start";
+import type { DateiArt } from "../core/letzteDateien";
 import {
   buildCurrentPatternDump,
   buildPatternDump,
@@ -1707,6 +1709,20 @@ export function initEditor(): void {
     poolDrop.classList.remove("drag");
     if (e.dataTransfer?.files?.length) void importWavFiles(e.dataTransfer.files);
   });
+  // Geladene Dateien im Start-Dashboard unter „Letzte Dateien" ablegen.
+  const merkeDateien = (files: FileList | File[]): void => {
+    for (const f of Array.from(files)) {
+      const n = f.name.toLowerCase();
+      const art: DateiArt = n.endsWith(".all")
+        ? "all"
+        : n.endsWith(".esx") || n.endsWith(".ess")
+          ? "esx"
+          : n.endsWith(".tekkforge") || n.endsWith(".json")
+            ? "projekt"
+            : "e2spat";
+      merkeLetzteDatei(f.name, art);
+    }
+  };
   const replaceFile = $<HTMLInputElement>("replaceFile");
   replaceFile.addEventListener("change", () => {
     const f = replaceFile.files?.[0];
@@ -1717,7 +1733,10 @@ export function initEditor(): void {
   const importAllFile = $<HTMLInputElement>("importAllFile");
   $("importAll").addEventListener("click", () => importAllFile.click());
   importAllFile.addEventListener("change", () => {
-    if (importAllFile.files?.length) void importE2Files(importAllFile.files);
+    if (importAllFile.files?.length) {
+      merkeDateien(importAllFile.files);
+      void importE2Files(importAllFile.files);
+    }
     importAllFile.value = "";
   });
   $("exportAll").addEventListener("click", exportSampleBank);
@@ -1737,12 +1756,18 @@ export function initEditor(): void {
   projFile.addEventListener("change", () => {
     const f = projFile.files?.[0];
     projFile.value = "";
-    if (f) void openProject(f);
+    if (f) {
+      merkeDateien([f]);
+      void openProject(f);
+    }
   });
   const importFile = $<HTMLInputElement>("importFile");
   $("importE2").addEventListener("click", () => importFile.click());
   importFile.addEventListener("change", () => {
-    if (importFile.files?.length) void importE2Files(importFile.files);
+    if (importFile.files?.length) {
+      merkeDateien(importFile.files);
+      void importE2Files(importFile.files);
+    }
     importFile.value = "";
   });
   $("previewPlay").addEventListener("click", togglePreview);
