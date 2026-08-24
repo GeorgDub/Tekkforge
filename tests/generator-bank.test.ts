@@ -43,6 +43,16 @@ describe("bankPlan", () => {
     expect(t).toHaveLength(1);
     expect(t[0].takte).toBe(8);
   });
+  it("bereiteAuf: 8-Takt-Vocal wird in zwei 4-Takt-Haelften geteilt (Melo bleibt ganz)", () => {
+    const sr = 44100;
+    const pcm = new Float32Array(Math.round(8 * (240 / 180) * sr)).map((_, i) => Math.sin(i / 20) * 0.5);
+    const { eintraege } = scanne([{ name: "GZUZ Vers.wav", pcm, sampleRate: sr }]);
+    expect(eintraege[0].rolle).toBe("vox");
+    const t = bereiteAuf(eintraege[0], 180).teile;
+    expect(t.map((x) => x.name)).toEqual(["GZUZ Vers A", "GZUZ Vers B"]);
+    expect(t.map((x) => x.takte)).toEqual([4, 4]);
+    expect(t.map((x) => x.chunk)).toEqual([0, 1]);
+  });
   it("bereiteAuf: 10-Takt-Vocal wird in genau zwei Haelften geteilt", () => {
     const sr = 44100;
     const pcm = new Float32Array(Math.round(10 * (240 / 180) * sr)).map((_, i) => Math.sin(i / 20) * 0.5);
@@ -88,6 +98,20 @@ describe("bankPlan", () => {
     expect(melo.raster!.onset).toHaveLength(64);
     expect(melo.raster!.bass).toHaveLength(64);
     expect(Math.max(...melo.raster!.onset)).toBeCloseTo(1, 5);
+  });
+  it("waehleVolumes: Vocals haben Vorrang vor gleichwertigen Melos", () => {
+    const sr = 44100;
+    const frames = Math.round(4 * (240 / 180) * sr);
+    const melo = new Float32Array(frames).map((_, i) => Math.sin(i / 30) * 0.5);
+    const vox = new Float32Array(frames).map((_, i) => Math.sin(i / 24) * 0.5);
+    const { eintraege } = scanne([
+      { name: "HyPer MeLo.wav", pcm: melo, sampleRate: sr },
+      { name: "GZUZ V01.wav", pcm: vox, sampleRate: sr },
+    ]);
+    expect(eintraege.map((e) => e.rolle).sort()).toEqual(["melo", "vox"]);
+    const dauer = frames / sr;
+    const vol = waehleVolumes(eintraege, 180, dauer + 0.5);
+    expect(vol[0][0].rolle).toBe("vox");
   });
   it("waehleVolumes: Budget teilt in Scheiben, nichts geht verloren", () => {
     const { eintraege } = scanne(eingaben(alle));

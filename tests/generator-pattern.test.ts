@@ -8,6 +8,7 @@ import { regelRezept, regelRezeptProMelo } from "../src/core/rezept";
 import { baueRezept, baueProMelo, baueAufbau, baueProMeloAufbau, alsAllPat, alsPat } from "../src/core/patternGen";
 import { parseElectribeAllPatBank, parseElectribePattern } from "../src/core/electribeImport";
 import { e2PatternRefToBankNumber } from "../src/core/e2sPatternSampleLink";
+import { voxSegmentEintrag } from "../src/core/generatorSession";
 
 const KORG3 = path.resolve("examples/e2s/korg3");
 const eingaben = fs
@@ -19,6 +20,15 @@ const eingaben = fs
   });
 const { projekt } = planeBank(scanne(eingaben).eintraege, { name: "korg3", bpm: 180, bankZeit: "x" });
 const nummern = new Set(projekt.samples.map((s) => s.nr));
+
+/** korg3 plus drei synthetische 8-Takt-Vocal-Segmente eines Lieds "Amph". */
+function projektMitVox() {
+  const frames = Math.round(8 * (240 / 180) * 44100);
+  const voxE = [1, 2, 3].map((n) => voxSegmentEintrag("Amph", n, new Float32Array(frames).map((_, i) => Math.sin(i / (18 + 3 * n)) * 0.5)));
+  const { projekt: pv } = planeBank(scanne(eingaben).eintraege.concat(voxE), { name: "amph", bpm: 180, bankZeit: "x" });
+  const paarA = pv.samples.filter((s) => s.rolle === "vox" && s.chunk === 0 && /^Amph V/.test(s.name)).sort((a, b) => a.nr - b.nr);
+  return { projekt: pv, paarA };
+}
 
 describe("patternGen", () => {
   it("jam: ein Pattern, 64 Steps, alle Refs in der Bank, Parts ohne Steps gemutet", () => {
@@ -73,17 +83,23 @@ describe("patternGen", () => {
     expect(p.bpm).toBe(180);
     expect(p.name.trim()).toBe(patterns[0].name);
   });
-  it("aufbau: identische Steps ueberall, Mutes wachsen monoton, Kick erst im Drop, Kette mit 2 Durchgaengen", () => {
+  it("aufbau: Steps ueberall positionsgleich, Mutes wachsen monoton, Kick erst im Drop, Kette verbunden", () => {
     const { patterns } = baueAufbau(regelRezept(projekt, { modus: "jam" }), projekt, { startSlot: 5 });
     expect(patterns.length).toBeGreaterThanOrEqual(3);
-    const drop = patterns[patterns.length - 1];
-    expect(drop.name.endsWith("DROP")).toBe(true);
-    // Steps in jedem Pattern identisch zum Drop — nur die Mutes unterscheiden sich
-    for (const p of patterns) {
-      for (let idx = 0; idx < 16; idx++) expect(p.parts[idx].steps).toEqual(drop.parts[idx].steps);
-    }
+    const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
+    const drop = patterns[dropIdx];
+    // Aktive Step-Positionen in jedem Pattern wie im Drop (Velocities duerfen
+    // abweichen: Aufbau gedimmt, Fill/Punch) — nur die Mutes unterscheiden sich.
+    // Ausnahme: Snare-Fill (Part 3) im letzten Takt der letzten Aufbau-Stufe.
+    const aktivMuster = (p: (typeof patterns)[0], idx: number) => p.parts[idx].steps.map((s) => !!s.active).join("");
+    patterns.forEach((p, i) => {
+      for (let idx = 0; idx < 16; idx++) {
+        if (idx === 2 && i === dropIdx - 1) continue;
+        expect(aktivMuster(p, idx)).toBe(aktivMuster(drop, idx));
+      }
+    });
     // Kicks (Part 1/2) bis zum Drop gemutet, aber mit gesetzten Steps
-    for (const p of patterns.slice(0, -1)) {
+    for (const p of patterns.slice(0, dropIdx)) {
       expect(p.parts[0].muted).toBe(true);
       expect(p.parts[0].steps.some((s) => s.active)).toBe(true);
     }
@@ -98,9 +114,9 @@ describe("patternGen", () => {
     }
     patterns.slice(0, -1).forEach((p, i) => {
       expect(p.chainTo).toBe(5 + i + 1);
-      expect(p.chainRepeat).toBe(2);
+      expect(p.chainRepeat).toBe(i === dropIdx ? 4 : 2);
     });
-    expect(drop.chainTo).toBe(0);
+    expect(patterns[patterns.length - 1].chainTo).toBe(0);
   });
   it("aufbau pro melo: je Melodie eine Kette, Slots fortlaufend", () => {
     const rezepte = regelRezeptProMelo(projekt);
@@ -113,6 +129,55 @@ describe("patternGen", () => {
     patterns.forEach((p, i) => {
       if (!p.name.endsWith("DROP")) expect(p.chainTo).toBe(i + 2);
     });
+  });
+  it("vocal-abdeckung: AUF traegt Paar 1, DROP Paar 2, VRS-Patterns den Rest — alle Segmente kommen vor", () => {
+    const { projekt: pv, paarA } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv, { startSlot: 1 });
+    const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
+    expect(dropIdx).toBeGreaterThan(0);
+    const nrVon = (p: (typeof patterns)[0], idx: number) => e2PatternRefToBankNumber(p.parts[idx].sampleId!);
+    // AUF-Patterns: erstes Paar; DROP: zweites; VRS-Patterns: die uebrigen in Liedreihenfolge
+    for (const p of patterns.slice(0, dropIdx)) expect(nrVon(p, 14)).toBe(paarA[0].nr);
+    expect(nrVon(patterns[dropIdx], 14)).toBe(paarA[1].nr);
+    const extras = patterns.slice(dropIdx + 1);
+    expect(extras.map((p) => p.name.replace(/^\S+ /, ""))).toEqual(paarA.slice(2).map((_, k) => `VRS${k + 3}`));
+    extras.forEach((p, k) => expect(nrVon(p, 14)).toBe(paarA[k + 2].nr));
+    // Kette laeuft bis zum letzten VRS-Pattern durch
+    patterns.slice(0, -1).forEach((p, i) => expect(p.chainTo).toBe(i + 2));
+    expect(patterns[patterns.length - 1].chainTo).toBe(0);
+    expect(patterns[dropIdx].chainRepeat).toBe(4);
+    for (const p of extras) expect(p.chainRepeat).toBe(2);
+  });
+  it("vocal-abdeckung: Paar liegt als A/B auf Parts 15/16, beide mit Steps, im Drop wach", () => {
+    const { projekt: pv, paarA } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const drop = patterns.find((p) => p.name.endsWith("DROP"))!;
+    expect(e2PatternRefToBankNumber(drop.parts[14].sampleId!)).toBe(paarA[1].nr);
+    expect(e2PatternRefToBankNumber(drop.parts[15].sampleId!)).toBe(paarA[1].nr + 1);
+    expect(drop.parts[14].steps.some((s) => s.active)).toBe(true);
+    expect(drop.parts[15].steps.some((s) => s.active)).toBe(true);
+    expect(drop.parts[14].muted).toBe(false);
+    expect(drop.parts[15].muted).toBe(false);
+    expect(drop.alternate15_16).toBe(true);
+  });
+  it("drop-punch: Kicks im Drop auf 127, Aufbau gedimmt, Snare-Fill vor dem Drop, Bass lauter", () => {
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
+    const drop = patterns[dropIdx];
+    const auf1 = patterns[0];
+    const letzteAuf = patterns[dropIdx - 1];
+    for (const s of drop.parts[0].steps) if (s.active) expect(s.velocity).toBe(127);
+    // Hats im Aufbau leiser als im Drop (Velocity gedimmt)
+    const vel = (p: (typeof patterns)[0], idx: number) => p.parts[idx].steps.find((s) => s.active)!.velocity!;
+    expect(vel(auf1, 4)).toBeLessThan(vel(drop, 4));
+    // Melo bleibt ungedimmt
+    expect(vel(auf1, 12)).toBe(vel(drop, 12));
+    // Snare-Fill im letzten Takt der letzten Aufbau-Stufe
+    const fill = letzteAuf.parts[2].steps.slice(48).filter((s) => s.active).length;
+    expect(fill).toBeGreaterThanOrEqual(6);
+    expect(drop.parts[2].steps.slice(48).filter((s) => s.active).length).toBeLessThan(fill);
+    expect(drop.parts[8].volume!).toBeGreaterThan(auf1.parts[8].volume!);
   });
   it("golden: gleiches Rezept → gleiche Bytes", () => {
     const r = regelRezept(projekt, { modus: "miniset" });

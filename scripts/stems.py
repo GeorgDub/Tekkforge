@@ -2,16 +2,18 @@
 stems.py — Demucs (htdemucs) auf fertig geschnittenen Fenster-WAVs fuer den
 Generator-Tab. Eingabe ist ein JSON (Pfad als Argument):
 
-  { "fenster": [ { "id": "DROP", "wav": "<pfad zum mono-44.1k-wav>" }, ... ],
+  { "fenster": [ { "id": "DROP", "wav": "<pfad zum mono-44.1k-wav>", "nurVox": false }, ... ],
     "ziel": "<ordner>" }
 
 Je Fenster entstehen <ziel>/<id>-melo.wav (bass + other; Vocals werden
 eingefaltet, wenn sie leiser als -36 dB sind), <ziel>/<id>-vox.wav (nur
 wenn Vocals > -36 dB, dann auf 0,95 normalisiert) und <ziel>/<id>-drums.wav
 (Drums-Stem, normalisiert — Quelle fuer geschnittene Kick/Snare/Hat-One-Shots).
+Fenster mit "nurVox": true liefern nur die Vocals (Vocal-Vollabdeckung des
+ganzen Lieds); melo und drums sind dann null.
 Fortschritt auf stderr, Ergebnis-JSON auf stdout:
 
-  { "fenster": [ { "id": "DROP", "melo": "<pfad>", "vox": "<pfad>" | null, "drums": "<pfad>" | null } ] }
+  { "fenster": [ { "id": "DROP", "melo": "<pfad>" | null, "vox": "<pfad>" | null, "drums": "<pfad>" | null } ] }
 """
 import io
 import json
@@ -79,6 +81,13 @@ def main():
         # -36 dB: Tekk-Vocals liegen oft 20 dB unter den Drums (Tommi Track 1: -32…-36 dB) und
         # sollen trotzdem als eigener, hochnormalisierter Vox-Loop rauskommen
         vox_stark = rms_db(st["vocals"]) > -36
+        if f.get("nurVox"):
+            vox_pfad = None
+            if vox_stark:
+                vox_pfad = os.path.join(ziel, f"{f['id']}-vox.wav")
+                sf.write(vox_pfad, normalisiere(st["vocals"]), SR, subtype="PCM_16")
+            ergebnis.append({"id": f["id"], "melo": None, "vox": vox_pfad, "drums": None, "voxDb": round(rms_db(st["vocals"]), 1)})
+            continue
         melo = st["bass"] + st["other"] + (0 if vox_stark else st["vocals"])
         melo_pfad = os.path.join(ziel, f"{f['id']}-melo.wav")
         sf.write(melo_pfad, normalisiere(melo), SR, subtype="PCM_16")

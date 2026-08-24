@@ -82,6 +82,22 @@ describe("liedAnalyse", () => {
     expect(brk.pegelDb).toBeLessThan(drop.pegelDb);
     expect(varF.startSek).not.toBe(drop.startSek);
   });
+  it("liefert alle hoerbaren 8-Takt-Segmente in Liedreihenfolge, Fenster tragen ihren Segment-Index", () => {
+    expect(res.segmente.length).toBeGreaterThan(res.fenster.length);
+    const frames = Math.round(((8 * 240) / 190) * SR);
+    for (let i = 0; i < res.segmente.length; i++) {
+      const s = res.segmente[i];
+      expect(s.pegelDb).toBeGreaterThan(-35);
+      expect(s.pcm.length).toBe(frames);
+      if (i > 0) expect(s.startSek).toBeGreaterThan(res.segmente[i - 1].startSek);
+    }
+    for (const f of res.fenster) {
+      expect(f.index).toBeDefined();
+      const seg = res.segmente.find((s) => s.index === f.index)!;
+      expect(seg).toBeDefined();
+      expect(seg.startSek).toBe(f.startSek);
+    }
+  });
   it("bpmHinweis uebersteuert die Messung", () => {
     const r2 = analysiereLied(lied, SR, { zielBpm: 180, bpmHinweis: 90 });
     expect(r2.bpm).toBe(90);

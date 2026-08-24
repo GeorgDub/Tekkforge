@@ -18,6 +18,16 @@ export interface LiedFenster {
   startSek: number;
   pcm: Float32Array;
   pegelDb: number;
+  /** Position in `segmente` (Vocal-Vollabdeckung ordnet Fenster und Segmente einander zu) */
+  index?: number;
+}
+
+/** Ein hoerbares 8-Takt-Segment des Lieds — zusammen decken sie das ganze Lied ab. */
+export interface LiedSegment {
+  index: number;
+  startSek: number;
+  pcm: Float32Array;
+  pegelDb: number;
 }
 
 export interface LiedAnalyse {
@@ -26,6 +36,7 @@ export interface LiedAnalyse {
   rate: number;
   offsetSek: number;
   fenster: LiedFenster[];
+  segmente: LiedSegment[];
 }
 
 const HOERBAR_DB = -35;
@@ -105,6 +116,7 @@ export function analysiereLied(
   }
   const fenster: LiedFenster[] = [...gewaehlt.entries()]
     .sort((a, b) => a[1] - b[1])
-    .map(([label, i]) => ({ label, startSek: starts[i] / sr, pcm: peakNormalize(segs[i], 0.95), pegelDb: pegel[i] }));
-  return { bpm, k, rate, offsetSek, fenster };
+    .map(([label, i]) => ({ label, startSek: starts[i] / sr, pcm: peakNormalize(segs[i], 0.95), pegelDb: pegel[i], index: i }));
+  const segmente: LiedSegment[] = hoerbar.map((i) => ({ index: i, startSek: starts[i] / sr, pcm: peakNormalize(segs[i], 0.95), pegelDb: pegel[i] }));
+  return { bpm, k, rate, offsetSek, fenster, segmente };
 }

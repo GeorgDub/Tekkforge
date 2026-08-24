@@ -135,7 +135,10 @@ export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
   }
   const ziel = takte * taktSek;
   y = aufLaenge(varispeed(y, y.length / SR / ziel), Math.round(ziel * SR));
-  if (takte <= 8) return { teile: [{ name: basis, pcm: peakNormalize(fades(y, 0.002, 0.004), 0.95), kind: "loop", takte }] };
+  // Vocals ab 5 Takten als zwei Haelften: die Vers-Parts 15/16 spielen A/B per
+  // Alternate hintereinander und sind am Geraet einzeln entmutbar
+  const ganzBis = e.rolle === "vox" ? 4 : 8;
+  if (takte <= ganzBis) return { teile: [{ name: basis, pcm: peakNormalize(fades(y, 0.002, 0.004), 0.95), kind: "loop", takte }] };
   const h = y.length >> 1;
   const kurz = sauberName(e.stem, 14);
   const haelfte = Math.round(takte / 2);
@@ -153,6 +156,8 @@ function punkte(e: ScanEintrag, bpm: number): number {
   if (e.sekunden >= 2.5 && e.sekunden <= 11) sc += 2;
   if (takte === 4 || takte === 8) sc += 1;
   if (/melo/i.test(e.stem)) sc += 1;
+  // Vocals zuerst ins Budget: die Patterns sollen die ganze Vocalspur abdecken
+  if (e.rolle === "vox") sc += 2.5;
   return sc;
 }
 

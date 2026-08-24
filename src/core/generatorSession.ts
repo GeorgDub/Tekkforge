@@ -3,7 +3,7 @@
  * Zusammenfassung eines Scans, tekk-Drums-Empfehlung, Dateiarten und
  * erzeuge() = Modus → Rezept(e) → Patterns → Bytes + Dateiname.
  */
-import type { ScanEintrag } from "./sampleScan";
+import { type ScanEintrag, rmsDb, peakVon } from "./sampleScan";
 import { tempoVorschlag } from "./tempoAnalyse";
 import { type Projekt, BUDGET_SEKUNDEN, waehleVolumes } from "./bankPlan";
 import { type Rezept, type Modus, regelRezept, regelRezeptProMelo } from "./rezept";
@@ -72,6 +72,21 @@ export function eindeutigeKuerzel(dateinamen: readonly string[]): string[] {
     vergeben.add(kurz);
     return kurz;
   });
+}
+
+/**
+ * Ein Vocal-Segment der Lied-Vollabdeckung als Scan-Eintrag: Name "<Lied> V01",
+ * eigene Familie je Segment (sonst dedupliziert die Budget-Auswahl die Segmente
+ * und die A/B-Chunk-Paarung teilt sich eine Gruppe).
+ */
+export function voxSegmentEintrag(liedName: string, nr: number, pcm: Float32Array): ScanEintrag {
+  const label = `V${String(nr).padStart(2, "0")}`;
+  const kurz = liedName.slice(0, Math.max(3, 16 - label.length - 1));
+  const stem = `${kurz} ${label}`;
+  return {
+    datei: `${stem}.wav`, stem, rolle: "vox", familie: stem.toLowerCase(), sekunden: pcm.length / 44100,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100,
+  };
 }
 
 export interface LiedGruppe {

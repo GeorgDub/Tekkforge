@@ -358,7 +358,7 @@ function registerLiedIpc(win) {
       return { python: null, demucs: false, version: "", meldung: `Kein Demucs: ${e.message}` };
     }
   });
-  // anfrage: { fenster: [{ id, bytes:number[] (mono 44,1 k float32 als Int16-WAV) }] } → { fenster: [{ id, melo: number[], vox: number[]|null, voxDb }] }
+  // anfrage: { fenster: [{ id, bytes (Int16-WAV), nurVox? }] } → { fenster: [{ id, melo|null, vox|null, drums|null, voxDb }] }
   ipcMain.handle("lied:stems", async (_e, anfrage) => {
     const basis = path.join(app.getPath("userData"), "tmp", `stems-${Date.now()}`);
     fs.mkdirSync(basis, { recursive: true });
@@ -366,7 +366,7 @@ function registerLiedIpc(win) {
       const liste = anfrage.fenster.map((f) => {
         const wav = path.join(basis, `${String(f.id).replace(/[^A-Za-z0-9_-]/g, "_")}-mix.wav`);
         fs.writeFileSync(wav, Buffer.from(f.bytes));
-        return { id: f.id, wav };
+        return f.nurVox ? { id: f.id, wav, nurVox: true } : { id: f.id, wav };
       });
       const anfragePfad = path.join(basis, "anfrage.json");
       fs.writeFileSync(anfragePfad, JSON.stringify({ fenster: liste, ziel: basis }));
@@ -386,11 +386,13 @@ function registerLiedIpc(win) {
       });
       const ergebnis = JSON.parse(out.trim().split(/\r?\n/).pop());
       return {
+        // Uint8Array statt number[]: bei der Vocal-Vollabdeckung gehen alle
+        // 8-Takt-Abschnitte des Lieds durch — als Zahlen-Arrays waere das riesig
         fenster: ergebnis.fenster.map((f) => ({
           id: f.id,
-          melo: Array.from(fs.readFileSync(f.melo)),
-          vox: f.vox ? Array.from(fs.readFileSync(f.vox)) : null,
-          drums: f.drums ? Array.from(fs.readFileSync(f.drums)) : null,
+          melo: f.melo ? new Uint8Array(fs.readFileSync(f.melo)) : null,
+          vox: f.vox ? new Uint8Array(fs.readFileSync(f.vox)) : null,
+          drums: f.drums ? new Uint8Array(fs.readFileSync(f.drums)) : null,
           voxDb: f.voxDb,
         })),
       };

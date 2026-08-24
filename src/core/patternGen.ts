@@ -64,7 +64,13 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
     return zweiteHaelfte && b ? b : s;
   };
   const melo = haelfte(byName(t.melo));
-  const vers = haelfte(byName(t.vers));
+  // Vocal-Paar (4-Takt-Chunks A/B): A auf Part 15, B auf Part 16 — Alternate
+  // spielt beide als durchgehende 8 Takte, einzeln entmuten geht am Geraet
+  const versRoh = byName(t.vers);
+  const versB = versRoh?.chunk === 0 && versRoh.takte === 4
+    ? projekt.samples.find((x) => x.chunk === 1 && x.name === versRoh.name.replace(/ A$/, " B"))
+    : undefined;
+  const vers = versB ? versRoh : haelfte(versRoh);
   const stab = byName(t.stab);
   const bass = byName(t.bass);
   const shotA = byName(t.shots?.[0]);
@@ -109,15 +115,15 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   wach[12] = a.lagen.includes("melo") && !!melo;
   wach[13] = wach[12] && !lang(melo);
   steps[14] = vers ? loopHit(vers.takte) : leer();
-  steps[15] = vers && !lang(vers) ? loopHit(vers.takte) : leer();
+  steps[15] = versB ? loopHit(versB.takte) : vers && !lang(vers) ? loopHit(vers.takte) : leer();
   wach[14] = a.lagen.includes("vers") && !!vers;
-  wach[15] = wach[14] && !lang(vers);
+  wach[15] = wach[14] && (versB ? true : !lang(vers));
 
   const pc = pl.percs.length ? pl.percs[(2 * pos) % pl.percs.length] : undefined;
   const pc2 = pl.percs.length ? pl.percs[(2 * pos + 1) % pl.percs.length] : undefined;
   const sample: (ProjektSample | undefined)[] = [
     kicks[0], kick2, byName(t.snare), byName(t.clap), byName(t.hats[0]), byName(t.hats[1]),
-    byName(t.percs?.[0]) ?? pc, byName(t.percs?.[1]) ?? pc2, bass, stab, shotA, shotB, melo, melo, vers, vers,
+    byName(t.percs?.[0]) ?? pc, byName(t.percs?.[1]) ?? pc2, bass, stab, shotA, shotB, melo, melo, vers, versB ?? vers,
   ];
   return steps.map((st, idx) => {
     const smp = sample[idx];
@@ -171,9 +177,29 @@ const AUFBAU_STUFEN: number[][] = [
 ];
 
 /**
+ * Vocal-Paare (Chunk-A-Loops mit 4 Takten) in Liedreihenfolge — zusammen decken
+ * sie die ganze Vocalspur ab. `meloName` filtert bei Multi-Select aufs eigene
+ * Lied (gleicher Namensstamm); ohne Treffer zaehlen alle Paare.
+ */
+export function voxPaare(projekt: Projekt, meloName?: string): ProjektSample[] {
+  const alle = projekt.samples
+    .filter((s) => s.rolle === "vox" && s.kind === "loop" && s.chunk === 0 && s.takte === 4)
+    .sort((a, b) => a.nr - b.nr);
+  const stamm = meloName?.split(/\s+/)[0]?.toLowerCase();
+  const eigene = stamm ? alle.filter((s) => s.name.toLowerCase().startsWith(stamm)) : [];
+  return eigene.length ? eigene : alle;
+}
+
+const AUFBAU_DIMM = 0.85;
+
+/**
  * Aufbau-Kette (Mute/Unmute-Spielweise): alle Patterns tragen dieselben vollen
  * Steps des Drop-Abschnitts, entmutet wird stufenweise — Melo + Snare zuerst,
- * die Kicks erst im Drop. Jede Stufe laeuft zwei Durchgaenge, chainTo verbindet.
+ * die Kicks erst im Drop. Damit der Drop kickt, laufen die Aufbau-Stufen mit
+ * gedimmten Drum-Velocities, die letzte Stufe endet in einem Snare-Fill, und
+ * der Drop bekommt Kicks auf 127 plus lauteren Bass. Die Vocal-Paare des Lieds
+ * verteilen sich ueber die Kette (AUF → Paar 1, DROP → Paar 2, VRS-Patterns →
+ * Rest), so dass ein Durchlauf die ganze Vocalspur spielt.
  */
 export function baueAufbau(
   rezept: Rezept,
@@ -184,13 +210,16 @@ export function baueAufbau(
   const hinweise: string[] = [];
   const tag = tagAus(rezept);
   const t = rezept.thema;
+  const paare = voxPaare(projekt, t.melo ?? t.vers);
+  const versFuer = (i: number) => (paare.length ? paare[Math.min(i, paare.length - 1)].name : t.vers);
   const lagen: Lage[] = (["melo", "vers", "bass", "stab", "shot"] as Lage[]).filter((l) =>
-    l === "melo" ? !!t.melo : l === "vers" ? !!t.vers : l === "bass" ? !!t.bass : l === "stab" ? !!t.stab : !!t.shots,
+    l === "melo" ? !!t.melo : l === "vers" ? !!t.vers || paare.length > 0 : l === "bass" ? !!t.bass : l === "stab" ? !!t.stab : !!t.shots,
   );
   if (t.riser) lagen.push("riser");
   const kick = rezept.abschnitte.reduce((a, b) => (b.intensitaet > a.intensitaet ? b : a), rezept.abschnitte[0]).kick;
   const drop: Abschnitt = { name: "DROP", wiederholungen: 1, intensitaet: 5, kick, lagen };
-  const dropParts = parts(rezept, projekt, drop, 0, false, true);
+  const partsFuer = (vers?: string) => parts({ ...rezept, thema: { ...t, vers } }, projekt, drop, 0, false, true);
+  const dropParts = partsFuer(versFuer(0));
   const hoerbar = (idx: number) => !dropParts[idx].muted;
   const aktiv = new Set<number>();
   const stufen: Set<number>[] = [];
@@ -199,18 +228,57 @@ export function baueAufbau(
     for (const idx of s) aktiv.add(idx);
     stufen.push(new Set(aktiv));
   }
-  const mitMutes = (an: Set<number> | null): E2PartInput[] =>
-    dropParts.map((p, idx) => ({ ...p, muted: p.muted || (an ? !an.has(idx) : false) }));
+  const mitMutes = (basisParts: E2PartInput[], an: Set<number> | null): E2PartInput[] =>
+    basisParts.map((p, idx) => ({ ...p, muted: p.muted || (an ? !an.has(idx) : false) }));
+  // Aufbau leiser fahren: Drums/Bass/Stab/Shots gedimmt, Melo/Vocals (12–15) tragen das Lied
+  const dimm = (ps: E2PartInput[]): E2PartInput[] =>
+    ps.map((p, idx) =>
+      idx <= 11 ? { ...p, steps: p.steps.map((s) => (s.active && s.velocity ? { ...s, velocity: Math.round(s.velocity * AUFBAU_DIMM) } : s)) } : p,
+    );
+  // Snare-Fill im letzten Takt der letzten Aufbau-Stufe — der Uebergang in den Drop
+  const fill = (ps: E2PartInput[]): E2PartInput[] =>
+    ps.map((p, idx) =>
+      idx === 2
+        ? { ...p, steps: p.steps.map((s, i) => (i >= 48 && i % 2 === 0 ? hit([60], 90 + Math.round(((i - 48) / 14) * 37), 10) : s)) }
+        : p,
+    );
+  // Drop-Punch: Kicks auf Maximum, Bass lauter
+  const punch = (ps: E2PartInput[]): E2PartInput[] =>
+    ps.map((p, idx) =>
+      idx <= 1
+        ? { ...p, steps: p.steps.map((s) => (s.active ? { ...s, velocity: 127 } : s)) }
+        : idx === 8
+          ? { ...p, volume: Math.min(127, (p.volume ?? VOLUME[8]) + 6) }
+          : p,
+    );
   const basis = { bpm: rezept.bpm, mfxType: opts.mfxType ?? 11, stepLength: 64 as const, alternate13_14: true, alternate15_16: true };
   const patterns: E2PatternInput[] = stufen.map((an, i) => ({
     ...basis,
     name: `${tag} AUF${i + 1}`.slice(0, 16),
-    parts: mitMutes(an),
+    parts: (i === stufen.length - 1 ? fill : (x: E2PartInput[]) => x)(dimm(mitMutes(dropParts, an))),
     chainTo: start + i + 1,
     chainRepeat: 2,
   }));
-  patterns.push({ ...basis, name: `${tag} DROP`.slice(0, 16), parts: mitMutes(null), chainTo: 0, chainRepeat: 1 });
+  const extras = Math.max(0, paare.length - 2);
+  patterns.push({
+    ...basis,
+    name: `${tag} DROP`.slice(0, 16),
+    parts: punch(mitMutes(partsFuer(versFuer(1)), null)),
+    chainTo: extras ? start + patterns.length + 1 : 0,
+    chainRepeat: 4,
+  });
+  // Rest der Vocalspur: je Paar ein Drop-Vollbild hinter dem Drop
+  for (let k = 2; k < paare.length; k++) {
+    patterns.push({
+      ...basis,
+      name: `${tag} VRS${k + 1}`.slice(0, 16),
+      parts: punch(mitMutes(partsFuer(versFuer(k)), null)),
+      chainTo: k < paare.length - 1 ? start + patterns.length + 1 : 0,
+      chainRepeat: 2,
+    });
+  }
   if (!t.melo) hinweise.push("keine Melodie im Projekt — Aufbau nur ueber Drums/Bass/Shots");
+  if (paare.length) hinweise.push(`Vocalspur in ${paare.length} Paaren ueber die Kette verteilt`);
   return { patterns, hinweise };
 }
 

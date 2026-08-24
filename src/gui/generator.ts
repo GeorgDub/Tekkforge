@@ -25,7 +25,7 @@ import { merkeLetzteDatei } from "./start";
 import { tekkUrl } from "./tekkUrl";
 import { tonartErkennen } from "../core/keyAnalyse";
 import { planeBank, type Projekt } from "../core/bankPlan";
-import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, voxSegmentEintrag, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import {
   type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
 } from "../core/projektStatus";
@@ -474,13 +474,12 @@ async function scanneOrdner(files: FileList | null): Promise<void> {
   render();
 }
 
-/** Ein Fenster (mono 44,1 k) als Scan-Eintrag — 8 Takte, ein Sample, Gruppe melo:<lied> <label>. */
-function fensterEintrag(liedName: string, label: string, pcm: Float32Array, rolle: "melo" | "vox"): ScanEintrag {
-  // 16-Zeichen-Namen: "<Lied> <LABEL>" bzw. "<Lied> <LABEL> VX" — Liedname so kuerzen, dass das VX-Kuerzel sichtbar bleibt
-  const kurz = rolle === "vox" ? liedName.slice(0, Math.max(3, 16 - label.length - 4)) : liedName.slice(0, Math.max(3, 16 - label.length - 1));
-  const stem = `${kurz} ${label}${rolle === "vox" ? " VX" : ""}`;
+/** Ein Fenster (mono 44,1 k) als Melo-Scan-Eintrag — 8 Takte, ein Sample. */
+function fensterEintrag(liedName: string, label: string, pcm: Float32Array): ScanEintrag {
+  const kurz = liedName.slice(0, Math.max(3, 16 - label.length - 1));
+  const stem = `${kurz} ${label}`;
   return {
-    datei: `${stem}.wav`, stem, rolle, familie: familie(stem), sekunden: pcm.length / 44100,
+    datei: `${stem}.wav`, stem, rolle: "melo", familie: familie(stem), sekunden: pcm.length / 44100,
     rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100,
   };
 }
@@ -578,18 +577,29 @@ async function liedAnalysieren(): Promise<void> {
           const el = document.getElementById("genLiedStatus");
           if (el) el.textContent = prefix + t;
         });
-        z.liedStatus = `${prefix}Demucs auf ${res.fenster.length} Fenstern (dauert ein bis zwei Minuten) …`;
+        // Vocal-Vollabdeckung: ALLE hoerbaren 8-Takt-Abschnitte durch Demucs —
+        // die gewaehlten Fenster voll (Melo/Vox/Drums), der Rest nur Vocals
+        const gewaehlteIdx = new Set(res.fenster.map((f) => f.index));
+        const rest = res.segmente.filter((s) => !gewaehlteIdx.has(s.index));
+        z.liedStatus = `${prefix}Demucs auf ${res.segmente.length} Abschnitten — ganze Vocalspur, dauert einige Minuten …`;
         render();
         const antwort = await lied.stems({
-          fenster: res.fenster.map((f) => ({ id: f.label, bytes: Array.from(encodeWav16(f.pcm, 44100, 1)) })),
+          fenster: [
+            ...res.fenster.map((f) => ({ id: f.label, bytes: encodeWav16(f.pcm, 44100, 1) })),
+            ...rest.map((s) => ({ id: `SEG${s.index}`, bytes: encodeWav16(s.pcm, 44100, 1), nurVox: true })),
+          ],
         });
-        for (const f of antwort.fenster) {
-          const melo = parseWav(Uint8Array.from(f.melo));
-          neue.push(fensterEintrag(liedName, f.id, melo.pcm, "melo"));
-          if (f.vox) {
-            const vox = parseWav(Uint8Array.from(f.vox));
-            neue.push(fensterEintrag(liedName, f.id, vox.pcm, "vox"));
-          }
+        const je = new Map(antwort.fenster.map((f) => [f.id, f]));
+        for (const f of res.fenster) {
+          const r = je.get(f.label);
+          if (r?.melo) neue.push(fensterEintrag(liedName, f.label, parseWav(Uint8Array.from(r.melo)).pcm));
+        }
+        // je hoerbarem Segment mit Vocals ein "V01…"-Eintrag in Liedreihenfolge
+        let vNr = 0;
+        for (const s of res.segmente) {
+          const fensterLabel = res.fenster.find((f) => f.index === s.index)?.label;
+          const r = je.get(fensterLabel ?? `SEG${s.index}`);
+          if (r?.vox) neue.push(voxSegmentEintrag(liedName, ++vNr, parseWav(Uint8Array.from(r.vox)).pcm));
         }
         // Drums aus dem Lied: den Stem des lautesten Fensters (DROP) schneiden
         if (!z.liedDrumsEigene) {
@@ -602,9 +612,10 @@ async function liedAnalysieren(): Promise<void> {
           }
         }
       } else {
-        for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm, "melo"));
+        for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm));
       }
       const drumZahl = neue.filter((e) => e.rolle === "kick" || e.rolle === "snare" || e.rolle === "hat").length;
+      const voxZahl = neue.filter((e) => e.rolle === "vox").length;
       const tonart = tonartErkennen(eingabe.pcm, 44100);
       const tonartText = tonart.konfidenz >= 0.03 ? ` · ${tonart.name} (${tonart.camelot})${tonart.konfidenz < 0.08 ? "?" : ""}` : "";
       neueLieder.push({
@@ -612,7 +623,7 @@ async function liedAnalysieren(): Promise<void> {
         dateien: neue.map((e) => e.datei),
         zeile: `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)})${tonartText} · Fenster ${res.fenster
           .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
-          .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocals als Vox${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"}`,
+          .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocalspur in ${voxZahl} Segmenten${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"}`,
       });
       alleNeuen.push(...neue);
     }
