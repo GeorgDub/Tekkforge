@@ -134,6 +134,10 @@ export interface PoolSample {
   sampleRate: number;
   /** Mono-Float32. */
   pcm: Float32Array;
+  /** +12-dB-Gain-Flag aus der .all-Bank (Standard aus). */
+  gain12db?: boolean;
+  /** Kategorie-Anzeigename aus der .all-Bank ("Kick", "Snare", …). */
+  kategorie?: string;
 }
 
 export interface EditorProject {
@@ -422,6 +426,8 @@ export function poolSamplesFromE2sBank(bank: E2sBank): PoolSample[] {
       name: (slot.name || `Sample ${display}`).slice(0, 16),
       sampleRate: slot.sampleRate,
       pcm,
+      ...(slot.gain12db ? { gain12db: true } : {}),
+      ...(slot.categoryName ? { kategorie: slot.categoryName } : {}),
     });
   }
   return out;
@@ -542,6 +548,7 @@ export function buildSampleBank(samples: readonly PoolSample[]): Uint8Array | nu
     pcmData: s.pcm,
     sampleRate: s.sampleRate,
     channels: 1,
+    ...(s.gain12db ? { gain12db: true } : {}),
   }));
   return new Uint8Array(buildE2sBank(slots).buffer);
 }
@@ -577,6 +584,8 @@ interface SerializedSample {
   name: string;
   /** 16-bit-Mono-WAV, Base64. */
   wavB64: string;
+  gain12db?: boolean;
+  kategorie?: string;
 }
 
 /** Pattern in Serialisierung: rawBody als Base64 (statt kaputt als Uint8Array-Objekt). */
@@ -603,6 +612,8 @@ export function serializeProject(project: EditorProject): string {
       number: s.number,
       name: s.name,
       wavB64: bytesToBase64(encodeWav16(s.pcm, s.sampleRate, 1)),
+      ...(s.gain12db ? { gain12db: true } : {}),
+      ...(s.kategorie ? { kategorie: s.kategorie } : {}),
     })),
   };
   return JSON.stringify(doc);
@@ -619,7 +630,14 @@ export function deserializeProject(text: string): EditorProject {
     throw new Error("Keine gültige TekkForge-Projekt-Datei");
   const samples: PoolSample[] = (doc.samples ?? []).map((s) => {
     const wav = parseWav(base64ToBytes(s.wavB64));
-    return { number: s.number, name: s.name, sampleRate: wav.sampleRate, pcm: wav.pcm };
+    return {
+      number: s.number,
+      name: s.name,
+      sampleRate: wav.sampleRate,
+      pcm: wav.pcm,
+      ...(s.gain12db ? { gain12db: true } : {}),
+      ...(typeof s.kategorie === "string" && s.kategorie ? { kategorie: s.kategorie } : {}),
+    };
   });
   // Patterns defensiv normalisieren (fehlende Felder → Defaults)
   const patterns: EditorPattern[] = doc.patterns.map((p, i) => {

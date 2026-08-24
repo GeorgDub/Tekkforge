@@ -100,6 +100,26 @@ function midiCall(cmd, payload, timeoutMs) {
 }
 
 // ── Dateibruecke (Generator-Tab): schreibt nur in absolute, vom Nutzer gewaehlte Ordner ──
+const { backupDateiname, backupInfo, zuLoeschen } = require("./backup.cjs");
+const BACKUP_MAX = 20;
+const BACKUP_ORDNER = "backups";
+
+/** Vor dem Ueberschreiben: Bestand nach <ordner>/backups/ kopieren und rotieren. */
+function backupVorSchreiben(ordner, name) {
+  const ziel = path.join(ordner, name);
+  if (!fs.existsSync(ziel)) return;
+  const ablage = path.join(ordner, BACKUP_ORDNER);
+  fs.mkdirSync(ablage, { recursive: true });
+  fs.copyFileSync(ziel, path.join(ablage, backupDateiname(name, new Date())));
+  for (const weg of zuLoeschen(fs.readdirSync(ablage), name, BACKUP_MAX)) {
+    try {
+      fs.unlinkSync(path.join(ablage, weg));
+    } catch {
+      /* Rotation darf das Schreiben nicht verhindern */
+    }
+  }
+}
+
 function registerFsIpc() {
   ipcMain.handle("fs:schreibe", (_e, ordner, dateien) => {
     if (typeof ordner !== "string" || !path.isAbsolute(ordner)) throw new Error("Ordner muss ein absoluter Pfad sein");
@@ -110,6 +130,11 @@ function registerFsIpc() {
         const name = path.basename(String(d.name));
         const ziel = path.join(ordner, name);
         const bytes = Buffer.from(d.bytes);
+        try {
+          backupVorSchreiben(ordner, name);
+        } catch (err) {
+          console.error("Auto-Backup fehlgeschlagen:", err.message);
+        }
         fs.writeFileSync(ziel, bytes);
         if (fs.statSync(ziel).size !== bytes.length) throw new Error(`${name}: Laenge nach dem Schreiben falsch`);
         geschrieben.push(ziel);
@@ -150,6 +175,41 @@ function registerFsIpc() {
       }
     }
     return out;
+  });
+  // Backups eines Ordners auflisten: [{ name, original, wann (ms), bytes }]
+  ipcMain.handle("fs:backups", (_e, ordner) => {
+    if (typeof ordner !== "string" || !path.isAbsolute(ordner)) throw new Error("Ordner muss ein absoluter Pfad sein");
+    const ablage = path.join(ordner, BACKUP_ORDNER);
+    if (!fs.existsSync(ablage)) return [];
+    const out = [];
+    for (const name of fs.readdirSync(ablage)) {
+      const info = backupInfo(name);
+      if (!info) continue;
+      let groesse = 0;
+      try {
+        groesse = fs.statSync(path.join(ablage, name)).size;
+      } catch {
+        continue;
+      }
+      out.push({ name, original: info.original, wann: info.wann.getTime(), bytes: groesse });
+    }
+    return out.sort((a, b) => b.wann - a.wann);
+  });
+  // Backup zuruecklegen: aktueller Stand wird vorher selbst gesichert.
+  ipcMain.handle("fs:backupZurueck", (_e, ordner, backupName) => {
+    if (typeof ordner !== "string" || !path.isAbsolute(ordner)) throw new Error("Ordner muss ein absoluter Pfad sein");
+    const name = path.basename(String(backupName));
+    const info = backupInfo(name);
+    if (!info) throw new Error(`Kein Backup-Dateiname: ${name}`);
+    const quelle = path.join(ordner, BACKUP_ORDNER, name);
+    if (!fs.existsSync(quelle)) throw new Error(`Backup fehlt: ${name}`);
+    backupVorSchreiben(ordner, info.original);
+    fs.copyFileSync(quelle, path.join(ordner, info.original));
+    return { original: info.original };
+  });
+  ipcMain.handle("fs:ordnerOeffnen", (_e, ordner) => {
+    if (typeof ordner !== "string" || !path.isAbsolute(ordner)) throw new Error("Ordner muss ein absoluter Pfad sein");
+    return shell.openPath(ordner);
   });
   ipcMain.handle("fs:tekkDrums", () => {
     const kandidaten = [path.join(app.getAppPath(), "examples", "e2s", "tekk4.all")];

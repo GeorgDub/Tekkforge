@@ -6,10 +6,57 @@
 import { $ } from "./shared";
 import { THEMES } from "../core/themes";
 import { aktuelleWahl, themeSetzen } from "./theme";
+import { tekkFs } from "./tekkFs";
 import { version } from "../../package.json";
+
+interface BackupZeile {
+  name: string;
+  original: string;
+  wann: number;
+  bytes: number;
+}
+
+let backupOrdner = "";
+let backupListe: BackupZeile[] | null = null;
+let backupMeldung = "";
+
+function backupOrdnerVorschlag(): string {
+  try {
+    return localStorage.getItem("tekkforge.letzterOrdner") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+async function backupsLaden(): Promise<void> {
+  const fsb = tekkFs();
+  if (!fsb?.backups || !backupOrdner) return;
+  try {
+    backupListe = await fsb.backups(backupOrdner);
+    backupMeldung = backupListe.length ? "" : "Keine Backups in diesem Ordner.";
+  } catch (e) {
+    backupListe = null;
+    backupMeldung = "Backups nicht lesbar: " + (e instanceof Error ? e.message : String(e));
+  }
+  render();
+}
+
+async function backupZurueck(name: string): Promise<void> {
+  const fsb = tekkFs();
+  if (!fsb?.backupZurueck || !backupOrdner) return;
+  if (!confirm(`"${name}" wiederherstellen? Der aktuelle Stand wird vorher gesichert.`)) return;
+  try {
+    const res = await fsb.backupZurueck(backupOrdner, name);
+    backupMeldung = `${res.original} wiederhergestellt.`;
+  } catch (e) {
+    backupMeldung = "Wiederherstellen fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
+  }
+  await backupsLaden();
+}
 
 function render(): void {
   const wahl = aktuelleWahl();
+  if (!backupOrdner) backupOrdner = backupOrdnerVorschlag();
   const host = $("viewSettings");
   host.innerHTML = `
     <div class="card">
@@ -36,7 +83,32 @@ function render(): void {
     </div>
     <div class="card" id="setBackupKarte">
       <h2>Backups</h2>
-      <p class="sub" style="margin:0">Auto-Backup beim Überschreiben von Banks — kommt im nächsten Schritt (Paket 2).</p>
+      ${
+        tekkFs()?.backups
+          ? `
+      <p class="sub" style="margin-top:0">
+        Beim Überschreiben einer Datei über „Projekt speichern" oder „auf SD kopieren"
+        landet der alte Stand automatisch in <code>backups/</code> (20 werden behalten).
+      </p>
+      <div class="zeileEinst">
+        <label for="setBackupOrdner">Ordner</label>
+        <input id="setBackupOrdner" type="text" value="${escapeAttr(backupOrdner)}" placeholder="z. B. G:\\Samples\\TekkForge" style="flex:1;min-width:220px" />
+        <button id="setBackupLaden" class="ghost">Backups anzeigen</button>
+        <button id="setBackupOeffnen" class="ghost">Ordner öffnen</button>
+      </div>
+      ${backupMeldung ? `<div class="sub">${escapeAttr(backupMeldung)}</div>` : ""}
+      ${
+        backupListe?.length
+          ? `<div class="startListe" style="margin-top:6px">${backupListe
+              .map(
+                (b) =>
+                  `<div><span class="rolle">${escapeAttr(b.original)}</span><span style="flex:1">${escapeAttr(b.name)}</span><span class="startWann">${new Date(b.wann).toLocaleString("de-DE")} · ${(b.bytes / 1024 / 1024).toFixed(1)} MB</span><button class="ghost" data-backup="${escapeAttr(b.name)}" style="padding:2px 8px;font-size:11px">↶ zurück</button></div>`,
+              )
+              .join("")}</div>`
+          : ""
+      }`
+          : `<p class="sub" style="margin:0">Auto-Backup läuft nur in der Desktop-App (Dateisystem-Brücke fehlt hier).</p>`
+      }
     </div>
     <div class="card">
       <h2>Über TekkForge</h2>
@@ -59,6 +131,21 @@ function render(): void {
     themeSetzen(aktuelleWahl().name);
     render();
   });
+  document.getElementById("setBackupOrdner")?.addEventListener("change", () => {
+    backupOrdner = ($("setBackupOrdner") as HTMLInputElement).value.trim();
+    backupListe = null;
+  });
+  document.getElementById("setBackupLaden")?.addEventListener("click", () => void backupsLaden());
+  document.getElementById("setBackupOeffnen")?.addEventListener("click", () => {
+    if (backupOrdner) void tekkFs()?.ordnerOeffnen?.(backupOrdner);
+  });
+  for (const b of host.querySelectorAll<HTMLButtonElement>("[data-backup]")) {
+    b.addEventListener("click", () => void backupZurueck(b.dataset.backup!));
+  }
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 export function initSettings(): void {

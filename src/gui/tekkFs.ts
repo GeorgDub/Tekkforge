@@ -13,6 +13,12 @@ export interface TekkFs {
   wechselmedien(): Promise<{ pfad: string; label: string }[]>;
   /** examples/e2s/tekk4.all als Byte-Array, sonst null. */
   tekkDrums(): Promise<number[] | null>;
+  /** Auto-Backups eines Ordners (neueste zuerst); fehlt bei aelteren Bridges. */
+  backups?(ordner: string): Promise<{ name: string; original: string; wann: number; bytes: number }[]>;
+  /** Backup zuruecklegen (aktueller Stand wird vorher gesichert). */
+  backupZurueck?(ordner: string, name: string): Promise<{ original: string }>;
+  /** Ordner im Explorer oeffnen. */
+  ordnerOeffnen?(ordner: string): Promise<string>;
 }
 
 export function tekkFs(): TekkFs | undefined {

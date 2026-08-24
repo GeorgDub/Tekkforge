@@ -253,6 +253,19 @@
 
       .poolList { max-height: 300px; overflow-y: auto; }
       .poolList td { font-size: 11px; }
+      .poolFilterRow { display: flex; gap: 4px; align-items: center; margin-bottom: 6px; }
+      .poolFilterRow .poolF {
+        background: var(--elevated); color: var(--muted); border: 1px solid var(--border);
+        border-radius: 999px; padding: 2px 10px; font-size: 11px; cursor: pointer;
+      }
+      .poolFilterRow .poolF.active { color: var(--text); border-color: var(--accent); }
+      .poolFilterRow input { flex: 1; min-width: 50px; font-size: 11px; padding: 3px 6px; }
+      .poolRam {
+        height: 8px; border-radius: 4px; background: var(--elevated);
+        border: 1px solid var(--border); margin-top: 8px; overflow: hidden;
+      }
+      .poolRam > div { height: 100%; width: 0; background: var(--accent2); transition: width 0.2s; }
+      .poolRam > div.voll { background: var(--danger); }
       .dropMini {
         border: 1px dashed var(--border); border-radius: 8px; text-align: center;
         color: var(--dim); padding: 10px; cursor: pointer; font-size: 11px; margin-bottom: 8px;
@@ -504,12 +517,22 @@
               <button id="exportAll" class="ghost" style="flex:1" title="Sample-Pool als .all speichern">⬇ .all export</button>
             </div>
             <input id="importAllFile" type="file" accept=".all" class="hidden" />
+            <div class="poolFilterRow">
+              <button id="poolFAlle" class="poolF active" data-filter="alle">Alle</button>
+              <button id="poolFFactory" class="poolF" data-filter="factory">Factory</button>
+              <button id="poolFUser" class="poolF" data-filter="user">User</button>
+              <input id="poolSuche" type="text" placeholder="Suchen…" />
+            </div>
             <div class="poolList">
               <table>
-                <thead><tr><th>#</th><th>Name</th><th>s</th><th></th></tr></thead>
+                <thead><tr><th>#</th><th>Name</th><th>s</th><th title="+12-dB-Gain-Flag">+12</th><th></th></tr></thead>
                 <tbody id="poolRows"></tbody>
               </table>
             </div>
+            <div class="poolRam" title="Sample-RAM des Geräts (~24 MB, 16-Bit-Mono bei 44,1 kHz)">
+              <div id="poolRamBalken"></div>
+            </div>
+            <div id="poolRamText" class="sub" style="margin:2px 0 0"></div>
             <p class="sub" style="margin-top:6px">
               # / Name direkt editierbar · ↻ Audio ersetzen · ▶ anhören · ✕ entfernen.
               Nummer ändern remappt verlinkte Parts.

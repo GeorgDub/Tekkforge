@@ -577,6 +577,11 @@ async function projektSpeichern(): Promise<void> {
   try {
     const res = await fsb.schreibe(`${z.ordnerPfad}\\TekkForge`, projektDateien());
     z.meldung = `Projekt gespeichert: ${res.ordner} (${res.geschrieben.length} Dateien)`;
+    try {
+      localStorage.setItem("tekkforge.letzterOrdner", res.ordner);
+    } catch {
+      /* ohne Speicher kein Backup-Manager-Vorschlag */
+    }
   } catch (e) {
     z.meldung = "Speichern fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
   }

@@ -75,6 +75,12 @@ contextBridge.exposeInMainWorld("tekkFs", {
     ipcRenderer.invoke("fs:schreibe", ordner, dateien.map((d) => ({ name: d.name, bytes: Array.from(d.bytes) }))),
   /** Wechselmedien (SD-Karten): [{ pfad: "H:", label }]. */
   wechselmedien: () => ipcRenderer.invoke("fs:wechselmedien"),
+  /** Auto-Backups eines Ordners: [{ name, original, wann, bytes }] (neueste zuerst). */
+  backups: (ordner) => ipcRenderer.invoke("fs:backups", ordner),
+  /** Backup zuruecklegen (aktueller Stand wird vorher gesichert): { original }. */
+  backupZurueck: (ordner, name) => ipcRenderer.invoke("fs:backupZurueck", ordner, name),
+  /** Ordner im Explorer oeffnen. */
+  ordnerOeffnen: (ordner) => ipcRenderer.invoke("fs:ordnerOeffnen", ordner),
   /** examples/e2s/tekk4.all aus dem App-Verzeichnis als Byte-Array, sonst null. */
   tekkDrums: () => ipcRenderer.invoke("fs:tekkDrums"),
 });
