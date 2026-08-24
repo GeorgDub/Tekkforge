@@ -25,7 +25,7 @@ import { merkeLetzteDatei } from "./start";
 import { tekkUrl } from "./tekkUrl";
 import { tonartErkennen } from "../core/keyAnalyse";
 import { planeBank, type Projekt } from "../core/bankPlan";
-import { zusammenfassung, erzeuge, projektJson, dateiRelevant, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import {
   type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
 } from "../core/projektStatus";
@@ -57,8 +57,8 @@ interface Zustand {
   python: { demucs: boolean; meldung: string } | null;
   /** Haken "Stems per Demucs" — lebt im Zustand, weil render() die Checkbox neu baut. */
   demucsGewuenscht: boolean;
-  /** zuletzt analysiertes Lied */
-  lied: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean; dateien: string[] } | null;
+  /** zuletzt analysierte Lieder (Multi-Select: alle aus einem Analyse-Lauf) */
+  lieder: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean; dateien: string[]; zeile: string }[];
   liedLaeuft: boolean;
   liedStatus: string;
   /** Aufbau-Kette: identische Steps in allen Patterns, entmutet wird stufenweise */
@@ -75,7 +75,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lied: null, liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false,
   url: null, urlLaeuft: false, urlDatei: null,
 };
 const player = new PreviewPlayer();
@@ -286,7 +286,7 @@ function render(): void {
       <div class="fortschritt" id="genFortschritt">${escapeHtml(z.fortschritt)}</div>
       <div class="zeile">
         <label for="genLied">Lied analysieren</label>
-        <input id="genLied" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" />
+        <input id="genLied" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" multiple />
       </div>
       <div class="zeile">
         <label for="genUrl" title="${escapeHtml(z.url?.meldung ?? "Probe laeuft …")}">Von URL</label>
@@ -304,8 +304,9 @@ function render(): void {
       </div>
       ${z.liedStatus ? `<div class="fortschritt" id="genLiedStatus">${escapeHtml(z.liedStatus)}</div>` : ""}
       ${
-        z.lied?.dateien.length
-          ? `<div class="liste" id="genFensterListe">${z.lied.dateien
+        z.lieder.some((l) => l.dateien.length)
+          ? `<div class="liste" id="genFensterListe">${z.lieder
+              .flatMap((l) => l.dateien)
               .map((d) => z.eintraege.find((e) => e.datei === d))
               .filter((e): e is ScanEintrag => !!e)
               .map(
@@ -487,88 +488,111 @@ async function urlHolen(): Promise<void> {
   }
 }
 
-/** Lied dekodieren → Fenster (TS) → optional Demucs-Stems → als Melo/Vox-Eintraege in den Scan. */
+/**
+ * Lied(er) dekodieren → Fenster (TS) → optional Demucs-Stems → als Melo/Vox-
+ * Eintraege in den Scan. Multi-Select: alle gewaehlten Dateien nacheinander;
+ * das ERSTE Lied bestimmt das gemeinsame Ziel-BPM (sonst chainen die Patterns
+ * nicht), alle weiteren werden per Varispeed daraufgerechnet.
+ */
 async function liedAnalysieren(): Promise<void> {
   const input = document.getElementById("genLied") as HTMLInputElement | null;
-  // frisch gewaehlte Datei gewinnt; sonst die per URL geholte (render() leert Inputs)
-  const datei = input?.files?.[0] ?? z.urlDatei ?? undefined;
-  if (!datei) {
+  // frisch gewaehlte Dateien gewinnen; sonst die per URL geholte (render() leert Inputs)
+  const gewaehlt = input?.files?.length ? Array.from(input.files) : z.urlDatei ? [z.urlDatei] : [];
+  if (!gewaehlt.length) {
     z.liedStatus = "Erst eine Audiodatei waehlen (oder per URL holen).";
     render();
     return;
   }
   if (z.liedLaeuft) return;
   z.liedLaeuft = true;
-  merkeLetzteDatei(datei.name, "lied");
-  z.liedStatus = `Dekodiere ${datei.name} …`;
-  render();
   const lied = tekkLied();
   let abmelden: (() => void) | null = null;
+  const kuerzel = eindeutigeKuerzel(gewaehlt.map((d) => d.name));
+  const alleNeuen: ScanEintrag[] = [];
+  const neueLieder: Zustand["lieder"] = [];
+  // Ziel-Tempo: Feld bzw. Verzeichnis-Vorschlag; ohne beides das Tempo des ERSTEN Lieds in der Tekk-Oktave
+  let zielBpm = Number((document.getElementById("genBpm") as HTMLInputElement | null)?.value) || z.zusammen?.tempoVorschlag || 0;
   try {
-    const eingabe = await dekodiere(datei);
-    const hinweis = Number((document.getElementById("genLiedBpm") as HTMLInputElement | null)?.value) || undefined;
-    z.liedStatus = "Tempo messen, Fenster waehlen …";
-    render();
-    await new Promise((r) => setTimeout(r, 0));
-    // Ziel-Tempo: Feld bzw. Verzeichnis-Vorschlag; ohne beides das Lied-Tempo in der Tekk-Oktave (kein Varispeed)
-    let zielBpm = Number((document.getElementById("genBpm") as HTMLInputElement | null)?.value) || z.zusammen?.tempoVorschlag || 0;
-    if (!zielBpm) {
-      const vor = analysiereLied(eingabe.pcm, 44100, { zielBpm: 180, bpmHinweis: hinweis, anzahl: 1 });
-      zielBpm = Math.round(vor.bpm * vor.k * 10) / 10;
-    }
-    const res = analysiereLied(eingabe.pcm, 44100, { zielBpm, bpmHinweis: hinweis });
-    if (!res.fenster.length) throw new Error("kein hoerbares Fenster gefunden");
-    const liedName = datei.name.replace(/\.[^.]+$/, "").slice(0, 10).trim() || "Lied";
-    const demucs = z.demucsGewuenscht && !!lied && !!z.python?.demucs;
-    const neue: ScanEintrag[] = [];
-    if (demucs && lied) {
-      abmelden = lied.onFortschritt((t) => {
-        z.liedStatus = t;
-        const el = document.getElementById("genLiedStatus");
-        if (el) el.textContent = t;
-      });
-      z.liedStatus = `Demucs auf ${res.fenster.length} Fenstern (dauert ein bis zwei Minuten) …`;
+    for (let li = 0; li < gewaehlt.length; li++) {
+      const datei = gewaehlt[li];
+      const prefix = gewaehlt.length > 1 ? `Lied ${li + 1}/${gewaehlt.length} — ` : "";
+      merkeLetzteDatei(datei.name, "lied");
+      z.liedStatus = `${prefix}Dekodiere ${datei.name} …`;
       render();
-      const antwort = await lied.stems({
-        fenster: res.fenster.map((f) => ({ id: f.label, bytes: Array.from(encodeWav16(f.pcm, 44100, 1)) })),
+      const eingabe = await dekodiere(datei);
+      // der BPM-Hinweis aus dem Feld gilt nur fuers erste Lied — die anderen haben eigene Tempi
+      const hinweis = li === 0 ? Number((document.getElementById("genLiedBpm") as HTMLInputElement | null)?.value) || undefined : undefined;
+      z.liedStatus = `${prefix}Tempo messen, Fenster waehlen …`;
+      render();
+      await new Promise((r) => setTimeout(r, 0));
+      if (!zielBpm) {
+        const vor = analysiereLied(eingabe.pcm, 44100, { zielBpm: 180, bpmHinweis: hinweis, anzahl: 1 });
+        zielBpm = Math.round(vor.bpm * vor.k * 10) / 10;
+      }
+      const res = analysiereLied(eingabe.pcm, 44100, { zielBpm, bpmHinweis: hinweis });
+      if (!res.fenster.length) throw new Error(`${datei.name}: kein hoerbares Fenster gefunden`);
+      const liedName = kuerzel[li];
+      const demucs = z.demucsGewuenscht && !!lied && !!z.python?.demucs;
+      const neue: ScanEintrag[] = [];
+      if (demucs && lied) {
+        abmelden?.();
+        abmelden = lied.onFortschritt((t) => {
+          z.liedStatus = prefix + t;
+          const el = document.getElementById("genLiedStatus");
+          if (el) el.textContent = prefix + t;
+        });
+        z.liedStatus = `${prefix}Demucs auf ${res.fenster.length} Fenstern (dauert ein bis zwei Minuten) …`;
+        render();
+        const antwort = await lied.stems({
+          fenster: res.fenster.map((f) => ({ id: f.label, bytes: Array.from(encodeWav16(f.pcm, 44100, 1)) })),
+        });
+        for (const f of antwort.fenster) {
+          const melo = parseWav(Uint8Array.from(f.melo));
+          neue.push(fensterEintrag(liedName, f.id, melo.pcm, "melo"));
+          if (f.vox) {
+            const vox = parseWav(Uint8Array.from(f.vox));
+            neue.push(fensterEintrag(liedName, f.id, vox.pcm, "vox"));
+          }
+        }
+        // Drums aus dem Lied: den Stem des lautesten Fensters (DROP) schneiden
+        if (!z.liedDrumsEigene) {
+          const dw = antwort.fenster.find((f) => f.id === "DROP" && f.drums) ?? antwort.fenster.find((f) => f.drums);
+          if (dw?.drums) {
+            const drums = parseWav(Uint8Array.from(dw.drums));
+            const treffer = schneideDrums(drums.pcm, 44100);
+            const zaehler: Record<DrumRolle, number> = { kick: 0, snare: 0, hat: 0 };
+            for (const t of treffer) neue.push(drumEintrag(liedName, t, ++zaehler[t.rolle]));
+          }
+        }
+      } else {
+        for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm, "melo"));
+      }
+      const drumZahl = neue.filter((e) => e.rolle === "kick" || e.rolle === "snare" || e.rolle === "hat").length;
+      const tonart = tonartErkennen(eingabe.pcm, 44100);
+      const tonartText = tonart.konfidenz >= 0.03 ? ` · ${tonart.name} (${tonart.camelot})${tonart.konfidenz < 0.08 ? "?" : ""}` : "";
+      neueLieder.push({
+        name: liedName, bpm: res.bpm, k: res.k, fenster: res.fenster.map((f) => f.label), stems: demucs,
+        dateien: neue.map((e) => e.datei),
+        zeile: `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)})${tonartText} · Fenster ${res.fenster
+          .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
+          .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocals als Vox${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"}`,
       });
-      for (const f of antwort.fenster) {
-        const melo = parseWav(Uint8Array.from(f.melo));
-        neue.push(fensterEintrag(liedName, f.id, melo.pcm, "melo"));
-        if (f.vox) {
-          const vox = parseWav(Uint8Array.from(f.vox));
-          neue.push(fensterEintrag(liedName, f.id, vox.pcm, "vox"));
-        }
-      }
-      // Drums aus dem Lied: den Stem des lautesten Fensters (DROP) schneiden
-      if (!z.liedDrumsEigene) {
-        const dw = antwort.fenster.find((f) => f.id === "DROP" && f.drums) ?? antwort.fenster.find((f) => f.drums);
-        if (dw?.drums) {
-          const drums = parseWav(Uint8Array.from(dw.drums));
-          const treffer = schneideDrums(drums.pcm, 44100);
-          const zaehler: Record<DrumRolle, number> = { kick: 0, snare: 0, hat: 0 };
-          for (const t of treffer) neue.push(drumEintrag(liedName, t, ++zaehler[t.rolle]));
-        }
-      }
-    } else {
-      for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm, "melo"));
+      alleNeuen.push(...neue);
     }
-    // Eintraege des vorherigen Lied-Laufs ersetzen, andere Samples behalten
-    const alt = new Set(z.lied?.dateien ?? []);
-    z.eintraege = z.eintraege.filter((e) => !alt.has(e.datei)).concat(neue);
-    if (!z.ordner) z.ordner = liedName;
+    // Eintraege des vorherigen Lied-Laufs als Ganzes ersetzen, andere Samples behalten
+    const alt = new Set(z.lieder.flatMap((l) => l.dateien));
+    z.eintraege = z.eintraege.filter((e) => !alt.has(e.datei)).concat(alleNeuen);
+    if (!z.ordner) z.ordner = gewaehlt.length > 1 ? "multi" : kuerzel[0];
     z.zusammen = zusammenfassung(z.eintraege);
     z.projekt = null;
     z.bank = null;
     z.ergebnis = null;
     z.pool = [];
-    z.lied = { name: liedName, bpm: res.bpm, k: res.k, fenster: res.fenster.map((f) => f.label), stems: demucs, dateien: neue.map((e) => e.datei) };
-    const drumZahl = neue.filter((e) => e.rolle === "kick" || e.rolle === "snare" || e.rolle === "hat").length;
-    const tonart = tonartErkennen(eingabe.pcm, 44100);
-    const tonartText = tonart.konfidenz >= 0.03 ? ` · ${tonart.name} (${tonart.camelot})${tonart.konfidenz < 0.08 ? "?" : ""}` : "";
-    z.liedStatus = `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)})${tonartText} · Fenster ${res.fenster
-      .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
-      .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocals als Vox${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"} — jetzt „Bank bauen"`;
+    z.lieder = neueLieder;
+    z.liedStatus =
+      (gewaehlt.length > 1 ? `${gewaehlt.length} Lieder, gemeinsames Ziel ${zielBpm} BPM · ` : "") +
+      neueLieder.map((l) => l.zeile).join(" ‖ ") +
+      ` — jetzt „Bank bauen"`;
   } catch (e) {
     z.liedStatus = "Lied-Analyse fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
   } finally {
@@ -585,8 +609,16 @@ async function alleAusLied(): Promise<void> {
   if (!z.eintraege.length || !z.zusammen) return;
   await bankBauen();
   if (!z.projekt) return;
+  // Mehrere Lieder: "Pro Melo" baut je Melodie eine Kette — alles landet in
+  // EINER .e2sallpat, die Samples aller Lieder stecken schon in EINER Bank.
+  if (z.lieder.length > 1) {
+    const radio = document.querySelector<HTMLInputElement>('input[name=genModus][value="promelo"]');
+    if (radio) radio.checked = true;
+  }
   await generieren();
-  z.liedStatus = `${z.liedStatus.replace(/ — jetzt „Bank bauen"$/, "")} — Bank gebaut, ${z.ergebnis?.patterns.length ?? 0} Pattern(s) erzeugt`;
+  z.liedStatus = `${z.liedStatus.replace(/ — jetzt „Bank bauen"$/, "")} — Bank gebaut, ${z.ergebnis?.patterns.length ?? 0} Pattern(s) erzeugt${
+    z.lieder.length > 1 ? ` (Pro Melo ueber ${z.lieder.length} Lieder in einer Datei)` : ""
+  }`;
   render();
 }
 

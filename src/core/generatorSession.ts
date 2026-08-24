@@ -59,6 +59,21 @@ export function dateiRelevant(relPfad: string, name: string): boolean {
   return !teile.some((t) => t.toLowerCase() === "tekkforge" || t.startsWith("."));
 }
 
+/**
+ * Eindeutige Lied-Kuerzel (max 10 Zeichen, ohne Endung) fuer Sample-Namen —
+ * bei Kollision ersetzt eine laufende Ziffer das letzte Zeichen.
+ */
+export function eindeutigeKuerzel(dateinamen: readonly string[]): string[] {
+  const vergeben = new Set<string>();
+  return dateinamen.map((n) => {
+    const basis = n.replace(/\.[^.]+$/, "").replace(/^[\s.]+|[\s.]+$/g, "").slice(0, 10).trim() || "Lied";
+    let kurz = basis;
+    for (let i = 2; vergeben.has(kurz); i++) kurz = `${basis.slice(0, 10 - String(i).length)}${i}`;
+    vergeben.add(kurz);
+    return kurz;
+  });
+}
+
 export interface Erzeugt {
   modus: Modus;
   rezepte: Rezept[];
