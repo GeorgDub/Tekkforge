@@ -22,6 +22,8 @@ import {
 import type { Rezept } from "../core/rezept";
 import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
 import { merkeLetzteDatei } from "./start";
+import { tekkUrl } from "./tekkUrl";
+import { tonartErkennen } from "../core/keyAnalyse";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiRelevant, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import {
@@ -53,6 +55,8 @@ interface Zustand {
   kiHinweis: string;
   /** Python/Demucs-Probe (nur Electron) */
   python: { demucs: boolean; meldung: string } | null;
+  /** Haken "Stems per Demucs" — lebt im Zustand, weil render() die Checkbox neu baut. */
+  demucsGewuenscht: boolean;
   /** zuletzt analysiertes Lied */
   lied: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean; dateien: string[] } | null;
   liedLaeuft: boolean;
@@ -61,12 +65,18 @@ interface Zustand {
   aufbau: boolean;
   /** eigene Drums (tekk/Ordner) statt aus dem Lied geschnittener Kick/Snare/Hat */
   liedDrumsEigene: boolean;
+  /** yt-dlp/ffmpeg-Probe fuer den URL-Import (nur Electron) */
+  url: { ok: boolean; meldung: string } | null;
+  urlLaeuft: boolean;
+  /** Per URL geholtes Lied — render() leert File-Inputs, darum liegt die Datei hier. */
+  urlDatei: File | null;
 }
 
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, lied: null, liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false,
+  python: null, demucsGewuenscht: false, lied: null, liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false,
+  url: null, urlLaeuft: false, urlDatei: null,
 };
 const player = new PreviewPlayer();
 
@@ -279,9 +289,15 @@ function render(): void {
         <input id="genLied" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" />
       </div>
       <div class="zeile">
+        <label for="genUrl" title="${escapeHtml(z.url?.meldung ?? "Probe laeuft …")}">Von URL</label>
+        <input id="genUrl" type="text" placeholder="YouTube- oder SoundCloud-Link" style="flex:1;min-width:220px" ${z.url?.ok && !z.urlLaeuft ? "" : "disabled"} />
+        <button id="genUrlHolen" ${z.url?.ok && !z.urlLaeuft ? "" : "disabled"}>${z.urlLaeuft ? "Laedt …" : "Holen"}</button>
+        ${z.url && !z.url.ok ? `<span class="fortschritt" title="${escapeHtml(z.url.meldung)}">nicht verfuegbar</span>` : ""}
+      </div>
+      <div class="zeile">
         <label for="genLiedBpm">Lied-BPM</label>
         <input id="genLiedBpm" type="number" min="40" max="300" placeholder="messen" style="width:80px" />
-        <label title="${escapeHtml(z.python?.meldung ?? "Probe laeuft …")}"><input id="genDemucs" type="checkbox" ${z.python?.demucs ? "checked" : "disabled"} /> Stems per Demucs${z.python ? (z.python.demucs ? "" : " (nicht verfuegbar)") : " (Probe …)"}</label>
+        <label title="${escapeHtml(z.python?.meldung ?? "Probe laeuft …")}"><input id="genDemucs" type="checkbox" ${z.python?.demucs ? (z.demucsGewuenscht ? "checked" : "") : "disabled"} /> Stems per Demucs${z.python ? (z.python.demucs ? "" : " (nicht verfuegbar)") : " (Probe …)"}</label>
         <label title="Ohne Haken werden Kick/Snare/Hat aus dem Drums-Stem des Lieds geschnitten; mit Haken kommen die Drums aus tekk4 bzw. dem gescannten Ordner."><input id="genLiedEigene" type="checkbox" ${z.liedDrumsEigene ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> eigene Drums statt Lied-Drums</label>
         <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
         <button id="genLiedAlles" class="primary" ${z.liedLaeuft ? "disabled" : ""} title="Analysieren → Stems → Drums schneiden → Bank bauen → Patterns erzeugen in einem Ablauf">${z.liedLaeuft ? "Laeuft …" : "Alles aus dem Lied"}</button>
@@ -323,8 +339,12 @@ function verdrahte(): void {
   knopf("genBank", () => void bankBauen());
   knopf("genLiedLos", () => void liedAnalysieren());
   knopf("genLiedAlles", () => void alleAusLied());
+  knopf("genUrlHolen", () => void urlHolen());
   document.getElementById("genLiedEigene")?.addEventListener("change", (e) => {
     z.liedDrumsEigene = (e.target as HTMLInputElement).checked;
+  });
+  document.getElementById("genDemucs")?.addEventListener("change", (e) => {
+    z.demucsGewuenscht = (e.target as HTMLInputElement).checked;
   });
   knopf("genBankSpeichern", () => {
     if (z.bank && z.projekt) download(z.bank, `${z.projekt.name}.all`, "application/octet-stream");
@@ -440,12 +460,40 @@ function drumEintrag(liedName: string, t: DrumTreffer, nr: number): ScanEintrag 
   };
 }
 
+/** YouTube-/SoundCloud-Link als WAV holen und ins Lied-Feld legen. */
+async function urlHolen(): Promise<void> {
+  const bruecke = tekkUrl();
+  const feld = document.getElementById("genUrl") as HTMLInputElement | null;
+  const url = feld?.value.trim();
+  if (!bruecke || !url || z.urlLaeuft) return;
+  z.urlLaeuft = true;
+  z.liedStatus = "Lade Audio von der URL …";
+  render();
+  const abmelden = bruecke.onFortschritt((t) => {
+    if (!t) return;
+    const el = document.getElementById("genLiedStatus");
+    if (el) el.textContent = t;
+  });
+  try {
+    const res = await bruecke.laden(url);
+    z.urlDatei = new File([new Uint8Array(res.bytes)], res.name, { type: "audio/wav" });
+    z.liedStatus = `${res.name} geladen (${(res.bytes.length / 1024 / 1024).toFixed(1)} MB) — jetzt „Fenster holen" oder „Alles aus dem Lied"`;
+  } catch (e) {
+    z.liedStatus = "URL-Import fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
+  } finally {
+    abmelden();
+    z.urlLaeuft = false;
+    render();
+  }
+}
+
 /** Lied dekodieren → Fenster (TS) → optional Demucs-Stems → als Melo/Vox-Eintraege in den Scan. */
 async function liedAnalysieren(): Promise<void> {
   const input = document.getElementById("genLied") as HTMLInputElement | null;
-  const datei = input?.files?.[0];
+  // frisch gewaehlte Datei gewinnt; sonst die per URL geholte (render() leert Inputs)
+  const datei = input?.files?.[0] ?? z.urlDatei ?? undefined;
   if (!datei) {
-    z.liedStatus = "Erst eine Audiodatei waehlen.";
+    z.liedStatus = "Erst eine Audiodatei waehlen (oder per URL holen).";
     render();
     return;
   }
@@ -471,7 +519,7 @@ async function liedAnalysieren(): Promise<void> {
     const res = analysiereLied(eingabe.pcm, 44100, { zielBpm, bpmHinweis: hinweis });
     if (!res.fenster.length) throw new Error("kein hoerbares Fenster gefunden");
     const liedName = datei.name.replace(/\.[^.]+$/, "").slice(0, 10).trim() || "Lied";
-    const demucs = !!(document.getElementById("genDemucs") as HTMLInputElement | null)?.checked && !!lied && !!z.python?.demucs;
+    const demucs = z.demucsGewuenscht && !!lied && !!z.python?.demucs;
     const neue: ScanEintrag[] = [];
     if (demucs && lied) {
       abmelden = lied.onFortschritt((t) => {
@@ -516,7 +564,9 @@ async function liedAnalysieren(): Promise<void> {
     z.pool = [];
     z.lied = { name: liedName, bpm: res.bpm, k: res.k, fenster: res.fenster.map((f) => f.label), stems: demucs, dateien: neue.map((e) => e.datei) };
     const drumZahl = neue.filter((e) => e.rolle === "kick" || e.rolle === "snare" || e.rolle === "hat").length;
-    z.liedStatus = `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)}) · Fenster ${res.fenster
+    const tonart = tonartErkennen(eingabe.pcm, 44100);
+    const tonartText = tonart.konfidenz >= 0.03 ? ` · ${tonart.name} (${tonart.camelot})${tonart.konfidenz < 0.08 ? "?" : ""}` : "";
+    z.liedStatus = `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)})${tonartText} · Fenster ${res.fenster
       .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
       .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocals als Vox${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"} — jetzt „Bank bauen"`;
   } catch (e) {
@@ -766,6 +816,7 @@ export function initGenerator(cb: (p: EditorProject) => void): void {
   if (lied) {
     void lied.pythonStatus().then((s) => {
       z.python = { demucs: s.demucs, meldung: s.meldung };
+      z.demucsGewuenscht = s.demucs;
       render();
     }).catch((e: unknown) => {
       z.python = { demucs: false, meldung: "Probe fehlgeschlagen: " + (e instanceof Error ? e.message : String(e)) };
@@ -773,6 +824,21 @@ export function initGenerator(cb: (p: EditorProject) => void): void {
     });
   } else {
     z.python = { demucs: false, meldung: "nur in der Desktop-App" };
+  }
+  const urlBruecke = tekkUrl();
+  if (urlBruecke) {
+    void urlBruecke
+      .probe()
+      .then((s) => {
+        z.url = { ok: s.ok, meldung: s.meldung };
+        render();
+      })
+      .catch((e: unknown) => {
+        z.url = { ok: false, meldung: "Probe fehlgeschlagen: " + (e instanceof Error ? e.message : String(e)) };
+        render();
+      });
+  } else {
+    z.url = { ok: false, meldung: "nur in der Desktop-App" };
   }
 }
 

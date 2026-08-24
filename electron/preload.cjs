@@ -59,6 +59,20 @@ contextBridge.exposeInMainWorld("tekkLied", {
   },
 });
 
+// ── URL-Bruecke (Generator-Tab): YouTube/SoundCloud -> WAV ueber yt-dlp + ffmpeg ──
+contextBridge.exposeInMainWorld("tekkUrl", {
+  available: true,
+  /** { ok, version?, meldung } */
+  probe: () => ipcRenderer.invoke("url:probe"),
+  /** https-URL (YouTube/SoundCloud) -> { name, bytes } (44,1-kHz-WAV). */
+  laden: (url) => ipcRenderer.invoke("url:laden", url),
+  onFortschritt: (cb) => {
+    const handler = (_e, text) => cb(text);
+    ipcRenderer.on("url:fortschritt", handler);
+    return () => ipcRenderer.removeListener("url:fortschritt", handler);
+  },
+});
+
 // ── Dateibruecke fuer den Generator-Tab (Projekt auf Platte, SD-Karte, tekk4-Drums) ──
 contextBridge.exposeInMainWorld("tekkFs", {
   available: true,

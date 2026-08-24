@@ -401,6 +401,81 @@ function registerLiedIpc(win) {
   });
 }
 
+// ── URL-Bruecke (Generator-Tab): YouTube/SoundCloud -> WAV ueber yt-dlp + imageio-ffmpeg ──
+const URL_HOSTS = new Set([
+  "youtube.com", "www.youtube.com", "music.youtube.com", "m.youtube.com", "youtu.be",
+  "soundcloud.com", "www.soundcloud.com", "m.soundcloud.com", "on.soundcloud.com",
+]);
+
+async function ffmpegPfad() {
+  try {
+    const { out } = await laufen(pythonPfad(), ["-c", "import imageio_ffmpeg,sys;print(imageio_ffmpeg.get_ffmpeg_exe())"], { timeoutMs: 20000 });
+    const p = out.trim().split(/\r?\n/).pop();
+    return p && fs.existsSync(p) ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function registerUrlIpc(win) {
+  ipcMain.handle("url:probe", async () => {
+    try {
+      const { out } = await laufen(pythonPfad(), ["-m", "yt_dlp", "--version"], { timeoutMs: 20000 });
+      const version = out.trim();
+      const ff = await ffmpegPfad();
+      if (!ff) return { ok: false, meldung: `yt-dlp ${version} da, aber kein ffmpeg (pip install imageio-ffmpeg)` };
+      return { ok: true, version, meldung: `yt-dlp ${version} + ffmpeg bereit` };
+    } catch (e) {
+      return { ok: false, meldung: "Kein yt-dlp (pip install yt-dlp): " + e.message };
+    }
+  });
+  ipcMain.handle("url:laden", async (_e, url) => {
+    let u;
+    try {
+      u = new URL(String(url));
+    } catch {
+      throw new Error("Keine gueltige URL");
+    }
+    if (u.protocol !== "https:") throw new Error("Nur https-Links");
+    if (!URL_HOSTS.has(u.hostname.toLowerCase())) throw new Error("Nur YouTube- und SoundCloud-Links");
+    const ff = await ffmpegPfad();
+    if (!ff) throw new Error("ffmpeg fehlt (pip install imageio-ffmpeg)");
+    const basis = path.join(app.getPath("userData"), "tmp", `url-${Date.now()}`);
+    fs.mkdirSync(basis, { recursive: true });
+    const melde = (t) => {
+      if (win && !win.isDestroyed()) win.webContents.send("url:fortschritt", t);
+    };
+    try {
+      melde("Lade Audio von der URL …");
+      await laufen(
+        pythonPfad(),
+        [
+          "-m", "yt_dlp", "--no-playlist", "--newline", "-x", "--audio-format", "wav", "--audio-quality", "0",
+          "--postprocessor-args", "ffmpeg:-ar 44100", "--ffmpeg-location", ff, "--write-info-json",
+          "-o", path.join(basis, "lied.%(ext)s"), u.toString(),
+        ],
+        { timeoutMs: 600000, onStderr: (t) => melde(t.trim().split(/\r?\n/).pop() || "") },
+      );
+      const wav = path.join(basis, "lied.wav");
+      if (!fs.existsSync(wav)) throw new Error("Es ist kein WAV entstanden — Link pruefen");
+      let titel = "lied";
+      try {
+        titel = String(JSON.parse(fs.readFileSync(path.join(basis, "lied.info.json"), "utf8")).title || "lied");
+      } catch {
+        /* Titel bleibt "lied" */
+      }
+      const name = `${titel.replace(/[^\w\s().-]/g, "").trim().slice(0, 60) || "lied"}.wav`;
+      return { name, bytes: fs.readFileSync(wav) };
+    } finally {
+      try {
+        fs.rmSync(basis, { recursive: true, force: true });
+      } catch {
+        /* Temp bleibt liegen — unkritisch */
+      }
+    }
+  });
+}
+
 function registerMidiIpc(win) {
   midiWin = win;
   startMidiWorker();
@@ -486,6 +561,7 @@ app.whenReady().then(() => {
   registerFsIpc();
   registerKiIpc();
   registerLiedIpc(win);
+  registerUrlIpc(win);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();
