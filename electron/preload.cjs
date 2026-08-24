@@ -46,6 +46,15 @@ contextBridge.exposeInMainWorld("tekkKi", {
   chat: (anfrage) => ipcRenderer.invoke("ki:chat", anfrage),
 });
 
+// ── Update-Check (GitHub Releases) ──
+contextBridge.exposeInMainWorld("tekkUpdate", {
+  available: true,
+  /** { tag: "v0.5.1" | null, url } — tag null = noch kein Release. */
+  pruefen: () => ipcRenderer.invoke("update:pruefen"),
+  /** GitHub-Link im Browser oeffnen. */
+  oeffnen: (url) => ipcRenderer.invoke("update:oeffnen", url),
+});
+
 // ── Lied-Bruecke fuer den Generator-Tab (Python/Demucs-Probe, Stems) ──
 contextBridge.exposeInMainWorld("tekkLied", {
   available: true,

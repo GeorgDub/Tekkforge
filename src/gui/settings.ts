@@ -7,7 +7,46 @@ import { $ } from "./shared";
 import { THEMES } from "../core/themes";
 import { aktuelleWahl, themeSetzen } from "./theme";
 import { tekkFs } from "./tekkFs";
+import { vergleicheVersionen } from "../core/updateCheck";
 import { version } from "../../package.json";
+
+interface TekkUpdate {
+  available: boolean;
+  pruefen(): Promise<{ tag: string | null; url: string }>;
+  oeffnen(url: string): Promise<void>;
+}
+
+function tekkUpdate(): TekkUpdate | undefined {
+  const w = globalThis as unknown as { tekkUpdate?: TekkUpdate };
+  return w.tekkUpdate?.available ? w.tekkUpdate : undefined;
+}
+
+let updateMeldung = "";
+let updateUrl = "";
+
+async function updatePruefen(): Promise<void> {
+  const up = tekkUpdate();
+  if (!up) return;
+  updateMeldung = "Frage GitHub …";
+  updateUrl = "";
+  render();
+  try {
+    const res = await up.pruefen();
+    if (!res.tag) {
+      updateMeldung = "Noch kein Release veroeffentlicht — du laeufst auf dem Arbeitsstand.";
+    } else {
+      const lage = vergleicheVersionen(version, res.tag);
+      updateMeldung =
+        lage === "neuer"
+          ? `Version ${res.tag} ist verfuegbar (installiert: v${version}).`
+          : `v${version} ist aktuell (letztes Release: ${res.tag}).`;
+      if (lage === "neuer") updateUrl = res.url;
+    }
+  } catch (e) {
+    updateMeldung = "Update-Check fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
+  }
+  render();
+}
 
 interface BackupZeile {
   name: string;
@@ -112,10 +151,19 @@ function render(): void {
     </div>
     <div class="card">
       <h2>Über TekkForge</h2>
-      <p class="sub" style="margin:0">
+      <p class="sub" style="margin:0 0 8px">
         TekkForge v${version} · Electribe-2-Sampler-Werkzeug — alles lokal, keine Datei verlässt den Rechner.<br />
         Step-Layout verifiziert gegen KORG-Factory-Files + hardwaregetestete Patterns.
       </p>
+      ${
+        tekkUpdate()
+          ? `<div class="zeileEinst">
+              <button id="setUpdate" class="ghost">Nach Updates suchen</button>
+              ${updateUrl ? `<button id="setUpdateAuf" class="primary">Release öffnen</button>` : ""}
+              ${updateMeldung ? `<span class="sub" style="margin:0">${escapeAttr(updateMeldung)}</span>` : ""}
+            </div>`
+          : ""
+      }
     </div>`;
   for (const b of host.querySelectorAll<HTMLButtonElement>("[data-theme]")) {
     b.addEventListener("click", () => {
@@ -142,6 +190,10 @@ function render(): void {
   for (const b of host.querySelectorAll<HTMLButtonElement>("[data-backup]")) {
     b.addEventListener("click", () => void backupZurueck(b.dataset.backup!));
   }
+  document.getElementById("setUpdate")?.addEventListener("click", () => void updatePruefen());
+  document.getElementById("setUpdateAuf")?.addEventListener("click", () => {
+    if (updateUrl) void tekkUpdate()?.oeffnen(updateUrl);
+  });
 }
 
 function escapeAttr(s: string): string {

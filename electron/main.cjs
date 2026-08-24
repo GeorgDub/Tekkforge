@@ -579,6 +579,27 @@ function createWindow() {
   return win;
 }
 
+// ── Update-Check (GitHub Releases, MKM-Angleich) ──
+const UPDATE_REPO = "GeorgDub/Tekkforge";
+
+function registerUpdateIpc() {
+  ipcMain.handle("update:pruefen", async () => {
+    const antwort = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+      headers: { "User-Agent": "TekkForge", Accept: "application/vnd.github+json" },
+    });
+    // 404 = noch kein Release veroeffentlicht — kein Fehler
+    if (antwort.status === 404) return { tag: null, url: `https://github.com/${UPDATE_REPO}/releases` };
+    if (!antwort.ok) throw new Error(`GitHub antwortet mit ${antwort.status}`);
+    const json = await antwort.json();
+    return { tag: json.tag_name || null, url: json.html_url || `https://github.com/${UPDATE_REPO}/releases` };
+  });
+  ipcMain.handle("update:oeffnen", (_e, url) => {
+    const u = String(url || "");
+    if (!/^https:\/\/github\.com\//.test(u)) throw new Error("Nur GitHub-Links");
+    return shell.openExternal(u);
+  });
+}
+
 app.whenReady().then(() => {
   grantMidiPermissions();
   registerAppProtocol();
@@ -588,6 +609,7 @@ app.whenReady().then(() => {
   registerKiIpc();
   registerLiedIpc(win);
   registerUrlIpc(win);
+  registerUpdateIpc();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();
