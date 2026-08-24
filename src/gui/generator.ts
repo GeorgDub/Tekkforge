@@ -65,6 +65,8 @@ interface Zustand {
   aufbau: boolean;
   /** eigene Drums (tekk/Ordner) statt aus dem Lied geschnittener Kick/Snare/Hat */
   liedDrumsEigene: boolean;
+  /** Ziel-BPM der letzten Lied-Analyse — Bank und Patterns muessen im selben Tempo laufen wie die geschnittenen Fenster */
+  liedBpm: number | null;
   /** yt-dlp/ffmpeg-Probe fuer den URL-Import (nur Electron) */
   url: { ok: boolean; meldung: string } | null;
   urlLaeuft: boolean;
@@ -86,7 +88,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false, liedBpm: null,
   url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
@@ -196,7 +198,7 @@ function render(): void {
       }
       <div class="zeile">
         <label for="genBpm">Tempo</label>
-        <input id="genBpm" type="number" min="60" max="300" value="${z.projekt?.bpm ?? zs.tempoVorschlag}" style="width:80px" />
+        <input id="genBpm" type="number" min="60" max="300" value="${z.projekt?.bpm ?? z.liedBpm ?? zs.tempoVorschlag}" style="width:80px" />
         <span class="fortschritt">Vorschlag aus der Taktanalyse: ${zs.tempoVorschlag} BPM</span>
       </div>
       <div class="zeile">
@@ -638,6 +640,7 @@ async function liedAnalysieren(): Promise<void> {
     z.pool = [];
     z.sets = [];
     z.lieder = neueLieder;
+    z.liedBpm = zielBpm || null;
     z.liedStatus =
       (gewaehlt.length > 1 ? `${gewaehlt.length} Lieder, gemeinsames Ziel ${zielBpm} BPM · ` : "") +
       neueLieder.map((l) => l.zeile).join(" ‖ ") +
@@ -700,7 +703,7 @@ async function alleAusLied(): Promise<void> {
  * (.e2sallpat), Rezepte per Regel-Planer (kein KI-Aufruf je Gruppe).
  */
 async function setsBauen(gruppen: LiedGruppe[]): Promise<void> {
-  const bpm = Number(($("genBpm") as HTMLInputElement | null)?.value) || z.zusammen?.tempoVorschlag || 180;
+  const bpm = Number(($("genBpm") as HTMLInputElement | null)?.value) || z.liedBpm || z.zusammen?.tempoVorschlag || 180;
   const tekkGewuenscht = (document.getElementById("genTekk") as HTMLInputElement | null)?.checked ?? false;
   const tekk = tekkGewuenscht ? await ladeTekkDrums() : null;
   const basis = z.ordner.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 10) || "multi";
@@ -743,7 +746,7 @@ async function setsBauen(gruppen: LiedGruppe[]): Promise<void> {
 
 async function bankBauen(): Promise<void> {
   if (!z.eintraege.length || !z.zusammen) return;
-  const bpm = Number(($("genBpm") as HTMLInputElement).value) || z.zusammen.tempoVorschlag;
+  const bpm = Number(($("genBpm") as HTMLInputElement).value) || z.liedBpm || z.zusammen.tempoVorschlag;
   const volume = Number(($("genVolume") as HTMLSelectElement).value) || 1;
   const tekkGewuenscht = ($("genTekk") as HTMLInputElement).checked;
   const tekk = tekkGewuenscht ? await ladeTekkDrums() : null;
