@@ -13,9 +13,10 @@ import { initConverter } from "./converter";
 import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
 import { initGenerator, generatorWirdSichtbar } from "./generator";
+import { initMidiImport, midiImportWirdSichtbar } from "./midiImport";
 import type { EditorProject } from "../core/editorModel";
 
-type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "settings";
+type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "settings";
 
 const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?: () => void }> = {
   start: { view: "viewStart", knopf: "tabStart", titel: "Start", sichtbar: startWirdSichtbar },
@@ -25,6 +26,7 @@ const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?:
   panel: { view: "viewPanel", knopf: "tabPanel", titel: "E2S Panel", sichtbar: panelWirdSichtbar },
   paddeck: { view: "viewPadDeck", knopf: "tabPadDeck", titel: "Pad-Deck", sichtbar: padDeckWirdSichtbar },
   generator: { view: "viewGenerator", knopf: "tabGenerator", titel: "Generator", sichtbar: generatorWirdSichtbar },
+  midi: { view: "viewMidi", knopf: "tabMidi", titel: "MIDI zu Korg", sichtbar: midiImportWirdSichtbar },
   settings: { view: "viewSettings", knopf: "tabSettings", titel: "Einstellungen", sichtbar: settingsWirdSichtbar },
 };
 
@@ -82,6 +84,13 @@ initGenerator((project: EditorProject) => {
   if (loadProject(project)) {
     switchTab("editor");
     alert(`Generator → Editor: ${project.patterns.length} Pattern(s), ${project.samples.length} Sample(s).`);
+  }
+});
+// MIDI-Import-Handoff: gebaute Patterns in den Editor laden + Tab wechseln.
+initMidiImport((project: EditorProject) => {
+  if (loadProject(project)) {
+    switchTab("editor");
+    alert(`MIDI → Editor: ${project.patterns.length} Pattern(s) — jetzt Samples zuordnen.`);
   }
 });
 initStart({

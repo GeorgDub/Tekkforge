@@ -43,7 +43,7 @@ export function merkeLetzteDatei(name: string, art: DateiArt, pfad?: string): vo
 }
 
 const ART_LABEL: Record<DateiArt, string> = {
-  all: ".all", esx: "ESX", projekt: "Projekt", e2spat: "Pattern", lied: "Lied",
+  all: ".all", esx: "ESX", projekt: "Projekt", e2spat: "Pattern", lied: "Lied", midi: "MIDI",
 };
 
 function wannText(wann: number): string {

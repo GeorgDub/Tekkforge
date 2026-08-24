@@ -5,7 +5,7 @@
  * (localStorage), entscheidet die GUI.
  */
 
-export type DateiArt = "all" | "esx" | "projekt" | "e2spat" | "lied";
+export type DateiArt = "all" | "esx" | "projekt" | "e2spat" | "lied" | "midi";
 
 export interface LetzteDatei {
   name: string;
