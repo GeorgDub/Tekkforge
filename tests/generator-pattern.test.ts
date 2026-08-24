@@ -5,7 +5,7 @@ import { parseWav } from "../src/core/wavCodec";
 import { scanne } from "../src/core/sampleScan";
 import { planeBank } from "../src/core/bankPlan";
 import { regelRezept, regelRezeptProMelo } from "../src/core/rezept";
-import { baueRezept, baueProMelo, alsAllPat, alsPat } from "../src/core/patternGen";
+import { baueRezept, baueProMelo, baueAufbau, baueProMeloAufbau, alsAllPat, alsPat } from "../src/core/patternGen";
 import { parseElectribeAllPatBank, parseElectribePattern } from "../src/core/electribeImport";
 import { e2PatternRefToBankNumber } from "../src/core/e2sPatternSampleLink";
 
@@ -72,6 +72,47 @@ describe("patternGen", () => {
     const p = parseElectribePattern(bytes);
     expect(p.bpm).toBe(180);
     expect(p.name.trim()).toBe(patterns[0].name);
+  });
+  it("aufbau: identische Steps ueberall, Mutes wachsen monoton, Kick erst im Drop, Kette mit 2 Durchgaengen", () => {
+    const { patterns } = baueAufbau(regelRezept(projekt, { modus: "jam" }), projekt, { startSlot: 5 });
+    expect(patterns.length).toBeGreaterThanOrEqual(3);
+    const drop = patterns[patterns.length - 1];
+    expect(drop.name.endsWith("DROP")).toBe(true);
+    // Steps in jedem Pattern identisch zum Drop — nur die Mutes unterscheiden sich
+    for (const p of patterns) {
+      for (let idx = 0; idx < 16; idx++) expect(p.parts[idx].steps).toEqual(drop.parts[idx].steps);
+    }
+    // Kicks (Part 1/2) bis zum Drop gemutet, aber mit gesetzten Steps
+    for (const p of patterns.slice(0, -1)) {
+      expect(p.parts[0].muted).toBe(true);
+      expect(p.parts[0].steps.some((s) => s.active)).toBe(true);
+    }
+    expect(drop.parts[0].muted).toBe(false);
+    // Stufe 1 hat die Melo wach
+    expect(patterns[0].parts[12].muted).toBe(false);
+    // einmal entmutet bleibt entmutet
+    for (let i = 1; i < patterns.length; i++) {
+      for (let idx = 0; idx < 16; idx++) {
+        if (!patterns[i - 1].parts[idx].muted) expect(patterns[i].parts[idx].muted).toBe(false);
+      }
+    }
+    patterns.slice(0, -1).forEach((p, i) => {
+      expect(p.chainTo).toBe(5 + i + 1);
+      expect(p.chainRepeat).toBe(2);
+    });
+    expect(drop.chainTo).toBe(0);
+  });
+  it("aufbau pro melo: je Melodie eine Kette, Slots fortlaufend", () => {
+    const rezepte = regelRezeptProMelo(projekt);
+    const { patterns } = baueProMeloAufbau(rezepte, projekt);
+    expect(patterns.length).toBeGreaterThan(rezepte.length);
+    const dropIdx = patterns.map((p, i) => (p.name.endsWith("DROP") ? i : -1)).filter((i) => i >= 0);
+    expect(dropIdx.length).toBe(rezepte.length);
+    for (const i of dropIdx) expect(patterns[i].chainTo).toBe(0);
+    // Ketten zeigen jeweils auf den naechsten Slot (1-basiert = Index + 1)
+    patterns.forEach((p, i) => {
+      if (!p.name.endsWith("DROP")) expect(p.chainTo).toBe(i + 2);
+    });
   });
   it("golden: gleiches Rezept → gleiche Bytes", () => {
     const r = regelRezept(projekt, { modus: "miniset" });

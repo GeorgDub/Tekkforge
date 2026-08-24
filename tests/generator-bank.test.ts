@@ -61,6 +61,34 @@ describe("bankPlan", () => {
     expect(t.takte).toBe(4);
     expect(t.pcm.length).toBe(Math.round(4 * (240 / 180) * sr));
   });
+  it("bereiteAuf: Off-Grid-Melo (Eigentempo 155) wird per Varispeed auf 2 Takte @180 gezogen statt One-Shot", () => {
+    const sr = 44100;
+    // 8 Beats bei 155 BPM: klare Onsets, damit tempoSchaetzen das Eigentempo findet
+    const beat = 60 / 155;
+    const dauer = 8 * beat; // ≈ 3,097 s → bei 180 BPM: 2,32 Takte → Abweichung 16 % > Toleranz
+    const pcm = new Float32Array(Math.round(dauer * sr));
+    for (let b = 0; b < 8; b++) {
+      const start = Math.round(b * beat * sr);
+      for (let i = 0; i < 4000 && start + i < pcm.length; i++) {
+        pcm[start + i] = Math.sin((2 * Math.PI * 800 * i) / sr) * 0.7 * Math.exp(-i / 800);
+      }
+    }
+    const { eintraege } = scanne([{ name: "OffGrid MeLo.wav", pcm, sampleRate: sr }]);
+    expect(eintraege[0].rolle).toBe("melo");
+    const t = bereiteAuf(eintraege[0], 180).teile[0];
+    expect(t.kind).toBe("loop");
+    expect(t.takte).toBe(2);
+    expect(t.pcm.length).toBe(Math.round(2 * (240 / 180) * sr));
+  });
+  it("planeBank: Melo-Loops tragen ein 64er-Raster (Onset/Bass)", () => {
+    const { eintraege } = scanne(eingaben(["BaReTT MeLo.wav"]));
+    const { projekt } = planeBank(eintraege, { name: "r", bpm: 180, bankZeit: "x" });
+    const melo = projekt.samples.find((s) => s.rolle === "melo" && s.kind === "loop")!;
+    expect(melo.raster).toBeDefined();
+    expect(melo.raster!.onset).toHaveLength(64);
+    expect(melo.raster!.bass).toHaveLength(64);
+    expect(Math.max(...melo.raster!.onset)).toBeCloseTo(1, 5);
+  });
   it("waehleVolumes: Budget teilt in Scheiben, nichts geht verloren", () => {
     const { eintraege } = scanne(eingaben(alle));
     const vol = waehleVolumes(eintraege, 180, 30);

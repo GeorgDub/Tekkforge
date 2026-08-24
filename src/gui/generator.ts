@@ -15,13 +15,14 @@ import { tekkLied } from "./tekkLied";
 import { analysiereLied, type LiedFenster } from "../core/liedAnalyse";
 import { encodeWav16, parseWav } from "../core/wavCodec";
 import { rmsDb, peakVon, familie } from "../core/sampleScan";
+import { schneideDrums, type DrumTreffer, type DrumRolle } from "../core/drumSchnitt";
 import {
   promptFuer, antwortZuRezept, REZEPT_SCHEMA, KI_MODELL_STANDARD, KI_MODELLE, promptFuerProMelo, antwortZuRezepte, REZEPT_LISTE_SCHEMA,
 } from "../core/kiPlaner";
 import type { Rezept } from "../core/rezept";
 import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
 import { planeBank, type Projekt } from "../core/bankPlan";
-import { zusammenfassung, erzeuge, projektJson, dateiArt, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import { zusammenfassung, erzeuge, projektJson, dateiRelevant, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import {
   type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
 } from "../core/projektStatus";
@@ -55,12 +56,16 @@ interface Zustand {
   lied: { name: string; bpm: number; k: number; fenster: string[]; stems: boolean; dateien: string[] } | null;
   liedLaeuft: boolean;
   liedStatus: string;
+  /** Aufbau-Kette: identische Steps in allen Patterns, entmutet wird stufenweise */
+  aufbau: boolean;
+  /** eigene Drums (tekk/Ordner) statt aus dem Lied geschnittener Kick/Snare/Hat */
+  liedDrumsEigene: boolean;
 }
 
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, lied: null, liedLaeuft: false, liedStatus: "",
+  python: null, lied: null, liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false,
 };
 const player = new PreviewPlayer();
 
@@ -204,6 +209,9 @@ function render(): void {
         <label><input type="radio" name="genModus" value="miniset" /> Mini-Set (6)</label>
         <label><input type="radio" name="genModus" value="promelo" /> Pro Melo (${melos.length})</label>
       </div>
+      <div class="zeile"><label title="Alle Patterns tragen dieselben vollen Steps; entmutet wird stufenweise (Melo+Snare → Hats → … → Drop mit Kick). Spielweise: am Geraet Parts entmuten.">
+        <input id="genAufbau" type="checkbox" ${z.aufbau ? "checked" : ""} /> Aufbau-Kette (Mute/Unmute-Spielweise)</label>
+      </div>
       <div class="zeile"><label for="genMelo">Melodie</label>
         <select id="genMelo"><option value="">Regel waehlt</option>${melos
           .map((m) => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${m.takte} T)</option>`)
@@ -273,7 +281,9 @@ function render(): void {
         <label for="genLiedBpm">Lied-BPM</label>
         <input id="genLiedBpm" type="number" min="40" max="300" placeholder="messen" style="width:80px" />
         <label title="${escapeHtml(z.python?.meldung ?? "Probe laeuft …")}"><input id="genDemucs" type="checkbox" ${z.python?.demucs ? "checked" : "disabled"} /> Stems per Demucs${z.python ? (z.python.demucs ? "" : " (nicht verfuegbar)") : " (Probe …)"}</label>
+        <label title="Ohne Haken werden Kick/Snare/Hat aus dem Drums-Stem des Lieds geschnitten; mit Haken kommen die Drums aus tekk4 bzw. dem gescannten Ordner."><input id="genLiedEigene" type="checkbox" ${z.liedDrumsEigene ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> eigene Drums statt Lied-Drums</label>
         <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
+        <button id="genLiedAlles" class="primary" ${z.liedLaeuft ? "disabled" : ""} title="Analysieren → Stems → Drums schneiden → Bank bauen → Patterns erzeugen in einem Ablauf">${z.liedLaeuft ? "Laeuft …" : "Alles aus dem Lied"}</button>
       </div>
       ${z.liedStatus ? `<div class="fortschritt" id="genLiedStatus">${escapeHtml(z.liedStatus)}</div>` : ""}
       ${
@@ -311,6 +321,10 @@ function verdrahte(): void {
   ordner.addEventListener("change", () => void scanneOrdner(ordner.files));
   knopf("genBank", () => void bankBauen());
   knopf("genLiedLos", () => void liedAnalysieren());
+  knopf("genLiedAlles", () => void alleAusLied());
+  document.getElementById("genLiedEigene")?.addEventListener("change", (e) => {
+    z.liedDrumsEigene = (e.target as HTMLInputElement).checked;
+  });
   knopf("genBankSpeichern", () => {
     if (z.bank && z.projekt) download(z.bank, `${z.projekt.name}.all`, "application/octet-stream");
   });
@@ -321,6 +335,9 @@ function verdrahte(): void {
   knopf("genSd", () => void aufSd());
   knopf("genGeladen", alsGeladen);
   knopf("genLos", () => void generieren());
+  document.getElementById("genAufbau")?.addEventListener("change", (e) => {
+    z.aufbau = (e.target as HTMLInputElement).checked;
+  });
   knopf("genKeySpeichern", () => void keySpeichern(($("genKey") as HTMLInputElement).value));
   knopf("genKeyLoeschen", () => void keySpeichern(""));
   document.getElementById("genModell")?.addEventListener("change", (e) => {
@@ -364,8 +381,8 @@ type DateiMitPfad = File & { webkitRelativePath?: string };
 async function scanneOrdner(files: FileList | null): Promise<void> {
   if (!files?.length) return;
   const alle = Array.from(files) as DateiMitPfad[];
-  // nur die oberste Ebene des gewaehlten Verzeichnisses, keine Unterordner
-  const liste = alle.filter((f) => dateiArt(f.name) !== "skip" && (f.webkitRelativePath ?? "").split("/").length <= 2);
+  // alle Ebenen des gewaehlten Verzeichnisses; nur TekkForge/ (eigene Ausgabe) und versteckte Ordner bleiben draussen
+  const liste = alle.filter((f) => dateiRelevant(f.webkitRelativePath ?? f.name, f.name));
   z.ordner = (alle[0].webkitRelativePath ?? "").split("/")[0] || "Verzeichnis";
   const fsb = tekkFs();
   const erste = liste[0] ?? alle[0];
@@ -406,6 +423,19 @@ function fensterEintrag(liedName: string, label: string, pcm: Float32Array, roll
   return {
     datei: `${stem}.wav`, stem, rolle, familie: familie(stem), sekunden: pcm.length / 44100,
     rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100,
+  };
+}
+
+const DRUM_KURZ: Record<DrumRolle, string> = { kick: "KICK", snare: "SNR", hat: "HAT" };
+
+/** Ein geschnittener Drum-Shot als Scan-Eintrag — Name "<Lied> KICK1" usw., Familie teilt der Lied-Stamm. */
+function drumEintrag(liedName: string, t: DrumTreffer, nr: number): ScanEintrag {
+  const label = `${DRUM_KURZ[t.rolle]}${nr}`;
+  const kurz = liedName.slice(0, Math.max(3, 16 - label.length - 1));
+  const stem = `${kurz} ${label}`;
+  return {
+    datei: `${stem}.wav`, stem, rolle: t.rolle, familie: familie(stem), sekunden: t.pcm.length / 44100,
+    rmsDb: t.rmsDb, peak: peakVon(t.pcm), pcm: t.pcm, sampleRate: 44100,
   };
 }
 
@@ -460,6 +490,16 @@ async function liedAnalysieren(): Promise<void> {
           neue.push(fensterEintrag(liedName, f.id, vox.pcm, "vox"));
         }
       }
+      // Drums aus dem Lied: den Stem des lautesten Fensters (DROP) schneiden
+      if (!z.liedDrumsEigene) {
+        const dw = antwort.fenster.find((f) => f.id === "DROP" && f.drums) ?? antwort.fenster.find((f) => f.drums);
+        if (dw?.drums) {
+          const drums = parseWav(Uint8Array.from(dw.drums));
+          const treffer = schneideDrums(drums.pcm, 44100);
+          const zaehler: Record<DrumRolle, number> = { kick: 0, snare: 0, hat: 0 };
+          for (const t of treffer) neue.push(drumEintrag(liedName, t, ++zaehler[t.rolle]));
+        }
+      }
     } else {
       for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm, "melo"));
     }
@@ -473,9 +513,10 @@ async function liedAnalysieren(): Promise<void> {
     z.ergebnis = null;
     z.pool = [];
     z.lied = { name: liedName, bpm: res.bpm, k: res.k, fenster: res.fenster.map((f) => f.label), stems: demucs, dateien: neue.map((e) => e.datei) };
+    const drumZahl = neue.filter((e) => e.rolle === "kick" || e.rolle === "snare" || e.rolle === "hat").length;
     z.liedStatus = `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)}) · Fenster ${res.fenster
       .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
-      .join(", ")}${demucs ? " · Stems: bass+other als Melo, Vocals als Vox" : " · Vollmix (ohne Demucs)"} — jetzt „Bank bauen"`;
+      .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocals als Vox${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"} — jetzt „Bank bauen"`;
   } catch (e) {
     z.liedStatus = "Lied-Analyse fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
   } finally {
@@ -483,6 +524,18 @@ async function liedAnalysieren(): Promise<void> {
     z.liedLaeuft = false;
     render();
   }
+}
+
+/** Ein-Klick: Lied analysieren (mit Stems/Drums, falls verfuegbar) → Bank bauen → Patterns erzeugen. */
+async function alleAusLied(): Promise<void> {
+  if (z.liedLaeuft) return;
+  await liedAnalysieren();
+  if (!z.eintraege.length || !z.zusammen) return;
+  await bankBauen();
+  if (!z.projekt) return;
+  await generieren();
+  z.liedStatus = `${z.liedStatus.replace(/ — jetzt „Bank bauen"$/, "")} — Bank gebaut, ${z.ergebnis?.patterns.length ?? 0} Pattern(s) erzeugt`;
+  render();
 }
 
 async function bankBauen(): Promise<void> {
@@ -636,7 +689,7 @@ async function generieren(): Promise<void> {
   }
   // Beschreibung und Auswahl bleiben nach dem Rendern erhalten
   const text = beschreibung;
-  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept, rezepte });
+  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept, rezepte, aufbau: z.aufbau });
   z.sendeStatus = "";
   render();
   const ta = document.getElementById("genText") as HTMLTextAreaElement | null;

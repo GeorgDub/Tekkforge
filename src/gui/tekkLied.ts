@@ -5,9 +5,9 @@
 export interface TekkLied {
   available: boolean;
   pythonStatus(): Promise<{ python: string | null; demucs: boolean; version: string; meldung: string }>;
-  /** Fenster als WAV-Bytes rein, Stems als WAV-Bytes raus (vox null, wenn leiser als −32 dB). */
+  /** Fenster als WAV-Bytes rein, Stems als WAV-Bytes raus (vox null, wenn leiser als −36 dB; drums null, wenn praktisch still). */
   stems(anfrage: { fenster: { id: string; bytes: number[] }[] }): Promise<{
-    fenster: { id: string; melo: number[]; vox: number[] | null; voxDb: number }[];
+    fenster: { id: string; melo: number[]; vox: number[] | null; drums?: number[] | null; voxDb: number }[];
   }>;
   onFortschritt(cb: (text: string) => void): () => void;
 }

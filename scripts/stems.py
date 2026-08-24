@@ -6,10 +6,12 @@ Generator-Tab. Eingabe ist ein JSON (Pfad als Argument):
     "ziel": "<ordner>" }
 
 Je Fenster entstehen <ziel>/<id>-melo.wav (bass + other; Vocals werden
-eingefaltet, wenn sie leiser als -36 dB sind) und <ziel>/<id>-vox.wav (nur
-wenn Vocals > -36 dB, dann auf 0,95 normalisiert). Fortschritt auf stderr, Ergebnis-JSON auf stdout:
+eingefaltet, wenn sie leiser als -36 dB sind), <ziel>/<id>-vox.wav (nur
+wenn Vocals > -36 dB, dann auf 0,95 normalisiert) und <ziel>/<id>-drums.wav
+(Drums-Stem, normalisiert — Quelle fuer geschnittene Kick/Snare/Hat-One-Shots).
+Fortschritt auf stderr, Ergebnis-JSON auf stdout:
 
-  { "fenster": [ { "id": "DROP", "melo": "<pfad>", "vox": "<pfad>" | null } ] }
+  { "fenster": [ { "id": "DROP", "melo": "<pfad>", "vox": "<pfad>" | null, "drums": "<pfad>" | null } ] }
 """
 import io
 import json
@@ -84,7 +86,11 @@ def main():
         if vox_stark:
             vox_pfad = os.path.join(ziel, f"{f['id']}-vox.wav")
             sf.write(vox_pfad, normalisiere(st["vocals"]), SR, subtype="PCM_16")
-        ergebnis.append({"id": f["id"], "melo": melo_pfad, "vox": vox_pfad, "voxDb": round(rms_db(st["vocals"]), 1)})
+        drums_pfad = None
+        if rms_db(st["drums"]) > -45:
+            drums_pfad = os.path.join(ziel, f"{f['id']}-drums.wav")
+            sf.write(drums_pfad, normalisiere(st["drums"]), SR, subtype="PCM_16")
+        ergebnis.append({"id": f["id"], "melo": melo_pfad, "vox": vox_pfad, "drums": drums_pfad, "voxDb": round(rms_db(st["vocals"]), 1)})
     print(json.dumps({"fenster": ergebnis}))
 
 

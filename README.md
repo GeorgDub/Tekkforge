@@ -41,10 +41,17 @@ pnpm dist:win       # Windows-Installer (NSIS) + Portable nach release/
 
 Die gebaute `dist/index.html` ist selbsttragend (kein Server) und lässt sich auch einfach
 im Browser doppelklicken.
-5. **Generator** (Tab): Sample-Verzeichnis wählen → Scan zeigt Rollen, Tempo-Vorschlag und
+5. **Generator** (Tab): Sample-Verzeichnis wählen (Unterordner werden mitgescannt; nur
+   `TekkForge/` und versteckte Ordner bleiben draußen) → Scan zeigt Rollen, Tempo-Vorschlag und
    RAM-Bedarf → „Bank bauen" (`.all` speichern, per SD laden) → Jam-Pattern, Mini-Set (6
    gechainte Patterns) oder Pro Melo erzeugen → „→ Datei" oder „→ Editor". Melodien bleiben
-   ganz; die Beschreibung steuert Kick/Bass/Stab per Schlüsselwort (KI-Übersetzung folgt).
+   ganz; Melos, die das Taktraster verfehlen, werden über ihr Eigentempo per Varispeed aufs
+   Bank-Tempo gezogen, und ihre Waveform steuert die Steps (Stab auf den stärksten Melo-Onsets,
+   Bass weicht Melo-Bass aus). Die Beschreibung steuert Kick/Bass/Stab per Schlüsselwort.
+   **Aufbau-Kette** (Checkbox, Standard an): alle Patterns tragen dieselben vollen Steps,
+   entmutet wird stufenweise — Melo+Snare → Hats → Clap/Perc → Bass/Stab → Vers/Shots →
+   DROP mit Kick (je Stufe 2 Durchgänge, per Chain verbunden). Spielweise am Gerät ist
+   Mute/Unmute: jedes Part lässt sich in jedem Pattern von Hand dazuholen.
    In der Desktop-App außerdem: „Projekt speichern" legt `<Verzeichnis>/TekkForge/<name>.all`
    + `projekt.json` an, „auf SD kopieren" schreibt nach `<SD>6\`, „als geladen markieren"
    merkt sich die Bank (überlebt Neustarts) und gibt „→ Gerät ab Slot N" frei — Patterns gehen
@@ -58,8 +65,11 @@ im Browser doppelklicken.
    **Lied analysieren:** Audiodatei wählen → Tempo messen (oder eintragen), Half-/Double-Time in
    die Tekk-Oktave, drei 8-Takt-Fenster DROP / BREAK / VAR als je ein Melodie-Sample; mit Python +
    Demucs („Stems per Demucs", `scripts/stems.py`) als bass+other plus Vocals als Vox-Loop, sonst
-   Vollmix. Die Fenster lassen sich vor dem Bankbau vorhören (▶/■). Dann wie gewohnt Bank bauen
-   (tekk4-Drums kommen automatisch dazu).
+   Vollmix. Aus dem Drums-Stem des lautesten Fensters werden Kick/Snare/Hat-One-Shots
+   geschnitten (abschaltbar per „eigene Drums statt Lied-Drums" — dann tekk4/Ordner-Drums).
+   Die Fenster lassen sich vor dem Bankbau vorhören (▶/■). **„Alles aus dem Lied"** macht den
+   ganzen Weg in einem Klick: Analysieren → Stems → Drums schneiden → Bank bauen → Patterns
+   erzeugen — das Lied ist der einzige Input.
 
 ## Pattern-Editor — Workflow
 

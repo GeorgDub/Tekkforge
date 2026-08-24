@@ -327,6 +327,7 @@ function registerLiedIpc(win) {
           id: f.id,
           melo: Array.from(fs.readFileSync(f.melo)),
           vox: f.vox ? Array.from(fs.readFileSync(f.vox)) : null,
+          drums: f.drums ? Array.from(fs.readFileSync(f.drums)) : null,
           voxDb: f.voxDb,
         })),
       };

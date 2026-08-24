@@ -10,7 +10,8 @@ import type { E2PatternInput, E2PartInput, E2StepInput } from "./electribePatter
 import { buildE2AllPatFile, buildE2PatternFileV2 } from "./e2sExport";
 import { bankNumberToE2PatternRef } from "./e2sPatternSampleLink";
 import type { Projekt, ProjektSample } from "./bankPlan";
-import { type Rezept, type Abschnitt, type Thema, type KickFigur, type BassFigur, type StabFigur, pools } from "./rezept";
+import { type Rezept, type Abschnitt, type Thema, type KickFigur, type BassFigur, type StabFigur, type Lage, pools } from "./rezept";
+import { stabAusRaster, bassAnMelo } from "./meloRaster";
 
 const N = 64;
 const MONO1 = 0;
@@ -49,7 +50,7 @@ const SHOT_B = () => baue((s) => (s === 24 || s === 56 ? hit([60], 112, 96) : nu
 //            K1   K2   SN   CL   HH  HH2   PC  PC2  BASS STAB SHA  SHB  MELA MELB VRA  VRB
 const VOLUME = [127, 104, 110, 96, 88, 82, 84, 80, 118, 100, 112, 108, 112, 112, 114, 114];
 
-function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zweiteHaelfte: boolean): E2PartInput[] {
+function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zweiteHaelfte: boolean, stepsImmer = false): E2PartInput[] {
   const pl = pools(projekt);
   const byName = (n?: string) => (n ? projekt.samples.find((s) => s.name === n) : undefined);
   const t: Thema = rezept.thema;
@@ -92,10 +93,12 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   wach[6] = i >= 4;
   steps[7] = baue((s) => (imTakt(s) === 14 && takt(s) % 2 === 1 ? hit([60], 84, 40) : imTakt(s) === 7 && takt(s) === 3 ? hit([60], 80, 10) : null));
   wach[7] = i >= 5;
-  steps[8] = BASS[rezept.figuren.bass]();
+  // Melo-Raster: Bass weicht Melo-Bass aus, Stab-Hits sitzen auf den staerksten Melo-Onsets
+  const raster = melo?.raster;
+  steps[8] = raster ? bassAnMelo(BASS[rezept.figuren.bass](), raster) : BASS[rezept.figuren.bass]();
   wach[8] = a.lagen.includes("bass") && !!bass;
   const stabFig: StabFigur | "phrase" = stab && (stab.kind === "loop" || stab.sekunden >= 2) ? "phrase" : rezept.figuren.stab;
-  steps[9] = STAB[stabFig]();
+  steps[9] = raster && stabFig !== "phrase" ? stabAusRaster(raster) : STAB[stabFig]();
   wach[9] = a.lagen.includes("stab") && !!stab;
   steps[10] = shotA?.kind === "loop" ? loopHit(shotA.takte, 118) : SHOT_A();
   wach[10] = a.lagen.includes("shot") && !!shotA;
@@ -124,7 +127,8 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
     if (idx === 8 && smp?.rolle === "kick") params.oscPitch = -12;
     if (idx === 5) params.egDecay = 60;
     const an = wach[idx] && !!smp;
-    return { sampleId: smp ? bankNumberToE2PatternRef(smp.nr) : 0, steps: an ? st : leer(), volume: VOLUME[idx], params, muted: !an };
+    // stepsImmer: Steps auch bei gemuteten Parts setzen (Mute/Unmute-Spielweise am Geraet)
+    return { sampleId: smp ? bankNumberToE2PatternRef(smp.nr) : 0, steps: an || (stepsImmer && smp) ? st : leer(), volume: VOLUME[idx], params, muted: !an };
   });
 }
 
@@ -155,6 +159,70 @@ export function baueRezept(
   }));
   if (!rezept.thema.melo) hinweise.push("keine Melodie im Projekt — Pattern nur Drums/Bass/Shots");
   return { patterns, hinweise };
+}
+
+/** Stufen der Aufbau-Kette: welche Part-Indizes je Pattern dazukommen. Kicks (0/1) erst im Drop. */
+const AUFBAU_STUFEN: number[][] = [
+  [12, 13, 2], // Melo + Snare
+  [4, 5], // Hats
+  [3, 6, 7], // Clap + Percs
+  [8, 9], // Bass + Stab
+  [14, 15, 10, 11], // Vers + Shots/Riser
+];
+
+/**
+ * Aufbau-Kette (Mute/Unmute-Spielweise): alle Patterns tragen dieselben vollen
+ * Steps des Drop-Abschnitts, entmutet wird stufenweise — Melo + Snare zuerst,
+ * die Kicks erst im Drop. Jede Stufe laeuft zwei Durchgaenge, chainTo verbindet.
+ */
+export function baueAufbau(
+  rezept: Rezept,
+  projekt: Projekt,
+  opts: { startSlot?: number; mfxType?: number } = {},
+): { patterns: E2PatternInput[]; hinweise: string[] } {
+  const start = opts.startSlot ?? 1;
+  const hinweise: string[] = [];
+  const tag = tagAus(rezept);
+  const t = rezept.thema;
+  const lagen: Lage[] = (["melo", "vers", "bass", "stab", "shot"] as Lage[]).filter((l) =>
+    l === "melo" ? !!t.melo : l === "vers" ? !!t.vers : l === "bass" ? !!t.bass : l === "stab" ? !!t.stab : !!t.shots,
+  );
+  if (t.riser) lagen.push("riser");
+  const kick = rezept.abschnitte.reduce((a, b) => (b.intensitaet > a.intensitaet ? b : a), rezept.abschnitte[0]).kick;
+  const drop: Abschnitt = { name: "DROP", wiederholungen: 1, intensitaet: 5, kick, lagen };
+  const dropParts = parts(rezept, projekt, drop, 0, false, true);
+  const hoerbar = (idx: number) => !dropParts[idx].muted;
+  const aktiv = new Set<number>();
+  const stufen: Set<number>[] = [];
+  for (const s of AUFBAU_STUFEN) {
+    if (!s.some(hoerbar)) continue;
+    for (const idx of s) aktiv.add(idx);
+    stufen.push(new Set(aktiv));
+  }
+  const mitMutes = (an: Set<number> | null): E2PartInput[] =>
+    dropParts.map((p, idx) => ({ ...p, muted: p.muted || (an ? !an.has(idx) : false) }));
+  const basis = { bpm: rezept.bpm, mfxType: opts.mfxType ?? 11, stepLength: 64 as const, alternate13_14: true, alternate15_16: true };
+  const patterns: E2PatternInput[] = stufen.map((an, i) => ({
+    ...basis,
+    name: `${tag} AUF${i + 1}`.slice(0, 16),
+    parts: mitMutes(an),
+    chainTo: start + i + 1,
+    chainRepeat: 2,
+  }));
+  patterns.push({ ...basis, name: `${tag} DROP`.slice(0, 16), parts: mitMutes(null), chainTo: 0, chainRepeat: 1 });
+  if (!t.melo) hinweise.push("keine Melodie im Projekt — Aufbau nur ueber Drums/Bass/Shots");
+  return { patterns, hinweise };
+}
+
+export function baueProMeloAufbau(rezepte: Rezept[], projekt: Projekt): { patterns: E2PatternInput[]; hinweise: string[] } {
+  const out: E2PatternInput[] = [];
+  const hinweise: string[] = [];
+  for (const r of rezepte) {
+    const res = baueAufbau(r, projekt, { startSlot: out.length + 1 });
+    out.push(...res.patterns);
+    hinweise.push(...res.hinweise);
+  }
+  return { patterns: out, hinweise };
 }
 
 export function baueProMelo(rezepte: Rezept[], projekt: Projekt): { patterns: E2PatternInput[]; hinweise: string[] } {

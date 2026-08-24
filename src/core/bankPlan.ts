@@ -5,7 +5,8 @@
  * optional auf ihren Originalnummern; Ergebnis = Projekt + .all-Bytes.
  */
 import { type ScanEintrag, type Rolle, sauberName, rmsDb, peakVon, LANG_AB } from "./sampleScan";
-import { taktPassung } from "./tempoAnalyse";
+import { taktPassung, tempoSchaetzen } from "./tempoAnalyse";
+import { meloRaster, type MeloRaster } from "./meloRaster";
 import { polyPhaseResample, peakNormalize } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { parseE2sBank } from "./e2sBankReader";
@@ -36,6 +37,8 @@ export interface ProjektSample {
   gruppe: string;
   chunk?: 0 | 1;
   chunks?: 2;
+  /** Melo-Loops: Onset/Bass je 16tel-Step (64 Werte) fuer melo-passende Steps */
+  raster?: MeloRaster;
 }
 export interface Projekt {
   name: string;
@@ -97,6 +100,22 @@ function aufLaenge(pcm: Float32Array, frames: number): Float32Array {
 
 const LOOP_ROLLEN: Rolle[] = ["melo", "vox", "fx", "bass", "ton"];
 
+/**
+ * Off-Grid-Loop: Eigentempo messen, Faktor k ∈ {0.5, 1, 2} zum Bank-Tempo,
+ * Taktzahl am eigenen Raster. null, wenn der Loop auch sein eigenes Raster
+ * verfehlt oder der noetige Varispeed zu weit weg von 1 laege (> ±23 %).
+ */
+function eigentempoTakte(pcm: Float32Array, bpm: number): number | null {
+  const dauer = pcm.length / SR;
+  const b0 = tempoSchaetzen(pcm, SR);
+  const k = [0.5, 1, 2].reduce((a, b) => (Math.abs(b0 * b - bpm) < Math.abs(b0 * a - bpm) ? b : a));
+  const roh = dauer / (240 / (b0 * k));
+  const takte = Math.min(16, Math.max(1, Math.round(roh)));
+  if (Math.abs(roh - takte) / takte > 0.08) return null;
+  const rate = dauer / (takte * (240 / bpm));
+  return rate >= 0.77 && rate <= 1.3 ? takte : null;
+}
+
 /** Ein Scan-Eintrag → ein oder zwei Teile (Haelften) fuer die Bank. */
 export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
   const taktSek = 240 / bpm;
@@ -104,9 +123,15 @@ export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
   const oneshot = (pcm: Float32Array): Teil => ({ name: basis, pcm: peakNormalize(fades(trimme(pcm), 0.002, 0.01), 0.95), kind: "oneshot", takte: 0 });
   if (e.sekunden < LANG_AB || !LOOP_ROLLEN.includes(e.rolle)) return { teile: [oneshot(e.pcm)] };
   let y = e.rolle === "melo" ? e.pcm : trimme(e.pcm, 45);
-  const { takte, abweichung } = taktPassung(y.length / SR, bpm);
-  if (abweichung > TAKT_TOLERANZ && y.length / SR / taktSek <= 8) {
-    return { teile: [{ name: basis, pcm: peakNormalize(fades(y, 0.002, 0.01), 0.95), kind: "oneshot", takte: 0 }] };
+  let { takte, abweichung } = taktPassung(y.length / SR, bpm);
+  if (abweichung > TAKT_TOLERANZ) {
+    // Melos, die das Bank-Raster verfehlen, laufen sonst als One-Shot asynchron —
+    // erst am Eigentempo festmachen und per Varispeed aufs Bank-Tempo ziehen
+    const eigen = eigentempoTakte(y, bpm);
+    if (eigen !== null) takte = eigen;
+    else if (y.length / SR / taktSek <= 8) {
+      return { teile: [{ name: basis, pcm: peakNormalize(fades(y, 0.002, 0.01), 0.95), kind: "oneshot", takte: 0 }] };
+    }
   }
   const ziel = takte * taktSek;
   y = aufLaenge(varispeed(y, y.length / SR / ziel), Math.round(ziel * SR));
@@ -212,6 +237,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
         nr, name, rolle: e.rolle, familie: e.familie, kind: t.kind, takte: t.takte, sekunden: t.pcm.length / SR, rmsDb: rmsDb(t.pcm), quelle: e.datei,
         gruppe: t.kind === "loop" ? `${e.rolle}:${e.familie}` : e.rolle,
         ...(t.chunk !== undefined ? { chunk: t.chunk, chunks: 2 as const } : {}),
+        ...(e.rolle === "melo" && t.kind === "loop" ? { raster: meloRaster(t.pcm, SR, t.takte) } : {}),
       });
       nr++;
     }

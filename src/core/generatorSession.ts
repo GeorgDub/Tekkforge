@@ -7,7 +7,7 @@ import type { ScanEintrag } from "./sampleScan";
 import { tempoVorschlag } from "./tempoAnalyse";
 import { type Projekt, BUDGET_SEKUNDEN, waehleVolumes } from "./bankPlan";
 import { type Rezept, type Modus, regelRezept, regelRezeptProMelo } from "./rezept";
-import { baueRezept, baueProMelo, alsAllPat, alsPat } from "./patternGen";
+import { baueRezept, baueProMelo, baueAufbau, baueProMeloAufbau, alsAllPat, alsPat } from "./patternGen";
 import type { E2PatternInput } from "./electribePatternBuilder";
 
 export interface Zusammenfassung {
@@ -49,6 +49,16 @@ export function dateiArt(name: string): "wav" | "audio" | "skip" {
   return "skip";
 }
 
+/**
+ * Gehoert eine Datei aus dem gewaehlten Verzeichnis (inkl. Unterordner) in den
+ * Scan? Ausgenommen: der eigene TekkForge-Ausgabeordner und versteckte Ordner.
+ */
+export function dateiRelevant(relPfad: string, name: string): boolean {
+  if (dateiArt(name) === "skip") return false;
+  const teile = relPfad.split(/[\\/]/).slice(0, -1);
+  return !teile.some((t) => t.toLowerCase() === "tekkforge" || t.startsWith("."));
+}
+
 export interface Erzeugt {
   modus: Modus;
   rezepte: Rezept[];
@@ -63,21 +73,33 @@ export interface Erzeugt {
 
 export function erzeuge(
   projekt: Projekt,
-  wunsch: { modus: Modus; bpm: number; melo?: string; beschreibung?: string; startSlot?: number; rezept?: Rezept; rezepte?: Rezept[] },
+  wunsch: {
+    modus: Modus;
+    bpm: number;
+    melo?: string;
+    beschreibung?: string;
+    startSlot?: number;
+    rezept?: Rezept;
+    rezepte?: Rezept[];
+    /** Aufbau-Kette: identische Steps in allen Patterns, Mutes wachsen bis zum Drop */
+    aufbau?: boolean;
+  },
 ): Erzeugt {
   const basis = projekt.name.toUpperCase().replace(/[^A-Z0-9]+/g, "");
   if (wunsch.modus === "promelo") {
     const rezepte = wunsch.rezepte?.length ? wunsch.rezepte.map((r) => ({ ...r, bpm: wunsch.bpm })) : regelRezeptProMelo(projekt, wunsch.bpm);
-    const { patterns, hinweise } = baueProMelo(rezepte, projekt);
+    const { patterns, hinweise } = wunsch.aufbau ? baueProMeloAufbau(rezepte, projekt) : baueProMelo(rezepte, projekt);
     return {
       modus: "promelo",
       rezepte,
       patterns,
       bytes: new Uint8Array(alsAllPat(patterns)),
-      dateiname: `${basis}-promelo.e2sallpat`,
+      dateiname: `${basis}-promelo${wunsch.aufbau ? "-aufbau" : ""}.e2sallpat`,
       hinweise,
       startSlot: 1,
-      warumSo: `${rezepte.length} Melodien, je ein Jam-Pattern; Kick-Familien rotieren: ${rezepte.map((r) => `${r.thema.melo} → ${r.thema.kickFamilie}`).join(", ")}.`,
+      warumSo:
+        `${rezepte.length} Melodien, je ${wunsch.aufbau ? "eine Aufbau-Kette (Entmuten bis zum Drop)" : "ein Jam-Pattern"}; ` +
+        `Kick-Familien rotieren: ${rezepte.map((r) => `${r.thema.melo} → ${r.thema.kickFamilie}`).join(", ")}.`,
     };
   }
   const rezept =
@@ -85,8 +107,23 @@ export function erzeuge(
       ? wunsch.rezept
       : regelRezept(projekt, { modus: wunsch.modus, bpm: wunsch.bpm, melo: wunsch.melo, beschreibung: wunsch.beschreibung });
   const start = wunsch.startSlot ?? 1;
-  const { patterns, hinweise } = baueRezept(rezept, projekt, { startSlot: start });
+  if (wunsch.aufbau) {
+    const { patterns, hinweise } = baueAufbau(rezept, projekt, { startSlot: start });
+    return {
+      modus: wunsch.modus,
+      rezepte: [rezept],
+      patterns,
+      bytes: new Uint8Array(alsAllPat(patterns, start)),
+      dateiname: `${basis}-aufbau.e2sallpat`,
+      hinweise,
+      warumSo:
+        rezept.begruendung +
+        ` Aufbau-Kette: ${patterns.length} Patterns, alle Steps ueberall gesetzt, entmutet wird stufenweise — Kick erst im Drop; am Geraet frei weiter entmuten.`,
+      startSlot: start,
+    };
+  }
   const jam = wunsch.modus === "jam";
+  const { patterns, hinweise } = baueRezept(rezept, projekt, { startSlot: start });
   return {
     modus: wunsch.modus,
     rezepte: [rezept],
