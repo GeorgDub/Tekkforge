@@ -3,13 +3,23 @@
 **Electribe 2 Pattern-Editor & KORG ESX-1 Converter** — eigenständige Desktop-App,
 gebaut auf dem hardware-verifizierten Format-Kern von Synthstudio (v3.271+).
 
-Zwei Werkzeuge in einer App (Tab-Umschaltung):
+Werkzeuge in einer App (Icon-Leiste links, Start-Dashboard mit Statuskacheln,
+Themes unter „Einstellungen"):
 
 1. **Pattern-Editor** — E2-Sampler-Patterns von Grund auf am PC bauen (ohne ESX-Datei):
    16-Part-Grid × 16/32/64 Steps, Noten/Velocity/Gate pro Step, eigene WAV-Samples
    importieren und den Parts zuweisen, vorhören, exportieren als `.e2spat` (Einzel-Pattern)
-   oder `.e2sallpat` + `.all` (Bank + Sample-Bank).
+   oder `.e2sallpat` + `.all` (Bank + Sample-Bank). Der Sample-Pool ist eine kleine
+   Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken (~24 MB).
 2. **ESX-Converter** — ein ESX-1-All-Backup (`.esx`) in importfertige E2-Dateien wandeln.
+3. **MIDI zu Korg** — SMF-Dateien (.mid/.kar/.rmi) laden, Spuren den Parts zuordnen,
+   Noten im Piano Roll sichten/abwaehlen, als 4-Takt-Patterns in den Editor uebernehmen.
+4. **Generator** — Bank + Patterns aus einem Sample-Ordner oder direkt aus einem Lied
+   (Demucs-Stems, Drum-Schnitt, Tonart/Camelot-Anzeige); Lieder auch per
+   YouTube-/SoundCloud-Link holen (braucht `pip install yt-dlp imageio-ffmpeg`).
+
+Beim Speichern auf Platte/SD sichert die App den alten Stand automatisch nach
+`backups/` (20 Staende je Datei; Manager unter „Einstellungen").
 
 Alles läuft **lokal** — Desktop-App (Electron), Browser (Single-File-HTML) oder CLI (Node).
 Keine Datei verlässt den Rechner.
