@@ -39,6 +39,14 @@ write-side slot limits (IFX < 96, MFX < 32) follow utils/ht_sysex.py; the fork
 at https://github.com/13HansSeppaufpepp12/hacktribe-editor (e2_formats.py) was
 consulted for the groove-template layout and confirms the same FX structure.
 
+The groove-template layout (e2Groove.ts) — the 0x140-byte block with GVST/GVED
+markers, name, length and 64 four-byte steps — is ported from
+extra/e2_groove_template.py of the same project, including its value ranges
+(trigger ±0x30 two's complement, velocity 0..0x7F, gate 0..0x60). Note that the
+fork's e2_formats.py places the step table at 0x24 while the upstream tool uses
+0x30; TekkForge follows the upstream tool and verifies the 0xFF step marker at
+read time.
+
 TekkForge is therefore distributed under the GPL-3.0-or-later as well.
 
 
