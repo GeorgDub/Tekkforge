@@ -7,9 +7,9 @@
  * Master-Effekt (je Algorithmus, Ein-/Ausgangspegel und Parameterwerte), zehn
  * Zuordnungen fuer die X/Y-Flaeche und den FX-Knopf, sowie den Namen fuers Menue.
  *
- * Layout (Quelle: bangcorrupt/hacktribe-editor, GPL-3.0,
+ * Layout (Quelle: bangcorrupt/hacktribe-editor, **AGPL-3.0**,
  * `utils/ht_fx_preset_format.py`; Groove-Struktur zusaetzlich in der Fassung
- * von 13HansSeppaufpepp12. Herkunft siehe NOTICE):
+ * von 13HansSeppaufpepp12. Herkunft und Lizenzfolgen siehe NOTICE):
  *
  * | Offset | Inhalt |
  * |---|---|

@@ -6,7 +6,7 @@
  * damit entsteht Swing oder ein eigenes Timing-Gefuehl, statt aus den
  * mitgelieferten Vorlagen zu waehlen.
  *
- * Layout (Quelle: bangcorrupt/hacktribe-editor, GPL-3.0,
+ * Layout (Quelle: bangcorrupt/hacktribe-editor, **AGPL-3.0**,
  * `extra/e2_groove_template.py` — das Werkzeug des Hacktribe-Autors selbst,
  * inklusive der Wertebereiche in seinen Settern):
  *

@@ -16,10 +16,20 @@ src/core/hacktribeRam.ts, src/core/e2FxPreset.ts
 The KORG Electribe 2 SysEx protocol implementation and the KORG 8-bit <-> 7-bit
 codec are ported from:
 
-    hacktribe / hacktribe-editor
+    hacktribe / hacktribe-editor / hacktribe-editor-legacy
     Copyright (C) bangcorrupt
     https://github.com/bangcorrupt/hacktribe
-    Licensed under the GNU General Public License v3.0
+    Licensed under the GNU AFFERO General Public License v3.0 (AGPL-3.0)
+
+    !! Checked against the LICENSE files of all four upstream repositories on
+    !! 2026-08-25: hacktribe, hacktribe-editor, hacktribe-editor-legacy and the
+    !! fork by 13HansSeppaufpepp12 are ALL AGPL-3.0. Earlier revisions of this
+    !! file called them GPL-3.0 — that was wrong. The modules derived from them
+    !! (listed above) therefore carry AGPL-3.0 obligations. TekkForge is a local
+    !! desktop application and offers no network service, so the AGPL's
+    !! remote-interaction clause (section 13) has no practical effect here, but
+    !! the labelling must be accurate. Whether TekkForge as a whole should move
+    !! to AGPL-3.0-or-later is a decision for the copyright holder.
 
 Specifically, the message framing (F0 42 3g 00 01 <id> <msgId> ... F7), the
 message-ID table, the acknowledgement codes (ht_sysex_format) and the pattern
@@ -47,7 +57,8 @@ fork's e2_formats.py places the step table at 0x24 while the upstream tool uses
 0x30; TekkForge follows the upstream tool and verifies the 0xFF step marker at
 read time.
 
-TekkForge is therefore distributed under the GPL-3.0-or-later as well.
+TekkForge's own code is distributed under GPL-3.0-or-later; the hacktribe-derived
+modules named above additionally carry their upstream AGPL-3.0 terms.
 
 
 E2S / ESX-1 file-format knowledge

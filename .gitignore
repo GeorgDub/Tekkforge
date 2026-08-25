@@ -12,3 +12,6 @@ files zum lernen/
 # Praesentations-PDF und Screenshot-Zwischenstaende
 TekkForge-*-Uebersicht.pdf
 .tekkforge-shots/
+
+# AGPL-Fremddaten fuer die Preset-Gegenprobe (siehe tests/fx-preset-echt.test.ts)
+examples/fx/

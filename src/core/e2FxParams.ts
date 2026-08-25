@@ -1,7 +1,7 @@
 /**
  * e2FxParams.ts — FX-Typen + Parameter-Namen fuer die Korg-E2/hacktribe-FX-Steuerung.
  *
- * Quelle (verifiziert): bangcorrupt/hacktribe-editor (GPL-3.0)
+ * Quelle (verifiziert): bangcorrupt/hacktribe-editor (**AGPL-3.0**)
  *   utils/ht_fx_ram_format.py + ht_fx_preset_format.py (FX-Typ-Enums, Param-Listen)
  *   utils/ht_nrpn.py (FX-Slot-Math), hacktribe wiki MIDI.md
  * Uebernommen ueber Synthstudio; Herkunft siehe NOTICE.

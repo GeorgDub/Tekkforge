@@ -548,10 +548,13 @@ untergeekDE/electribe2-docs. Byte-Offsets hardware-verifiziert (siehe Kommentare
 
 **GPL-3.0-or-later** — siehe [LICENSE](LICENSE).
 
-`src/core/e2sysex.ts` ist eine Portierung des SysEx-Protokolls aus
-[bangcorrupt/hacktribe](https://github.com/bangcorrupt/hacktribe) (GPL-3.0); die
-`.all`-Struktur ist gegen [Oe2sSLE](https://github.com/JonathanTaquet/Oe2sSLE)
-(GPL-2.0+) verifiziert. Herkunft und Umfang stehen in [NOTICE](NOTICE).
+Die hacktribe-nahen Module (`e2sysex.ts`, `hacktribeNrpn.ts`, `hacktribeRam.ts`,
+`e2FxParams.ts`, `e2FxPreset.ts`, `e2Groove.ts`) sind aus
+[bangcorrupt/hacktribe(-editor)](https://github.com/bangcorrupt/hacktribe)
+portiert — **AGPL-3.0**, geprüft am 2026-08-25; sie tragen deshalb zusätzlich
+AGPL-Pflichten. Die `.all`-Struktur ist gegen
+[Oe2sSLE](https://github.com/JonathanTaquet/Oe2sSLE) (GPL-2.0+) verifiziert.
+Herkunft, Umfang und Lizenzfolgen stehen in [NOTICE](NOTICE).
 
 KORG, Electribe und ESX-1 sind Marken der KORG Inc. Dieses Projekt steht in
 keiner Verbindung zu KORG.

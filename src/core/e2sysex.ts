@@ -2,9 +2,9 @@
  * e2sysex.ts — KORG Electribe 2 SysEx-Protokoll (Pattern-Transfer zum/vom Gerät).
  *
  * Protokoll + KORG-8↔7-Bit-Codec portiert nach der Referenz-Implementierung
- * bangcorrupt/hacktribe(-editor) (GPL-3.0). Da diese Software rein privat
- * genutzt wird, ist die Übernahme unproblematisch; bei einer etwaigen
- * Weitergabe wäre die GPL-Herkunft zu kennzeichnen.
+ * bangcorrupt/hacktribe(-editor) — **AGPL-3.0**, nicht GPL-3.0 (am 2026-08-25
+ * an den LICENSE-Dateien aller drei Repos geprüft). Die Herkunft ist im NOTICE
+ * gekennzeichnet; die daraus abgeleiteten Module tragen AGPL-Pflichten.
  *
  * Nachricht: F0 42 (0x30|ch) 00 01 <id> <msgId> <body…> F7
  *   - 0x42            KORG Manufacturer ID
