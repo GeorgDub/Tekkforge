@@ -1,15 +1,23 @@
 /**
  * make-doc-html.mjs — erzeugt die Praesentations-HTML (Funktionsuebersicht +
- * Roadmap) mit eingebetteten Screenshots aus .tekkforge-shots/bilder.json.
- * Danach macht scripts/make-doc-pdf.mjs eine PDF daraus.
+ * Ausblick) mit eingebetteten Screenshots aus docs/praesentation/bilder/.
+ * Danach macht scripts/make-doc-pdf2.mjs eine PDF daraus.
+ *
+ * **Bei jeder neuen Funktion mitpflegen** — die PDF liegt im Repo und soll den
+ * Stand zeigen, nicht den von vorgestern. Ablauf:
+ *   node scripts/make-doc-html.mjs
+ *   node scripts/make-doc-pdf2.mjs .tekkforge-shots/doc.html docs/praesentation/TekkForge-Uebersicht.pdf
  */
 import * as fs from "node:fs";
+import * as path from "node:path";
 
-const bilder = JSON.parse(fs.readFileSync(".tekkforge-shots/bilder.json", "utf8"));
-const img = (name, caption) =>
-  bilder[name]
-    ? `<figure><img src="data:image/png;base64,${bilder[name]}" alt="${caption}" />${caption ? `<figcaption>${caption}</figcaption>` : ""}</figure>`
-    : `<p class="fehlt">[Screenshot ${name} fehlt]</p>`;
+const BILDER = "docs/praesentation/bilder";
+const img = (name, caption) => {
+  const datei = path.join(BILDER, `${name}.png`);
+  if (!fs.existsSync(datei)) return `<p class="fehlt">[Screenshot ${name}.png fehlt in ${BILDER}]</p>`;
+  const b64 = fs.readFileSync(datei).toString("base64");
+  return `<figure><img src="data:image/png;base64,${b64}" alt="${caption}" />${caption ? `<figcaption>${caption}</figcaption>` : ""}</figure>`;
+};
 
 const heute = new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" });
 
@@ -25,7 +33,7 @@ const abschnitte = [
       "Export als <code>.e2spat</code> (Einzel-Pattern), <code>.e2sallpat</code> (Bank mit 250 Slots) und <code>.all</code> (Sample-Bank).",
       "Direkter Draht zum Gerät: Patterns per SysEx in einen Slot schreiben oder von dort holen.",
     ],
-    bild: ["doc-editor", "Der Editor mit geladenem Akkord-Pattern: links die Pattern-Liste, in der Mitte das Step-Grid über 16 Parts, rechts der Sample-Pool mit RAM-Anzeige."],
+    bild: ["editor", "Der Editor mit geladenem Akkord-Pattern: links die Pattern-Liste, in der Mitte das Step-Grid über 16 Parts, rechts der Sample-Pool mit RAM-Anzeige."],
   },
   {
     nr: "02",
@@ -39,7 +47,7 @@ const abschnitte = [
       "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Snare-Fill, im Drop gehen die Kicks auf Maximum.",
       "<b>KI-Rezept</b> — auf Wunsch übersetzt Claude eine Beschreibung wie „düster, Vocal nur im Break“ in das Arrangement.",
     ],
-    bild: ["vocal-probe4", "Ein kompletter Durchlauf: 30 Vocal-Segmente aus dem Lied, 5 geschnittene Drum-Shots, daraus 15 verkettete Patterns im gemessenen Tempo von 209,5 BPM."],
+    bild: ["generator-lied", "Ein kompletter Durchlauf: 30 Vocal-Segmente aus dem Lied, 5 geschnittene Drum-Shots, daraus 15 verkettete Patterns im gemessenen Tempo von 209,5 BPM."],
   },
   {
     nr: "03",
@@ -52,7 +60,7 @@ const abschnitte = [
       "Piano Roll zum Prüfen: Noten anklicken nimmt sie aus dem Import, Ziehen verschiebt sie — waagrecht in 16teln, senkrecht in Halbtönen.",
       "Übergabe in den Editor als 4-Takt-Patterns, Samples ordnest du dort zu.",
     ],
-    bild: ["midi-poly", "Polyphone Transkription einer Melodie-WAV: 44 Noten mit drei Stimmen — Melodielinie oben, durchgehende Basstöne darunter."],
+    bild: ["midi-polyphon", "Polyphone Transkription einer Melodie-WAV: 44 Noten mit drei Stimmen — Melodielinie oben, durchgehende Basstöne darunter."],
   },
   {
     nr: "04",
@@ -66,9 +74,10 @@ const abschnitte = [
       "<b>Transport</b> — Start, Stopp und ein Panik-Knopf, der alle Töne auf allen 16 Kanälen abwürgt.",
       "<b>Morph</b> — mehrere Regler gleichzeitig über eine bestimmte Zahl von Takten auf Zielwerte fahren, taktsynchron, mit Fortschrittsbalken im Pad.",
       "Je Pad: Beschriftung, Farbe, Tastaturkürzel und MIDI-Learn für einen eigenen Controller. Wahlweise sofort auslösen oder auf den nächsten Takt warten.",
+      "<b>Live-FX per Controller</b> — 24 Regler verstellen die Parameter des gewählten Effekts, während das Gerät spielt. Ziel ist ein Part mit einem seiner beiden Insert-Effekte oder der Master-Effekt.",
       "Das Deck liegt im Projekt und lässt sich als Datei weitergeben; ein Beispiel-Deck baut sich aus den vorhandenen Patterns von selbst.",
     ],
-    bild: ["doc-paddeck", "Das Pad-Deck: frei belegbares Raster mit Aktionslisten, Tastaturkürzeln und Controller-Anbindung."],
+    bild: ["fx-live", "Live-FX eingeschaltet: die Regler des Controllers gehen als Effekt-Parameter ans Gerät statt an die Pads."],
     extra: "<div class=\"hinweis\"><b>Eigener Controller, getrennter Weg:</b> Ein zweiter MIDI-Eingang — erprobt mit einem Akai MIDImix — geht ausschließlich ans Pad-Deck. Seine Nachrichten laufen bewusst nicht in die Gerätelogik, damit ein Reglerdreh am Controller nie versehentlich als Antwort der Electribe gedeutet wird.</div>",
   },
   {
@@ -85,7 +94,7 @@ const abschnitte = [
       "<b>Pads des Geräts</b> — Parts anspielen, chromatisch spielen, Steps löschen.",
       "<b>Panik</b> — alle Töne auf allen Kanälen sofort aus.",
     ],
-    bild: ["doc-panel", "Das Panel: Geräteanbindung, Program Change, Regler-Spiegel und Transport."],
+    bild: ["panel", "Das Panel: Geräteanbindung, Program Change, Regler-Spiegel und Transport."],
     extra:
       "<div class=\"hinweis\"><b>Zwei Eigenheiten, die uns Messreihen gekostet haben:</b> Das Gerät zählt Patterns beim Program Change ab null — die offizielle KORG-Beschreibung stimmt hier nicht. Und bei gestopptem Sequencer ignoriert es Pattern-Wechsel vollständig; sie greifen nur während der Wiedergabe. Beides steht heute als Hinweis direkt in der Oberfläche.</div>",
   },
@@ -98,7 +107,7 @@ const abschnitte = [
       "Ein Mapping-Report hält fest, welche Geräte-Nummer zu welchem Namen und welchem ESX-Index gehört.",
       "Gibt es auch als Kommandozeilen-Werkzeug für Stapelverarbeitung.",
     ],
-    bild: ["doc-converter", "Der Converter mit Pattern-Auswahl und Mapping-Report."],
+    bild: ["converter", "Der Converter mit Pattern-Auswahl und Mapping-Report."],
   },
   {
     nr: "07",
@@ -109,7 +118,7 @@ const abschnitte = [
       "Zuletzt geöffnete Dateien und Schnellzugriff in alle Module.",
       "<b>Assistent</b> — beantwortet Fragen zu TekkForge und zur Electribe, kennt die Module und die Geräte-Grenzen.",
     ],
-    bild: ["doc-start", "Das Start-Dashboard mit Statuskacheln, letzten Dateien und dem Assistenten."],
+    bild: ["start", "Das Start-Dashboard mit Statuskacheln, letzten Dateien und dem Assistenten."],
   },
   {
     nr: "08",
@@ -120,7 +129,7 @@ const abschnitte = [
       "<b>Auto-Backup</b> — beim Überschreiben landet der alte Stand in <code>backups/</code>, 20 Stände je Datei, mit Wiederherstellen-Knopf.",
       "Update-Prüfung gegen die Veröffentlichungen auf GitHub.",
     ],
-    bild: ["doc-settings", "Themenauswahl, Backup-Manager und Update-Prüfung."],
+    bild: ["einstellungen", "Themenauswahl, Backup-Manager und Update-Prüfung."],
   },
 ];
 
@@ -135,10 +144,11 @@ const firmwareSeiten = `
     <tbody>
       <tr><td>Patterns senden und holen, Grundeinstellungen lesen</td><td class="ja">ja</td><td class="ja">ja</td></tr>
       <tr><td>Regler in beide Richtungen, Pattern-Wechsel, Transport</td><td class="ja">ja</td><td class="ja">ja</td></tr>
-      <tr><td>Parts live stummschalten</td><td class="halb">über eine Übertragung, rund eine Sekunde</td><td class="ja">sofort</td></tr>
+      <tr><td>Parts live stummschalten</td><td class="halb">über eine Übertragung, rund eine Sekunde</td><td class="halb">Weg gebaut, am Gerät noch offen</td></tr>
       <tr><td>Effekt-Parameter live verändern, während das Gerät spielt</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
+      <tr><td>Effekt-Presets und Groove-Vorlagen selbst bauen</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
       <tr><td>Direkter Zugriff auf den Arbeitsspeicher des Geräts</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
-      <tr><td>Bedienfeld fernsteuern (Solo, Erase, Chord, Step-Jump …)</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
+      <tr><td>Gerät meldet jeden Knopfdruck zurück</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
     </tbody>
   </table>
   <p>Welche Fassung läuft, muss niemand raten: Ein Knopf schickt eine harmlose Vier-Byte-Leseanfrage. Kommt eine Antwort, ist es Hacktribe; bleibt es still, die Werksfirmware. Funktionen, die nur Hacktribe kann, sind ab Werk gar nicht erst sichtbar — statt eines Knopfes, der nichts tut, steht dort der Grund.</p>
@@ -153,13 +163,56 @@ const firmwareSeiten = `
     <li><b>Live an den Reglern</b> — einzelne Effekt-Parameter lassen sich verändern, während der Sequencer läuft. Am Gerät nachgewiesen an einem Decimator: Bit-Tiefe und Abtastrate von außen verändert, die Klangänderung war hörbar und dreimal hintereinander reproduzierbar.</li>
     <li><b>Effekte beim Namen nennen</b> — TekkForge kennt <b>21 Insert-Algorithmen</b> (Kompressoren, Filter, Verzerrer, Chorus, Flanger, Phaser, Ring-Modulator, Decimator, kurzes Delay …) und <b>26 Master-Algorithmen</b> (Hall- und Plattenhall-Varianten, Bandecho, Grain Shifter, Vinyl Break, Looper …) samt ihren Parameternamen. Im Part-Fenster steht damit „Bit-Tiefe“ statt „Parameter 2“.</li>
     <li><b>Presets im Speicher</b> — 100 Insert- und 32 Master-Presets liegen als Blöcke im Arbeitsspeicher und lassen sich auslesen, sichern und zurückschreiben. Auch die Namen, die das Gerätemenü zeigt, stehen dort.</li>
-    <li><b>Bedienfeld fernsteuern</b> — Mute, Solo, Erase, Trigger, Keyboard, Chord, Step-Jump und die Pattern-Zuweisung sind als Fernbefehle ansprechbar.</li>
+    <li><b>Live per Controller</b> — 24 Regler eines angeschlossenen Controllers verstellen die Parameter des gewählten Effekts direkt, während der Sequencer läuft.</li>
   </ul>
   <div class="hinweis"><b>Eine Falle, die im Werkzeug dokumentiert ist:</b> Der Zwischenspeicher der Effekte zeigt <i>nicht</i> den laufenden Stand, sondern den beim Laden des Patterns — auch ein Reglerdreh am Gerät selbst ändert dort kein Byte. Wer ihn als Gegenprobe nimmt, hält einen funktionierenden Sendeweg für kaputt. Genau dieser Irrtum hat uns mehrere Messreihen gekostet und steht deshalb als Warnung im Code.</div>
 </section>
 
 <section class="seite">
   <span class="nr">11</span>
+  <h2>Eigene Effekte und Grooves bauen</h2>
+  <p class="lead">Was am Gerät nur auswählbar ist, lässt sich hier entwerfen: ein Effekt-Preset mit eigenem Namen, eigenen Algorithmen und eigener Belegung der Bedienelemente — und ein eigenes Timing-Gefühl.</p>
+  <h3 class="unter-h">Effekt-Presets</h3>
+  <p>Am Gerät wählt man im Menü einen Namen wie „Bit Crusher“. Dahinter steckt eine ganze Kette: bis zu zwei Insert-Effekte plus Master-Effekt, jeweils mit Algorithmus, Ein- und Ausgangspegel und Parameterwerten, dazu zehn Zuordnungen für die X/Y-Fläche und den FX-Knopf — jede mit Ziel-Parameter und eigenem Wertebereich.</p>
+  <ul>
+    <li>Platz vom Gerät lesen, Name und Algorithmen einstellen, Parameter mit ihren <b>echten Namen</b> verstellen — „Bit-Tiefe“ statt „Parameter 2“.</li>
+    <li>Der zweite Insert-Effekt sperrt sich mit Begründung, wenn der erste ihn nicht zulässt — eine Regel des Geräts, die sonst still ins Leere liefe.</li>
+    <li>Presets als Datei sichern und weitergeben; die Dateien des Hacktribe-Editors lassen sich direkt laden.</li>
+  </ul>
+  ${img("fx-preset", "Ein echtes Fremd-Preset im Editor: „Tube Drive“, Master-Effekt Tube Pre mit allen zwölf benannten Parametern, alle zehn Zuordnungen belegt.")}
+  <div class="hinweis"><b>Ohne Gerät belegt:</b> Zehn echte Preset-Dateien aus dem Hacktribe-Projekt werden korrekt gelesen — Namen, Algorithmen und Werte passen — und byte-genau zurückgeschrieben. Das Format stimmt also, bevor die Electribe überhaupt angeschlossen ist.</div>
+</section>
+
+<section class="seite">
+  <span class="nr">12</span>
+  <h2>Groove-Vorlagen — eigener Swing</h2>
+  <p class="lead">Eine Groove-Vorlage legt für jeden Step drei Dinge fest: den Zeitversatz, die Anschlagstärke und die Tonlänge. Genau daraus entsteht das Timing-Gefühl.</p>
+  <ul>
+    <li><b>96 Vorlagen</b> liegen im Gerät; jede lässt sich lesen, ändern und zurückschreiben.</li>
+    <li><b>Swing auf Knopfdruck</b> — jeder zweite Step wandert um den eingestellten Betrag nach hinten. Ein halber Step ist der Maximalwert.</li>
+    <li><b>Eigene Länge</b> — steht sie auf 13 statt 64, läuft das Muster gegen den Takt und ergibt schiefe, wandernde Grooves.</li>
+    <li>Auch hier: als Datei sichern und weitergeben.</li>
+  </ul>
+  ${img("groove", "Die Step-Tabelle mit gesetztem Swing: jeder zweite Step um 24 nach hinten, dazwischen unverändert.")}
+  <div class="hinweis"><b>Vorsicht, wo Quellen sich widersprechen:</b> Zwei Beschreibungen des Formats nennen unterschiedliche Stellen für die Step-Tabelle. TekkForge folgt der Fassung des Hacktribe-Autors und prüft beim Lesen zusätzlich ein Muster, das nur an der richtigen Stelle auftritt. Passt es nicht, verweigert der Schreibknopf — lieber nichts schreiben als zwölf Byte daneben.</div>
+</section>
+
+<section class="seite">
+  <span class="nr">13</span>
+  <h2>Geräte-Spiegel und Werkbank</h2>
+  <p class="lead">Hacktribe meldet jeden Griff am Gerät zurück: welcher Modus aktiv ist, welches Bedienelement bewegt wurde, wohin. TekkForge zeigt diesen Strom in Klartext.</p>
+  <ul>
+    <li>Jede Meldung erscheint als Zeile mit Kanal, Modus, Bedienelement und Zustand — vom Shift-Knopf bis zum Encoder, der „eins hoch“ meldet.</li>
+    <li>Der Kanal verrät nebenbei, welcher Part am Gerät gerade gewählt ist.</li>
+    <li>Unbekannte Kennungen werden als unbekannt ausgewiesen, statt einen Namen zu erfinden.</li>
+  </ul>
+  <h3 class="unter-h">Werkbank für das Undokumentierte</h3>
+  <p>Manches kann das Gerät, ohne dass jemand aufgeschrieben hat, wie: Es gibt versteckte Einstellungen, die nur über MIDI erreichbar sind und im Menü gar nicht auftauchen. Veröffentlicht ist nur eine davon. Die Werkbank schickt deshalb <b>beliebige</b> Nachrichten — und der Spiegel daneben zeigt sofort, ob etwas passiert ist. Zusammen ergibt das eine Suchschleife für alles, was noch fehlt.</p>
+  ${img("nrpn-spiegel", "Der Spiegel in Aktion: Shift im Keyboard-Modus gedrückt und losgelassen, IFX-On auf Kanal 1, ein Encoder-Schritt — jeweils mit Kanal, Modus und Bedienelement.")}
+</section>
+
+<section class="seite">
+  <span class="nr">14</span>
   <h2>Zugriff auf den Arbeitsspeicher</h2>
   <p class="lead">Hacktribe erlaubt, direkt in den Speicher des laufenden Geräts zu schauen und zu schreiben. Das ist mächtig und heikel zugleich — deshalb ist der Weg dorthin bewusst umständlich gebaut.</p>
   <h3 class="unter-h">Was heute erreichbar ist</h3>
@@ -185,15 +238,15 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">12</span>
+  <span class="nr">15</span>
   <h2>Was über den Speicherzugriff noch möglich wird</h2>
-  <p class="lead">Der Weg ins Gerät ist gebaut und erprobt. Was fehlt, ist nicht der Zugang, sondern die Bedienoberfläche darüber — und das Wissen, welches Byte welche Bedeutung hat.</p>
+  <p class="lead">Effekt-Presets und Groove-Vorlagen sind inzwischen gebaut. Was bleibt, ist nicht der Zugang, sondern das Wissen, welches Byte welche Bedeutung hat.</p>
   <div class="karten">
-    <div class="karte"><h3>Effekt-Presets verwalten</h3><p>Eigene Insert- und Master-Presets am Rechner bauen, benennen, sichern und in freie Plätze schreiben — statt sie am kleinen Display des Geräts zusammenzudrehen.</p></div>
-    <div class="karte"><h3>Presets weitergeben</h3><p>Ein Preset ist ein Block von 524 Byte. Als Datei exportiert, wird daraus etwas, das man tauschen oder als Sammlung veröffentlichen kann.</p></div>
-    <div class="karte"><h3>Eigene Grooves</h3><p>96 Groove-Vorlagen liegen im Speicher. Sie zu lesen und zu schreiben, hieße: eigenes Timing-Gefühl entwerfen, statt aus den mitgelieferten zu wählen.</p></div>
     <div class="karte"><h3>Sicherung des ganzen Geräts</h3><p>Alle erreichbaren Bereiche in einem Rutsch auslesen und als Sicherung ablegen — ein Rückweg, den es bisher nur für einzelne Blöcke gibt.</p></div>
+    <div class="karte"><h3>Die versteckten Schalter finden</h3><p>Drei Einstellungen gibt es nur über MIDI; veröffentlicht ist eine. Mit Werkbank und Spiegel lassen sich die anderen suchen — etwa der Schalter, der das Gerät überhaupt erst zurückmelden lässt.</p></div>
     <div class="karte"><h3>Regler-Bewegungen schreiben</h3><p>Aufgezeichnete Bewegungen werden heute nur gelesen. Sie auch setzen zu können, würde Arrangements in Bewegung bringen.</p></div>
+    <div class="karte"><h3>Sequenz-Steps von außen</h3><p>Das Gerät nimmt inzwischen auch Befehle für einzelne Schritte entgegen. Was die Kennziffern bedeuten, steht nirgends — genau dafür ist die Werkbank da.</p></div>
+    <div class="karte"><h3>Preset-Sammlungen</h3><p>Ein Preset ist eine kleine Datei. Als Sammlung veröffentlicht, wird daraus etwas, das andere Electribe-Besitzer nutzen können.</p></div>
     <div class="karte"><h3>Vergleichen statt raten</h3><p>Zwei Auslesungen gegeneinanderhalten und die Unterschiede benennen — so lassen sich unbekannte Bytes Stück für Stück entschlüsseln.</p></div>
   </div>
   <div class="hinweis"><b>Bewusst nicht geplant:</b> Presets so anzulegen, dass sie im Gerätemenü als neue Einträge auftauchen. Dafür müssten dreizehn verstreute Zähler gleichzeitig stimmen; ein halb hochgezählter Satz hinterlässt eine Firmware in sich widersprüchlich. Diesen Weg soll weiterhin Hacktribes eigenes Werkzeug gehen.</div>
@@ -204,6 +257,11 @@ const roadmap = [
     titel: "Abnahme am Gerät",
     wann: "als Nächstes",
     text: "Die neuen Funktionen sind am Bildschirm belegt, aber das Ohr entscheidet: kickt der Drop hörbar härter als der Aufbau, ergibt die Vocal-Reihenfolge das ganze Lied, klingen Akkorde vollständig, belegt jedes Sample genau einen Part?",
+  },
+  {
+    titel: "Die versteckten Schalter aufspüren",
+    wann: "als Nächstes",
+    text: "Drei Einstellungen sind nur über MIDI erreichbar, veröffentlicht ist eine. Ausgerechnet der Schalter, der das Gerät zum Zurückmelden bringt, fehlt — ohne ihn bleibt der Geräte-Spiegel stumm. Werkbank und Spiegel bilden zusammen die Suchschleife.",
   },
   {
     titel: "Vocals sparsamer speichern",
@@ -329,7 +387,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>538</b><span>automatische Tests</span></div>
+    <div><b>572</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -344,7 +402,7 @@ const html = `<!doctype html>
     <div class="karte"><h3>Von Hand</h3><p>Der Pattern-Editor baut Patterns Schritt für Schritt: Noten, Anschlagstärke, Tonlänge, Akkorde, eigene Klänge.</p></div>
     <div class="karte"><h3>Ans Gerät</h3><p>Fertige Dateien auf die Speicherkarte kopieren oder direkt per MIDI in einen Slot schreiben — das laufende Pattern bleibt unberührt.</p></div>
   </div>
-  ${img("doc-start", "Der Start-Bildschirm: Statuskacheln, zuletzt geöffnete Dateien, Schnellzugriff und der eingebaute Assistent.")}
+  ${img("start", "Der Start-Bildschirm: Statuskacheln, zuletzt geöffnete Dateien, Schnellzugriff und der eingebaute Assistent.")}
   <div class="hinweis"><b>Warum das zählt:</b> Das Dateiformat der Electribe ist nirgends offiziell beschrieben. Jede Byte-Position in TekkForge ist am echten Gerät nachgemessen — deshalb landen die Dateien nicht nur im Speicher, sondern klingen auch so, wie sie sollen.</div>
 </section>
 
@@ -364,7 +422,7 @@ ${abschnitte
 ${firmwareSeiten}
 
 <section class="seite">
-  <span class="nr">13 · AUSBLICK</span>
+  <span class="nr">16 · AUSBLICK</span>
   <h2>Was als Nächstes kommt</h2>
   <p class="lead">Der Stand von heute ist benutzbar und getestet. Diese Punkte stehen als Nächstes an — geordnet nach Dringlichkeit, nicht nach Aufwand.</p>
   <div class="rm">
@@ -380,7 +438,7 @@ ${firmwareSeiten}
 </section>
 
 <section class="seite">
-  <span class="nr">TECHNIK</span>
+  <span class="nr">17 · TECHNIK</span>
   <h2>Grundlagen in Kürze</h2>
   <p class="lead">Was unter der Oberfläche gilt — die Regeln, an denen sich alles ausrichtet.</p>
   <div class="karten">
@@ -389,7 +447,8 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>538 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>572 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
   <div class="fuss"><span>TekkForge 0.6.0 — Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
