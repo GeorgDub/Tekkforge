@@ -65,7 +65,8 @@ describe("e2FxPreset", () => {
     expect(p.controlMap).toHaveLength(10);
     const s0 = p.controlMap[0];
     expect(s0.quelle).toBe(0x42);
-    expect(s0.quelleName).toBe("FX Edit X");
+    // Bezeichnung nach Hacktribe-Wiki: beim MFX die X-Achse, beim IFX der Edit-Regler
+    expect(s0.quelleName).toBe("MFX X / IFX Edit");
     expect(s0.kette).toBe(0);
     expect(s0.zielParam).toBe(2);
     expect(s0.min).toBe(10);
@@ -134,11 +135,14 @@ describe("e2FxPreset", () => {
   });
 
   it("Quellenliste enthaelt die Bedienelemente des Geraets", () => {
-    const namen = FX_QUELLEN.map((q) => q.name);
-    expect(namen).toContain("FX Edit X");
-    expect(namen).toContain("FX Edit Y");
-    expect(namen).toContain("FX On");
-    expect(FX_QUELLEN.find((q) => q.name === "FX Edit X")!.wert).toBe(0x42);
+    expect(FX_QUELLEN).toHaveLength(11);
+    const wert = (name: string) => FX_QUELLEN.find((q) => q.name === name)?.wert;
+    expect(wert("MFX X / IFX Edit")).toBe(0x42);
+    expect(wert("MFX Y")).toBe(0x43);
+    expect(wert("FX On / XY beruehrt")).toBe(0x41);
+    // Die invertierten Quellen sind als solche benannt (Wiki: 0 = Maximalwert)
+    expect(FX_QUELLEN.filter((q) => /invertiert/.test(q.name)).map((q) => q.wert)).toEqual([0x45, 0x47]);
+    expect(wert("Play/Start (setzt Maximum)")).toBe(0x4a);
   });
 
   it("MFX-Presets nutzen die Master-Algorithmentabelle", () => {

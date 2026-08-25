@@ -31,11 +31,14 @@ import {
   VELOCITY_MAX,
   type Groove,
 } from "../core/e2Groove";
+import { baueMidiThru } from "../core/fxLive";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
 
 export interface FxPresetHooks {
   lesen(addr: number, len: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
   schreiben(addr: number, bytes: Uint8Array, was: string): Promise<void>;
+  /** Rohe MIDI-Nachricht senden (fuer die versteckten Global-Einstellungen). */
+  midi?(bytes: number[]): void;
 }
 
 let hooks: FxPresetHooks | null = null;
@@ -448,6 +451,20 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
     render();
     setStatus("bereit");
   });
+  // MIDI-Thru: versteckte Global-Einstellung aus Diskussion #189 des
+  // hacktribe-Repos — im Geraetemenue gibt es sie nicht.
+  const thru = (an: boolean) => {
+    if (!hooks?.midi) {
+      setStatus("Ohne MIDI-Verbindung nicht moeglich.");
+      return;
+    }
+    for (const m of baueMidiThru(0, an)) hooks.midi([...m]);
+    setStatus(
+      `MIDI-Thru ${an ? "eingeschaltet" : "ausgeschaltet"}. Damit es bleibt: am Geraet ins Global-Menue und „Write" druecken.`,
+    );
+  };
+  $("fxpThruAn").addEventListener("click", () => thru(true));
+  $("fxpThruAus").addEventListener("click", () => thru(false));
   $("fxpRead").addEventListener("click", () => void lesen());
   $("fxpWrite").addEventListener("click", () => void schreiben());
   $("fxpUndo").addEventListener("click", () => void zurueck());

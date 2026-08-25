@@ -190,12 +190,23 @@ das dazu.
 |---|---|---|
 | Pattern → Edit-Buffer / Slot (SysEx, ACK-Prüfung), Pattern ← Gerät, Global | ✅ | ✅ |
 | E2S-Panel: Regler-CCs in beide Richtungen, Auto-Sync, Program Change, Alternate | ✅ | ✅ |
-| Panel-Live-Mute | per Edit-Buffer-Übertragung (~1 s) | sofort per NRPN |
+| Panel-Live-Mute | per Edit-Buffer-Übertragung (~1 s) | per NRPN — ⚠ **am Gerät unbestätigt**, siehe Hinweis unten |
 | IFX-Parameter live senden (Part-Popup) | ausgeblendet | ✅ (NRPN) |
 | Geräte-RAM lesen/schreiben, „FX-Puffer lesen" | ausgeblendet | ✅ |
 
 Logik in `src/core/firmwareMode.ts` (`featureAvailable`, `featureHint`,
 `firmwareFromProbe`), Tests in `tests/firmware-mode.test.ts`.
+
+⚠ **Offene Frage zum Panel-NRPN.** Das Hacktribe-Wiki (`MIDI.md`) sagt:
+„Physical controls **send** NRPN messages, **reception of controls is not
+implemented yet**. Only FX editing is currently implemented for received NRPN."
+Demnach würde das Gerät unsere Panel-Nachrichten (Mute/Solo/Trigger) gar nicht
+annehmen — der Live-Mute-Weg wäre wirkungslos. Das Januar-2025-Update hat
+Empfang für Global- und Sequenz-Parameter ergänzt, das Wiki könnte also
+veraltet sein. **Am Gerät zu prüfen**; bis dahin gilt der Edit-Buffer-Weg als
+der belegte. Umgekehrt ist der Sende-Weg des Geräts interessant: es meldet
+jeden Knopfdruck als NRPN, wenn die versteckte Einstellung „NRPN-Ausgabe"
+aktiv ist.
 
 ### Pattern vorbereiten, während ein anderes läuft
 

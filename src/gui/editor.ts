@@ -1554,6 +1554,7 @@ function setupRamPanel(): void {
       ramSnapshot = ramSnapshot ?? null;
       await ramWriteVerified(addr, bytes, was);
     },
+    midi: (bytes) => void panelBridge.midi.send(Uint8Array.from(bytes)),
   });
 }
 

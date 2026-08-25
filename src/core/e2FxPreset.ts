@@ -50,16 +50,18 @@ const STUFEN = {
  */
 export const FX_QUELLEN: readonly { wert: number; name: string }[] = [
   { wert: 0x00, name: "— keine —" },
-  { wert: 0x41, name: "FX On" },
-  { wert: 0x42, name: "FX Edit X" },
-  { wert: 0x43, name: "FX Edit Y" },
-  { wert: 0x44, name: "FX Edit X oben" },
-  { wert: 0x45, name: "FX Edit X unten" },
-  { wert: 0x46, name: "FX Edit Y oben" },
-  { wert: 0x47, name: "FX Edit Y unten" },
+  // Bezeichnungen nach dem Hacktribe-Wiki (MIDI.md, „FX Map source controls"):
+  // beim Master-Effekt ist es die X/Y-Flaeche, beim Insert-Effekt der IFX-Regler.
+  { wert: 0x41, name: "FX On / XY beruehrt" },
+  { wert: 0x42, name: "MFX X / IFX Edit" },
+  { wert: 0x43, name: "MFX Y" },
+  { wert: 0x44, name: "MFX X oben / IFX Edit oben" },
+  { wert: 0x45, name: "MFX X unten (invertiert)" },
+  { wert: 0x46, name: "MFX Y oben" },
+  { wert: 0x47, name: "MFX Y unten (invertiert)" },
   { wert: 0x48, name: "Taste Part" },
   { wert: 0x49, name: "Taste global" },
-  { wert: 0x4a, name: "Play gedrueckt" },
+  { wert: 0x4a, name: "Play/Start (setzt Maximum)" },
 ];
 
 /** Ziel einer Zuordnung: welche Stufe der Kette bzw. welcher Pegel. */

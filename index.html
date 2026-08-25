@@ -490,6 +490,15 @@
                   <button id="fxpSave" class="ghost">Als Datei sichern</button>
                   <input id="fxpFileIn" type="file" accept=".e2fxp,.e2gv,.ifx,.mfx,.gv,.bin" class="hidden" />
                 </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Versteckte Global-Einstellung:</b></span>
+                  <button id="fxpThruAn" class="ghost">MIDI-Thru einschalten</button>
+                  <button id="fxpThruAus" class="ghost">ausschalten</button>
+                  <span class="sub" style="margin:0">
+                    Gibt es nur über MIDI, nicht im Menü. Danach am Gerät ins Global-Menü und
+                    <b>Write</b> drücken, sonst ist es nach dem Ausschalten wieder weg.
+                  </span>
+                </div>
                 <div id="fxpEditor" style="margin-top:10px"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
                   <button id="fxpWrite" class="primary hidden">⚠ Auf das Gerät schreiben</button>

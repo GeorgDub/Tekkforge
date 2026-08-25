@@ -46,6 +46,7 @@ import {
   type PartAenderung,
 } from "../core/padDeck";
 import { buildMfxCc, buildPanic, buildSchalterCc } from "../core/e2Remote";
+import { baueFxLiveNachricht, paramFuerCc, standardControllerMap, type FxLiveZiel } from "../core/fxLive";
 import { buildKnobCc, KNOB_CCS } from "../core/e2KnobCc";
 import { buildCurrentPatternDump, buildPatternRequest, decodeDump } from "../core/e2sysex";
 import { buildPatternFile, editorPatternFromBody, type EditorPattern } from "../core/editorModel";
@@ -437,6 +438,11 @@ function baueDom(): void {
       <button id="pdImport" class="ghost">⇧ JSON</button>
       <input id="pdImportDatei" type="file" accept=".json,application/json" class="hidden">
     </div>
+    <div class="pd-toolbar" id="pdFxLiveLeiste" title="Regler am Controller verstellen FX-Parameter des gewählten Ziels — live, während das Gerät spielt (nur Hacktribe)">
+      <label><input type="checkbox" id="pdFxLive" /> Live-FX per Controller</label>
+      <label>Ziel <select id="pdFxZiel"></select></label>
+      <span class="sub" id="pdFxLiveInfo" style="margin:0"></span>
+    </div>
     <div class="pd-status" id="pdStatus">Pad-Deck — Klick führt aus.</div>
     <div class="pd-wrap">
       <div class="pd-grid" id="pdGrid"></div>
@@ -466,6 +472,88 @@ function renderSeiten(): void {
 }
 
 const CONTROLLER_KEY = "tekkforge.paddeck.controller";
+const FXLIVE_KEY = "tekkforge.paddeck.fxlive";
+
+// ─── Live-FX per Controller ──────────────────────────────────────────────────
+
+const fxLive: { an: boolean; ziel: FxLiveZiel; map: number[] } = {
+  an: false,
+  ziel: { art: "part", part: 1, slot: 0 },
+  map: standardControllerMap(),
+};
+
+function fxLiveZielListe(): { wert: string; name: string }[] {
+  const out: { wert: string; name: string }[] = [];
+  for (let p = 1; p <= 16; p++) {
+    out.push({ wert: `p${p}-0`, name: `Part ${p} · IFX 1` });
+    out.push({ wert: `p${p}-1`, name: `Part ${p} · IFX 2` });
+  }
+  out.push({ wert: "mfx", name: "Master-Effekt" });
+  return out;
+}
+
+const fxLiveZielWert = (z: FxLiveZiel): string => (z.art === "mfx" ? "mfx" : `p${z.part}-${z.slot}`);
+
+function fxLiveZielAus(wert: string): FxLiveZiel {
+  if (wert === "mfx") return { art: "mfx" };
+  const m = /^p(\d+)-([01])$/.exec(wert);
+  return m ? { art: "part", part: Number(m[1]), slot: Number(m[2]) as 0 | 1 } : { art: "part", part: 1, slot: 0 };
+}
+
+function fxLiveInfo(text?: string): void {
+  const el = document.getElementById("pdFxLiveInfo");
+  if (!el) return;
+  el.textContent = text ?? (fxLive.an ? "24 Regler → FX-Parameter 0–23 (MIDImix-Belegung)" : "");
+}
+
+/**
+ * Einen Controller-CC als FX-Parameter ans Geraet schicken.
+ * Rueckgabe true = verbraucht, die Nachricht geht nicht mehr an die Pads.
+ */
+function fxLiveVerarbeite(cc: number, wert: number): boolean {
+  if (!fxLive.an) return false;
+  const msgs = baueFxLiveNachricht({ ziel: fxLive.ziel, map: fxLive.map, cc, wert, kanal0: panelBridge.midiChannel });
+  if (!msgs) return false;
+  for (const m of msgs) panelBridge.midi.send(Uint8Array.from(m));
+  const param = paramFuerCc(fxLive.map, cc);
+  fxLiveInfo(`Parameter ${param} = ${wert} → ${fxLiveZielListe().find((z) => z.wert === fxLiveZielWert(fxLive.ziel))?.name}`);
+  return true;
+}
+
+function richteFxLiveEin(): void {
+  const sel = document.getElementById("pdFxZiel") as HTMLSelectElement | null;
+  const box = document.getElementById("pdFxLive") as HTMLInputElement | null;
+  if (!sel || !box) return;
+  try {
+    const gemerkt = JSON.parse(localStorage.getItem(FXLIVE_KEY) ?? "null") as { an?: boolean; ziel?: FxLiveZiel } | null;
+    if (gemerkt?.ziel) fxLive.ziel = gemerkt.ziel;
+    if (typeof gemerkt?.an === "boolean") fxLive.an = gemerkt.an;
+  } catch {
+    /* ohne Speicher eben Standardwerte */
+  }
+  sel.innerHTML = fxLiveZielListe()
+    .map((z) => `<option value="${z.wert}"${z.wert === fxLiveZielWert(fxLive.ziel) ? " selected" : ""}>${escapeHtml(z.name)}</option>`)
+    .join("");
+  box.checked = fxLive.an;
+  const merken = () => {
+    try {
+      localStorage.setItem(FXLIVE_KEY, JSON.stringify({ an: fxLive.an, ziel: fxLive.ziel }));
+    } catch {
+      /* egal */
+    }
+  };
+  box.addEventListener("change", () => {
+    fxLive.an = box.checked;
+    merken();
+    fxLiveInfo(fxLive.an ? undefined : "aus");
+  });
+  sel.addEventListener("change", () => {
+    fxLive.ziel = fxLiveZielAus(sel.value);
+    merken();
+    fxLiveInfo();
+  });
+  fxLiveInfo();
+}
 
 /** Controller-Auswahl füllen (Ports sind erst nach „MIDI aktivieren" bekannt). */
 function renderController(): void {
@@ -591,10 +679,16 @@ export function initPadDeck(istOffen: () => boolean): void {
 
   $("pdController").addEventListener("change", (e) => void waehleController((e.target as HTMLSelectElement).value).then(renderController));
 
+  richteFxLiveEin();
+
   // MIDI: Learn oder Trigger (aktive Seite) — vom Controller-Eingang UND vom Gerät.
   const verarbeiteTrigger = (bytes: number[]) => {
     const st = bytes[0] & 0xf0;
     const kanal = bytes[0] & 0x0f;
+    // Live-FX zuerst: ein belegter Regler geht als FX-Parameter ans Gerät und
+    // nicht mehr an die Pad-Erkennung. Lernen hat trotzdem Vorrang, sonst
+    // liesse sich ein Regler nie einem Pad zuweisen.
+    if (lernePad === null && st === 0xb0 && bytes.length >= 3 && fxLiveVerarbeite(bytes[1], bytes[2])) return;
     const istNote = st === 0x90 && bytes.length >= 3 && bytes[2] > 0;
     const istCc = st === 0xb0 && bytes.length >= 3 && bytes[2] >= 64 && bytes[1] !== 0x20 && bytes[1] !== 0x00;
     if (!istNote && !istCc) return;
