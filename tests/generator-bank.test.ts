@@ -5,7 +5,8 @@ import { parseWav } from "../src/core/wavCodec";
 import { scanne } from "../src/core/sampleScan";
 import { bereiteAuf, waehleVolumes, planeBank } from "../src/core/bankPlan";
 import { parseE2sBank } from "../src/core/e2sBankReader";
-import { oscToDisplayNumber } from "../src/core/e2sPatternSampleLink";
+import { buildE2sBank } from "../src/core/e2sBankBuilder";
+import { oscToDisplayNumber, displayNumberToOsc, displayNumberToSlotIndex } from "../src/core/e2sPatternSampleLink";
 
 const KORG3 = path.resolve("examples/e2s/korg3");
 const TEKK4 = path.resolve("examples/e2s/tekk4.all");
@@ -163,6 +164,31 @@ describe("bankPlan", () => {
     for (const s of projekt.samples) expect(s.name.length).toBeLessThanOrEqual(16);
     expect(projekt.samples.filter((s) => s.rolle === "melo" && s.kind === "loop").every((s) => s.takte <= 8)).toBe(true);
     expect(new Set(projekt.samples.map((s) => s.name.toLowerCase())).size).toBe(projekt.samples.length);
+  });
+  it("planeBank: STEREO-Basissample wird zu Mono gemischt (sonst frisst es zwei Parts)", () => {
+    const sr = 44100;
+    // Fremdbank mit einem STEREO-Slot unter einem tekk-Basisnamen
+    const frames = 4410;
+    const stereo = new Float32Array(frames * 2);
+    for (let i = 0; i < frames; i++) {
+      stereo[i * 2] = Math.sin(i / 12) * 0.6;
+      stereo[i * 2 + 1] = Math.sin(i / 9) * 0.6;
+    }
+    const fremd = buildE2sBank([
+      { slotIndex: displayNumberToSlotIndex(501), sampleNumber: displayNumberToOsc(501), name: "HaimKind Stereo", category: 2, pcmData: stereo, sampleRate: sr, channels: 2 },
+    ]);
+    const { eintraege } = scanne(eingaben(["Klatsch.wav"]));
+    const { bank } = planeBank(eintraege, { name: "st", bpm: 180, tekkDrumsBank: new Uint8Array(fremd.buffer) });
+    const gelesen = parseE2sBank(new Uint8Array(bank), "st.all");
+    for (const s of gelesen.slots.filter(Boolean)) expect(s!.channels).toBe(1);
+  });
+  it("planeBank: JEDER Slot ist mono — die Electribe legt Stereo sonst auf zwei Parts", () => {
+    const { eintraege } = scanne(eingaben(["BaReTT MeLo.wav", "Klatsch.wav"]));
+    const { projekt, bank } = planeBank(eintraege, { name: "m", bpm: 180, tekkDrumsBank: new Uint8Array(fs.readFileSync(TEKK4)) });
+    const gelesen = parseE2sBank(new Uint8Array(bank), "m.all");
+    const belegt = gelesen.slots.filter(Boolean);
+    expect(belegt.length).toBe(projekt.samples.length);
+    for (const s of belegt) expect(s!.channels).toBe(1);
   });
   it("planeBank: mit tekk4-Drums liegen die auf 501–535, eigene ab 601", () => {
     const { eintraege } = scanne(eingaben(["BaReTT MeLo.wav", "Klatsch.wav"]));

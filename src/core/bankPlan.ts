@@ -7,7 +7,7 @@
 import { type ScanEintrag, type Rolle, sauberName, rmsDb, peakVon, LANG_AB } from "./sampleScan";
 import { taktPassung, tempoSchaetzen } from "./tempoAnalyse";
 import { meloRaster, type MeloRaster } from "./meloRaster";
-import { polyPhaseResample, peakNormalize } from "./audioProcessor";
+import { polyPhaseResample, peakNormalize, downmixToMono } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { parseE2sBank } from "./e2sBankReader";
 import { displayNumberToOsc, displayNumberToSlotIndex, oscToDisplayNumber } from "./e2sPatternSampleLink";
@@ -243,13 +243,16 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
       if (!praefix || genommen.has(praefix)) continue;
       genommen.add(praefix);
       const nr = oscToDisplayNumber(s.sampleNumber);
+      // Die Electribe legt ein Mono-Sample auf EINEN Part, ein Stereo-Sample auf
+      // ZWEI — uebernommene Stereo-Slots werden darum gemischt (spart Part und RAM)
+      const pcm = s.channels === 2 ? downmixToMono(s.pcmData).pcm : s.pcmData;
       slots.push({
         slotIndex: s.index, sampleNumber: s.sampleNumber, name: s.name, category: s.category,
-        pcmData: s.pcmData, sampleRate: s.sampleRate, channels: s.channels as 1 | 2,
+        pcmData: pcm, sampleRate: s.sampleRate, channels: 1,
       });
       samples.push({
         nr, name: s.name.trim(), rolle: TEKK_ROLLE[praefix], familie: "tekk", kind: "oneshot", takte: 0,
-        sekunden: s.frames / s.sampleRate, rmsDb: rmsDb(s.pcmData), quelle: `tekk4.all #${nr}`, gruppe: "tekk",
+        sekunden: pcm.length / s.sampleRate, rmsDb: rmsDb(pcm), quelle: `tekk4.all #${nr}`, gruppe: "tekk",
       });
       vergeben.add(s.name.trim().toLowerCase());
     }

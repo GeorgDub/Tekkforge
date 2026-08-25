@@ -129,6 +129,28 @@ describe("baueMidiPatterns", () => {
     expect(n.note).toBe(127);
   });
 
+  it("Akkord-Part wird auf Poly gestellt, einstimmiger Part bleibt Mono", () => {
+    const akkord = [
+      { tick: 0, dauer: 240, note: 60, velocity: 100, kanal: 0 },
+      { tick: 0, dauer: 240, note: 64, velocity: 100, kanal: 0 },
+      { tick: 0, dauer: 240, note: 67, velocity: 100, kanal: 0 },
+    ];
+    const solo = [{ tick: 0, dauer: 240, note: 48, velocity: 100, kanal: 1 }];
+    const lied = {
+      format: 1, ticksProViertel: 480, bpm: 120,
+      spuren: [
+        { name: "CHORD", kanal: 0, programm: null, noten: akkord },
+        { name: "BASS", kanal: 1, programm: null, noten: solo },
+      ],
+    };
+    const { patterns } = baueMidiPatterns(lied, [{ spurIndex: 0, part: 10 }, { spurIndex: 1, part: 11 }], {
+      bpm: 120, stepLength: 16, namensBasis: "X",
+    });
+    expect(patterns[0].parts[10].steps[0].notes?.length).toBeGreaterThan(1);
+    expect(patterns[0].parts[10].params?.voiceAssign).toBe(3);
+    expect(patterns[0].parts[11].params?.voiceAssign ?? 0).toBe(0);
+  });
+
   it("meldet Hinweis und deckelt bei mehr als 16 Fenstern", () => {
     const noten = Array.from({ length: 300 }, (_, i) => ({ tick: i * 480, dauer: 240, note: 60, velocity: 100, kanal: 0 }));
     const lied = { format: 1, ticksProViertel: 480, bpm: 120, spuren: [{ name: "X", kanal: 0, programm: null, noten }] };

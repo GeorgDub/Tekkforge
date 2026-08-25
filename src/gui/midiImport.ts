@@ -29,11 +29,13 @@ interface Zustand {
   audio: { pcm: Float32Array; name: string } | null;
   audioBpm: number;
   audioLaeuft: boolean;
+  /** Gleichzeitige Toene je Step: 1 = einstimmig, 2..4 = polyphon (Akkorde) */
+  audioStimmen: number;
 }
 
 const z: Zustand = {
   lied: null, dateiname: "", fehler: "", ziel: new Map(), weg: new Set(), rollSpur: 0, stepLength: 64, hinweise: [],
-  audio: null, audioBpm: 120, audioLaeuft: false,
+  audio: null, audioBpm: 120, audioLaeuft: false, audioStimmen: 1,
 };
 
 let uebergabe: ((p: EditorProject) => void) | null = null;
@@ -62,11 +64,12 @@ const MIDI_ENDUNGEN = /\.(mid|midi|kar|rmi|rmid|smf)$/i;
 /** Audio einstimmig transkribieren und als Pseudo-SMF in den Wizard legen. */
 function transkribieren(): void {
   if (!z.audio) return;
-  const noten = transkribiereAudio(z.audio.pcm, 44100, { bpm: z.audioBpm });
+  const noten = transkribiereAudio(z.audio.pcm, 44100, { bpm: z.audioBpm, stimmen: z.audioStimmen });
   z.lied = alsSmfLied(noten, z.audioBpm, z.audio.name.replace(/\.[^.]+$/, "").slice(0, 12) || "Audio");
   z.weg.clear();
+  const art = z.audioStimmen > 1 ? `polyphon bis ${z.audioStimmen} Toene` : "einstimmig";
   z.hinweise = noten.length
-    ? [`${noten.length} Noten transkribiert (einstimmig, 16tel-Raster bei ${z.audioBpm} BPM) — im Piano Roll pruefen.`]
+    ? [`${noten.length} Noten transkribiert (${art}, 16tel-Raster bei ${z.audioBpm} BPM) — im Piano Roll pruefen.`]
     : ["keine Tonhoehen gefunden — anderes BPM probieren oder stimmhafteres Material (Melodie/Bass-Stem statt Vollmix)."];
   vorschlagZiel(z.lied);
 }
@@ -278,8 +281,14 @@ function render(): void {
           ? `<div class="zeileEinst" style="margin-top:6px">
               <label for="miAudioBpm">Audio-BPM</label>
               <input id="miAudioBpm" type="number" min="60" max="300" value="${z.audioBpm}" style="width:80px" />
+              <label for="miStimmen">Stimmen</label>
+              <select id="miStimmen">
+                ${[1, 2, 3, 4]
+                  .map((s) => `<option value="${s}" ${z.audioStimmen === s ? "selected" : ""}>${s === 1 ? "1 · einstimmig" : `${s} · Akkorde`}</option>`)
+                  .join("")}
+              </select>
               <button id="miNeu" class="ghost">Neu transkribieren</button>
-              <span class="sub" style="margin:0">einstimmig — am besten Melodie- oder Bass-Stem, kein Vollmix</span>
+              <span class="sub" style="margin:0">am besten Melodie- oder Bass-Stem, kein Vollmix</span>
             </div>`
           : ""
       }
@@ -345,8 +354,12 @@ function render(): void {
   if (z.audio) {
     $("miNeu").addEventListener("click", () => {
       z.audioBpm = Math.min(300, Math.max(60, Number(($("miAudioBpm") as HTMLInputElement).value) || z.audioBpm));
+      z.audioStimmen = Number(($("miStimmen") as HTMLSelectElement).value) || 1;
       transkribieren();
       render();
+    });
+    $("miStimmen").addEventListener("change", () => {
+      z.audioStimmen = Number(($("miStimmen") as HTMLSelectElement).value) || 1;
     });
   }
   if (lied) {

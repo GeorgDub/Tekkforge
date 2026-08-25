@@ -21,6 +21,13 @@ function stille(sek: number): Float32Array {
   return new Float32Array(Math.round(sek * SR));
 }
 
+/** Toene uebereinanderlegen (gleiche Laenge) — Akkord. */
+function mische(...teile: Float32Array[]): Float32Array {
+  const out = new Float32Array(teile[0].length);
+  for (const t of teile) for (let i = 0; i < out.length; i++) out[i] += t[i] / teile.length;
+  return out;
+}
+
 function verkette(...teile: Float32Array[]): Float32Array {
   const out = new Float32Array(teile.reduce((s, t) => s + t.length, 0));
   let o = 0;
@@ -52,6 +59,32 @@ describe("audioZuMidi", () => {
     const noten = transkribiereAudio(pcm, SR, { bpm: BPM });
     expect(noten).toHaveLength(2);
     expect(noten[0].velocity).toBeGreaterThan(noten[1].velocity);
+  });
+  it("polyphon: Dur-Dreiklang wird zu drei gleichzeitigen Noten", () => {
+    const dauer = 8 * STEP_SEK;
+    const akkord = mische(ton(261.63, dauer), ton(329.63, dauer), ton(392.0, dauer));
+    const noten = transkribiereAudio(akkord, SR, { bpm: BPM, stimmen: 3 });
+    expect(noten.map((n) => n.note).sort((a, b) => a - b)).toEqual([60, 64, 67]);
+    for (const n of noten) {
+      expect(n.tick).toBe(0);
+      expect(n.dauer).toBe(8 * (AUDIO_TPQ / 4));
+    }
+  });
+  it("polyphon: ein einzelner Ton bleibt EINE Note (keine Oberton-Geister)", () => {
+    const noten = transkribiereAudio(ton(261.63, 8 * STEP_SEK), SR, { bpm: BPM, stimmen: 3 });
+    expect(noten).toHaveLength(1);
+    expect(noten[0].note).toBe(60);
+  });
+  it("polyphon: Akkordwechsel trennt die Noten an der Wechselstelle", () => {
+    const halb = 4 * STEP_SEK;
+    const a = mische(ton(261.63, halb), ton(329.63, halb));
+    const b = mische(ton(293.66, halb), ton(349.23, halb));
+    const noten = transkribiereAudio(verkette(a, b), SR, { bpm: BPM, stimmen: 2 });
+    const t16 = AUDIO_TPQ / 4;
+    const ersteHaelfte = noten.filter((n) => n.tick === 0).map((n) => n.note).sort((x, y) => x - y);
+    const zweiteHaelfte = noten.filter((n) => n.tick === 4 * t16).map((n) => n.note).sort((x, y) => x - y);
+    expect(ersteHaelfte).toEqual([60, 64]);
+    expect(zweiteHaelfte).toEqual([62, 65]);
   });
   it("alsSmfLied laeuft unveraendert durch den Pattern-Bau des MIDI-Wizards", () => {
     const pcm = verkette(ton(261.63, 4 * STEP_SEK), stille(4 * STEP_SEK), ton(329.63, 8 * STEP_SEK));

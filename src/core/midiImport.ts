@@ -238,6 +238,8 @@ export interface MidiBauOptionen {
 }
 
 export const MIDI_PATTERN_MAX = 16;
+/** Voice Assign „Poly" (partParams: 0 = Mono 1, 3 = Poly 2) — noetig fuer Akkorde. */
+const VOICE_POLY = 3;
 
 /** Zugeordnete Spuren in 16tel rastern und in Pattern-Fenster schneiden. */
 export function baueMidiPatterns(
@@ -286,6 +288,13 @@ export function baueMidiPatterns(
           }
           step.velocity = Math.max(step.velocity, n.velocity);
         }
+      }
+    }
+    // Parts mit Akkorden auf Poly stellen — sonst spielt das Geraet je Step
+    // nur eine Note, egal wie viele Toene im Slot stehen
+    for (const part of p.parts) {
+      if (part.steps.some((s) => s.on && (s.notes?.length ?? 0) > 1)) {
+        part.params = { ...(part.params ?? {}), voiceAssign: VOICE_POLY };
       }
     }
     if (!leer || f < fensterZahl - 1) patterns.push(p);
