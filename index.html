@@ -459,6 +459,41 @@
                 </div>
                 <div id="ramStatus" class="sub" style="margin-top:4px">bereit</div>
               </details>
+
+              <details id="fxpPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
+                <summary style="cursor:pointer;color:var(--accent2);font-weight:600">
+                  🎛 Effekt-Presets bearbeiten (Hacktribe)
+                </summary>
+                <div class="sub" style="font-size:11px;margin:8px 0">
+                  Ein Preset ist das, was am Gerät im Effekt-Menü mit Namen steht: bis zu zwei
+                  Insert-Effekte plus Master-Effekt, deren Parameter und die Belegung der
+                  X/Y-Fläche. Änderungen gehen in den Arbeitsspeicher — nach dem Ausschalten
+                  ist wieder alles wie vorher. <b>Das Gerät darf beim Schreiben nicht spielen.</b>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+                  <div>
+                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Art</label>
+                    <select id="fxpArt">
+                      <option value="ifx">Insert-Effekt (IFX)</option>
+                      <option value="mfx">Master-Effekt (MFX)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Platz</label>
+                    <input id="fxpSlot" type="number" min="0" max="95" value="0" style="width:70px" />
+                  </div>
+                  <button id="fxpRead" class="ghost">Vom Gerät lesen</button>
+                  <button id="fxpFile" class="ghost">Aus Datei…</button>
+                  <button id="fxpSave" class="ghost">Als Datei sichern</button>
+                  <input id="fxpFileIn" type="file" accept=".e2fxp,.bin" class="hidden" />
+                </div>
+                <div id="fxpEditor" style="margin-top:10px"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+                  <button id="fxpWrite" class="primary hidden">⚠ Auf das Gerät schreiben</button>
+                  <button id="fxpUndo" class="ghost hidden">↶ Vorherigen Stand zurückschreiben</button>
+                </div>
+                <div id="fxpStatus" class="sub" style="margin-top:4px">bereit</div>
+              </details>
             </div>
             <button id="midiEnable" class="primary">MIDI aktivieren</button>
           </div>

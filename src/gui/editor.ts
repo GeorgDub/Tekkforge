@@ -66,6 +66,7 @@ import {
   type FirmwareMode,
   type ProbeOutcome,
 } from "../core/firmwareMode";
+import { initFxPresetPanel } from "./fxPreset";
 import {
   E2_RAM_MAP,
   RAM_CMD,
@@ -1543,6 +1544,16 @@ function setupRamPanel(): void {
     // Bewusst über denselben Pfad inkl. Rückleseprobe: eine ungeprüfte
     // Wiederherstellung hätte dasselbe Problem wie ein ungeprüfter Write.
     void ramWriteVerified(addr, bytes, "Zurückschreiben");
+  });
+
+  // Der Preset-Editor benutzt denselben Lese- und Schreibpfad — ein Schreibweg,
+  // eine Stelle mit Schnappschuss und Rückleseprobe.
+  initFxPresetPanel({
+    lesen: ramReadBytes,
+    schreiben: async (addr, bytes, was) => {
+      ramSnapshot = ramSnapshot ?? null;
+      await ramWriteVerified(addr, bytes, was);
+    },
   });
 }
 
