@@ -197,6 +197,28 @@ das dazu.
 Logik in `src/core/firmwareMode.ts` (`featureAvailable`, `featureHint`,
 `firmwareFromProbe`), Tests in `tests/firmware-mode.test.ts`.
 
+### Geräte-Spiegel und NRPN-Werkbank (Panel-Tab)
+
+Hacktribe **meldet jeden Griff am Gerät** als NRPN — welcher Pad-Modus aktiv
+ist, welches Bedienelement bewegt wurde, wohin. `src/core/nrpnEmpfang.ts` liest
+diesen Strom (Tests `tests/nrpn-empfang.test.ts`) und der Panel-Tab zeigt ihn
+als Liste: `Ch5 Panel · Keyboard · Shift — gedrückt`.
+
+Der Leser ist **zustandsbehaftet**, und das ist kein Detail: Nach der ersten
+vollständigen Folge schickt das Gerät bei weiteren Änderungen desselben
+Elements **nur noch den Wert** (CC 0x26). Wer jede Nachricht für sich liest,
+verliert ab der zweiten den Bezug. Der Stand liegt je Kanal vor, weil der Kanal
+den aktiven Part trägt.
+
+⚠ Die Meldungen kommen nur, wenn am Gerät die versteckte Einstellung
+„NRPN-Ausgabe" aktiv ist — deren Byte-Index hat der Hacktribe-Autor nirgends
+veröffentlicht. Dafür gibt es die **NRPN-Werkbank** daneben: beliebige
+Nachricht senden (Kategorie / LSB / DATA-MSB / Wert) und in der Spiegelung
+sehen, ob etwas passiert. Voreingestellt ist die einzige dokumentierte
+Einstellung — Global `0/44/1` = MIDI-Thru an (Diskussion #189). Nach einer
+Global-Änderung am Gerät **Write** drücken, sonst ist sie nach dem Ausschalten
+weg; beim Suchen also bewusst *nicht* drücken.
+
 ⚠ **Offene Frage zum Panel-NRPN.** Das Hacktribe-Wiki (`MIDI.md`) sagt:
 „Physical controls **send** NRPN messages, **reception of controls is not
 implemented yet**. Only FX editing is currently implemented for received NRPN."
