@@ -18,6 +18,19 @@ import {
   type FxStufe,
 } from "../core/e2FxPreset";
 import { IFX_TYPES, MFX_TYPES } from "../core/e2FxParams";
+import {
+  decodeGroove,
+  encodeGroove,
+  initGrooveBytes,
+  erkenneStepBasis,
+  setzeSwing,
+  GROOVE_SIZE,
+  GROOVE_STEP_BASIS,
+  TRIGGER_MAX,
+  GATE_MAX,
+  VELOCITY_MAX,
+  type Groove,
+} from "../core/e2Groove";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
 
 export interface FxPresetHooks {
@@ -27,6 +40,7 @@ export interface FxPresetHooks {
 
 let hooks: FxPresetHooks | null = null;
 let preset: FxPreset | null = null;
+let groove: Groove | null = null;
 let basis: Uint8Array | null = null;
 let quelleAdresse: number | null = null;
 
@@ -35,15 +49,22 @@ const setStatus = (t: string): void => {
   if (el) el.textContent = t;
 };
 
-const istMfx = (): boolean => ($("fxpArt") as HTMLSelectElement).value === "mfx";
+type Art = "ifx" | "mfx" | "groove";
+const art = (): Art => (($("fxpArt") as HTMLSelectElement).value as Art) ?? "ifx";
+const istMfx = (): boolean => art() === "mfx";
+const istGroove = (): boolean => art() === "groove";
+
+/** Groove-Vorlagen: 96 Plaetze (beide Quellen einig). */
+const GROOVE_WRITE_MAX = 95;
 
 /** Adresse des gewaehlten Platzes aus der RAM-Karte. */
-function adresse(): { addr: number; slot: number; max: number } | null {
-  const eintrag = E2_RAM_MAP.find((e) => e.key === (istMfx() ? "mfxPreset" : "ifxPreset"));
+function adresse(): { addr: number; slot: number; max: number; len: number } | null {
+  const key = istGroove() ? "groove" : istMfx() ? "mfxPreset" : "ifxPreset";
+  const eintrag = E2_RAM_MAP.find((e) => e.key === key);
   if (!eintrag) return null;
-  const max = istMfx() ? MFX_PRESET_WRITE_MAX : IFX_PRESET_WRITE_MAX;
+  const max = istGroove() ? GROOVE_WRITE_MAX : istMfx() ? MFX_PRESET_WRITE_MAX : IFX_PRESET_WRITE_MAX;
   const slot = Math.max(0, Math.min(max, Number(($("fxpSlot") as HTMLInputElement).value) || 0));
-  return { addr: addressForSlot(eintrag, slot), slot, max };
+  return { addr: addressForSlot(eintrag, slot), slot, max, len: istGroove() ? GROOVE_SIZE : FX_PRESET_SIZE };
 }
 
 // ─── Oberflaeche ─────────────────────────────────────────────────────────────
@@ -93,9 +114,90 @@ function stufeHtml(titel: string, key: "ifx1" | "ifx2" | "mfx", s: FxStufe, mfx:
     </div>`;
 }
 
+/** Groove-Vorlage: Kopfzeile, Swing-Schnellzugriff und Step-Tabelle. */
+function renderGroove(host: HTMLElement, g: Groove): void {
+  const zeilen: string[] = [];
+  for (let i = 0; i < g.laenge; i++) {
+    const s = g.steps[i];
+    const takt = Math.floor(i / 16) + 1;
+    zeilen.push(`<tr${i % 4 === 0 ? ' style="border-top:1px solid var(--border)"' : ""}>
+      <td style="color:var(--muted);font-size:10px">${i + 1}<span style="opacity:.5"> · T${takt}</span></td>
+      <td><input class="gvT" data-i="${i}" type="number" min="${-TRIGGER_MAX}" max="${TRIGGER_MAX}" value="${s.trigger}" style="width:62px" /></td>
+      <td><input class="gvV" data-i="${i}" type="number" min="0" max="${VELOCITY_MAX}" value="${s.velocity}" style="width:62px" /></td>
+      <td><input class="gvG" data-i="${i}" type="number" min="0" max="${GATE_MAX}" value="${s.gate}" style="width:62px" /></td>
+    </tr>`);
+  }
+  host.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px">
+      <div>
+        <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Name im Geräte-Menü (max 15)</label>
+        <input id="gvName" type="text" maxlength="15" value="${escapeHtml(g.name)}" style="width:190px" />
+      </div>
+      <div>
+        <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Länge (Steps)</label>
+        <input id="gvLen" type="number" min="1" max="64" value="${g.laenge}" style="width:70px" />
+      </div>
+      <div>
+        <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px">Swing (0–${TRIGGER_MAX})</label>
+        <input id="gvSwing" type="number" min="0" max="${TRIGGER_MAX}" value="0" style="width:70px" />
+      </div>
+      <button id="gvSwingLos" class="ghost">Swing setzen</button>
+      <span class="sub" style="margin:0">${TRIGGER_MAX} = halber Step · 0 = gerade</span>
+    </div>
+    <div style="max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:6px">
+      <table style="width:100%;font-size:11px">
+        <thead><tr>
+          <th style="text-align:left">Step</th>
+          <th style="text-align:left">Versatz</th>
+          <th style="text-align:left">Anschlag</th>
+          <th style="text-align:left">Tonlänge</th>
+        </tr></thead>
+        <tbody>${zeilen.join("")}</tbody>
+      </table>
+    </div>`;
+  const zahl = (el: HTMLInputElement, min: number, max: number): number =>
+    Math.max(min, Math.min(max, Math.round(Number(el.value) || 0)));
+  $("gvName").addEventListener("input", () => {
+    g.name = ($("gvName") as HTMLInputElement).value;
+  });
+  $("gvLen").addEventListener("change", () => {
+    g.laenge = zahl($("gvLen") as HTMLInputElement, 1, 64);
+    render();
+  });
+  $("gvSwingLos").addEventListener("click", () => {
+    setzeSwing(g, zahl($("gvSwing") as HTMLInputElement, 0, TRIGGER_MAX));
+    render();
+  });
+  for (const el of host.querySelectorAll<HTMLInputElement>(".gvT")) {
+    el.addEventListener("change", () => {
+      g.steps[Number(el.dataset.i)].trigger = zahl(el, -TRIGGER_MAX, TRIGGER_MAX);
+    });
+  }
+  for (const el of host.querySelectorAll<HTMLInputElement>(".gvV")) {
+    el.addEventListener("change", () => {
+      g.steps[Number(el.dataset.i)].velocity = zahl(el, 0, VELOCITY_MAX);
+    });
+  }
+  for (const el of host.querySelectorAll<HTMLInputElement>(".gvG")) {
+    el.addEventListener("change", () => {
+      g.steps[Number(el.dataset.i)].gate = zahl(el, 0, GATE_MAX);
+    });
+  }
+  document.getElementById("fxpWrite")?.classList.toggle("hidden", !quelleAdresse);
+}
+
 function render(): void {
   const host = document.getElementById("fxpEditor");
   if (!host) return;
+  if (istGroove()) {
+    if (!groove) {
+      host.innerHTML = `<p class="sub" style="margin:0">Platz wählen und „Vom Gerät lesen“ — oder eine gesicherte Datei laden.</p>`;
+      document.getElementById("fxpWrite")?.classList.add("hidden");
+      return;
+    }
+    renderGroove(host, groove);
+    return;
+  }
   if (!preset) {
     host.innerHTML = `<p class="sub" style="margin:0">Platz wählen und „Vom Gerät lesen“ — oder eine gesicherte Datei laden.</p>`;
     document.getElementById("fxpWrite")?.classList.add("hidden");
@@ -206,13 +308,32 @@ async function lesen(): Promise<void> {
   const ziel = adresse();
   if (!hooks || !ziel) return;
   setStatus(`Lese Platz ${ziel.slot} …`);
-  const r = await hooks.lesen(ziel.addr, FX_PRESET_SIZE);
+  const r = await hooks.lesen(ziel.addr, ziel.len);
   if (!r.ok) {
     setStatus(`Lesen fehlgeschlagen: ${r.reason}`);
     return;
   }
   basis = r.bytes;
   quelleAdresse = ziel.addr;
+  if (istGroove()) {
+    groove = decodeGroove(r.bytes);
+    render();
+    // Zwei Quellen nennen verschiedene Step-Adressen — am 0xFF-Muster
+    // nachsehen, statt blind an unsere Stelle zu schreiben
+    const erkannt = erkenneStepBasis(r.bytes);
+    const rahmen = String.fromCharCode(...r.bytes.slice(0, 4)) === "GVST";
+    const warnung =
+      erkannt === null
+        ? " ⚠ Step-Muster nicht gefunden — bitte NICHT schreiben, erst melden."
+        : erkannt !== GROOVE_STEP_BASIS
+          ? ` ⚠ Steps liegen bei 0x${erkannt.toString(16)}, erwartet 0x${GROOVE_STEP_BASIS.toString(16)} — nicht schreiben.`
+          : "";
+    setStatus(
+      `Groove-Platz ${ziel.slot} gelesen: „${groove.name || "(ohne Namen)"}“, ${groove.laenge} Steps` +
+        `${rahmen ? "" : " (kein GVST-Kennzeichen — evtl. leerer Platz)"}${warnung}`,
+    );
+    return;
+  }
   preset = decodeFxPreset(r.bytes, istMfx());
   render();
   setStatus(`Platz ${ziel.slot} gelesen: „${preset.name || "(ohne Namen)"}“ — ${preset.ifx1.algorithmus || "?"}${preset.mfx.algorithmus && preset.mfx.device ? ` + ${preset.mfx.algorithmus}` : ""}`);
@@ -220,11 +341,25 @@ async function lesen(): Promise<void> {
 
 async function schreiben(): Promise<void> {
   const ziel = adresse();
-  if (!hooks || !preset || !ziel) return;
+  if (!hooks || !ziel) return;
   if (quelleAdresse === null) {
     setStatus("Erst einen Platz lesen — ohne Vorher-Stand wird nicht geschrieben.");
     return;
   }
+  if (istGroove()) {
+    if (!groove) return;
+    // Nicht an eine Stelle schreiben, deren Aufbau die Lesung nicht bestaetigt hat
+    if (basis && erkenneStepBasis(basis) !== GROOVE_STEP_BASIS) {
+      setStatus("Abbruch: Der gelesene Block passt nicht zum erwarteten Groove-Aufbau.");
+      return;
+    }
+    const bytes = encodeGroove(groove, basis ?? undefined);
+    setStatus(`Schreibe Groove „${groove.name}“ auf Platz ${ziel.slot} …`);
+    await hooks.schreiben(ziel.addr, bytes, `Groove „${groove.name}“`);
+    document.getElementById("fxpUndo")?.classList.remove("hidden");
+    return;
+  }
+  if (!preset) return;
   const bytes = encodeFxPreset(preset, basis ?? undefined);
   setStatus(`Schreibe „${preset.name}“ auf Platz ${ziel.slot} …`);
   await hooks.schreiben(ziel.addr, bytes, `Preset „${preset.name}“`);
@@ -242,28 +377,38 @@ async function zurueck(): Promise<void> {
 // ─── Datei ───────────────────────────────────────────────────────────────────
 
 function sichern(): void {
-  if (!preset) return;
-  const bytes = encodeFxPreset(preset, basis ?? undefined);
-  const name = (preset.name || "preset").replace(/[^A-Za-z0-9 _-]/g, "").trim() || "preset";
+  const gv = istGroove();
+  if (gv ? !groove : !preset) return;
+  const bytes = gv ? encodeGroove(groove!, basis ?? undefined) : encodeFxPreset(preset!, basis ?? undefined);
+  const roh = (gv ? groove!.name : preset!.name) || (gv ? "groove" : "preset");
+  const name = roh.replace(/[^A-Za-z0-9 _-]/g, "").trim() || (gv ? "groove" : "preset");
+  const endung = gv ? "e2gv" : "e2fxp";
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/octet-stream" }));
-  a.download = `${name}.e2fxp`;
+  a.download = `${name}.${endung}`;
   a.click();
   URL.revokeObjectURL(a.href);
-  setStatus(`„${preset.name}“ als ${name}.e2fxp gesichert.`);
+  setStatus(`„${roh}“ als ${name}.${endung} gesichert.`);
 }
 
 async function ausDatei(f: File): Promise<void> {
   const bytes = new Uint8Array(await f.arrayBuffer());
-  if (bytes.length !== FX_PRESET_SIZE) {
-    setStatus(`Datei hat ${bytes.length} Bytes, erwartet sind ${FX_PRESET_SIZE}.`);
+  const erwartet = istGroove() ? GROOVE_SIZE : FX_PRESET_SIZE;
+  if (bytes.length !== erwartet) {
+    setStatus(`Datei hat ${bytes.length} Bytes, erwartet sind ${erwartet} — passt die Art oben?`);
     return;
   }
   basis = bytes;
-  preset = decodeFxPreset(bytes, istMfx());
   // Aus einer Datei geladen: es gibt noch keinen Vorher-Stand vom Gerät, also
   // erst lesen lassen, bevor geschrieben werden darf.
   quelleAdresse = null;
+  if (istGroove()) {
+    groove = decodeGroove(bytes);
+    render();
+    setStatus(`Groove „${groove.name}“ geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen.`);
+    return;
+  }
+  preset = decodeFxPreset(bytes, istMfx());
   render();
   setStatus(`„${preset.name}“ geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen (Vorher-Stand).`);
 }
@@ -274,12 +419,22 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   if (!artSel) return;
   artSel.addEventListener("change", () => {
     const slotIn = $("fxpSlot") as HTMLInputElement;
-    slotIn.max = String(istMfx() ? MFX_PRESET_WRITE_MAX : IFX_PRESET_WRITE_MAX);
+    slotIn.max = String(istGroove() ? GROOVE_WRITE_MAX : istMfx() ? MFX_PRESET_WRITE_MAX : IFX_PRESET_WRITE_MAX);
     if (Number(slotIn.value) > Number(slotIn.max)) slotIn.value = slotIn.max;
     preset = null;
+    groove = null;
     basis = null;
     quelleAdresse = null;
+    // Leerer Startpunkt je Art, damit die Oberflaeche nicht leer wirkt
+    if (istGroove()) {
+      basis = initGrooveBytes();
+      groove = decodeGroove(basis);
+    } else {
+      basis = initFxPresetBytes();
+      preset = decodeFxPreset(basis);
+    }
     render();
+    setStatus("bereit");
   });
   $("fxpRead").addEventListener("click", () => void lesen());
   $("fxpWrite").addEventListener("click", () => void schreiben());
