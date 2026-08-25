@@ -28,7 +28,7 @@
  */
 
 import { panelBridge } from "./editor";
-import { $ } from "./shared";
+import { $, escapeHtml } from "./shared";
 import {
   buildCurrentPatternDump,
   buildCurrentPatternRequest,
@@ -36,7 +36,8 @@ import {
   decodeDump,
 } from "../core/e2sysex";
 import { requestSysex } from "./midi";
-import { buildPanelControl } from "../core/hacktribeNrpn";
+import { buildPanelControl, buildNrpn } from "../core/hacktribeNrpn";
+import { NrpnLeser } from "../core/nrpnEmpfang";
 import { featureAvailable } from "../core/firmwareMode";
 import {
   MIDI_START,
@@ -198,6 +199,45 @@ function baueDom(): void {
     </span>
     <span class="e2s-status" id="e2sStatus">Prepare-Modus — Pattern aus dem Editor.</span>
   </div>
+  <details id="e2sNrpnPanel" style="margin:8px 0;border:1px solid var(--border);border-radius:6px;padding:8px">
+    <summary style="cursor:pointer;color:var(--accent2);font-weight:600">
+      📡 Geräte-Spiegel &amp; NRPN-Werkbank (Hacktribe)
+    </summary>
+    <div class="sub" style="font-size:11px;margin:8px 0">
+      Hacktribe meldet jeden Griff am Gerät als NRPN — Pad-Modus, Bedienelement und Wert.
+      Hier siehst du live, was das Gerät sendet. <b>Dafür muss am Gerät die versteckte
+      Einstellung „NRPN-Ausgabe“ aktiv sein</b>; ihr Byte-Index ist nirgends veröffentlicht,
+      mit der Werkbank unten lässt er sich suchen.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button id="e2sSpiegelLeeren" class="ghost">Liste leeren</button>
+      <button id="e2sSpiegelProbe" class="ghost" title="Speist eine erfundene Meldung durch dieselbe Auswertung — zum Ansehen ohne Gerät">Beispielmeldung</button>
+      <label><input type="checkbox" id="e2sSpiegelAlle" /> auch Nicht-Panel-Meldungen</label>
+      <span class="sub" id="e2sSpiegelZahl" style="margin:0">noch nichts empfangen</span>
+    </div>
+    <div id="e2sSpiegel" style="max-height:170px;overflow:auto;margin-top:6px;font-family:monospace;font-size:11px;color:var(--muted)"></div>
+    <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+      <div class="sub" style="margin:0 0 6px"><b>Werkbank:</b> beliebige NRPN-Nachricht senden — so findet man undokumentierte Parameter.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end">
+        <div><label style="display:block;color:var(--muted);font-size:10px">Kategorie (0x63)</label>
+          <select id="e2sNrpnKat">
+            <option value="1">1 · FX-Parameter</option>
+            <option value="2">2 · FX-Zuordnung</option>
+            <option value="3" selected>3 · Global</option>
+            <option value="9">9 · Sequenz-Step</option>
+            <option value="0">0 · Panel</option>
+          </select></div>
+        <div><label style="display:block;color:var(--muted);font-size:10px">LSB (0x62)</label>
+          <input id="e2sNrpnLsb" type="number" min="0" max="127" value="0" style="width:70px" /></div>
+        <div><label style="display:block;color:var(--muted);font-size:10px">DATA-MSB (0x06)</label>
+          <input id="e2sNrpnDmsb" type="number" min="0" max="127" value="44" style="width:80px" /></div>
+        <div><label style="display:block;color:var(--muted);font-size:10px">Wert (0x26)</label>
+          <input id="e2sNrpnWert" type="number" min="0" max="127" value="1" style="width:70px" /></div>
+        <button id="e2sNrpnSenden" class="ghost">Senden</button>
+        <span class="sub" id="e2sNrpnInfo" style="margin:0">Voreinstellung: Global 0/44/1 = MIDI-Thru an</span>
+      </div>
+    </div>
+  </details>
   <div class="e2s">
     <div class="e2s-top">
       <div class="e2s-power"></div>
@@ -1113,6 +1153,76 @@ export function panelWirdSichtbar(): void {
   renderPanel();
 }
 
+// ─── Geräte-Spiegel: NRPN-Meldungen des Geräts anzeigen ──────────────────────
+
+const nrpnLeser = new NrpnLeser();
+const spiegelZeilen: string[] = [];
+const SPIEGEL_MAX = 60;
+
+function spiegelZeigen(): void {
+  const el = document.getElementById("e2sSpiegel");
+  const zahl = document.getElementById("e2sSpiegelZahl");
+  if (!el) return;
+  el.innerHTML = spiegelZeilen.length
+    ? spiegelZeilen.map((z) => `<div>${escapeHtml(z)}</div>`).join("")
+    : `<div style="opacity:.6">noch nichts empfangen — sendet das Gerät NRPN?</div>`;
+  el.scrollTop = el.scrollHeight;
+  if (zahl) zahl.textContent = spiegelZeilen.length ? `${spiegelZeilen.length} Meldung(en)` : "noch nichts empfangen";
+}
+
+/** Eingehende MIDI-Nachricht dem NRPN-Leser geben und ggf. anzeigen. */
+function spiegelNimm(bytes: number[]): void {
+  const e = nrpnLeser.nimm(bytes);
+  if (!e) return;
+  const nurPanel = !(document.getElementById("e2sSpiegelAlle") as HTMLInputElement | null)?.checked;
+  if (nurPanel && e.kategorie !== 0x00) return;
+  const zeit = new Date().toLocaleTimeString("de-DE", { hour12: false });
+  const wert =
+    e.richtung !== 0
+      ? e.richtung > 0
+        ? "▲ eins hoch"
+        : "▼ eins runter"
+      : e.gedrueckt
+        ? `gedrückt (${e.wert})`
+        : `los (${e.wert})`;
+  spiegelZeilen.push(`${zeit}  Ch${e.kanal + 1}  ${e.kategorieName} · ${e.padModusName} · ${e.name} — ${wert}`);
+  if (spiegelZeilen.length > SPIEGEL_MAX) spiegelZeilen.shift();
+  spiegelZeigen();
+}
+
+function richteNrpnSpiegelEin(): void {
+  if (!document.getElementById("e2sSpiegel")) return;
+  registriereEmpfaenger(spiegelNimm);
+  document.getElementById("e2sSpiegelLeeren")?.addEventListener("click", () => {
+    spiegelZeilen.length = 0;
+    nrpnLeser.zuruecksetzen();
+    spiegelZeigen();
+  });
+  // Beispiel aus dem Wiki (Shift im Keyboard-Modus auf Kanal 5) plus ein
+  // Encoder-Schritt — laeuft durch dieselbe Auswertung wie echte Meldungen
+  document.getElementById("e2sSpiegelProbe")?.addEventListener("click", () => {
+    const probe = [
+      [0xb4, 0x63, 0x00], [0xb4, 0x62, 0x05], [0xb4, 0x06, 0x0a], [0xb4, 0x26, 0x7f], [0xb4, 0x26, 0x00],
+      [0xb0, 0x63, 0x00], [0xb0, 0x62, 0x00], [0xb0, 0x06, 0x31], [0xb0, 0x26, 0x7f],
+      [0xb0, 0x63, 0x00], [0xb0, 0x62, 0x04], [0xb0, 0x06, 0x42], [0xb0, 0x60, 0x01],
+    ];
+    for (const m of probe) spiegelNimm(m);
+  });
+  document.getElementById("e2sNrpnSenden")?.addEventListener("click", () => {
+    const z = (id: string) => Math.max(0, Math.min(127, Number((document.getElementById(id) as HTMLInputElement).value) || 0));
+    const kat = Number((document.getElementById("e2sNrpnKat") as HTMLSelectElement).value);
+    const msgs = buildNrpn(panelBridge.midiChannel, kat, z("e2sNrpnLsb"), z("e2sNrpnDmsb"), z("e2sNrpnWert"));
+    for (const m of msgs) void panelBridge.midi.send(Uint8Array.from(m));
+    const info = document.getElementById("e2sNrpnInfo");
+    if (info) {
+      info.textContent =
+        `Gesendet: Kat ${kat}, LSB ${z("e2sNrpnLsb")}, DATA-MSB ${z("e2sNrpnDmsb")}, Wert ${z("e2sNrpnWert")}` +
+        (kat === 3 ? " — bei Global-Einstellungen am Gerät Write drücken, damit es bleibt." : "");
+    }
+  });
+  spiegelZeigen();
+}
+
 /** Weitere Empfänger für eingehendes MIDI (Pad-Deck: MIDI-Learn/Trigger). */
 const zusatzEmpfaenger: ((bytes: number[]) => void)[] = [];
 export function registriereEmpfaenger(cb: (bytes: number[]) => void): () => void {
@@ -1223,6 +1333,7 @@ export function initPanel(): void {
   $("e2sPatPrev").addEventListener("click", () => wechslePattern(schritt(basisIdx(), -1, 0, 249)));
   $("e2sPatNext").addEventListener("click", () => wechslePattern(schritt(basisIdx(), 1, 0, 249)));
   zeigeZielPattern(panelBridge.patternIndex);
+  richteNrpnSpiegelEin();
   $("e2sPanic").addEventListener("click", () => {
     try {
       for (const m of buildPanic()) panelBridge.midi.send(m);
