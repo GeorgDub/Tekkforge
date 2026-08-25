@@ -395,8 +395,20 @@ async function ausDatei(f: File): Promise<void> {
   const bytes = new Uint8Array(await f.arrayBuffer());
   const erwartet = istGroove() ? GROOVE_SIZE : FX_PRESET_SIZE;
   if (bytes.length !== erwartet) {
-    setStatus(`Datei hat ${bytes.length} Bytes, erwartet sind ${erwartet} — passt die Art oben?`);
+    // Die Dateien des hacktribe-Editors (.ifx/.mfx) haben dieselbe Groesse wie
+    // unsere .e2fxp — ein Groessenfehler heisst hier fast immer: falsche Art
+    setStatus(
+      `Datei hat ${bytes.length} Bytes, erwartet sind ${erwartet}` +
+        (bytes.length === FX_PRESET_SIZE || bytes.length === GROOVE_SIZE
+          ? ` — oben auf „${bytes.length === GROOVE_SIZE ? "Groove-Vorlage" : "Insert- oder Master-Effekt"}“ umstellen.`
+          : "."),
+    );
     return;
+  }
+  // .mfx aus dem hacktribe-Editor ist ein Master-Preset — Art danach richten,
+  // damit die Algorithmen aus der richtigen Tabelle benannt werden
+  if (/\.mfx$/i.test(f.name) && !istMfx() && !istGroove()) {
+    ($("fxpArt") as HTMLSelectElement).value = "mfx";
   }
   basis = bytes;
   // Aus einer Datei geladen: es gibt noch keinen Vorher-Stand vom Gerät, also
