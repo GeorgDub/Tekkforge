@@ -130,6 +130,12 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     // 0xC00B4F30.
     count: 100,
     size: 0x20c,
+    // ⚠ Zwei Quellen, zwei Zahlen — und die neuere ist strenger:
+    //   extra/e2sysex.py (aeltere Fassung, hier zitiert): idx < 100
+    //   utils/ht_sysex.py (gepflegter hacktribe-editor):  idx <  96
+    // Lesen bleibt bei 100 (harmlos, kollisionsfrei bis 0xC00B4DA0, der naechste
+    // Block beginnt erst bei 0xC00B4F30). Fuers SCHREIBEN gilt die strengere
+    // Zahl — siehe IFX_PRESET_WRITE_MAX unten.
     // Der Preset-NAME steht als ASCII ab Offset +1 des Blobs (NUL-terminiert)
     // — das ist die Bezeichnung, die das Gerätemenü zeigt. Sie ist NICHT der
     // Algorithmus-Name aus `e2FxParams`; siehe dortigen Kopfkommentar.
@@ -198,6 +204,16 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     note: "1 Byte — zum Schreiben gehören 12 weitere Zähler, siehe Modul-Doku",
   },
 ] as const;
+
+/**
+ * Hoechster Slot, in den ein IFX-Preset GESCHRIEBEN werden darf. Der gepflegte
+ * hacktribe-editor (`utils/ht_sysex.py`) laesst nur 0..95 zu, waehrend die
+ * aeltere `e2sysex.py` bis 99 ging. Beim Lesen ist die Differenz harmlos, beim
+ * Schreiben nehmen wir die vorsichtigere Grenze.
+ */
+export const IFX_PRESET_WRITE_MAX = 95;
+/** Dasselbe fuer MFX-Presets (beide Quellen einig: 0..31). */
+export const MFX_PRESET_WRITE_MAX = 31;
 
 export function findRamMapEntry(key: string): RamMapEntry | undefined {
   return E2_RAM_MAP.find((e) => e.key === key);
