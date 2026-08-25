@@ -337,7 +337,7 @@ function render(): void {
               .filter((e): e is ScanEintrag => !!e)
               .map(
                 (e) =>
-                  `<div><span class="rolle">${e.rolle}</span><span class="takte">${(e.sekunden / (240 / (z.zusammen?.tempoVorschlag || 180))).toFixed(0)} T</span><span style="flex:1">${escapeHtml(e.stem)}</span><span class="fortschritt">${e.rmsDb.toFixed(0)} dB</span><button class="genFensterPlay" data-datei="${escapeHtml(e.datei)}" title="${fensterSpielt === e.datei ? "Stopp" : "Vorhoeren (8 Takte)"}">${fensterSpielt === e.datei ? "■" : "▶"}</button></div>`,
+                  `<div><span class="rolle">${e.rolle}</span><span class="takte">${(e.sekunden / (240 / (z.liedBpm || z.zusammen?.tempoVorschlag || 180))).toFixed(0)} T</span><span style="flex:1">${escapeHtml(e.stem)}</span><span class="fortschritt">${e.rmsDb.toFixed(0)} dB</span><button class="genFensterPlay" data-datei="${escapeHtml(e.datei)}" title="${fensterSpielt === e.datei ? "Stopp" : "Vorhoeren (8 Takte)"}">${fensterSpielt === e.datei ? "■" : "▶"}</button></div>`,
               )
               .join("")}</div>`
           : ""
