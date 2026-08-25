@@ -11,7 +11,7 @@ Third-party origins
 ===================
 
 src/core/e2sysex.ts, src/core/hacktribeNrpn.ts, src/core/e2FxParams.ts,
-src/core/hacktribeRam.ts
+src/core/hacktribeRam.ts, src/core/e2FxPreset.ts
 ----------------------------------------------------------------------
 The KORG Electribe 2 SysEx protocol implementation and the KORG 8-bit <-> 7-bit
 codec are ported from:
@@ -31,6 +31,13 @@ utils/ht_fx_ram_format.py and utils/ht_fx_preset_format.py. Both were taken via
 Synthstudio, which ported them from the same source. The RAM peek/poke layer
 (hacktribeRam.ts) follows utils/ht_sysex.py; its address map is documented in
 omnitribe/docs/reverse/hacktribe_ram_and_formats.md.
+
+The FX preset layout (e2FxPreset.ts) — the 0x20C-byte block with name, control
+map, and the IFX 1 / IFX 2 / MFX chain stages — is ported directly from
+utils/ht_fx_preset_format.py of the same project (cloned 2026-08-25). The
+write-side slot limits (IFX < 96, MFX < 32) follow utils/ht_sysex.py; the fork
+at https://github.com/13HansSeppaufpepp12/hacktribe-editor (e2_formats.py) was
+consulted for the groove-template layout and confirms the same FX structure.
 
 TekkForge is therefore distributed under the GPL-3.0-or-later as well.
 
