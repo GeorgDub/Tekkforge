@@ -56,25 +56,38 @@ const abschnitte = [
   },
   {
     nr: "04",
-    titel: "Pad-Deck",
-    lead: "Slots live triggern und mischen — die Bühnenseite des Werkzeugs.",
+    titel: "Pad-Deck — Pads frei belegen",
+    lead: "Ein eigenes Pad-Raster am Rechner: bis zu 8 × 8 Felder auf vier Seiten, und jedes Pad führt eine ganze Liste von Aktionen aus.",
     punkte: [
-      "Pattern-Slots direkt antippen; das laufende Pattern bleibt dabei unberührt.",
-      "Learn-Funktion für eigene Controller — mit einem Akai MIDImix erprobt.",
-      "Der Controller hängt an einem zweiten Port, getrennt von der Gerätelogik.",
+      "<b>Pattern wechseln</b> — springt auf einen der 250 Slots; bei laufendem Sequencer greift der Wechsel sauber am Taktende.",
+      "<b>Pattern-Kopie mit Änderungen</b> — holt einen Slot vom Gerät, ändert Part-Werte, Lautstärke, Panorama, Mutes oder Tempo und schickt das Ergebnis flüchtig in den Zwischenspeicher. Kein Slot wird überschrieben.",
+      "<b>Regler</b> — Cutoff, Resonanz und weitere Part-Regler, Insert-Effekt an/aus, Send zum Master-Effekt, dessen X/Y-Fläche.",
+      "<b>Mutes</b> — Parts stumm oder wieder an, einzeln oder in Gruppen.",
+      "<b>Transport</b> — Start, Stopp und ein Panik-Knopf, der alle Töne auf allen 16 Kanälen abwürgt.",
+      "<b>Morph</b> — mehrere Regler gleichzeitig über eine bestimmte Zahl von Takten auf Zielwerte fahren, taktsynchron, mit Fortschrittsbalken im Pad.",
+      "Je Pad: Beschriftung, Farbe, Tastaturkürzel und MIDI-Learn für einen eigenen Controller. Wahlweise sofort auslösen oder auf den nächsten Takt warten.",
+      "Das Deck liegt im Projekt und lässt sich als Datei weitergeben; ein Beispiel-Deck baut sich aus den vorhandenen Patterns von selbst.",
     ],
-    bild: ["doc-paddeck", "Das Pad-Deck mit Slot-Kacheln und Controller-Zuweisung."],
+    bild: ["doc-paddeck", "Das Pad-Deck: frei belegbares Raster mit Aktionslisten, Tastaturkürzeln und Controller-Anbindung."],
+    extra: "<div class=\"hinweis\"><b>Eigener Controller, getrennter Weg:</b> Ein zweiter MIDI-Eingang — erprobt mit einem Akai MIDImix — geht ausschließlich ans Pad-Deck. Seine Nachrichten laufen bewusst nicht in die Gerätelogik, damit ein Reglerdreh am Controller nie versehentlich als Antwort der Electribe gedeutet wird.</div>",
   },
   {
     nr: "05",
-    titel: "Gerätesteuerung & Panel",
-    lead: "Die Electribe vom Rechner aus bedienen.",
+    titel: "Was über MIDI geht",
+    lead: "Der komplette Draht zum Gerät — alles über gewöhnliches MIDI, also mit beiden Firmware-Fassungen.",
     punkte: [
-      "Program Change, Mutes und Regler über MIDI — geräteverifiziert bis auf die Zählweise der Slot-Nummern.",
-      "Transport: Play/Stop und MIDI-Clock werden vom Gerät angenommen.",
-      "Zwei Firmware-Modi: Serien-Firmware (Stock) und Hacktribe werden erkannt; Hacktribe-Funktionen wie der RAM-Zugriff bleiben sonst gesperrt.",
+      "<b>Patterns übertragen</b> — in den Zwischenspeicher oder direkt in einen der 250 Slots, mit Empfangsbestätigung. Umgekehrt lassen sich Slots vom Gerät holen.",
+      "<b>Arbeiten, während etwas läuft</b> — Pattern 50 vorbereiten, während 10 spielt: das laufende Pattern bleibt unberührt, der Slot ist fertig, sobald man hinwechselt.",
+      "<b>Pattern-Wechsel</b> — über Program Change mit Bankumschaltung, damit auch die Patterns jenseits von 128 erreichbar sind.",
+      "<b>Regler in beide Richtungen</b> — Bewegungen am Gerät erscheinen im Panel, Bewegungen im Panel gehen ans Gerät.",
+      "<b>Transport und Takt</b> — Start, Stopp und eine mitlaufende MIDI-Uhr im Pattern-Tempo, driftkorrigiert.",
+      "<b>Master-Effekt</b> — an/aus und die X/Y-Fläche fernsteuern.",
+      "<b>Pads des Geräts</b> — Parts anspielen, chromatisch spielen, Steps löschen.",
+      "<b>Panik</b> — alle Töne auf allen Kanälen sofort aus.",
     ],
-    bild: ["doc-panel", "Das Panel mit Geräteanbindung, Program Change und Reglern."],
+    bild: ["doc-panel", "Das Panel: Geräteanbindung, Program Change, Regler-Spiegel und Transport."],
+    extra:
+      "<div class=\"hinweis\"><b>Zwei Eigenheiten, die uns Messreihen gekostet haben:</b> Das Gerät zählt Patterns beim Program Change ab null — die offizielle KORG-Beschreibung stimmt hier nicht. Und bei gestopptem Sequencer ignoriert es Pattern-Wechsel vollständig; sie greifen nur während der Wiedergabe. Beides steht heute als Hinweis direkt in der Oberfläche.</div>",
   },
   {
     nr: "06",
@@ -89,7 +102,7 @@ const abschnitte = [
   },
   {
     nr: "07",
-    titel: "Start-Dashboard & Assistent",
+    titel: "Start-Übersicht & Assistent",
     lead: "Der Einstieg: Status auf einen Blick und ein Assistent für Rückfragen.",
     punkte: [
       "Kacheln für Patterns im Projekt, Samples im Pool, belegtes Sample-RAM und den MIDI-Status.",
@@ -110,6 +123,81 @@ const abschnitte = [
     bild: ["doc-settings", "Themenauswahl, Backup-Manager und Update-Prüfung."],
   },
 ];
+
+/** Seiten zu Firmware, Speicherzugriff und Effekten — der technische Kern. */
+const firmwareSeiten = `
+<section class="seite">
+  <span class="nr">09</span>
+  <h2>Zwei Firmware-Welten</h2>
+  <p class="lead">Die Electribe 2 gibt es mit der Firmware ab Werk und mit <b>Hacktribe</b> — einer von der Szene erweiterten Fassung, die dem Gerät Funktionen beibringt, die KORG nie vorgesehen hat. TekkForge spricht mit beiden und richtet sich selbst danach aus.</p>
+  <table>
+    <thead><tr><th>Funktion</th><th>Ab Werk</th><th>Hacktribe</th></tr></thead>
+    <tbody>
+      <tr><td>Patterns senden und holen, Grundeinstellungen lesen</td><td class="ja">ja</td><td class="ja">ja</td></tr>
+      <tr><td>Regler in beide Richtungen, Pattern-Wechsel, Transport</td><td class="ja">ja</td><td class="ja">ja</td></tr>
+      <tr><td>Parts live stummschalten</td><td class="halb">über eine Übertragung, rund eine Sekunde</td><td class="ja">sofort</td></tr>
+      <tr><td>Effekt-Parameter live verändern, während das Gerät spielt</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
+      <tr><td>Direkter Zugriff auf den Arbeitsspeicher des Geräts</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
+      <tr><td>Bedienfeld fernsteuern (Solo, Erase, Chord, Step-Jump …)</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
+    </tbody>
+  </table>
+  <p>Welche Fassung läuft, muss niemand raten: Ein Knopf schickt eine harmlose Vier-Byte-Leseanfrage. Kommt eine Antwort, ist es Hacktribe; bleibt es still, die Werksfirmware. Funktionen, die nur Hacktribe kann, sind ab Werk gar nicht erst sichtbar — statt eines Knopfes, der nichts tut, steht dort der Grund.</p>
+  <div class="hinweis"><b>Ehrlich bleiben, wo es unsicher ist:</b> Ein von einem anderen Programm belegter MIDI-Anschluss sieht genauso aus wie eine Werksfirmware — das Gerät antwortet in beiden Fällen nicht. Der Statustext sagt das dazu, statt eine falsche Sicherheit vorzuspiegeln.</div>
+</section>
+
+<section class="seite">
+  <span class="nr">10</span>
+  <h2>Effekte — was Hacktribe möglich macht</h2>
+  <p class="lead">Ab Werk stellt man einen Effekt am Gerät ein und dreht ihn dort von Hand. Mit Hacktribe wird er zum fernsteuerbaren Baustein.</p>
+  <ul>
+    <li><b>Live an den Reglern</b> — einzelne Effekt-Parameter lassen sich verändern, während der Sequencer läuft. Am Gerät nachgewiesen an einem Decimator: Bit-Tiefe und Abtastrate von außen verändert, die Klangänderung war hörbar und dreimal hintereinander reproduzierbar.</li>
+    <li><b>Effekte beim Namen nennen</b> — TekkForge kennt <b>21 Insert-Algorithmen</b> (Kompressoren, Filter, Verzerrer, Chorus, Flanger, Phaser, Ring-Modulator, Decimator, kurzes Delay …) und <b>26 Master-Algorithmen</b> (Hall- und Plattenhall-Varianten, Bandecho, Grain Shifter, Vinyl Break, Looper …) samt ihren Parameternamen. Im Part-Fenster steht damit „Bit-Tiefe“ statt „Parameter 2“.</li>
+    <li><b>Presets im Speicher</b> — 100 Insert- und 32 Master-Presets liegen als Blöcke im Arbeitsspeicher und lassen sich auslesen, sichern und zurückschreiben. Auch die Namen, die das Gerätemenü zeigt, stehen dort.</li>
+    <li><b>Bedienfeld fernsteuern</b> — Mute, Solo, Erase, Trigger, Keyboard, Chord, Step-Jump und die Pattern-Zuweisung sind als Fernbefehle ansprechbar.</li>
+  </ul>
+  <div class="hinweis"><b>Eine Falle, die im Werkzeug dokumentiert ist:</b> Der Zwischenspeicher der Effekte zeigt <i>nicht</i> den laufenden Stand, sondern den beim Laden des Patterns — auch ein Reglerdreh am Gerät selbst ändert dort kein Byte. Wer ihn als Gegenprobe nimmt, hält einen funktionierenden Sendeweg für kaputt. Genau dieser Irrtum hat uns mehrere Messreihen gekostet und steht deshalb als Warnung im Code.</div>
+</section>
+
+<section class="seite">
+  <span class="nr">11</span>
+  <h2>Zugriff auf den Arbeitsspeicher</h2>
+  <p class="lead">Hacktribe erlaubt, direkt in den Speicher des laufenden Geräts zu schauen und zu schreiben. Das ist mächtig und heikel zugleich — deshalb ist der Weg dorthin bewusst umständlich gebaut.</p>
+  <h3 class="unter-h">Was heute erreichbar ist</h3>
+  <table>
+    <thead><tr><th>Bereich</th><th>Umfang</th><th>Stand</th></tr></thead>
+    <tbody>
+      <tr><td>Insert-Effekt-Presets</td><td>100 Plätze à 524 Byte, mit Namen</td><td class="ja">lesen und schreiben</td></tr>
+      <tr><td>Master-Effekt-Presets</td><td>32 Plätze à 524 Byte</td><td class="ja">lesen und schreiben</td></tr>
+      <tr><td>Groove-Vorlagen</td><td>96 Vorlagen à 320 Byte</td><td class="ja">lesen und schreiben</td></tr>
+      <tr><td>Effekt-Zwischenspeicher</td><td>Stand beim Pattern-Laden</td><td class="halb">nur lesen, nicht live</td></tr>
+      <tr><td>Belegungszähler der Presets</td><td>ein Byte</td><td class="halb">nur lesen</td></tr>
+    </tbody>
+  </table>
+  <h3 class="unter-h">Die Sicherungen</h3>
+  <ul>
+    <li><b>Nur der Arbeitsspeicher, niemals der Flash.</b> Für die Flash-Befehle gibt es absichtlich keinen Bauplan im Werkzeug: Ein Fehler im Arbeitsspeicher ist nach dem Aus- und Einschalten weg, ein Fehler im Flash bleibt für immer.</li>
+    <li><b>Ohne Vorher-Lesung kein Schreiben.</b> Wer keinen Schnappschuss hat, hat keinen Rückweg — das ist ein harter Abbruch, keine wegklickbare Warnung.</li>
+    <li><b>Zwei Klicks statt einem.</b> Der erste prüft und sagt, wie viele Bytes sich ändern würden; erst der zweite sendet.</li>
+    <li><b>Jeder Schreibvorgang wird zurückgelesen und verglichen.</b> Ein Schreibvorgang ohne Gegenprobe ist einer, von dem man nichts weiß.</li>
+    <li><b>Ein Rückweg bleibt stehen.</b> Der Knopf zum Wiederherstellen trägt seine Zieladresse im Text und verschwindet nicht, wenn man daneben etwas verstellt.</li>
+  </ul>
+  <div class="hinweis"><b>Am Gerät nachgewiesen:</b> Ein Preset-Name wurde gezielt verändert („LP Drive“ → „MP Drive“), zurückgelesen, verglichen und wieder hergestellt — 524 Byte, unverändert identisch. Die vorherigen Fehlschläge hatten alle dieselbe Ursache: eine Bestätigung des Geräts, die nicht abgeholt wurde, ließ einen wirkungslosen Schreibvorgang wie einen erfolgreichen aussehen.</div>
+</section>
+
+<section class="seite">
+  <span class="nr">12</span>
+  <h2>Was über den Speicherzugriff noch möglich wird</h2>
+  <p class="lead">Der Weg ins Gerät ist gebaut und erprobt. Was fehlt, ist nicht der Zugang, sondern die Bedienoberfläche darüber — und das Wissen, welches Byte welche Bedeutung hat.</p>
+  <div class="karten">
+    <div class="karte"><h3>Effekt-Presets verwalten</h3><p>Eigene Insert- und Master-Presets am Rechner bauen, benennen, sichern und in freie Plätze schreiben — statt sie am kleinen Display des Geräts zusammenzudrehen.</p></div>
+    <div class="karte"><h3>Presets weitergeben</h3><p>Ein Preset ist ein Block von 524 Byte. Als Datei exportiert, wird daraus etwas, das man tauschen oder als Sammlung veröffentlichen kann.</p></div>
+    <div class="karte"><h3>Eigene Grooves</h3><p>96 Groove-Vorlagen liegen im Speicher. Sie zu lesen und zu schreiben, hieße: eigenes Timing-Gefühl entwerfen, statt aus den mitgelieferten zu wählen.</p></div>
+    <div class="karte"><h3>Sicherung des ganzen Geräts</h3><p>Alle erreichbaren Bereiche in einem Rutsch auslesen und als Sicherung ablegen — ein Rückweg, den es bisher nur für einzelne Blöcke gibt.</p></div>
+    <div class="karte"><h3>Regler-Bewegungen schreiben</h3><p>Aufgezeichnete Bewegungen werden heute nur gelesen. Sie auch setzen zu können, würde Arrangements in Bewegung bringen.</p></div>
+    <div class="karte"><h3>Vergleichen statt raten</h3><p>Zwei Auslesungen gegeneinanderhalten und die Unterschiede benennen — so lassen sich unbekannte Bytes Stück für Stück entschlüsseln.</p></div>
+  </div>
+  <div class="hinweis"><b>Bewusst nicht geplant:</b> Presets so anzulegen, dass sie im Gerätemenü als neue Einträge auftauchen. Dafür müssten dreizehn verstreute Zähler gleichzeitig stimmen; ein halb hochgezählter Satz hinterlässt eine Firmware in sich widersprüchlich. Diesen Weg soll weiterhin Hacktribes eigenes Werkzeug gehen.</div>
+</section>`;
 
 const roadmap = [
   {
@@ -205,6 +293,18 @@ const html = `<!doctype html>
   .karte h3 { margin: 0 0 5px; font-size: 11.5pt; color: #fff; }
   .karte p { margin: 0; font-size: 9.5pt; color: #a9a9bd; }
 
+  /* Tabellen */
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 16px; font-size: 9.5pt; break-inside: avoid; }
+  th { text-align: left; font-size: 8pt; text-transform: uppercase; letter-spacing: 1px; color: #8a8aa0;
+       border-bottom: 1px solid #2c2c38; padding: 0 8px 6px; }
+  td { padding: 7px 8px; border-bottom: 1px solid #1e1e28; vertical-align: top; }
+  td.ja { color: #5ed49a; font-weight: 600; }
+  td.nein { color: #74748a; }
+  td.halb { color: #ffb15e; }
+  th:not(:first-child), td:not(:first-child) { width: 26%; }
+  h3.unter-h { font-size: 12pt; margin: 18px 0 6px; color: #fff; }
+  p { margin: 0 0 12px; }
+
   /* Roadmap */
   .rm { border-left: 2px solid #2c2c38; margin: 18px 0 0; padding-left: 18px; }
   .rm-eintrag { position: relative; margin-bottom: 18px; break-inside: avoid; }
@@ -256,12 +356,15 @@ ${abschnitte
   <p class="lead">${a.lead}</p>
   <ul>${a.punkte.map((p) => `<li>${p}</li>`).join("")}</ul>
   ${img(a.bild[0], a.bild[1])}
+  ${a.extra ?? ""}
 </section>`,
   )
   .join("\n")}
 
+${firmwareSeiten}
+
 <section class="seite">
-  <span class="nr">AUSBLICK</span>
+  <span class="nr">13 · AUSBLICK</span>
   <h2>Was als Nächstes kommt</h2>
   <p class="lead">Der Stand von heute ist benutzbar und getestet. Diese Punkte stehen als Nächstes an — geordnet nach Dringlichkeit, nicht nach Aufwand.</p>
   <div class="rm">

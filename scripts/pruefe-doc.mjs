@@ -19,7 +19,7 @@ const fenster = app.windows();
 const seite = fenster[fenster.length - 1];
 const anzahl = await seite.evaluate(() => document.querySelectorAll(".seite").length);
 console.log(`HTML-Abschnitte: ${anzahl}`);
-for (const i of [0, 1, 2, 9, 10]) {
+for (const i of [7, 12, 13, 14]) {
   const el = seite.locator(".seite").nth(i);
   if ((await el.count()) === 0) continue;
   await el.screenshot({ path: `.tekkforge-shots/pdfseite-${i + 1}.png` });
