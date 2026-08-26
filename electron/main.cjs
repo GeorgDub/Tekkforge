@@ -373,10 +373,28 @@ function registerLiedIpc(win) {
   ipcMain.handle("lied:pythonStatus", async () => {
     const py = pythonPfad();
     try {
-      const { out } = await laufen(py, ["-c", "import demucs, sys; print(getattr(demucs, '__version__', 'ok'))"], { timeoutMs: 20000 });
-      return { python: py, demucs: true, version: out.trim(), meldung: `Python gefunden, Demucs ${out.trim()}` };
+      // Zusaetzlich melden, ob Torch eine Grafikkarte sieht — die uebliche
+      // pip-Installation bringt nur die CPU-Fassung mit, und das ist der
+      // groesste Zeitunterschied bei der Stem-Trennung.
+      const { out } = await laufen(
+        py,
+        ["-c", "import demucs,torch; print(getattr(demucs,'__version__','ok')); print('cuda' if torch.cuda.is_available() else 'cpu')"],
+        { timeoutMs: 30000 },
+      );
+      const zeilen = out.trim().split(/\r?\n/);
+      const version = zeilen[0] ?? "ok";
+      const gpu = (zeilen[1] ?? "cpu").trim() === "cuda";
+      return {
+        python: py,
+        demucs: true,
+        version,
+        gpu,
+        meldung:
+          `Python gefunden, Demucs ${version} — Trennung auf ${gpu ? "der Grafikkarte" : "dem Prozessor"}` +
+          (gpu ? "." : ". Mit einer CUDA-Fassung von Torch liefe sie um ein Vielfaches schneller."),
+      };
     } catch (e) {
-      return { python: null, demucs: false, version: "", meldung: `Kein Demucs: ${e.message}` };
+      return { python: null, demucs: false, version: "", gpu: false, meldung: `Kein Demucs: ${e.message}` };
     }
   });
   // anfrage: { fenster: [{ id, bytes (Int16-WAV), nurVox? }] } → { fenster: [{ id, melo|null, vox|null, drums|null, voxDb }] }
@@ -390,7 +408,10 @@ function registerLiedIpc(win) {
         return f.nurVox ? { id: f.id, wav, nurVox: true } : { id: f.id, wav };
       });
       const anfragePfad = path.join(basis, "anfrage.json");
-      fs.writeFileSync(anfragePfad, JSON.stringify({ fenster: liste, ziel: basis }));
+      fs.writeFileSync(
+        anfragePfad,
+        JSON.stringify({ fenster: liste, ziel: basis, qualitaet: anfrage.qualitaet === "genau" ? "genau" : "schnell" }),
+      );
       // gepackt liegt stems.py als extraResource neben der App (asar kann Python nicht lesen)
       const kandidaten = [path.join(app.getAppPath(), "scripts", "stems.py")];
       if (process.resourcesPath) kandidaten.unshift(path.join(process.resourcesPath, "scripts", "stems.py"));

@@ -69,6 +69,8 @@ interface Zustand {
   liedBpm: number | null;
   /** Vocals mit halber Abtastrate in die Bank (spart Speicher, am Geraet noch unbestaetigt) */
   sparsameVocals: boolean;
+  /** Stem-Trennung genauer statt schneller (mittelt ueber verschobene Durchlaeufe) */
+  trennungGenau: boolean;
   /** yt-dlp/ffmpeg-Probe fuer den URL-Import (nur Electron) */
   url: { ok: boolean; meldung: string } | null;
   urlLaeuft: boolean;
@@ -90,7 +92,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
   url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
@@ -327,6 +329,7 @@ function render(): void {
         <input id="genLiedBpm" type="number" min="40" max="300" placeholder="messen" style="width:80px" />
         <label title="${escapeHtml(z.python?.meldung ?? "Probe laeuft …")}"><input id="genDemucs" type="checkbox" ${z.python?.demucs ? (z.demucsGewuenscht ? "checked" : "") : "disabled"} /> Stems per Demucs${z.python ? (z.python.demucs ? "" : " (nicht verfuegbar)") : " (Probe …)"}</label>
         <label title="Ohne Haken werden Kick/Snare/Hat aus dem Drums-Stem des Lieds geschnitten; mit Haken kommen die Drums aus tekk4 bzw. dem gescannten Ordner."><input id="genLiedEigene" type="checkbox" ${z.liedDrumsEigene ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> eigene Drums statt Lied-Drums</label>
+        <label title="Genauer mittelt über zusätzlich verschobene Durchläufe — rund ein Viertel mehr Zeit für einen meist kaum hörbaren Unterschied."><input id="genTrennungGenau" type="checkbox" ${z.trennungGenau ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> Trennung genauer (langsamer)</label>
         <label title="Vocals mit halber Abtastrate ablegen — halber Speicher, doppelt so viel Lied passt in eine Bank. Gesang verliert dabei kaum hörbar. ⚠ Am Gerät noch nicht abgenommen: klingen die Vocals doppelt so schnell, beachtet die Electribe die gespeicherte Rate nicht — dann Haken wieder raus."><input id="genSparsameVox" type="checkbox" ${z.sparsameVocals ? "checked" : ""} /> Vocals sparsam (halbe Rate)</label>
         <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
         <button id="genLiedAlles" class="primary" ${z.liedLaeuft ? "disabled" : ""} title="Analysieren → Stems → Drums schneiden → Bank bauen → Patterns erzeugen in einem Ablauf">${z.liedLaeuft ? "Laeuft …" : "Alles aus dem Lied"}</button>
@@ -391,6 +394,9 @@ function verdrahte(): void {
   });
   document.getElementById("genSparsameVox")?.addEventListener("change", (e) => {
     z.sparsameVocals = (e.target as HTMLInputElement).checked;
+  });
+  document.getElementById("genTrennungGenau")?.addEventListener("change", (e) => {
+    z.trennungGenau = (e.target as HTMLInputElement).checked;
   });
   knopf("genBankSpeichern", () => {
     if (z.bank && z.projekt) download(z.bank, `${z.projekt.name}.all`, "application/octet-stream");
@@ -592,6 +598,7 @@ async function liedAnalysieren(): Promise<void> {
         z.liedStatus = `${prefix}Demucs auf ${res.segmente.length} Abschnitten — ganze Vocalspur, dauert einige Minuten …`;
         render();
         const antwort = await lied.stems({
+          qualitaet: z.trennungGenau ? "genau" : "schnell",
           fenster: [
             ...res.fenster.map((f) => ({ id: f.label, bytes: encodeWav16(f.pcm, 44100, 1) })),
             ...rest.map((s) => ({ id: `SEG${s.index}`, bytes: encodeWav16(s.pcm, 44100, 1), nurVox: true })),

@@ -44,7 +44,7 @@ const abschnitte = [
     lead: "Das Herzstück: aus einem Sample-Ordner oder einem ganzen Lied entsteht eine fertige Sample-Bank samt passender Patterns.",
     punkte: [
       "<b>Lied hineingeben</b> — als Datei oder per YouTube-/SoundCloud-Link. Tempo, Tonart (mit Camelot-Angabe) und die markanten Stellen werden gemessen.",
-      "<b>Stems trennen</b> — Demucs zerlegt das Lied in Melodie, Bass, Drums und Vocals. Aus dem Drums-Stem schneidet TekkForge einzelne Kick-, Snare- und Hat-Shots.",
+      "<b>Stems trennen</b> — Demucs zerlegt das Lied in Melodie, Bass, Drums und Vocals. Aus dem Drums-Stem schneidet TekkForge einzelne Kick-, Snare- und Hat-Shots. Wahlweise schnell oder genau; eine Grafikkarte wird genutzt, sobald sie verfügbar ist.",
       "<b>Ganze Vocalspur</b> — alle hörbaren 8-Takt-Abschnitte werden getrennt und der Reihe nach auf die Patterns verteilt. Wer die Kette durchspielt, hat das Lied einmal komplett gehört. Wahlweise sparsam gespeichert, dann passt doppelt so viel Lied in eine Bank.",
       "<b>Aufbau-Kette</b> — die Patterns verketten sich von einer dünnen Anfangsstufe bis zum Drop; gespielt wird durch Entmuten am Gerät.",
       "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Snare-Fill, im Drop gehen die Kicks auf Maximum.",
@@ -277,9 +277,9 @@ const roadmap = [
     text: "Ein vocal-lastiges Lied bringt schnell 30 Segmente mit — mehr, als die ~24 MB Sample-RAM auf einmal fassen. Ideen: Vocals mit halber Abtastrate ablegen (doppelte Abdeckung) oder klanglich ähnliche Abschnitte zusammenfassen.",
   },
   {
-    titel: "Stem-Trennung beschleunigen",
-    wann: "geplant",
-    text: "Die Trennung über das ganze Lied dauert derzeit einige Minuten. Grafikkarten-Unterstützung und eine Wahl zwischen schnellem und genauem Modell würden das deutlich kürzen.",
+    titel: "Stem-Trennung: Grafikkarte nutzen",
+    wann: "wartet auf Einrichtung",
+    text: "Die Wahl zwischen schnell und genau ist eingebaut und spart rund ein Fünftel. Der große Hebel liegt aber bei der Grafikkarte: TekkForge nutzt sie automatisch, sobald die passende Torch-Fassung installiert ist — bisher liegt nur die Prozessor-Fassung vor, und die App sagt das jetzt auch."
   },
   {
     titel: "Transkription verfeinern",
