@@ -30,10 +30,12 @@ const abschnitte = [
       "16 Parts × 16/32/64 Steps; je Step Note, Velocity und Gate, bis zu 4 Töne für Akkorde.",
       "Eigene WAVs importieren, den Parts zuweisen und direkt am Rechner vorhören.",
       "Sample-Pool als Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken gegen das ~24-MB-Sample-RAM.",
+      "<b>Sample-Editor</b> — Wellenform ansehen, Anfang und Ende ziehen, stille Ränder finden, kürzen, ein- und ausblenden, normalisieren, umkehren und den Loop setzen.",
       "Export als <code>.e2spat</code> (Einzel-Pattern), <code>.e2sallpat</code> (Bank mit 250 Slots) und <code>.all</code> (Sample-Bank).",
       "Direkter Draht zum Gerät: Patterns per SysEx in einen Slot schreiben oder von dort holen.",
     ],
     bild: ["editor", "Der Editor mit geladenem Akkord-Pattern: links die Pattern-Liste, in der Mitte das Step-Grid über 16 Parts, rechts der Sample-Pool mit RAM-Anzeige."],
+    extra: `<div style="margin-top:10px">${img("sample-editor", "Der Sample-Editor: Wellenform mit ziehbarem Anfang und Ende, darunter die Werkzeuge — bis „Übernehmen“ bleibt das Original unberührt.")}</div>`,
   },
   {
     nr: "02",
@@ -92,7 +94,7 @@ const abschnitte = [
       "<b>Transport und Takt</b> — Start, Stopp und eine mitlaufende MIDI-Uhr im Pattern-Tempo, driftkorrigiert.",
       "<b>Master-Effekt</b> — an/aus und die X/Y-Fläche fernsteuern.",
       "<b>Pads des Geräts</b> — Parts anspielen, chromatisch spielen, Steps löschen.",
-      "<b>Panik</b> — alle Töne auf allen Kanälen sofort aus.",
+      "<b>Panik</b> — Stopp, dann alle Töne auf allen Kanälen aus, dazu die selbst angespielten Noten einzeln. Wichtig dabei: die üblichen Sammelbefehle beenden nur Töne aus eingehenden Noten — den internen Sequencer stoppt erst der Stopp-Befehl.",
     ],
     bild: ["panel", "Das Panel: Geräteanbindung, Program Change, Regler-Spiegel und Transport."],
     extra:
@@ -387,7 +389,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>572</b><span>automatische Tests</span></div>
+    <div><b>584</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -447,7 +449,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>572 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>584 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
