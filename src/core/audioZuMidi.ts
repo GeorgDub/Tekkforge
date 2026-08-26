@@ -180,23 +180,31 @@ function polyphonTranskribieren(pcm: Float32Array, sr: number, opts: Transkripti
     }
     jeStep.push(karte);
   }
-  // Steps zu Noten verschmelzen: gleiche Tonhoehe in Folge = eine Note
+  // Steps zu Noten verschmelzen: gleiche Tonhoehe in Folge = eine Note.
+  // Die **Stimme** (tiefster Ton = 0) landet im Kanal-Feld — damit lassen sich
+  // die Linien spaeter auf eigene Parts verteilen, statt alles als Akkord auf
+  // einen zu legen.
   const noten: SmfNote[] = [];
-  const offen = new Map<number, { start: number; staerke: number }>();
+  const offen = new Map<number, { start: number; staerke: number; stimme: number }>();
   const schliesse = (midi: number, endStep: number): void => {
     const o = offen.get(midi);
     if (!o) return;
     offen.delete(midi);
     const velocity = Math.max(1, Math.min(127, Math.round(45 + 82 * Math.sqrt(o.staerke / (maxStaerke || 1)))));
-    noten.push({ tick: o.start * T16, dauer: (endStep - o.start) * T16, note: midi, velocity, kanal: 0 });
+    noten.push({ tick: o.start * T16, dauer: (endStep - o.start) * T16, note: midi, velocity, kanal: o.stimme });
   };
   for (let s = 0; s < steps; s++) {
     const karte = jeStep[s];
     for (const midi of [...offen.keys()]) if (!karte.has(midi)) schliesse(midi, s);
+    // Stimme nach Tonhoehe: der tiefste Ton dieses Steps ist Stimme 0. Das
+    // trennt Bass von Melodie zuverlaessiger als die Reihenfolge, in der die
+    // Toene gefunden wurden (die richtet sich nach der Lautstaerke).
+    const nachHoehe = [...karte.keys()].sort((a, b) => a - b);
     for (const [midi, staerke] of karte) {
+      const stimme = nachHoehe.indexOf(midi);
       const o = offen.get(midi);
       if (o) o.staerke = Math.max(o.staerke, staerke);
-      else offen.set(midi, { start: s, staerke });
+      else offen.set(midi, { start: s, staerke, stimme });
     }
   }
   for (const midi of [...offen.keys()]) schliesse(midi, steps);
@@ -271,7 +279,28 @@ export function transkribiereAudio(pcm: Float32Array, sr: number, opts: Transkri
   return noten;
 }
 
-/** Notenliste als kuenstliches SMF-Lied — Eingang fuer den MIDI-Wizard. */
+/** Notenliste als kuenstliches SMF-Lied — alles auf einer Spur. */
 export function alsSmfLied(noten: SmfNote[], bpm: number, name: string): SmfLied {
   return { format: 0, ticksProViertel: AUDIO_TPQ, bpm, spuren: [{ name, kanal: 0, programm: null, noten }] };
+}
+
+/** Lagenamen fuer bis zu vier Stimmen — verstaendlicher als "Stimme 3". */
+const LAGE = ["tief", "mittel", "hoch", "oben"];
+
+/**
+ * Wie {@link alsSmfLied}, aber **je Stimme eine eigene Spur**. Im Wizard
+ * landet dann jede Linie auf einem eigenen Part: Bass und Melodie lassen sich
+ * getrennt mit Samples belegen, statt als Akkord auf einem Part zu kleben.
+ * Einstimmiges Material ergibt weiterhin genau eine Spur.
+ */
+export function alsSmfLiedProStimme(noten: SmfNote[], bpm: number, name: string): SmfLied {
+  const stimmen = [...new Set(noten.map((n) => n.kanal))].sort((a, b) => a - b);
+  const spuren = stimmen.map((stimme, i) => ({
+    name: `${name} ${i + 1} (${LAGE[i] ?? i + 1})`.slice(0, 24),
+    // Eigener Kanal je Spur — sonst schlaegt der Wizard fuer alle denselben Part vor
+    kanal: Math.min(15, i),
+    programm: null,
+    noten: noten.filter((n) => n.kanal === stimme).map((n) => ({ ...n, kanal: Math.min(15, i) })),
+  }));
+  return { format: 1, ticksProViertel: AUDIO_TPQ, bpm, spuren };
 }

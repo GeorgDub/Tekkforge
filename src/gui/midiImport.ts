@@ -6,7 +6,7 @@
 
 import { $, escapeHtml } from "./shared";
 import { parseSmf, baueMidiPatterns, verschiebeNote, MIDI_PATTERN_MAX, type SmfLied, type SmfNote } from "../core/midiImport";
-import { transkribiereAudio, alsSmfLied } from "../core/audioZuMidi";
+import { transkribiereAudio, alsSmfLied, alsSmfLiedProStimme } from "../core/audioZuMidi";
 import { tempoSchaetzen } from "../core/tempoAnalyse";
 import { dateiArt } from "../core/generatorSession";
 import { dekodiere } from "./audioDecode";
@@ -31,11 +31,13 @@ interface Zustand {
   audioLaeuft: boolean;
   /** Gleichzeitige Toene je Step: 1 = einstimmig, 2..4 = polyphon (Akkorde) */
   audioStimmen: number;
+  /** Jede Stimme auf eine eigene Spur (und damit einen eigenen Part) */
+  stimmenGetrennt: boolean;
 }
 
 const z: Zustand = {
   lied: null, dateiname: "", fehler: "", ziel: new Map(), weg: new Set(), rollSpur: 0, stepLength: 64, hinweise: [],
-  audio: null, audioBpm: 120, audioLaeuft: false, audioStimmen: 1,
+  audio: null, audioBpm: 120, audioLaeuft: false, audioStimmen: 1, stimmenGetrennt: true,
 };
 
 let uebergabe: ((p: EditorProject) => void) | null = null;
@@ -65,11 +67,20 @@ const MIDI_ENDUNGEN = /\.(mid|midi|kar|rmi|rmid|smf)$/i;
 function transkribieren(): void {
   if (!z.audio) return;
   const noten = transkribiereAudio(z.audio.pcm, 44100, { bpm: z.audioBpm, stimmen: z.audioStimmen });
-  z.lied = alsSmfLied(noten, z.audioBpm, z.audio.name.replace(/\.[^.]+$/, "").slice(0, 12) || "Audio");
+  const basis = z.audio.name.replace(/\.[^.]+$/, "").slice(0, 12) || "Audio";
+  // Stimmen trennen lohnt nur bei polyphonem Material
+  z.lied =
+    z.audioStimmen > 1 && z.stimmenGetrennt
+      ? alsSmfLiedProStimme(noten, z.audioBpm, basis)
+      : alsSmfLied(noten, z.audioBpm, basis);
   z.weg.clear();
   const art = z.audioStimmen > 1 ? `polyphon bis ${z.audioStimmen} Toene` : "einstimmig";
+  const spuren = z.lied.spuren.length;
   z.hinweise = noten.length
-    ? [`${noten.length} Noten transkribiert (${art}, 16tel-Raster bei ${z.audioBpm} BPM) — im Piano Roll pruefen.`]
+    ? [
+        `${noten.length} Noten transkribiert (${art}, 16tel-Raster bei ${z.audioBpm} BPM)` +
+          `${spuren > 1 ? ` auf ${spuren} Spuren — tiefste Linie zuerst` : ""} — im Piano Roll pruefen.`,
+      ]
     : ["keine Tonhoehen gefunden — anderes BPM probieren oder stimmhafteres Material (Melodie/Bass-Stem statt Vollmix)."];
   vorschlagZiel(z.lied);
 }
@@ -287,6 +298,7 @@ function render(): void {
                   .map((s) => `<option value="${s}" ${z.audioStimmen === s ? "selected" : ""}>${s === 1 ? "1 · einstimmig" : `${s} · Akkorde`}</option>`)
                   .join("")}
               </select>
+              <label title="Jede erkannte Linie kommt auf einen eigenen Part — Bass und Melodie lassen sich dann getrennt mit Samples belegen. Ohne Haken landet alles als Akkord auf einem Part."><input id="miGetrennt" type="checkbox" ${z.stimmenGetrennt ? "checked" : ""} ${z.audioStimmen > 1 ? "" : "disabled"} /> Stimmen auf eigene Parts</label>
               <button id="miNeu" class="ghost">Neu transkribieren</button>
               <span class="sub" style="margin:0">am besten Melodie- oder Bass-Stem, kein Vollmix</span>
             </div>`
@@ -360,6 +372,10 @@ function render(): void {
     });
     $("miStimmen").addEventListener("change", () => {
       z.audioStimmen = Number(($("miStimmen") as HTMLSelectElement).value) || 1;
+      ($("miGetrennt") as HTMLInputElement).disabled = z.audioStimmen <= 1;
+    });
+    $("miGetrennt").addEventListener("change", () => {
+      z.stimmenGetrennt = ($("miGetrennt") as HTMLInputElement).checked;
     });
   }
   if (lied) {

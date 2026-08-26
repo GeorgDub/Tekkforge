@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { transkribiereAudio, alsSmfLied, AUDIO_TPQ } from "../src/core/audioZuMidi";
+import { transkribiereAudio, alsSmfLied, alsSmfLiedProStimme, AUDIO_TPQ } from "../src/core/audioZuMidi";
 import { baueMidiPatterns } from "../src/core/midiImport";
 
 const SR = 44100;
@@ -86,6 +86,36 @@ describe("audioZuMidi", () => {
     expect(ersteHaelfte).toEqual([60, 64]);
     expect(zweiteHaelfte).toEqual([62, 65]);
   });
+  it("polyphon: jede Stimme bekommt eine eigene Kennung, tief zuerst", () => {
+    const dauer = 8 * STEP_SEK;
+    const akkord = mische(ton(261.63, dauer), ton(329.63, dauer), ton(392.0, dauer));
+    const noten = transkribiereAudio(akkord, SR, { bpm: BPM, stimmen: 3 });
+    const nachStimme = [...noten].sort((a, b) => a.kanal - b.kanal);
+    // Stimme 0 ist die tiefste, Stimme 2 die hoechste
+    expect(nachStimme.map((n) => n.kanal)).toEqual([0, 1, 2]);
+    expect(nachStimme.map((n) => n.note)).toEqual([60, 64, 67]);
+  });
+
+  it("alsSmfLiedProStimme macht aus jeder Stimme eine eigene Spur", () => {
+    const dauer = 8 * STEP_SEK;
+    const akkord = mische(ton(261.63, dauer), ton(329.63, dauer), ton(392.0, dauer));
+    const lied = alsSmfLiedProStimme(transkribiereAudio(akkord, SR, { bpm: BPM, stimmen: 3 }), BPM, "AKK");
+    expect(lied.spuren).toHaveLength(3);
+    expect(lied.spuren.map((s) => s.noten.length)).toEqual([1, 1, 1]);
+    expect(lied.spuren[0].noten[0].note).toBe(60);
+    expect(lied.spuren[2].noten[0].note).toBe(67);
+    // Namen benennen die Lage, damit die Zuordnung im Wizard verständlich ist
+    expect(lied.spuren[0].name).toMatch(/tief|1/i);
+    // Jede Spur liegt auf einem eigenen Kanal — sonst landen sie im selben Part
+    expect(new Set(lied.spuren.map((s) => s.kanal)).size).toBe(3);
+  });
+
+  it("alsSmfLiedProStimme laesst einstimmiges Material bei einer Spur", () => {
+    const noten = transkribiereAudio(ton(261.63, 8 * STEP_SEK), SR, { bpm: BPM, stimmen: 3 });
+    const lied = alsSmfLiedProStimme(noten, BPM, "SOLO");
+    expect(lied.spuren).toHaveLength(1);
+  });
+
   it("alsSmfLied laeuft unveraendert durch den Pattern-Bau des MIDI-Wizards", () => {
     const pcm = verkette(ton(261.63, 4 * STEP_SEK), stille(4 * STEP_SEK), ton(329.63, 8 * STEP_SEK));
     const lied = alsSmfLied(transkribiereAudio(pcm, SR, { bpm: BPM }), BPM, "TON");

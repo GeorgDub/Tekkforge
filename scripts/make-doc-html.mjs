@@ -59,11 +59,12 @@ const abschnitte = [
     punkte: [
       "Standard-MIDI-Dateien (.mid, .kar, .rmi) laden und die Spuren den 16 Parts zuordnen.",
       "<b>Audio zu Noten</b> — eine WAV oder MP3 wird transkribiert: einstimmig oder polyphon mit bis zu vier gleichzeitigen Tönen.",
+      "<b>Stimmen auf eigene Parts</b> — die erkannten Linien werden getrennt: tiefste zuerst, jede auf einen eigenen Part. Bass und Melodie lassen sich damit getrennt mit Samples belegen, statt als Akkord auf einem Part zu kleben.",
       "Akkord-Parts werden automatisch auf Poly gestellt, damit das Gerät wirklich alle Töne eines Steps spielt.",
       "Piano Roll zum Prüfen: Noten anklicken nimmt sie aus dem Import, Ziehen verschiebt sie — waagrecht in 16teln, senkrecht in Halbtönen.",
       "Übergabe in den Editor als 4-Takt-Patterns, Samples ordnest du dort zu.",
     ],
-    bild: ["midi-polyphon", "Polyphone Transkription einer Melodie-WAV: 44 Noten mit drei Stimmen — Melodielinie oben, durchgehende Basstöne darunter."],
+    bild: ["midi-polyphon", "Polyphone Transkription: 44 Noten auf drei Spuren aufgeteilt (21 tief, 14 mittel, 9 hoch) — jede landet auf einem eigenen Part."],
   },
   {
     nr: "04",
@@ -394,7 +395,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>605</b><span>automatische Tests</span></div>
+    <div><b>608</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -454,7 +455,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>605 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>608 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
