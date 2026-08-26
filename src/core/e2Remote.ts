@@ -63,14 +63,35 @@ export function buildMfxCc(globalChannel0: number, was: keyof typeof MFX_CC, val
 }
 
 /**
- * Panic: All Sound Off (CC 120) + All Notes Off (CC 123) auf allen 16
- * Kanälen — Klasse A, also unabhängig vom Receive-Filter.
+ * Panic — alles zum Schweigen bringen.
+ *
+ * ⚠ **All Sound Off und All Notes Off allein reichen nicht.** Sie beenden nur
+ * Toene, die das Geraet wegen eingehender MIDI-Noten spielt. Laeuft der interne
+ * Sequencer, triggert er munter weiter — genau deshalb sah der alte Panik-Knopf
+ * wirkungslos aus. Darum steht **MIDI-Stop zuerst**.
+ *
+ * Bleibt auch das ohne Wirkung, steht am Geraet „Clock Mode" auf Internal; dann
+ * ignoriert es Start/Stop von aussen und nur die Stop-Taste am Geraet hilft.
+ *
+ * @param opts.noten     Gemerkte klingende Noten, die einzeln abgeschaltet
+ *                       werden — praeziser als die Sammelbefehle.
+ * @param opts.alleNoten Alle 128 Noten auf allen 16 Kanaelen abfahren (2048
+ *                       Nachrichten). Gruendlich, aber langsam — und eine Flut
+ *                       kann den Eingangspuffer des Geraets ueberfahren.
  */
-export function buildPanic(): Uint8Array[] {
-  const out: Uint8Array[] = [];
+export function buildPanic(opts: { noten?: readonly { kanal: number; note: number }[]; alleNoten?: boolean } = {}): Uint8Array[] {
+  const out: Uint8Array[] = [Uint8Array.from([MIDI_STOP])];
   for (let ch = 0; ch < 16; ch++) {
-    out.push(Uint8Array.from([0xb0 | ch, 120, 0]));
-    out.push(Uint8Array.from([0xb0 | ch, 123, 0]));
+    out.push(Uint8Array.from([0xb0 | ch, 120, 0])); // All Sound Off
+    out.push(Uint8Array.from([0xb0 | ch, 123, 0])); // All Notes Off
+  }
+  for (const n of opts.noten ?? []) {
+    out.push(Uint8Array.from([0x80 | (n.kanal & 0x0f), n.note & 0x7f, 0]));
+  }
+  if (opts.alleNoten) {
+    for (let ch = 0; ch < 16; ch++) {
+      for (let note = 0; note < 128; note++) out.push(Uint8Array.from([0x80 | ch, note, 0]));
+    }
   }
   return out;
 }

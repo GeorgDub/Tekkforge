@@ -190,7 +190,7 @@ function baueDom(): void {
     <button id="e2sSchreiben" title="Pattern dauerhaft auf den Geräte-Slot schreiben">💾 → Slot</button>
     <label title="Zieht den Gerätezustand regelmäßig automatisch — bei laufendem Sequencer per Dreifach-Lesung mit Byte-Mehrheit"><input id="e2sAutoSync" type="checkbox" checked> Auto-Sync</label>
     <label title="▶ sendet MIDI-Clock (24 ppqn) im Pattern-Tempo plus Start — das Gerät folgt nur bei Global „Clock Mode" Auto/Ext"><input id="e2sClock" type="checkbox" checked> MIDI-Clock</label>
-    <button id="e2sPanic" title="All Sound Off + All Notes Off auf allen 16 Kanälen (wirkt unabhängig vom Receive-Filter)">⛔ Panic</button>
+    <button id="e2sPanic" title="MIDI-Stop + All Sound Off + All Notes Off auf allen 16 Kanälen, dazu gemerkte Noten einzeln. Mit Shift zusätzlich alle 128 Noten je Kanal (langsam). Spielt das Gerät weiter, steht sein Clock Mode auf Internal — dann hilft nur die Stop-Taste am Gerät.">⛔ Panic</button>
     <span class="e2s-goto" title="Pattern am Gerät wählen (Program Change — greift bei laufendem Sequencer am Taktende)">
       <button id="e2sPatPrev" title="Pattern runter (−1)">▼</button>
       <label>Pattern <input id="e2sGoto" type="number" min="1" max="250" value="1" style="width:60px"></label>
@@ -595,11 +595,23 @@ function clockTempoNachziehen(): void {
   }
 }
 
+/**
+ * Von uns angespielte Noten, damit Panic sie einzeln abschalten kann. Die
+ * Sammelbefehle „All Sound Off"/„All Notes Off" wirken nicht bei jedem Geraet
+ * zuverlaessig; ein gezieltes Note-Off tut es immer.
+ */
+const klingendeNoten = new Set<string>();
+const notenSchluessel = (kanal: number, note: number) => `${kanal}:${note}`;
+
 /** Kurzer Ton auf dem Kanal des Parts (Stock-MIDI: Part n hört auf Kanal n). */
 function spieleNote(part0: number, note: number): void {
   try {
     panelBridge.midi.send(buildNoteOn(part0, note, 110));
-    window.setTimeout(() => panelBridge.midi.send(buildNoteOff(part0, note)), 180);
+    klingendeNoten.add(notenSchluessel(part0, note));
+    window.setTimeout(() => {
+      panelBridge.midi.send(buildNoteOff(part0, note));
+      klingendeNoten.delete(notenSchluessel(part0, note));
+    }, 180);
   } catch (err) {
     setStatus(`Note senden fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI aktiviert?`);
   }
@@ -1334,10 +1346,23 @@ export function initPanel(): void {
   $("e2sPatNext").addEventListener("click", () => wechslePattern(schritt(basisIdx(), 1, 0, 249)));
   zeigeZielPattern(panelBridge.patternIndex);
   richteNrpnSpiegelEin();
-  $("e2sPanic").addEventListener("click", () => {
+  // Panic: Doppelklick (oder Shift) fährt zusätzlich alle 128 Noten auf allen
+  // 16 Kanälen ab — gründlich, aber 2048 Nachrichten, die den Eingangspuffer
+  // des Geräts überfahren können. Darum nicht als Standardweg.
+  $("e2sPanic").addEventListener("click", (ev) => {
+    const hart = (ev as MouseEvent).shiftKey;
     try {
-      for (const m of buildPanic()) panelBridge.midi.send(m);
-      setStatus("Panic gesendet: All Sound Off + All Notes Off auf allen 16 Kanälen.");
+      const noten = [...klingendeNoten].map((k) => {
+        const [kanal, note] = k.split(":").map(Number);
+        return { kanal, note };
+      });
+      for (const m of buildPanic({ noten, alleNoten: hart })) panelBridge.midi.send(m);
+      klingendeNoten.clear();
+      setStatus(
+        `Panic: Stop + All Sound/Notes Off auf 16 Kanälen${noten.length ? `, ${noten.length} gemerkte Note(n) einzeln aus` : ""}` +
+          `${hart ? ", dazu alle 128 Noten je Kanal" : " — mit Shift gedrückt zusätzlich alle Noten"}. ` +
+          `Spielt das Gerät weiter, steht sein Clock Mode auf Internal: dann hilft nur die Stop-Taste am Gerät.`,
+      );
     } catch (err) {
       setStatus(`Panic fehlgeschlagen: ${err instanceof Error ? err.message : err} — MIDI aktiviert?`);
     }

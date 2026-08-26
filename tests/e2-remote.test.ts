@@ -91,13 +91,35 @@ describe("e2Remote — Noten und Transport", () => {
     expect(clockIntervalMs(5)).toBe(clockIntervalMs(20));
   });
 
-  it("Master-FX-CCs auf dem Global-Kanal, Panic auf allen 16 Kanälen", () => {
+  it("Master-FX-CCs auf dem Global-Kanal", () => {
     expect(Array.from(buildMfxCc(0, "x", 64))).toEqual([0xb0, 102, 64]);
     expect(Array.from(buildMfxCc(3, "on", 999))).toEqual([0xb3, 106, 127]);
+  });
+
+  it("Panic beginnt mit MIDI-Stop — ohne das laeuft der Sequencer weiter", () => {
     const p = buildPanic();
-    expect(p).toHaveLength(32);
-    expect(Array.from(p[0])).toEqual([0xb0, 120, 0]);
-    expect(Array.from(p[31])).toEqual([0xbf, 123, 0]);
+    expect(Array.from(p[0])).toEqual([MIDI_STOP]);
+    // danach All Sound Off + All Notes Off auf allen 16 Kanaelen
+    expect(p).toHaveLength(1 + 32);
+    expect(Array.from(p[1])).toEqual([0xb0, 120, 0]);
+    expect(Array.from(p[32])).toEqual([0xbf, 123, 0]);
+  });
+
+  it("Panic schaltet gemerkte Noten einzeln ab", () => {
+    const p = buildPanic({ noten: [{ kanal: 2, note: 60 }, { kanal: 5, note: 36 }] });
+    const noteOffs = p.filter((m) => (m[0] & 0xf0) === 0x80).map((m) => Array.from(m));
+    expect(noteOffs).toEqual([
+      [0x82, 60, 0],
+      [0x85, 36, 0],
+    ]);
+  });
+
+  it("harter Panic faehrt alle 128 Noten auf allen 16 Kanaelen ab", () => {
+    const p = buildPanic({ alleNoten: true });
+    const noteOffs = p.filter((m) => (m[0] & 0xf0) === 0x80);
+    expect(noteOffs).toHaveLength(16 * 128);
+    expect(Array.from(noteOffs[0])).toEqual([0x80, 0, 0]);
+    expect(Array.from(noteOffs[noteOffs.length - 1])).toEqual([0x8f, 127, 0]);
   });
 });
 

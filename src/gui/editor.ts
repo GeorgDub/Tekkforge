@@ -67,6 +67,7 @@ import {
   type ProbeOutcome,
 } from "../core/firmwareMode";
 import { initFxPresetPanel } from "./fxPreset";
+import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import {
   E2_RAM_MAP,
   RAM_CMD,
@@ -642,6 +643,7 @@ function renderPool(): void {
         <td><input class="poolGain" data-num="${s.number}" type="checkbox" ${s.gain12db ? "checked" : ""} title="+12 dB Gain" /></td>
         <td style="white-space:nowrap">
           <a data-play="${s.number}" style="cursor:pointer" title="Anhören">▶</a>
+          <a data-edit="${s.number}" style="cursor:pointer;color:var(--accent)" title="Bearbeiten: schneiden, blenden, normalisieren, Loop">✎</a>
           <a data-replace="${s.number}" style="cursor:pointer;color:var(--accent2)" title="Audio ersetzen (WAV)">↻</a>
           <a data-del="${s.number}" style="cursor:pointer;color:var(--danger)" title="Entfernen">✕</a>
         </td>
@@ -695,6 +697,20 @@ function renderPool(): void {
     a.addEventListener("click", () => {
       const s = byNum(Number(a.dataset.play));
       if (s) player.audition(s);
+    }),
+  );
+  tbody.querySelectorAll<HTMLAnchorElement>("a[data-edit]").forEach((a) =>
+    a.addEventListener("click", () => {
+      const s = byNum(Number(a.dataset.edit));
+      if (!s) return;
+      oeffneSampleEditor({
+        nummer: s.number,
+        name: s.name,
+        pcm: s.pcm,
+        sampleRate: s.sampleRate,
+        loopType: s.loopType,
+        loopStartFrame: s.loopStartFrame,
+      });
     }),
   );
   tbody.querySelectorAll<HTMLAnchorElement>("a[data-replace]").forEach((a) =>
@@ -1685,6 +1701,20 @@ function renderAll(): void {
 }
 
 export function initEditor(): void {
+  // Sample-Editor: geänderte Daten zurück in den Pool, Vorhören über denselben
+  // Player wie die Pool-Liste
+  initSampleEditor({
+    uebernehmen: (nummer, pcm, loop) => {
+      const s = project.samples.find((x) => x.number === nummer);
+      if (!s) return;
+      s.pcm = pcm;
+      s.loopType = loop.loopType;
+      s.loopStartFrame = loop.loopStartFrame;
+      markDirty();
+      renderPool();
+    },
+    anhoeren: (pcm, sampleRate) => player.audition({ number: 0, name: "Auswahl", pcm, sampleRate }),
+  });
   $("patAdd").addEventListener("click", () => {
     project.patterns.push(createPattern(`PATTERN ${project.patterns.length + 1}`));
     cur = project.patterns.length - 1;

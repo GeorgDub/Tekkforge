@@ -138,6 +138,10 @@ export interface PoolSample {
   gain12db?: boolean;
   /** Kategorie-Anzeigename aus der .all-Bank ("Kick", "Snare", …). */
   kategorie?: string;
+  /** Loop-Modus wie im Bank-Format: 1 = One-Shot (Standard), 0 = vorwärts schleifend. */
+  loopType?: number;
+  /** Loop-Start in FRAMES (die Bank rechnet in Bytes — hier die handlichere Einheit). */
+  loopStartFrame?: number;
 }
 
 export interface EditorProject {
@@ -549,6 +553,9 @@ export function buildSampleBank(samples: readonly PoolSample[]): Uint8Array | nu
     sampleRate: s.sampleRate,
     channels: 1,
     ...(s.gain12db ? { gain12db: true } : {}),
+    // Loop-Punkte: die Bank rechnet in Bytes, ein Mono-16-Bit-Frame sind zwei
+    ...(s.loopType !== undefined ? { loopType: s.loopType as 0 | 1 } : {}),
+    ...(s.loopStartFrame !== undefined ? { loopStartBytes: Math.max(0, Math.round(s.loopStartFrame)) * 2 } : {}),
   }));
   return new Uint8Array(buildE2sBank(slots).buffer);
 }
