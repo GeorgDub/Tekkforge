@@ -255,7 +255,12 @@ export function voxPaare(projekt: Projekt, meloName?: string): ProjektSample[] {
   return eigene.length ? eigene : alle;
 }
 
-const AUFBAU_DIMM = 0.85;
+/**
+ * Pegel der ersten und der letzten Aufbau-Stufe, in Dezibel unter dem Drop.
+ * Dazwischen wird gleichmaessig verteilt; der Drop laeuft voll.
+ */
+const AUFBAU_DB_VON = -7;
+const AUFBAU_DB_BIS = -2;
 
 /**
  * Aufbau-Kette (Mute/Unmute-Spielweise): alle Patterns tragen dieselben vollen
@@ -312,11 +317,26 @@ export function baueAufbau(
   }
   const mitMutes = (basisParts: E2PartInput[], an: Set<number> | null): E2PartInput[] =>
     basisParts.map((p, idx) => ({ ...p, muted: p.muted || (an ? !an.has(idx) : false) }));
-  // Aufbau leiser fahren: Drums/Bass/Stab/Shots gedimmt, Melo/Vocals (12–15) tragen das Lied
-  const dimm = (ps: E2PartInput[]): E2PartInput[] =>
-    ps.map((p, idx) =>
-      idx <= 11 ? { ...p, steps: p.steps.map((s) => (s.active && s.velocity ? { ...s, velocity: Math.round(s.velocity * AUFBAU_DIMM) } : s)) } : p,
-    );
+  /**
+   * Der Aufbau wird STUFENWEISE lauter — alle Lagen zusammen, nicht nur die Drums.
+   *
+   * Vorher lag ueber den Drums ein fester Daempfer von 0,85, und die Melodie-
+   * schleife lief von Stufe 1 an auf voller Lautstaerke. Gemessen wuchsen die
+   * ersten Stufen dadurch um 0,08 / 0,26 / 0,57 dB — das hoert kein Mensch, und
+   * der Drop kam aus dem Nichts statt aus einer Steigerung. Nutzerbefund dazu:
+   * "nirgends kam der Drop und es hat gekickt".
+   *
+   * Jetzt liegt auf jeder Stufe ein Pegel, gleichmaessig in DEZIBEL verteilt
+   * (nicht in Prozent — sonst schrumpfen die Schritte nach hinten). Erste Stufe
+   * rund 7 dB unter dem Drop, letzte 2 dB darunter; der Drop selbst voll. Das
+   * ergibt gleich grosse, hoerbare Schritte und einen Sprung am Ende.
+   */
+  const stufenPegel = (ps: E2PartInput[], stufe: number, anzahl: number): E2PartInput[] => {
+    const anteil = anzahl > 1 ? stufe / (anzahl - 1) : 1;
+    const db = AUFBAU_DB_VON + (AUFBAU_DB_BIS - AUFBAU_DB_VON) * anteil;
+    const faktor = Math.pow(10, db / 20);
+    return ps.map((p, idx) => ({ ...p, volume: Math.max(1, Math.round((p.volume ?? VOLUME[idx]) * faktor)) }));
+  };
   // Snare-Fill im letzten Takt der letzten Aufbau-Stufe — der Uebergang in den
   // Drop. Die Schlaege kommen aus derselben Definition wie im Editor
   // (patternVarianten), damit eine Verbesserung nicht nur eine Haelfte trifft.
@@ -362,7 +382,7 @@ export function baueAufbau(
     ...basis,
     name: `${tag} AUF${i + 1}`.slice(0, 16),
     parts: (i === stufen.length - 1 ? fill : i === 0 && duennesIntro ? ausduennen : (x: E2PartInput[]) => x)(
-      dimm(mitMutes(dropParts, an)),
+      stufenPegel(mitMutes(dropParts, an), i, stufen.length),
     ),
     chainTo: start + i + 1,
     chainRepeat: 2,

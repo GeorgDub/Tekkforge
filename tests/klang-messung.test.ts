@@ -159,3 +159,52 @@ describe("Nachmessen: die Kick wiederholt sich nicht", () => {
     expect(taktUnterschied("schlank")).toBeGreaterThan(taktUnterschied("voll") * 2.5);
   });
 });
+
+describe("Nachmessen: der Aufbau baut wirklich auf", () => {
+  /** Effektivpegel je Pattern der Kette, in dB unter dem Drop. */
+  function verlauf(): number[] {
+    const { patterns, ep, dropIdx } = aufbauFuer("schlank");
+    const rms = (i: number) => {
+      const r = rendere(ep.patterns[i], ep.samples as PoolSample[], { ausklang: 0 });
+      let summe = 0;
+      for (const v of r.pcm) summe += v * v;
+      return Math.sqrt(summe / r.pcm.length);
+    };
+    const werte = patterns.map((_, i) => rms(i));
+    const drop = werte[dropIdx];
+    return werte.map((v) => 20 * Math.log10(Math.max(v, 1e-9) / Math.max(drop, 1e-9)));
+  }
+
+  it("jede Stufe ist hörbar lauter als die davor", () => {
+    // Nutzerbefund: "nirgends kam der Drop und es hat gekickt". Nachgemessen
+    // lagen die ersten vier Stufen innerhalb von 0,7 dB — da baut nichts auf,
+    // weil die Melodieschleife von Stufe 1 an auf voller Lautstärke lief und
+    // dazugeschaltete Hats daneben nicht ins Gewicht fielen.
+    const v = verlauf();
+    // Gemessen waren die Schritte 0,08 / 0,26 / 0,57 / 2,31 / 2,35 dB — die
+    // ersten drei hört kein Mensch. Unter einem Dezibel ist kein Schritt.
+    for (let i = 1; i < v.length; i++) {
+      const schritt = v[i] - v[i - 1];
+      expect(schritt, `Schritt ${i} → ${i + 1} nur ${schritt.toFixed(2)} dB`).toBeGreaterThan(1);
+    }
+  });
+
+  it("zwischen erster Stufe und Drop liegen hörbare Dezibel", () => {
+    const v = verlauf();
+    // Vorher: 5,6 dB, davon 4,7 in den letzten beiden Schritten.
+    expect(v[v.length - 1] - v[0]).toBeGreaterThan(7);
+  });
+
+  it("der Drop springt gegenüber der letzten Aufbau-Stufe deutlich", () => {
+    const { patterns, ep, dropIdx } = aufbauFuer("schlank");
+    const rms = (i: number) => {
+      const r = rendere(ep.patterns[i], ep.samples as PoolSample[], { ausklang: 0 });
+      let summe = 0;
+      for (const v of r.pcm) summe += v * v;
+      return Math.sqrt(summe / r.pcm.length);
+    };
+    const sprung = 20 * Math.log10(rms(dropIdx) / Math.max(rms(dropIdx - 1), 1e-9));
+    expect(sprung, `Sprung nur ${sprung.toFixed(1)} dB`).toBeGreaterThan(1.5);
+    void patterns;
+  });
+});

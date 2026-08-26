@@ -34,7 +34,8 @@ describe("drumSchnitt", () => {
     expect(rollen("hat").length).toBeGreaterThanOrEqual(1);
     for (const r of ["kick", "snare", "hat"]) expect(rollen(r).length).toBeLessThanOrEqual(2);
     for (const t of treffer) {
-      expect(t.pcm.length).toBeLessThanOrEqual(Math.round(0.4 * SR));
+      // Kicks duerfen laenger sein als der Rest — der Ausklang gehoert dazu.
+      expect(t.pcm.length).toBeLessThanOrEqual(Math.round((t.rolle === "kick" ? 0.45 : 0.4) * SR));
       expect(t.pcm.length).toBeGreaterThanOrEqual(1024);
       expect(t.rmsDb).toBeGreaterThan(-40);
     }
@@ -44,5 +45,52 @@ describe("drumSchnitt", () => {
   });
   it("stiller Stem → keine Treffer", () => {
     expect(schneideDrums(new Float32Array(SR), SR)).toEqual([]);
+  });
+});
+
+/**
+ * Dichter Tekk-Stem: lange Kicks, denen kurz darauf eine Hat folgt.
+ * Genau die Lage, die den Kicks den Bauch nahm.
+ */
+function dichterStem(): Float32Array {
+  const pcm = new Float32Array(3 * SR);
+  // Kick alle 0,5 s, 300 ms lang — der lange, gestimmte Tekk-Bauch
+  for (const t of [0.1, 0.6, 1.1, 1.6, 2.1]) burst(pcm, t, 55, 0.3, 0.9);
+  // Durchgehende Sechzehntel-Hats, laut genug für eigene Onsets. Genau so
+  // sieht ein Tekk-Drums-Stem bei 200 BPM aus — und genau daran zerbrach der
+  // Schnitt: die Kicks kamen mit 0,09 s heraus, wie im echten Lied gemessen.
+  for (let t = 0.19; t < 2.9; t += 0.09) burst(pcm, t, 9000, 0.03, 1.4);
+  return pcm;
+}
+
+describe("drumSchnitt: der Bauch der Kick", () => {
+  it("die Kick behält ihren Ausklang, auch wenn kurz danach eine Hat kommt", () => {
+    // Nutzerbefund: "es hat nicht gekickt". Nachgemessen war die aus dem Lied
+    // geschnittene Kick 0,09 s lang — die tekk4-Kicks sind 0,32 bis 0,37 s.
+    // Ein Tekk-Kick IST der lange Bauch; 90 ms sind nur der Anschlag.
+    const kicks = schneideDrums(dichterStem(), SR).filter((t) => t.rolle === "kick");
+    expect(kicks.length).toBeGreaterThan(0);
+    for (const k of kicks) {
+      expect(k.pcm.length / SR, "Kick zu kurz — der Ausklang fehlt").toBeGreaterThanOrEqual(0.18);
+    }
+  });
+
+  it("die Hat bleibt kurz — sie hat keinen Bauch zu verlieren", () => {
+    const hats = schneideDrums(dichterStem(), SR).filter((t) => t.rolle === "hat");
+    for (const h of hats) expect(h.pcm.length / SR).toBeLessThan(0.2);
+  });
+
+  it("keine Kick wird länger als die Obergrenze", () => {
+    for (const t of schneideDrums(dichterStem(), SR)) {
+      expect(t.pcm.length).toBeLessThanOrEqual(Math.round(0.5 * SR));
+    }
+  });
+
+  it("eine Kick reicht nicht in die nächste Kick hinein", () => {
+    // Bei 0,5 s Abstand darf der Ausklang nicht über den nächsten Schlag laufen,
+    // sonst steckt im Sample zweimal dieselbe Kick.
+    for (const k of schneideDrums(dichterStem(), SR).filter((t) => t.rolle === "kick")) {
+      expect(k.pcm.length / SR).toBeLessThanOrEqual(0.5);
+    }
   });
 });

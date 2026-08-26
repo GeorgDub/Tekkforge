@@ -172,11 +172,16 @@ describe("patternGen", () => {
     const auf1 = patterns[0];
     const letzteAuf = patterns[dropIdx - 1];
     for (const s of drop.parts[0].steps) if (s.active) expect(s.velocity).toBe(127);
-    // Hats im Aufbau leiser als im Drop (Velocity gedimmt)
-    const vel = (p: (typeof patterns)[0], idx: number) => p.parts[idx].steps.find((s) => s.active)!.velocity!;
-    expect(vel(auf1, 4)).toBeLessThan(vel(drop, 4));
-    // Melo bleibt ungedimmt
-    expect(vel(auf1, 12)).toBe(vel(drop, 12));
+    // Der Aufbau ist leiser als der Drop — seit dem gemessenen Befund über die
+    // PART-LAUTSTÄRKE und über ALLE Lagen, nicht mehr über die Velocity der
+    // Drums allein. Vorher lief die Melodieschleife von Stufe 1 an voll und
+    // deckte jede Steigerung zu.
+    const vol = (p: (typeof patterns)[0], idx: number) => p.parts[idx].volume!;
+    expect(vol(auf1, 4)).toBeLessThan(vol(drop, 4));
+    expect(vol(auf1, 12), "auch die Melodie wird zurückgenommen").toBeLessThan(vol(drop, 12));
+    // Und es geht stufenweise aufwärts statt in einem Satz.
+    expect(vol(letzteAuf, 4)).toBeGreaterThan(vol(auf1, 4));
+    expect(vol(letzteAuf, 4)).toBeLessThan(vol(drop, 4));
     // Snare-Fill im letzten Takt der letzten Aufbau-Stufe
     const fill = letzteAuf.parts[2].steps.slice(48).filter((s) => s.active).length;
     expect(fill).toBeGreaterThanOrEqual(6);
