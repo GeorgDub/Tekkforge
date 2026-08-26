@@ -246,3 +246,116 @@ describe("patternGen", () => {
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
   });
 });
+
+// ─── Dichte und Kick-Abwechslung ─────────────────────────────────────────────
+//
+// Nutzerbefund 2026-08-26: die Patterns waren "ueberladen und anstrengend zu
+// hoeren und dazu noch monoton von der Kick her". Nachgemessen am Drop-Pattern
+// stimmte beides: auf JEDEM der 64 Sechzehntel lag mindestens ein Schlag der
+// Schlagzeug-/Bass-Parts (0 leere Steps, 109 Treffer), und die Kick-Figuren
+// "vier", "hart" und "galopp" wiederholten vier Takte lang dieselbe Zeile.
+// Diese Tests halten beides fest, damit es nicht zurueckkommt.
+
+/** Steps ohne einen einzigen Schlag in den Parts 0..8 (Drums + Bass). */
+function leereSteps(p: { parts: { steps: { active?: boolean }[] }[] }): number {
+  let leer = 0;
+  for (let s = 0; s < 64; s++) {
+    if (!p.parts.slice(0, 9).some((part) => part.steps[s]?.active)) leer++;
+  }
+  return leer;
+}
+
+/** Wie viele UNTERSCHIEDLICHE Takt-Zeilen hat ein Part über die 4 Takte? */
+function taktFiguren(part: { steps: { active?: boolean }[] }): number {
+  const zeilen = [0, 1, 2, 3].map((t) =>
+    Array.from({ length: 16 }, (_, i) => (part.steps[t * 16 + i]?.active ? "x" : ".")).join(""),
+  );
+  return new Set(zeilen).size;
+}
+
+describe("Dichte", () => {
+  const dropVon = (rezept: ReturnType<typeof regelRezept>, pr: Parameters<typeof baueRezept>[1]) => {
+    const { patterns } = baueAufbau(rezept, pr);
+    return patterns.find((p) => p.name.endsWith("DROP"))!;
+  };
+
+  it("lässt Luft: das Drop-Pattern hat leere Steps", () => {
+    const { projekt: pv } = projektMitVox();
+    const drop = dropVon(regelRezept(pv, { modus: "jam" }), pv);
+    // Vorher waren es null. Ein Viertel des Rasters soll atmen dürfen.
+    expect(leereSteps(drop)).toBeGreaterThanOrEqual(12);
+  });
+
+  it("die Kick wiederholt nicht vier Takte lang dieselbe Zeile", () => {
+    const { projekt: pv } = projektMitVox();
+    const drop = dropVon(regelRezept(pv, { modus: "jam" }), pv);
+    expect(taktFiguren(drop.parts[0])).toBeGreaterThanOrEqual(2);
+  });
+
+  it("Clap und Snare liegen nicht in jedem Takt auf demselben Step", () => {
+    const { projekt: pv } = projektMitVox();
+    const drop = dropVon(regelRezept(pv, { modus: "jam" }), pv);
+    let doppelt = 0;
+    for (let s = 0; s < 64; s++) if (drop.parts[2].steps[s]?.active && drop.parts[3].steps[s]?.active) doppelt++;
+    expect(doppelt).toBeLessThanOrEqual(2);
+  });
+
+  it("die offene HiHat rasselt nicht auf jedem zweiten Step", () => {
+    const { projekt: pv } = projektMitVox();
+    const drop = dropVon(regelRezept(pv, { modus: "jam" }), pv);
+    const treffer = drop.parts[5].steps.filter((s) => s.active).length;
+    expect(treffer).toBeLessThanOrEqual(16); // vorher 32
+  });
+
+  it("„voll“ holt den alten, dichten Satz zurück", () => {
+    const { projekt: pv } = projektMitVox();
+    const r = regelRezept(pv, { modus: "jam" });
+    const voll = dropVon({ ...r, figuren: { ...r.figuren, dichte: "voll" } }, pv);
+    expect(leereSteps(voll)).toBe(0);
+    expect(voll.parts[5].steps.filter((s) => s.active).length).toBe(32);
+  });
+});
+
+describe("ausgedünnte Anfangsstufe (Option)", () => {
+  const hits = (p: { parts: { steps: { active?: boolean }[] }[] }, idx: number) =>
+    p.parts[idx].steps.filter((s) => s.active).length;
+
+  it("ohne Option bleibt die Zusage: alle Stufen tragen dieselben Steps", () => {
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
+    const muster = (p: (typeof patterns)[0], idx: number) => p.parts[idx].steps.map((s) => !!s.active).join("");
+    for (let idx = 0; idx < 16; idx++) {
+      if (idx === 2) continue; // Snare: Fill in der letzten Stufe
+      expect(muster(patterns[0], idx)).toBe(muster(patterns[dropIdx], idx));
+    }
+  });
+
+  it("mit Option spielt die erste Stufe halb so viel Schlagzeug", () => {
+    const { projekt: pv } = projektMitVox();
+    const r = regelRezept(pv, { modus: "jam" });
+    const voll = baueAufbau(r, pv).patterns[0];
+    const duenn = baueAufbau(r, pv, { intro: "duenn" }).patterns[0];
+    expect(hits(duenn, 2)).toBeLessThan(hits(voll, 2));
+    expect(hits(duenn, 2)).toBeGreaterThan(0); // ausgedünnt, nicht ausgeschaltet
+  });
+
+  it("die Melodie und die Vocals bleiben ganz", () => {
+    const { projekt: pv } = projektMitVox();
+    const r = regelRezept(pv, { modus: "jam" });
+    const voll = baueAufbau(r, pv).patterns[0];
+    const duenn = baueAufbau(r, pv, { intro: "duenn" }).patterns[0];
+    // Melos nicht zerstückeln — die Regel gilt hier genauso.
+    for (const idx of [12, 13, 14, 15]) expect(hits(duenn, idx)).toBe(hits(voll, idx));
+  });
+
+  it("nur die erste Stufe wird ausgedünnt, der Drop bleibt voll", () => {
+    const { projekt: pv } = projektMitVox();
+    const r = regelRezept(pv, { modus: "jam" });
+    const { patterns } = baueAufbau(r, pv, { intro: "duenn" });
+    const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
+    const vollLauf = baueAufbau(r, pv).patterns;
+    expect(hits(patterns[dropIdx], 0)).toBe(hits(vollLauf[dropIdx], 0));
+    expect(hits(patterns[1], 2)).toBe(hits(vollLauf[1], 2));
+  });
+});

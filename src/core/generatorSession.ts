@@ -137,6 +137,15 @@ export interface Erzeugt {
   startSlot: number;
 }
 
+/**
+ * Der Dichte-Schalter der Oberflaeche schlaegt auf das Rezept durch — auch auf
+ * eines, das die KI geliefert oder der Nutzer gespeichert hat. Ohne Haken gilt
+ * schlank; das war die Antwort auf "ueberladen und anstrengend zu hoeren".
+ */
+function mitDichte(r: Rezept, voll?: boolean): Rezept {
+  return { ...r, figuren: { ...r.figuren, dichte: voll ? "voll" : "schlank" } };
+}
+
 export function erzeuge(
   projekt: Projekt,
   wunsch: {
@@ -149,11 +158,17 @@ export function erzeuge(
     rezepte?: Rezept[];
     /** Aufbau-Kette: identische Steps in allen Patterns, Mutes wachsen bis zum Drop */
     aufbau?: boolean;
+    /** Erste Aufbau-Stufe nur mit jedem zweiten Schlagzeug-Schlag (Vorgabe: aus). */
+    duennesIntro?: boolean;
+    /** Alter, dichter Satz statt des schlanken (Vorgabe: aus, also schlank). */
+    dichteVoll?: boolean;
   },
 ): Erzeugt {
   const basis = projekt.name.toUpperCase().replace(/[^A-Z0-9]+/g, "");
   if (wunsch.modus === "promelo") {
-    const rezepte = wunsch.rezepte?.length ? wunsch.rezepte.map((r) => ({ ...r, bpm: wunsch.bpm })) : regelRezeptProMelo(projekt, wunsch.bpm);
+    const rezepte = (wunsch.rezepte?.length ? wunsch.rezepte.map((r) => ({ ...r, bpm: wunsch.bpm })) : regelRezeptProMelo(projekt, wunsch.bpm)).map(
+      (r) => mitDichte(r, wunsch.dichteVoll),
+    );
     const { patterns, hinweise } = wunsch.aufbau ? baueProMeloAufbau(rezepte, projekt) : baueProMelo(rezepte, projekt);
     return {
       modus: "promelo",
@@ -168,13 +183,18 @@ export function erzeuge(
         `Kick-Familien rotieren: ${rezepte.map((r) => `${r.thema.melo} → ${r.thema.kickFamilie}`).join(", ")}.`,
     };
   }
-  const rezept =
+  const rezept = mitDichte(
     wunsch.rezept && wunsch.rezept.modus === wunsch.modus
       ? wunsch.rezept
-      : regelRezept(projekt, { modus: wunsch.modus, bpm: wunsch.bpm, melo: wunsch.melo, beschreibung: wunsch.beschreibung });
+      : regelRezept(projekt, { modus: wunsch.modus, bpm: wunsch.bpm, melo: wunsch.melo, beschreibung: wunsch.beschreibung }),
+    wunsch.dichteVoll,
+  );
   const start = wunsch.startSlot ?? 1;
   if (wunsch.aufbau) {
-    const { patterns, hinweise } = baueAufbau(rezept, projekt, { startSlot: start });
+    const { patterns, hinweise } = baueAufbau(rezept, projekt, {
+      startSlot: start,
+      intro: wunsch.duennesIntro ? "duenn" : "voll",
+    });
     return {
       modus: wunsch.modus,
       rezepte: [rezept],
@@ -185,7 +205,9 @@ export function erzeuge(
       warumSo:
         rezept.begruendung +
         ` Aufbau-Kette: ${patterns.length} Patterns, Steps ueberall gesetzt, entmutet wird stufenweise — Kick erst im Drop; ` +
-        `Aufbau leicht gedimmt, Snare-Fill vor dem Drop, Drop-Kicks auf Maximum; Vocal-Paare wandern ueber die Kette. Am Geraet frei weiter entmuten.`,
+        `Aufbau leicht gedimmt, Snare-Fill vor dem Drop, Drop-Kicks auf Maximum; Vocal-Paare wandern ueber die Kette. Am Geraet frei weiter entmuten.` +
+        (wunsch.duennesIntro ? " Erste Stufe ausgeduennt: nur jeder zweite Schlagzeug-Schlag." : "") +
+        (rezept.figuren.dichte === "voll" ? " Dichter Satz (voll)." : ""),
       startSlot: start,
     };
   }

@@ -63,6 +63,10 @@ interface Zustand {
   liedStatus: string;
   /** Aufbau-Kette: Steps ueberall gesetzt, entmutet wird stufenweise; Drop kickt haerter, Vocal-Paare wandern ueber die Kette */
   aufbau: boolean;
+  /** Erste Aufbau-Stufe nur mit jedem zweiten Schlagzeug-Schlag. */
+  duennesIntro: boolean;
+  /** Alter, dichter Satz statt des schlanken. */
+  dichteVoll: boolean;
   /** eigene Drums (tekk/Ordner) statt aus dem Lied geschnittener Kick/Snare/Hat */
   liedDrumsEigene: boolean;
   /** Ziel-BPM der letzten Lied-Analyse — Bank und Patterns muessen im selben Tempo laufen wie die geschnittenen Fenster */
@@ -92,7 +96,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, duennesIntro: false, dichteVoll: false, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
   url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
@@ -239,6 +243,12 @@ function render(): void {
       </div>
       <div class="zeile"><label title="Steps in allen Patterns gesetzt; entmutet wird stufenweise (Melo+Snare → Hats → … → Drop mit Kick). Aufbau leicht gedimmt, Snare-Fill vor dem Drop, Drop-Kicks auf Maximum; die Vocal-Paare des Lieds wandern ueber die Kette (AUF → DROP → VRS). Spielweise: am Geraet Parts entmuten.">
         <input id="genAufbau" type="checkbox" ${z.aufbau ? "checked" : ""} /> Aufbau-Kette (Mute/Unmute-Spielweise)</label>
+      </div>
+      <div class="zeile"><label title="Laesst die erste Stufe nur jeden zweiten Schlagzeug-Schlag spielen. Melodie und Vocals bleiben ganz. Ohne diesen Haken tragen alle Stufen dieselben Steps und nur die Mutes unterscheiden sich — das ist die Spielweise, fuer die die Kette gebaut ist.">
+        <input id="genIntroDuenn" type="checkbox" ${z.duennesIntro ? "checked" : ""} /> Anfangsstufe ausduennen</label>
+      </div>
+      <div class="zeile"><label title="Der schlanke Satz ist die Vorgabe: offene HiHat als Achtel-Akzent statt Dauerrasseln, Clap nur in Takt 2 und 4 statt auf jeder Snare, und die Kick bekommt einen eigenen vierten Takt. Nachgemessen: 109 Treffer und null leere Steps vorher, 82 Treffer und 16 leere Steps danach. Dieser Haken holt den alten, dichten Satz zurueck.">
+        <input id="genDichteVoll" type="checkbox" ${z.dichteVoll ? "checked" : ""} /> Dichter Satz (alt)</label>
       </div>
       <div class="zeile"><label for="genMelo">Melodie</label>
         <select id="genMelo"><option value="">Regel waehlt</option>${melos
@@ -410,6 +420,12 @@ function verdrahte(): void {
   knopf("genLos", () => void generieren());
   document.getElementById("genAufbau")?.addEventListener("change", (e) => {
     z.aufbau = (e.target as HTMLInputElement).checked;
+  });
+  document.getElementById("genIntroDuenn")?.addEventListener("change", (e) => {
+    z.duennesIntro = (e.target as HTMLInputElement).checked;
+  });
+  document.getElementById("genDichteVoll")?.addEventListener("change", (e) => {
+    z.dichteVoll = (e.target as HTMLInputElement).checked;
   });
   knopf("genKeySpeichern", () => void keySpeichern(($("genKey") as HTMLInputElement).value));
   knopf("genKeyLoeschen", () => void keySpeichern(""));
@@ -735,7 +751,7 @@ async function setsBauen(gruppen: LiedGruppe[]): Promise<void> {
       const { projekt, bank } = planeBank(eintraege, {
         name, bpm, volume: 1, tekkDrumsBank: tekk ?? undefined, sparsameVocals: z.sparsameVocals,
       });
-      const ergebnis = erzeuge(projekt, { modus: "promelo", bpm, aufbau: z.aufbau, startSlot: 1 });
+      const ergebnis = erzeuge(projekt, { modus: "promelo", bpm, aufbau: z.aufbau, duennesIntro: z.duennesIntro, dichteVoll: z.dichteVoll, startSlot: 1 });
       z.sets.push({
         name,
         lieder: lieder.map((l) => l.name),
@@ -925,7 +941,7 @@ async function generieren(): Promise<void> {
   }
   // Beschreibung und Auswahl bleiben nach dem Rendern erhalten
   const text = beschreibung;
-  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept, rezepte, aufbau: z.aufbau });
+  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept, rezepte, aufbau: z.aufbau, duennesIntro: z.duennesIntro, dichteVoll: z.dichteVoll });
   z.sendeStatus = "";
   render();
   const ta = document.getElementById("genText") as HTMLTextAreaElement | null;

@@ -46,6 +46,31 @@ const BASS: Record<BassFigur, () => E2StepInput[]> = {
   roll: () => baue((s) => (takt(s) < 3 ? (s % 4 === 2 ? hit([60], 110, 12) : null) : s % 2 === 1 ? hit([60], 104, 8) : null)),
   acht: () => baue((s) => (s % 2 === 1 ? hit([imTakt(s) === 15 ? 55 : 60], 104, 8) : null)),
 };
+/**
+ * Gibt der Kick einen eigenen vierten Takt.
+ *
+ * Nutzerbefund: "monoton von der Kick her". Nachgemessen stimmte das genau —
+ * "vier", "hart" und "galopp" hatten ueber alle vier Takte GENAU EINE Zeile,
+ * viermal hintereinander. Einzig "roll" wich im letzten Takt ab, und ausgerechnet
+ * die hat der Nutzer nicht bemaengelt; sie ist hier das Vorbild.
+ *
+ * Der letzte Takt laesst die Zwoelf aus (die Luecke ist das, was man hoert) und
+ * setzt eine Fuenfzehn als Auftakt in den naechsten Durchlauf. Bewusst NICHT
+ * die Vierzehn: dort sitzen Kick 2 und Perc 2 schon mit ihrem Akzent, und beim
+ * Nachrechnen tuermten sich dort sechs Lagen.
+ *
+ * Die Takte 1 bis 3 bleiben unangetastet — sie sind der Anker, an dem man den
+ * Groove wiedererkennt.
+ */
+function kickMitViertemTakt(steps: E2StepInput[]): E2StepInput[] {
+  const raus = steps.map((s) => ({ ...s }));
+  const letzter = 3 * 16;
+  raus[letzter + 12] = { active: false };
+  const vorlage = steps.find((s) => s.active);
+  raus[letzter + 15] = hit([60], Math.min(127, (vorlage?.velocity ?? 112) + 4), vorlage?.gate ?? 14);
+  return raus;
+}
+
 const SHOT_A = () => baue((s) => (s === 0 || s === 32 ? hit([60], 118, 96) : null));
 const SHOT_B = () => baue((s) => (s === 24 || s === 56 ? hit([60], 112, 96) : null));
 //            K1   K2   SN   CL   HH  HH2   PC  PC2  BASS STAB SHA  SHB  MELA MELB VRA  VRB
@@ -82,21 +107,30 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   const shotB = riserAktiv ? riser : byName(t.shots?.[1]);
   const i = a.intensitaet;
   const hatsOff = rezept.figuren.hatsOffbeat;
+  // Ohne Angabe schlank: der dichte Satz war der beanstandete.
+  const schlank = rezept.figuren.dichte !== "voll";
   const lang = (s?: ProjektSample) => !!s && s.kind === "loop" && s.takte > 4;
 
   const steps: E2StepInput[][] = Array.from({ length: 16 }, leer);
   const wach = new Array<boolean>(16).fill(false);
-  steps[0] = KICK[a.kick]();
+  steps[0] = schlank ? kickMitViertemTakt(KICK[a.kick]()) : KICK[a.kick]();
   wach[0] = true;
   steps[1] = baue((s) => (imTakt(s) === 8 ? hit([60], 96, 22) : takt(s) === 3 && imTakt(s) === 14 ? hit([60], 100, 14) : null));
   wach[1] = i >= 4;
   steps[2] = baue((s) => (a.kick === "roll" && takt(s) === 3 ? hit([60], 100, 10) : imTakt(s) === 4 || imTakt(s) === 12 ? hit([60], 106, 28) : null));
   wach[2] = i >= 3 || a.kick === "roll";
-  steps[3] = baue((s) => (imTakt(s) === 12 ? hit([60], 96, 22) : takt(s) === 1 && imTakt(s) === 14 ? hit([60], 84, 12) : null));
+  // Clap schlank nur in Takt 2 und 4: sonst liegt er in JEDEM Takt auf
+  // demselben Step wie die Snare — ein doppelter Backbeat, der mehr nach
+  // "anstrengend" klingt als jede Trefferzahl.
+  const clapTakt = (s: number) => !schlank || takt(s) % 2 === 1;
+  steps[3] = baue((s) => (imTakt(s) === 12 && clapTakt(s) ? hit([60], 96, 22) : takt(s) === 1 && imTakt(s) === 14 ? hit([60], 84, 12) : null));
   wach[3] = i >= 4;
   steps[4] = baue((s) => (s % 4 === (hatsOff ? 2 : 0) ? hit([60], 82, 12) : null));
   wach[4] = i >= 1;
-  steps[5] = baue((s) => (s % 2 === 1 ? hit([60], takt(s) === 3 ? 78 : 70, 8) : null));
+  // Offene HiHat: voll rasselt sie auf JEDEM zweiten Step (32 Treffer in vier
+  // Takten) — offene Hats klingen nach, das ist der ermuedendste Einzelposten
+  // im ganzen Satz. Schlank bleibt ein Achtel-Akzent uebrig.
+  steps[5] = baue((s) => ((schlank ? s % 8 === 7 : s % 2 === 1) ? hit([60], takt(s) === 3 ? 78 : 70, 8) : null));
   wach[5] = i >= 3;
   steps[6] = baue((s) => (s % 8 === 5 ? hit([60], 78, 13) : null));
   wach[6] = i >= 4;
@@ -213,7 +247,21 @@ const AUFBAU_DIMM = 0.85;
 export function baueAufbau(
   rezept: Rezept,
   projekt: Projekt,
-  opts: { startSlot?: number; mfxType?: number; versAb?: number; versExtras?: boolean } = {},
+  opts: {
+    startSlot?: number;
+    mfxType?: number;
+    versAb?: number;
+    versExtras?: boolean;
+    /**
+     * "duenn" laesst die erste Aufbau-Stufe nur jeden zweiten Schlagzeug-Schlag
+     * spielen. Vorgabe ist "voll", denn ohne diese Option gilt die Zusage: alle
+     * Stufen tragen dieselben Steps, nur die Mutes unterscheiden sich. Das ist
+     * kein Zufall, sondern das Spielmodell — entmutet wird stufenweise, und die
+     * Snare aus Stufe 1 soll dieselbe Figur sein, die bis in den Drop traegt.
+     * Wer ausduennt, gibt das bewusst auf.
+     */
+    intro?: "duenn" | "voll";
+  } = {},
 ): { patterns: E2PatternInput[]; hinweise: string[] } {
   const start = opts.startSlot ?? 1;
   const hinweise: string[] = [];
@@ -273,11 +321,27 @@ export function baueAufbau(
           ? { ...p, volume: Math.min(127, (p.volume ?? VOLUME[8]) + 6) }
           : p,
     );
+  /**
+   * Jeden zweiten Schlag der Schlagzeug-/Bass-Parts weglassen. Gezaehlt werden
+   * die TREFFER, nicht die Steps: so bleibt die Figur als Figur erkennbar,
+   * egal auf welchem Raster sie sitzt. Parts 12–15 (Melo, Vocals) bleiben ganz
+   * — Melodien werden nicht zerstueckelt.
+   */
+  const ausduennen = (ps: E2PartInput[]): E2PartInput[] =>
+    ps.map((p, idx) => {
+      if (idx > 11) return p;
+      let nr = 0;
+      const steps = p.steps.map((s) => (s.active ? (nr++ % 2 === 0 ? s : { active: false }) : s));
+      return { ...p, steps, muted: p.muted || !steps.some((s) => s.active) };
+    });
   const basis = { bpm: rezept.bpm, mfxType: opts.mfxType ?? 11, stepLength: 64 as const, alternate13_14: true, alternate15_16: true };
+  const duennesIntro = opts.intro === "duenn";
   const patterns: E2PatternInput[] = stufen.map((an, i) => ({
     ...basis,
     name: `${tag} AUF${i + 1}`.slice(0, 16),
-    parts: (i === stufen.length - 1 ? fill : (x: E2PartInput[]) => x)(dimm(mitMutes(dropParts, an))),
+    parts: (i === stufen.length - 1 ? fill : i === 0 && duennesIntro ? ausduennen : (x: E2PartInput[]) => x)(
+      dimm(mitMutes(dropParts, an)),
+    ),
     chainTo: start + i + 1,
     chainRepeat: 2,
   }));

@@ -35,13 +35,27 @@ export interface Abschnitt {
   kick: KickFigur;
   lagen: Lage[];
 }
+/**
+ * Wie voll ein Pattern gebaut wird.
+ *
+ * "schlank" ist die Vorgabe und entstand aus einem Nutzerbefund (2026-08-26):
+ * die Patterns waren "ueberladen und anstrengend zu hoeren". Nachgemessen lag
+ * auf JEDEM der 64 Sechzehntel mindestens ein Schlag — nirgends Luft. Schlank
+ * duennt die offene HiHat aus, nimmt den Clap von der Snare herunter und gibt
+ * der Kick einen eigenen vierten Takt.
+ *
+ * "voll" ist der alte, dichte Satz — als Rueckweg, falls es am Geraet doch
+ * anders klingt als am Bildschirm gerechnet.
+ */
+export type Dichte = "schlank" | "voll";
+
 export interface Rezept {
   modus: Modus;
   bpm: number;
   begruendung: string;
   thema: Thema;
   abschnitte: Abschnitt[];
-  figuren: { bass: BassFigur; stab: StabFigur; hatsOffbeat: boolean };
+  figuren: { bass: BassFigur; stab: StabFigur; hatsOffbeat: boolean; dichte?: Dichte };
 }
 
 // ── Pools ──────────────────────────────────────────────────────────────────
@@ -140,13 +154,14 @@ function themaFuer(pl: Pools, i: number, melo?: ProjektSample): Thema {
   };
 }
 
-function figurenAus(beschreibung = ""): { kick: KickFigur; bass: BassFigur; stab: StabFigur; hatsOffbeat: boolean } {
+function figurenAus(beschreibung = ""): { kick: KickFigur; bass: BassFigur; stab: StabFigur; hatsOffbeat: boolean; dichte: Dichte } {
   const b = beschreibung.toLowerCase();
   return {
     kick: /kicks?\W{0,3}(roll|wirbel)|(roll\w*|wirbel)\W{0,3}kick|wirbel/.test(b) ? "roll" : /galopp|gallop|offbeat kick/.test(b) ? "galopp" : /hart|hard|brett|druck/.test(b) ? "hart" : "vier",
     bass: /bass\W{0,3}roll|roll\w*\W{0,3}bass/.test(b) ? "roll" : /bass\W{0,3}(acht|8tel|achtel)|(acht\w*|8tel)\W{0,3}bass|schnell/.test(b) ? "acht" : "off",
     stab: /arp/.test(b) ? "arp" : /frage|call/.test(b) ? "frage" : /ruhig|soft|weich|chill/.test(b) ? "ruhig" : "stab",
     hatsOffbeat: !/keine hats|ohne hats/.test(b),
+    dichte: /voll|dicht|fett|brett|wall of/.test(b) ? "voll" : "schlank",
   };
 }
 
@@ -178,7 +193,7 @@ export function regelRezept(projekt: Projekt, wunsch: { modus: Modus; bpm?: numb
     `${melo ? `Melodie "${melo.name}" (${melo.takte} Takte)` : "keine Melodie"} mit Kick-Familie "${thema.kickFamilie}"` +
     `${thema.vers ? `, Vocal-Loop "${thema.vers}"` : ""}; Tempo ${bpm} BPM${wunsch.bpm ? " (gewaehlt)" : " (Vorschlag aus der Taktanalyse)"}; ` +
     `Kick ${fig.kick}, Bass ${fig.bass}, Stab ${fig.stab}.`;
-  return { modus: wunsch.modus, bpm, begruendung, thema, abschnitte, figuren: { bass: fig.bass, stab: fig.stab, hatsOffbeat: fig.hatsOffbeat } };
+  return { modus: wunsch.modus, bpm, begruendung, thema, abschnitte, figuren: { bass: fig.bass, stab: fig.stab, hatsOffbeat: fig.hatsOffbeat, dichte: fig.dichte } };
 }
 
 export function regelRezeptProMelo(projekt: Projekt, bpm?: number): Rezept[] {
@@ -256,7 +271,7 @@ export function pruefeRezept(r: unknown, projekt: Projekt): { rezept: Rezept; ko
   let stab: StabFigur = "stab";
   if (STAB_FIGUREN.includes(f.stab as StabFigur)) stab = f.stab as StabFigur;
   else korr.push("figuren.stab → stab");
-  const figuren = { bass, stab, hatsOffbeat: typeof f.hatsOffbeat === "boolean" ? f.hatsOffbeat : true };
+  const figuren = { bass, stab, hatsOffbeat: typeof f.hatsOffbeat === "boolean" ? f.hatsOffbeat : true, dichte: (f.dichte === "voll" ? "voll" : "schlank") as Dichte };
   const begruendung = typeof x.begruendung === "string" && x.begruendung.trim() ? x.begruendung.trim() : basis.begruendung;
   return { rezept: { modus, bpm, begruendung, thema, abschnitte, figuren }, korrekturen: korr };
 }
