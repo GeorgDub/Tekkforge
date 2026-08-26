@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { taktPassung, tempoSchaetzen, tempoVorschlag, onsetKurve } from "../src/core/tempoAnalyse";
+import { analysiereLied } from "../src/core/liedAnalyse";
 
 function klickspur(bpm: number, sekunden: number, sr = 22050): Float32Array {
   const out = new Float32Array(Math.round(sekunden * sr));
@@ -42,5 +43,35 @@ describe("tempoAnalyse", () => {
   });
   it("tempoVorschlag ohne Treffer → 180", () => {
     expect(tempoVorschlag([0.3, 0.2])).toBe(180);
+  });
+});
+
+describe("Oktavwahl beim Tempo — logarithmisch, nicht linear", () => {
+  /** Welchen Faktor waehlt die Analyse fuer ein gemessenes Tempo? */
+  const faktorFuer = (gemessen: number, zielBpm = 180) => {
+    const still = new Float32Array(44100 * 4);
+    return analysiereLied(still, 44100, { zielBpm, bpmHinweis: gemessen, anzahl: 1 }).k;
+  };
+
+  it("verdoppelt bei 120 BPM eindeutig — auch bei einem Bruchteil mehr oder weniger", () => {
+    // Der Fall, der es zutage brachte: dasselbe Lied wurde als MP3 mit 119,8
+    // gemessen und als WAV mit 120,25. Linear gerechnet kippte die Entscheidung
+    // dazwischen von ×2 auf ×1 — aus 240er Tekk wurde 120er Halbtempo, weil
+    // das Ziel 180 genau in der Mitte zwischen beiden Oktaven liegt.
+    for (const bpm of [119.5, 119.8, 120, 120.25, 121]) {
+      expect(faktorFuer(bpm), `${bpm} BPM`).toBe(2);
+    }
+  });
+
+  it("verdoppelt langsame Lieder", () => {
+    for (const bpm of [70, 80, 90, 100]) expect(faktorFuer(bpm), `${bpm} BPM`).toBe(2);
+  });
+
+  it("lässt Tempi im Zielbereich in Ruhe", () => {
+    for (const bpm of [160, 180, 200, 240]) expect(faktorFuer(bpm), `${bpm} BPM`).toBe(1);
+  });
+
+  it("halbiert, was doppelt so schnell gemessen wurde", () => {
+    for (const bpm of [340, 400]) expect(faktorFuer(bpm), `${bpm} BPM`).toBe(0.5);
   });
 });

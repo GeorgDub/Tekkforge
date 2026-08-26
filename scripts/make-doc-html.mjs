@@ -47,7 +47,7 @@ const abschnitte = [
     titel: "Generator — vom Lied zum Set",
     lead: "Das Herzstück: aus einem Sample-Ordner oder einem ganzen Lied entsteht eine fertige Sample-Bank samt passender Patterns.",
     punkte: [
-      "<b>Lied hineingeben</b> — als Datei oder per YouTube-/SoundCloud-Link. Tempo, Tonart (mit Camelot-Angabe) und die markanten Stellen werden gemessen.",
+      "<b>Lied hineingeben</b> — als Datei oder per YouTube-/SoundCloud-Link. Tempo, Tonart (mit Camelot-Angabe) und die markanten Stellen werden gemessen. Die Oktave des Tempos wird dabei in Verhältnissen entschieden, nicht in Schritten: ein Lied mit gemessenen 120 Schlägen wird zuverlässig als 240er Tekk gefahren und nicht als Halbtempo — vorher entschied darüber ein Bruchteil eines Schlages.",
       "<b>Stems trennen</b> — Demucs zerlegt das Lied in Melodie, Bass, Drums und Vocals. Aus dem Drums-Stem schneidet TekkForge einzelne Kick-, Snare- und Hat-Shots. Wahlweise schnell oder genau. Eine Grafikkarte wird genutzt, sobald sie verfügbar ist — gemessen der Faktor 7: eine Minute Musik in 2,4 statt 17,7 Sekunden.",
       "<b>Ganze Vocalspur</b> — alle hörbaren 8-Takt-Abschnitte werden getrennt und der Reihe nach auf die Patterns verteilt. Wer die Kette durchspielt, hat das Lied einmal komplett gehört. Wahlweise sparsam gespeichert, dann passt doppelt so viel Lied in eine Bank.",
       "<b>Aufbau-Kette</b> — die Patterns verketten sich von einer dünnen Anfangsstufe bis zum Drop; gespielt wird durch Entmuten am Gerät. Auf Wunsch spielt die erste Stufe nur jeden zweiten Schlagzeug-Schlag; Melodie und Vocals bleiben dabei ganz.",
@@ -400,7 +400,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>746</b><span>automatische Tests</span></div>
+    <div><b>751</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>

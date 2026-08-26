@@ -71,7 +71,20 @@ export function analysiereLied(
   const anzahl = opts.anzahl ?? 3;
   const y0 = peakNormalize(pcm, 0.95);
   const bpm = opts.bpmHinweis && opts.bpmHinweis > 0 ? opts.bpmHinweis : tempoSchaetzen(y0, sr);
-  const k = [0.5, 1, 2].reduce((a, b) => (Math.abs(bpm * b - opts.zielBpm) < Math.abs(bpm * a - opts.zielBpm) ? b : a));
+  // Welche Oktave? LOGARITHMISCH vergleichen, nicht linear.
+  //
+  // Linear gerechnet liegt 120 naeher an 180 (60 Schritte) als 240 (60 Schritte)
+  // — es entscheidet ein Bruchteil eines BPM, und genau das ist passiert:
+  // dasselbe Lied wurde als MP3 mit 119,8 gemessen und als WAV mit 120,25, und
+  // die Wahl kippte dazwischen von "verdoppeln" auf "so lassen". Aus 240er Tekk
+  // wurde 120er Halbtempo, ohne dass sich am Lied etwas geaendert haette.
+  //
+  // Tempo wird aber wie Tonhoehe wahrgenommen: in Verhaeltnissen. Im Log-Mass
+  // ist 240 (Faktor 1,33) klar naeher an 180 als 120 (Faktor 0,67), und die
+  // Kippstelle verschwindet. Nebenbei ist das auch musikalisch die richtige
+  // Antwort — 120 ist kein Tekk-Tempo, 240 schon.
+  const oktavAbstand = (v: number) => Math.abs(Math.log2(Math.max(1e-6, v) / opts.zielBpm));
+  const k = [0.5, 1, 2].reduce((a, b) => (oktavAbstand(bpm * b) < oktavAbstand(bpm * a) ? b : a));
   const rate = (bpm * k) / opts.zielBpm;
   const y = Math.abs(rate - 1) < 0.002 ? y0 : polyPhaseResample(y0, Math.round(sr * rate), sr, 1);
   const beatSek = 60 / opts.zielBpm;
