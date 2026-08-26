@@ -7,7 +7,7 @@
  */
 
 import type { EditorPattern, PoolSample } from "../core/editorModel";
-import { EDITOR_DEFAULT_NOTE, EDITOR_GATE_MAX } from "../core/editorModel";
+import { stepDauer, stimmen, type Stimme } from "../core/patternStimmen";
 
 const LOOKAHEAD_S = 0.12;
 const TICK_MS = 30;
@@ -19,6 +19,12 @@ export class PreviewPlayer {
   private nextStepTime = 0;
   private stepIdx = 0;
   private pattern: EditorPattern | null = null;
+  /**
+   * Die klingenden Stimmen je Step, einmal vorab aus `patternStimmen` geholt.
+   * Dieselbe Rechnung benutzt auch der Datei-Renderer — was hier klingt,
+   * kommt dort genauso heraus.
+   */
+  private stimmenAb = new Map<number, Stimme[]>();
   private samples: PoolSample[] = [];
   /** UI-Callback: aktueller Step (für Playhead-Highlight), -1 = gestoppt. */
   onStep: ((step: number) => void) | null = null;
@@ -39,6 +45,12 @@ export class PreviewPlayer {
       buf.getChannelData(0).set(s.pcm);
       this.buffers.set(s.number, buf);
     }
+    this.stimmenAb.clear();
+    for (const v of stimmen(pattern)) {
+      const liste = this.stimmenAb.get(v.step);
+      if (liste) liste.push(v);
+      else this.stimmenAb.set(v.step, [v]);
+    }
     this.stepIdx = 0;
     this.nextStepTime = this.ctx.currentTime + 0.06;
     this.timer = window.setInterval(() => this.tick(), TICK_MS);
@@ -56,7 +68,7 @@ export class PreviewPlayer {
     const ctx = this.ctx;
     const p = this.pattern;
     if (!ctx || !p) return;
-    const stepDur = 60 / p.bpm / 4; // 16tel
+    const stepDur = stepDauer(p.bpm);
     while (this.nextStepTime < ctx.currentTime + LOOKAHEAD_S) {
       this.scheduleStep(this.stepIdx, this.nextStepTime, stepDur);
       const uiStep = this.stepIdx;
@@ -71,28 +83,21 @@ export class PreviewPlayer {
 
   private scheduleStep(step: number, when: number, stepDur: number): void {
     const ctx = this.ctx;
-    const p = this.pattern;
-    if (!ctx || !p) return;
-    for (const part of p.parts) {
-      if (part.muted) continue; // Preview-Mute: Part isolieren
-      const st = part.steps[step];
-      if (!st?.on || part.sampleNumber === null) continue;
-      const buf = this.buffers.get(part.sampleNumber);
+    if (!ctx) return;
+    for (const v of this.stimmenAb.get(step) ?? []) {
+      const buf = this.buffers.get(v.sampleNumber);
       if (!buf) continue;
       const src = ctx.createBufferSource();
       src.buffer = buf;
-      src.playbackRate.value = Math.pow(2, (st.note - EDITOR_DEFAULT_NOTE) / 12);
+      src.playbackRate.value = v.rate;
       const gain = ctx.createGain();
-      gain.gain.value = (st.velocity / 127) * (part.volume / 127);
+      gain.gain.value = v.gain;
       const pan = ctx.createStereoPanner();
-      pan.pan.value = (part.pan - 64) / 63;
+      pan.pan.value = v.pan;
       src.connect(gain).connect(pan).connect(ctx.destination);
       src.start(when);
-      // Gate: Anteil der Steplänge; 96 = Tie → ausklingen lassen
-      if (st.gate < EDITOR_GATE_MAX) {
-        const stopAt = when + Math.max(0.02, (st.gate / EDITOR_GATE_MAX) * stepDur * 4);
-        src.stop(stopAt);
-      }
+      // Gate: null = Tie, also ausklingen lassen.
+      if (v.dauerSteps !== null) src.stop(when + Math.max(0.02, v.dauerSteps * stepDur));
     }
   }
 

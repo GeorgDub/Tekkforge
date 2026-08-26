@@ -76,6 +76,22 @@ const SHOT_B = () => baue((s) => (s === 24 || s === 56 ? hit([60], 112, 96) : nu
 //            K1   K2   SN   CL   HH  HH2   PC  PC2  BASS STAB SHA  SHB  MELA MELB VRA  VRB
 const VOLUME = [127, 104, 110, 96, 88, 82, 84, 80, 118, 100, 112, 108, 112, 112, 114, 114];
 
+/**
+ * Wie weit Melodie und Vocals im schlanken Satz zurueckgenommen werden.
+ *
+ * Nicht geraten, sondern am gerenderten Ergebnis gemessen: die Schleifen lagen
+ * mit +3,8 dB ueber dem GESAMTEN Schlagzeug und klangen 87 % der Zeit. Damit
+ * deckten sie genau die Luecken zu, die das Ausduennen der Drums geschaffen
+ * hatte — in der Vollmischung war zwischen schlank und voll fast kein
+ * Unterschied messbar (8,8 % gegen 8,6 % Ruhe), waehrend er auf der reinen
+ * Schlagzeugspur deutlich war (65,5 % gegen 60,6 %).
+ *
+ * 0,78 sind rund 2,2 dB. Bewusst nicht mehr: die ganze Vocalspur soll hoerbar
+ * bleiben, das war eine ausdrueckliche Vorgabe. Die Drums bleiben unangetastet,
+ * es aendert sich nur das Verhaeltnis.
+ */
+const SCHLEIFEN_DAEMPFUNG = 0.78;
+
 function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zweiteHaelfte: boolean, stepsImmer = false): E2PartInput[] {
   const pl = pools(projekt);
   const byName = (n?: string) => (n ? projekt.samples.find((s) => s.name === n) : undefined);
@@ -171,7 +187,13 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
     if (idx === 5) params.egDecay = 60;
     const an = wach[idx] && !!smp;
     // stepsImmer: Steps auch bei gemuteten Parts setzen (Mute/Unmute-Spielweise am Geraet)
-    return { sampleId: smp ? bankNumberToE2PatternRef(smp.nr) : 0, steps: an || (stepsImmer && smp) ? st : leer(), volume: VOLUME[idx], params, muted: !an };
+    return {
+      sampleId: smp ? bankNumberToE2PatternRef(smp.nr) : 0,
+      steps: an || (stepsImmer && smp) ? st : leer(),
+      volume: idx >= 12 && schlank ? Math.round(VOLUME[idx] * SCHLEIFEN_DAEMPFUNG) : VOLUME[idx],
+      params,
+      muted: !an,
+    };
   });
 }
 

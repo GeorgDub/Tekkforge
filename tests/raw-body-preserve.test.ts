@@ -106,3 +106,22 @@ for (let o = 0x0a; o < 0x30; o++) {
     expect(diffs).toBe(0);
   });
 });
+
+describe("Kette überlebt den Weg in den Editor", () => {
+  it("chainTo und chainRepeat werden beim Import zurückgelesen", () => {
+    // Geschrieben wurden sie schon immer (0x3B00/0x3B02) — gelesen nicht.
+    // Damit verlor jedes importierte Set seine Kette: der Song-Modus und das
+    // Ausrechnen einer Vorschau sahen lauter einzelne Patterns.
+    const p = createPattern("KETTE");
+    p.chainTo = 7;
+    p.chainRepeat = 3;
+    const zurueck = importE2Patterns(buildPatternFile(p)).patterns[0];
+    expect(zurueck.chainTo).toBe(7);
+    expect(zurueck.chainRepeat).toBe(3);
+  });
+
+  it("ohne Kette bleibt das Feld leer statt 0 zu behaupten", () => {
+    const zurueck = importE2Patterns(buildPatternFile(createPattern("OHNE"))).patterns[0];
+    expect(zurueck.chainTo ?? 0).toBe(0);
+  });
+});

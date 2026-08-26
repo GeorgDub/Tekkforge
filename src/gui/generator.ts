@@ -5,6 +5,7 @@
  * Duenne DOM-Schicht; Entscheidungen in core/generatorSession.ts und
  * core/projektStatus.ts.
  */
+import { rendereKette } from "../core/patternRender";
 import { $, download, escapeHtml } from "./shared";
 import { dekodiere } from "./audioDecode";
 import { PreviewPlayer } from "./preview";
@@ -315,6 +316,7 @@ function render(): void {
     ? `
       <div class="zeile"><b>${z.ergebnis.patterns.length} Pattern(s)</b> · ${escapeHtml(z.ergebnis.dateiname)}
         <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button>
+        <button id="genWav" title="Die ganze Kette als WAV ausrechnen — zum Anhoeren auf Kopfhoerern oder unterwegs. Vereinfachte Vorschau ohne Filter und Effekte, also nicht der Klang des Geraets.">→ WAV</button>
         <button id="genGeraet" ${sperre || z.sendet ? "disabled" : ""} title="${escapeHtml(sperre ?? "0x4C-Slot-Dump, laufendes Pattern bleibt unberuehrt")}">→ Geraet ab Slot <span id="genGeraetSlot">${z.ergebnis.startSlot}</span></button>
         ${sperre ? `<span class="fortschritt">${escapeHtml(sperre)}</span>` : ""}</div>
       <div class="liste">${z.ergebnis.patterns
@@ -462,6 +464,7 @@ function verdrahte(): void {
     if (z.ergebnis) download(z.ergebnis.bytes, z.ergebnis.dateiname, "application/octet-stream");
   });
   knopf("genEditor", inEditor);
+  knopf("genWav", alsWav);
   knopf("genGeraet", () => void anGeraet());
   for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genPlay")) {
     b.addEventListener("click", () => hoeren(Number(b.dataset.nr)));
@@ -1018,6 +1021,33 @@ async function generieren(): Promise<void> {
   if (sel && melo) sel.value = melo;
   const slot = document.getElementById("genSlot") as HTMLInputElement | null;
   if (slot) slot.value = String(startSlot);
+}
+
+/**
+ * Die ganze Kette zu einer WAV ausrechnen.
+ *
+ * Gedacht zum Anhoeren dort, wo kein Geraet steht — Kopfhoerer, Handy, Auto.
+ * Gerechnet wird dieselbe vereinfachte Vorschau wie beim Vorhoeren im Fenster
+ * (patternRender): kein Filter, keine Huellkurve, keine Effekte. Der Knopf
+ * sagt das im Titel, damit niemand die Datei fuer den Geraeteklang haelt.
+ */
+function alsWav(): void {
+  if (!z.ergebnis || !z.bank) return;
+  try {
+    if (vorschauFuer !== z.ergebnis) {
+      vorschauProjekt = editorProjectFromE2Files(new Uint8Array(alsAllPat(z.ergebnis.patterns)), z.bank);
+      vorschauFuer = z.ergebnis;
+    }
+    const projekt = vorschauProjekt;
+    if (!projekt) return;
+    const r = rendereKette(projekt.patterns, projekt.samples);
+    const name = z.ergebnis.dateiname.replace(/\.[^.]+$/, "") + "-vorschau.wav";
+    download(encodeWav16(r.pcm, r.sampleRate, r.kanaele), name, "audio/wav");
+    z.meldung = `${name} — ${Math.round(r.sekunden)} s, vereinfachte Vorschau ohne Filter und Effekte.`;
+  } catch (err) {
+    z.meldung = `WAV konnte nicht gebaut werden: ${err instanceof Error ? err.message : String(err)}`;
+  }
+  render();
 }
 
 function inEditor(): void {

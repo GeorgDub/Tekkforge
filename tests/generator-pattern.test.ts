@@ -415,3 +415,37 @@ describe("Vorhören: der Weg vom Generator in den Spieler", () => {
     expect(hoerbar(patterns.length - 1)).toBeGreaterThan(hoerbar(0));
   });
 });
+
+describe("Dichte: die Melodie deckt nicht mehr alles zu", () => {
+  const dropVon2 = (dichte: "schlank" | "voll") => {
+    const { projekt: pv } = projektMitVox();
+    const r = regelRezept(pv, { modus: "jam" });
+    const { patterns } = baueAufbau({ ...r, figuren: { ...r.figuren, dichte } }, pv);
+    return patterns.find((p) => p.name.endsWith("DROP"))!;
+  };
+
+  it("im schlanken Satz sind Melodie und Vocals leiser als im dichten", () => {
+    // Gemessen am gerenderten Ergebnis: die Schleifen lagen +3,8 dB ueber dem
+    // GESAMTEN Schlagzeug und klangen 87 % der Zeit — sie deckten damit genau
+    // die Luecken zu, die das Ausduennen geschaffen hat.
+    const schlank = dropVon2("schlank");
+    const voll = dropVon2("voll");
+    for (const idx of [12, 13, 14, 15]) {
+      expect(schlank.parts[idx].volume!).toBeLessThan(voll.parts[idx].volume!);
+    }
+  });
+
+  it("das Schlagzeug bleibt unangetastet — nur das Verhältnis ändert sich", () => {
+    const schlank = dropVon2("schlank");
+    const voll = dropVon2("voll");
+    for (let idx = 0; idx <= 11; idx++) {
+      expect(schlank.parts[idx].volume).toBe(voll.parts[idx].volume);
+    }
+  });
+
+  it("die Melodie bleibt deutlich hörbar — sie trägt das Lied", () => {
+    const schlank = dropVon2("schlank");
+    // Nicht unter zwei Drittel: die ganze Vocalspur soll hoerbar bleiben.
+    expect(schlank.parts[14].volume!).toBeGreaterThan(114 * 0.66);
+  });
+});

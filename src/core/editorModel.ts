@@ -27,6 +27,7 @@ import {
 import { readPartParamsFromBody } from "./partParams";
 import { parseE2sBank, type E2sBank } from "./e2sBankReader";
 import { E2S_SLOT_INDEX_MAX } from "./constants";
+import { PATTERN_CHAIN_TO_OFF, PATTERN_CHAIN_REPEAT_OFF } from "./e2sExport";
 import {
   bankNumberToE2PatternRef,
   displayNumberToOsc,
@@ -427,6 +428,7 @@ export function importE2Patterns(bytes: Uint8Array, onlyNonEmpty = true): Import
     if (raw[i]) {
       ed.rawBody = raw[i];
       applyPartParamsFromBody(ed);
+      applyChainFromBody(ed);
     }
     return ed;
   });
@@ -507,8 +509,32 @@ export function editorPatternFromBody(body: Uint8Array): EditorPattern {
   if (body.length === E2_BODY_SIZE) {
     pattern.rawBody = Uint8Array.from(body);
     applyPartParamsFromBody(pattern);
+    applyChainFromBody(pattern);
   }
   return pattern;
+}
+
+/**
+ * Liest die Kette (chainTo/chainRepeat) aus dem Roh-Body zurueck.
+ *
+ * Geschrieben wurden die beiden Felder schon immer, gelesen nicht — damit
+ * verlor jedes importierte Set seine Kette. Beim Re-Export fiel das nicht auf,
+ * weil der Roh-Body unveraendert durchgereicht wird; sichtbar wurde es erst,
+ * als etwas die Kette WISSEN musste (Song-Modus, Vorschau ausrechnen).
+ *
+ * chainTo 0 heisst "Ende der Kette" und bleibt undefined, statt eine Null zu
+ * behaupten, die es im Editor-Modell nicht gibt.
+ */
+export function applyChainFromBody(pattern: EditorPattern): void {
+  const body = pattern.rawBody;
+  if (!body || body.length < PATTERN_CHAIN_REPEAT_OFF + 2) return;
+  const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  const zu = view.getUint16(PATTERN_CHAIN_TO_OFF, true);
+  const wdh = view.getUint16(PATTERN_CHAIN_REPEAT_OFF, true);
+  if (zu > 0 && zu <= 250) {
+    pattern.chainTo = zu;
+    if (wdh > 0 && wdh <= 64) pattern.chainRepeat = wdh;
+  }
 }
 
 /** Befüllt part.params aus pattern.rawBody (experimentelle Offsets). */
