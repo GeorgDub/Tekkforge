@@ -243,8 +243,20 @@ function schreibeSettings(s) {
 const KI_MODELL_STANDARD = "claude-opus-5";
 
 /** Anfang/Ende/Laenge, damit ein Fehl-Paste auffaellt, ohne den Key zu zeigen. */
+/**
+ * Anzeige des hinterlegten Keys — bewusst OHNE Zeichen aus dem Key selbst.
+ *
+ * Vorher standen hier die ersten zehn, die letzten vier und die genaue Laenge.
+ * Das ist eine uebliche Maskierung und rekonstruiert keinen Key — aber die
+ * Screenshots dieser App landen in der Praesentation und damit im oeffentlichen
+ * Repository, und dort haben vier echte Zeichen plus die exakte Laenge nichts
+ * zu suchen. Zum Wiedererkennen reicht der Anbieter-Praefix, der bei jedem
+ * Anthropic-Key derselbe ist.
+ */
 function keyVorschau(k) {
-  return k ? `${k.slice(0, 10)}…${k.slice(-4)} · ${k.length} Zeichen` : "";
+  if (!k) return "";
+  const art = k.startsWith("sk-ant-") ? "Anthropic-Key" : "Key";
+  return `${art} hinterlegt`;
 }
 function keyStatusAus(s) {
   const k = typeof s.anthropicApiKey === "string" ? s.anthropicApiKey : "";
