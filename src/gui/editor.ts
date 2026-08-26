@@ -69,6 +69,7 @@ import {
 import { initFxPresetPanel } from "./fxPreset";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
+import { planeSong, songText, type SongSchritt } from "../core/songModus";
 import {
   E2_RAM_MAP,
   RAM_CMD,
@@ -1699,11 +1700,92 @@ function renderAll(): void {
   renderGlobals();
   renderGrid();
   renderPool();
+  // Die Song-Auswahl listet die Patterns — sie muss mitwachsen
+  renderSong();
+}
+
+// ─── Song-Modus ──────────────────────────────────────────────────────────────
+
+/** Die Abfolge lebt fuer die Sitzung; geschrieben wird sie in die Ketten. */
+let song: SongSchritt[] = [];
+
+function songInfo(t: string): void {
+  const el = document.getElementById("songInfo");
+  if (el) el.textContent = t;
+}
+
+function renderSong(): void {
+  const sel = document.getElementById("songPattern") as HTMLSelectElement | null;
+  const liste = document.getElementById("songListe");
+  if (!sel || !liste) return;
+  const gewaehlt = sel.value;
+  sel.innerHTML = project.patterns
+    .map((p, i) => `<option value="${i}">${i + 1}. ${escapeHtml(p.name)}</option>`)
+    .join("");
+  if (gewaehlt && Number(gewaehlt) < project.patterns.length) sel.value = gewaehlt;
+  liste.innerHTML = song.length
+    ? `<div class="startListe" style="font-size:11px">${song
+        .map(
+          (s, i) =>
+            `<div><span class="rolle">${i + 1}</span><span style="flex:1">${escapeHtml(project.patterns[s.pattern]?.name ?? "?")}</span>` +
+            `<span class="startWann">×${s.wiederholungen}</span>` +
+            `<button class="ghost songHoch" data-i="${i}" style="padding:0 5px;font-size:11px" ${i === 0 ? "disabled" : ""}>▲</button>` +
+            `<button class="ghost songWeg" data-i="${i}" style="padding:0 5px;font-size:11px">✕</button></div>`,
+        )
+        .join("")}</div>`
+    : `<p class="sub" style="font-size:10px;margin:0">Noch kein Schritt — Pattern wählen und anhängen.</p>`;
+  for (const b of liste.querySelectorAll<HTMLButtonElement>(".songWeg")) {
+    b.addEventListener("click", () => {
+      song.splice(Number(b.dataset.i), 1);
+      renderSong();
+    });
+  }
+  for (const b of liste.querySelectorAll<HTMLButtonElement>(".songHoch")) {
+    b.addEventListener("click", () => {
+      const i = Number(b.dataset.i);
+      [song[i - 1], song[i]] = [song[i], song[i - 1]];
+      renderSong();
+    });
+  }
+  const takte = song.reduce((s, x) => s + x.wiederholungen, 0);
+  songInfo(song.length ? `${song.length} Abschnitt(e), zusammen ${takte} Durchgänge.` : "");
+}
+
+function richteSongEin(): void {
+  if (!document.getElementById("songPanel")) return;
+  document.getElementById("songAdd")?.addEventListener("click", () => {
+    const p = Number(($("songPattern") as HTMLSelectElement).value);
+    const mal = Math.max(1, Math.min(64, Number(($("songMal") as HTMLInputElement).value) || 1));
+    if (!project.patterns[p]) return;
+    song.push({ pattern: p, wiederholungen: mal });
+    renderSong();
+  });
+  document.getElementById("songLeeren")?.addEventListener("click", () => {
+    song = [];
+    renderSong();
+  });
+  document.getElementById("songSchreiben")?.addEventListener("click", () => {
+    if (!song.length) {
+      songInfo("Erst Abschnitte anhängen.");
+      return;
+    }
+    const r = planeSong(project.patterns, song);
+    project.patterns = r.patterns;
+    if (cur >= project.patterns.length) cur = 0;
+    markDirty();
+    renderAll();
+    renderSong();
+    const kette = songText(project.patterns);
+    songInfo(`${kette}${r.hinweise.length ? " · " + r.hinweise.join(" ") : ""}`);
+  });
+  renderSong();
 }
 
 export function initEditor(): void {
   // Sample-Editor: geänderte Daten zurück in den Pool, Vorhören über denselben
   // Player wie die Pool-Liste
+  richteSongEin();
+
   // Bank ordnen: Nummern verschieben und die Part-Verweise mitziehen
   const ordnenInfo = (t: string) => {
     const el = document.getElementById("poolOrdnenInfo");

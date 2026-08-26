@@ -538,6 +538,24 @@
             <button id="patDup" class="ghost" style="width:100%">Duplizieren</button>
             <div style="height:6px"></div>
             <button id="patDel" class="ghost" style="width:100%">Löschen</button>
+            <details id="songPanel" style="margin-top:10px;border:1px solid var(--border);border-radius:6px;padding:6px">
+              <summary style="cursor:pointer;color:var(--accent2);font-weight:600;font-size:12px">♫ Song — Patterns aneinanderreihen</summary>
+              <p class="sub" style="font-size:10px;margin:6px 0">
+                Baue die Abfolge deines Tracks. Beim Schreiben zeigt jedes Pattern auf das
+                nächste; das Gerät spielt den Song dann von allein durch.
+              </p>
+              <div style="display:flex;gap:4px;align-items:end;flex-wrap:wrap">
+                <select id="songPattern" style="flex:1;min-width:110px;font-size:11px"></select>
+                <input id="songMal" type="number" min="1" max="64" value="4" title="Durchgänge" style="width:52px;font-size:11px" />
+                <button id="songAdd" class="ghost" style="padding:2px 8px;font-size:11px">+ anhängen</button>
+              </div>
+              <div id="songListe" style="margin-top:6px"></div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+                <button id="songSchreiben" class="primary" style="padding:3px 10px;font-size:11px">Kette schreiben</button>
+                <button id="songLeeren" class="ghost" style="padding:3px 10px;font-size:11px">Song leeren</button>
+              </div>
+              <div id="songInfo" class="sub" style="font-size:10px;margin-top:4px"></div>
+            </details>
           </div>
 
           <div class="edMain">

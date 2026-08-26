@@ -124,6 +124,12 @@ export interface EditorPattern {
    * von Grund auf neu gebauten Patterns.
    */
   rawBody?: Uint8Array;
+  /**
+   * Kette: Nummer des Folge-Patterns (1-basiert, 0 = Ende) und wie oft dieses
+   * Pattern laeuft, bevor gewechselt wird. Wird vom Song-Modus gesetzt.
+   */
+  chainTo?: number;
+  chainRepeat?: number;
 }
 
 export interface PoolSample {
@@ -262,6 +268,10 @@ export function patternToE2Input(p: EditorPattern): E2PatternInput {
     bpm: p.bpm,
     stepLength: p.stepLength,
     baseBody: p.rawBody,
+    // Kette aus dem Song-Modus mitgeben; ohne Song sind beide 0/1 und damit
+    // wirkungslos
+    ...(p.chainTo !== undefined ? { chainTo: p.chainTo } : {}),
+    ...(p.chainRepeat !== undefined ? { chainRepeat: p.chainRepeat } : {}),
     parts: p.parts.map((part) => ({
       volume: part.volume,
       pan: part.pan,
