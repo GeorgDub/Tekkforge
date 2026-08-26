@@ -23,6 +23,11 @@ import { detectKorgBankType } from "./core/bankDetect";
 import { parseE2sBank, countE2sSlots } from "./core/e2sBankReader";
 import { buildE2sSampleMap } from "./core/e2sPatternSampleLink";
 import { parseElectribeAllPatBank } from "./core/electribeImport";
+import * as os from "node:os";
+import { spawnSync } from "node:child_process";
+import { parseWav, encodeWav16 } from "./core/wavCodec";
+import { liedZuSet, type StemErgebnis } from "./core/liedZuSet";
+import { alsAllPat } from "./core/patternGen";
 
 const CLI_VERSION = "0.2.0";
 
@@ -31,6 +36,7 @@ const HELP = `TekkForge ${CLI_VERSION} — KORG ESX-1 → Electribe 2 Sampler Co
 Verwendung:
   tekkforge convert <input.esx> [Optionen]     ESX-Backup → .e2sallpat + .all + Mapping
   tekkforge inspect <datei>                    Inhalt anzeigen (.esx / .all / .e2sallpat)
+  tekkforge lied <datei|ordner> [Optionen]     Lied(er) → Tekk-Set (.all + .e2sallpat)
   tekkforge help                               Diese Hilfe
 
 Optionen für convert:
@@ -39,9 +45,21 @@ Optionen für convert:
   --cap <sekunden>    Sample-RAM-Deckel in Mono-Sekunden (Default: ${E2S_SAMPLE_SECONDS_CAP})
   --only <regex>      Nur Patterns, deren Name auf das Muster passt (case-insensitive)
 
-Beispiel:
+Optionen für lied:
+  -o, --out <dir>     Ausgabe-Verzeichnis (Default: ./sets)
+  --stems             Demucs-Trennung (eigene Drums + Vocals) — braucht Python
+  --python <pfad>     Python für die Trennung (Default: python)
+  --bpm <n>           Tempo festlegen statt messen
+  --keine-drums       tekk4-Drums NICHT dazunehmen
+  --jam               Ein Jam-Pattern statt der Aufbau-Kette
+  --sparsam           Vocals mit halber Abtastrate (doppelte Abdeckung)
+
+Beispiele:
   tekkforge convert BOTTROP.ESX -o out/
   → out/BOTTROP.e2sallpat  out/BOTTROP-samples.all  out/BOTTROP-mapping.md
+
+  tekkforge lied "Musik/Ori Wav" --stems -o sets/
+  → je Lied sets/<Name>.all + sets/<Name>.e2sallpat
 `;
 
 function fail(msg: string): never {
@@ -188,6 +206,132 @@ function cmdInspect(argv: string[]): void {
   fail("Unbekanntes Format — erwartet .esx, .all oder .e2sallpat");
 }
 
+/**
+ * Lied(er) → Tekk-Set. Stapelbetrieb: ein Ordner mit sechzehn Liedern soll
+ * nicht sechzehnmal durchgeklickt werden muessen.
+ *
+ * Die Stem-Trennung laeuft ueber scripts/stems.py — dasselbe Skript, das auch
+ * die App benutzt. Ohne `--stems` entstehen nur Melodie-Fenster; dann kommt
+ * das Schlagzeug aus tekk4, und getrennte Vocals gibt es nicht.
+ */
+/** Zeilentrenner fuer die Ausgabe von stems.py (Windows wie POSIX). */
+const NEUZEILE = /\r?\n/;
+
+interface LiedOptionen {
+  rest: string[];
+  out?: string;
+  stems: boolean;
+  python?: string;
+  bpm?: number;
+  keineDrums: boolean;
+  jam: boolean;
+  sparsam: boolean;
+}
+
+function liedOptionen(argv: string[]): LiedOptionen {
+  const o: LiedOptionen = { rest: [], stems: false, keineDrums: false, jam: false, sparsam: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "-o" || a === "--out") o.out = argv[++i];
+    else if (a === "--python") o.python = argv[++i];
+    else if (a === "--bpm") {
+      const v = Number(argv[++i]);
+      if (!Number.isFinite(v) || v < 20 || v > 300) fail("--bpm muss 20..300 sein");
+      o.bpm = v;
+    } else if (a === "--stems") o.stems = true;
+    else if (a === "--keine-drums") o.keineDrums = true;
+    else if (a === "--jam") o.jam = true;
+    else if (a === "--sparsam") o.sparsam = true;
+    else if (a.startsWith("-")) fail(`Unbekannte Option: ${a}`);
+    else o.rest.push(a);
+  }
+  return o;
+}
+
+function cmdLied(args: string[]): void {
+  const opts = liedOptionen(args);
+  const ziel = opts.out ?? "sets";
+  const quelle = opts.rest[0];
+  if (!quelle) fail("Kein Lied und kein Ordner angegeben.");
+  const dateien = fs.statSync(quelle).isDirectory()
+    ? fs
+        .readdirSync(quelle)
+        .filter((f) => /\.wav$/i.test(f))
+        .sort()
+        .map((f) => path.join(quelle, f))
+    : [quelle];
+  if (!dateien.length) fail(`Keine WAV in ${quelle} (MP3/M4A vorher umwandeln).`);
+
+  const tekkPfad = path.resolve("examples/e2s/tekk4.all");
+  const tekkDrums =
+    opts.keineDrums || !fs.existsSync(tekkPfad) ? undefined : new Uint8Array(fs.readFileSync(tekkPfad));
+  const stems = opts.stems ? stemsUeberPython(opts.python ?? "python") : undefined;
+
+  fs.mkdirSync(ziel, { recursive: true });
+  for (const datei of dateien) {
+    const roh = parseWav(new Uint8Array(fs.readFileSync(datei)));
+    const name = path.basename(datei).replace(/\.[^.]+$/, "");
+    const set = liedZuSet(roh.pcm, roh.sampleRate, {
+      name,
+      tekkDrums,
+      stems,
+      bpm: opts.bpm,
+      aufbau: !opts.jam,
+      sparsameVocals: opts.sparsam,
+    });
+    const stamm = name.replace(/_\d+.*$/, "").replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 40) || "set";
+    fs.writeFileSync(path.join(ziel, `${stamm}.all`), new Uint8Array(set.bank));
+    fs.writeFileSync(path.join(ziel, `${stamm}.e2sallpat`), new Uint8Array(alsAllPat(set.patterns)));
+    process.stdout.write(
+      `${stamm}: ${set.gemessen.toFixed(1)}×${set.oktave} = ${set.bpm} BPM · ` +
+        `${set.projekt.samples.length} Samples (${set.zaehler.drums} Drums, ${set.zaehler.vox} Vocals) · ` +
+        `${set.patterns.length} Patterns
+`,
+    );
+    for (const h of set.hinweise) process.stdout.write(`   ! ${h}
+`);
+  }
+  process.stdout.write(`
+${dateien.length} Set(s) in ${path.resolve(ziel)}
+`);
+}
+
+/**
+ * Stem-Trennung ueber scripts/stems.py — dasselbe Skript wie in der App.
+ * Die Fenster gehen als Mono-WAV in einen Temp-Ordner, das Skript legt
+ * <id>-melo/-vox/-drums.wav daneben, und wir lesen sie zurueck.
+ */
+function stemsUeberPython(python: string) {
+  return (fenster: { id: string; pcm: Float32Array; nurVox: boolean }[]): StemErgebnis[] => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tekkforge-stems-"));
+    try {
+      const liste = fenster.map((f) => {
+        const wav = path.join(tmp, `${f.id}.wav`);
+        fs.writeFileSync(wav, encodeWav16(f.pcm, 44100, 1));
+        return { id: f.id, wav, nurVox: f.nurVox };
+      });
+      const anfrage = path.join(tmp, "anfrage.json");
+      fs.writeFileSync(anfrage, JSON.stringify({ fenster: liste, ziel: tmp, qualitaet: "schnell" }));
+      const res = spawnSync(python, [path.resolve("scripts/stems.py"), anfrage], {
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
+      if (res.status !== 0) fail(`Stem-Trennung fehlgeschlagen: ${res.stderr?.slice(-400) ?? res.error}`);
+      const letzte = res.stdout.trim().split(NEUZEILE).pop() ?? "{}";
+      const raus = JSON.parse(letzte) as { fenster: { id: string; melo: string | null; vox: string | null; drums: string | null }[] };
+      const lies = (p: string | null): Float32Array | null =>
+        p && fs.existsSync(p) ? parseWav(new Uint8Array(fs.readFileSync(p))).pcm : null;
+      return raus.fenster.map((f) => ({ id: f.id, melo: lies(f.melo), vox: lies(f.vox), drums: lies(f.drums) }));
+    } finally {
+      try {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      } catch {
+        /* Temp bleibt liegen — unkritisch */
+      }
+    }
+  };
+}
+
 const [, , cmd, ...rest] = process.argv;
 switch (cmd) {
   case "convert":
@@ -195,6 +339,9 @@ switch (cmd) {
     break;
   case "inspect":
     cmdInspect(rest);
+    break;
+  case "lied":
+    cmdLied(rest);
     break;
   case "help":
   case "--help":
