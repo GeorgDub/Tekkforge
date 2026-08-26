@@ -233,6 +233,26 @@ Der Laufwerksbuchstabe wechselt; nie fest verdrahten.
 - **Piping in den REPL braucht `sleep`s, der Batch-Modus nicht.** Eine Pipe
   wartet nicht auf den Prompt; darum `--run`, das jedes `await` abwartet.
 
+- **In `eval` darf kein Semikolon stehen.** `--run` trennt die Kommandos am
+  `;`, und zwar stumpf — ein `const s = await x; return s.y` wird mitten
+  durchgeschnitten, und der Rest landet als eigenes (unbekanntes) Kommando.
+  Die Fehlermeldung zeigt dann auf eine Zeile, die so nie gemeint war.
+
+  Statt Anweisungen also Ausdrücke schreiben: Komma-Ausdruck, Pfeilfunktion,
+  `.then(...)` statt `await`. Promises löst der Treiber selbst auf.
+
+  ```bash
+  # falsch — wird an beiden ; zerteilt
+  eval const s = await bridge.lesen(); return s.text.length
+
+  # richtig
+  eval bridge.lesen().then(s => s ? s.text.length : null)
+  ```
+
+  Elemente lieber über einen einzigen Selektor greifen als in mehreren
+  Schritten: `.stepCell[data-part="0"][data-step="4"]` statt erst die Zeile
+  und dann die Zelle zu suchen.
+
 ## Troubleshooting
 
 - **`dist/index.html fehlt`** → `pnpm build:gui`. Der Treiber prüft das vorab
