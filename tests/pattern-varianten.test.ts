@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { createPattern, EDITOR_MAX_STEPS, type EditorPattern } from "../src/core/editorModel";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import {
+  buildPatternFile,
+  createPattern,
+  importE2Patterns,
+  EDITOR_MAX_STEPS,
+  type EditorPattern,
+} from "../src/core/editorModel";
 import { baueVariante, kettenNachEinschub, VARIANTEN, type VariantenArt } from "../src/core/patternVarianten";
 
 /** Setzt Steps auf einem Part; `muster` ist eine Liste von Step-Indizes. */
@@ -38,8 +46,8 @@ describe("baueVariante — allgemein", () => {
     for (const art of Object.keys(VARIANTEN) as VariantenArt[]) {
       const v = baueVariante(p, art);
       expect(v.name).not.toBe(p.name);
-      // Das Gerät zeigt 18 Zeichen; alles darüber wird beim Export abgeschnitten.
-      expect(v.name.length).toBeLessThanOrEqual(18);
+      // Das Namensfeld im Pattern hat 16 Byte; alles darüber schneidet der Export ab.
+      expect(v.name.length).toBeLessThanOrEqual(16);
     }
   });
 
@@ -320,5 +328,61 @@ describe("kettenNachEinschub", () => {
     p[0].chainTo = 2;
     kettenNachEinschub(p, 2); // ans Ende gehängt
     expect(p[0].chainTo).toBe(2);
+  });
+});
+
+// ─── Der Weg bis in die Datei ────────────────────────────────────────────────
+//
+// Die Tests oben pruefen das Modell. Zwei Varianten aendern aber Felder, die
+// auch im uebernommenen Rohkoerper eines importierten Patterns stehen: "halb"
+// die Step-Laenge, "duenn" die Stummschaltung. Wenn dort der Rohkoerper
+// gewinnt, sieht das Modell richtig aus und das Geraet spielt trotzdem etwas
+// anderes — still. Also einmal wirklich exportieren und zurueckimportieren.
+
+const BEISPIEL = path.resolve(process.cwd(), "examples", "e2s", "CHORDTEST.e2spat");
+
+(fs.existsSync(BEISPIEL) ? describe : describe.skip)("Varianten überstehen den Export", () => {
+  const geladen = () => importE2Patterns(new Uint8Array(fs.readFileSync(BEISPIEL))).patterns[0];
+
+  it("das Beispiel bringt einen Rohkörper mit — sonst prüft der Test nichts", () => {
+    const p = geladen();
+    expect(p.rawBody).toBeDefined();
+    expect(p.stepLength).toBe(16);
+  });
+
+  it("halbes Tempo: die verdoppelte Länge steht auch in der Datei", () => {
+    const p = geladen();
+    setze(p, 0, [0, 4, 8, 12]);
+    const v = baueVariante(p, "halb");
+    const zurueck = importE2Patterns(buildPatternFile(v)).patterns[0];
+    expect(zurueck.stepLength).toBe(32);
+    expect(aktive(zurueck, 0)).toEqual([0, 8, 16, 24]);
+  });
+
+  it("ausdünnen: die Stummschaltung steht auch in der Datei", () => {
+    const p = geladen();
+    for (let i = 0; i < 16; i++) p.parts[5].steps[i].on = false;
+    setze(p, 5, [1, 3, 5, 7]); // nur Zwischenschritte → Part wird leer
+    setze(p, 0, [0, 4, 8, 12]);
+    const v = baueVariante(p, "duenn");
+    const zurueck = importE2Patterns(buildPatternFile(v)).patterns[0];
+    expect(aktive(zurueck, 5)).toEqual([]);
+    expect(zurueck.parts[5].muted).toBe(true);
+    expect(zurueck.parts[0].muted).toBeFalsy();
+  });
+
+  it("der Name der Variante passt ungekürzt ins Namensfeld", () => {
+    const p = geladen();
+    p.name = "AMPHEGOTT VOCAL 1"; // länger als das Feld
+    const v = baueVariante(p, "rueckwaerts");
+    const zurueck = importE2Patterns(buildPatternFile(v)).patterns[0];
+    expect(zurueck.name.trim()).toBe(v.name);
+  });
+
+  it("Fill: der Wirbel steht auch in der Datei", () => {
+    const p = geladen();
+    const v = baueVariante(p, "fill");
+    const zurueck = importE2Patterns(buildPatternFile(v)).patterns[0];
+    expect(aktive(zurueck, 2)).toEqual([12, 13, 14, 15]);
   });
 });

@@ -85,8 +85,12 @@ export interface VariantenOptionen {
   fillPart?: number;
 }
 
-/** Geraetename: 18 Zeichen, Grossbuchstaben — laenger schneidet der Export ab. */
-const NAME_MAX = 18;
+/**
+ * Das Namensfeld im Pattern ist 16 Byte lang (ELECTRIBE_REAL_NAME_OFFSET,
+ * ASCII, NUL-gefuellt). Wer laenger benennt, verliert den Rest beim Export —
+ * still. Also hier schon kuerzen, damit im Editor steht, was auch ankommt.
+ */
+const NAME_MAX = 16;
 
 export function variantenName(quelle: string, art: VariantenArt): string {
   const kuerzel = VARIANTEN[art].kuerzel;
