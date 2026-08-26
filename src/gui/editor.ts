@@ -71,6 +71,8 @@ import { initFxPresetPanel } from "./fxPreset";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
+import { rendereKette } from "../core/patternRender";
+import { encodeWav16 } from "../core/wavCodec";
 import { Verlauf } from "../core/verlauf";
 import {
   E2_RAM_MAP,
@@ -1824,6 +1826,13 @@ function renderSong(): void {
         )
         .join("")}</div>`
     : `<p class="sub" style="font-size:10px;margin:0">Noch kein Schritt — Pattern wählen und anhängen.</p>`;
+  // Eine Kette, die schon im Projekt steckt (geschrieben ODER importiert),
+  // gehört angezeigt. Seit die Ketten-Felder beim Import zurückgelesen werden,
+  // sieht man hier auch die Kette eines fremden Sets.
+  const info = document.getElementById("songInfo");
+  if (info && !song.length && project.patterns.some((p) => (p.chainTo ?? 0) > 0)) {
+    info.textContent = `Vorhandene Kette: ${songText(project.patterns)}`;
+  }
   for (const b of liste.querySelectorAll<HTMLButtonElement>(".songWeg")) {
     b.addEventListener("click", () => {
       song.splice(Number(b.dataset.i), 1);
@@ -1867,6 +1876,21 @@ function richteSongEin(): void {
     renderSong();
     const kette = songText(project.patterns);
     songInfo(`${kette}${r.hinweise.length ? " · " + r.hinweise.join(" ") : ""}`);
+  });
+  document.getElementById("songWav")?.addEventListener("click", () => {
+    const start = project.patterns.findIndex((p) => (p.chainTo ?? 0) > 0);
+    if (start < 0) {
+      songInfo("Keine Kette da — erst eine schreiben oder ein verkettetes Set importieren.");
+      return;
+    }
+    try {
+      const r = rendereKette(project.patterns, project.samples, { start });
+      const stamm = safeStem(project.patterns[start].name || "kette");
+      download(encodeWav16(r.pcm, r.sampleRate, r.kanaele), `${stamm}-kette.wav`, "audio/wav");
+      songInfo(`${stamm}-kette.wav — ${Math.round(r.sekunden)} s, vereinfachte Vorschau ohne Filter und Effekte.`);
+    } catch (err) {
+      songInfo(`WAV ging nicht: ${err instanceof Error ? err.message : String(err)}`);
+    }
   });
   renderSong();
 }
