@@ -102,3 +102,52 @@ describe("e2Groove", () => {
     expect(decodeGroove(encodeGroove(g, initGrooveBytes())).laenge).toBe(1);
   });
 });
+
+describe("erkenneStepBasis: kürzere Vorlagen", () => {
+  /**
+   * Echte Geräte-Vorlage, am 2026-08-26 aus dem RAM gelesen ("Conga 1"):
+   * 16 Steps ab 0x30, dahinter Nullen. Genau daran schlug die Schutzprüfung
+   * fehl — sie verlangte 64 Marker und fand 16, obwohl das Längenbyte bei
+   * 0x22 sauber 16 sagte. Jede korrekte Vorlage unter 64 Steps wurde damit
+   * als verdächtig gemeldet.
+   */
+  function geraeteGroove(steps: number): Uint8Array {
+    const b = new Uint8Array(GROOVE_SIZE);
+    b.set([0x47, 0x56, 0x53, 0x54], 0); // "GVST"
+    b[0x0c] = 0xff;
+    for (const [i, c] of Array.from("Conga 1").entries()) b[0x10 + i] = c.charCodeAt(0);
+    b[0x22] = steps;
+    b[0x23] = 0xff;
+    for (let i = 0; i < steps; i++) {
+      const o = GROOVE_STEP_BASIS + i * 4;
+      b[o] = 0x00;
+      b[o + 1] = 0x15;
+      b[o + 2] = 0x50;
+      b[o + 3] = 0xff;
+    }
+    return b;
+  }
+
+  it("erkennt eine 16-Step-Vorlage vom Gerät", () => {
+    expect(erkenneStepBasis(geraeteGroove(16))).toBe(GROOVE_STEP_BASIS);
+  });
+
+  it("erkennt auch 32 und volle 64 Steps", () => {
+    expect(erkenneStepBasis(geraeteGroove(32))).toBe(GROOVE_STEP_BASIS);
+    expect(erkenneStepBasis(geraeteGroove(64))).toBe(GROOVE_STEP_BASIS);
+  });
+
+  it("meldet weiterhin, wenn innerhalb der Länge ein Marker fehlt", () => {
+    // Das ist der Fall, vor dem die Prüfung schützen soll: die Tabelle liegt
+    // anders, als wir denken. Ein Loch mitten drin darf nicht durchgehen.
+    const b = geraeteGroove(16);
+    b[GROOVE_STEP_BASIS + 7 * 4 + 3] = 0x00;
+    expect(erkenneStepBasis(b)).toBeNull();
+  });
+
+  it("eine Länge von 0 ist kein Freibrief", () => {
+    const b = geraeteGroove(16);
+    b[0x22] = 0;
+    expect(erkenneStepBasis(b)).toBeNull();
+  });
+});

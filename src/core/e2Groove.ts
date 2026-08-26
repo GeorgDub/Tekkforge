@@ -62,13 +62,22 @@ const klemme = (v: number, min: number, max: number): number => Math.max(min, Ma
  * Gibt null zurueck, wenn nirgends 64 Steps am Stueck passen.
  */
 export function erkenneStepBasis(bytes: Uint8Array): number | null {
+  // Geprueft wird nur so weit, wie die Vorlage SELBST sagt.
+  //
+  // Vorher waren es stur 64 Steps. Am Geraet gelesen (2026-08-26) hat die
+  // Werksvorlage "Conga 1" aber 16 Steps, und dahinter stehen Nullen — die
+  // Pruefung fand 16 Marker statt 64 und meldete jede korrekte kurze Vorlage
+  // als verdaechtig. Die Laenge steht sauber im Byte bei 0x22; sie zu ignorieren
+  // machte den Schutz nicht strenger, sondern unbrauchbar.
+  const laenge = bytes[LAENGE_OFF] ?? 0;
+  if (laenge < 1 || laenge > GROOVE_STEPS) return null;
   for (const basis of [GROOVE_STEP_BASIS, 0x24]) {
     let treffer = 0;
-    for (let i = 0; i < GROOVE_STEPS; i++) {
+    for (let i = 0; i < laenge; i++) {
       const o = basis + i * STEP_STRIDE + 3;
       if (o < bytes.length && bytes[o] === 0xff) treffer++;
     }
-    if (treffer === GROOVE_STEPS) return basis;
+    if (treffer === laenge) return basis;
   }
   return null;
 }
