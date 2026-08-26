@@ -155,6 +155,23 @@ function standSetzen(neu: EditorProject): void {
   zeigeVerlaufKnoepfe();
 }
 
+/**
+ * Das ganze Projekt wurde ersetzt (Import, Datei geoeffnet, neues Projekt,
+ * geretteter Stand).
+ *
+ * Der Verlauf muss dabei weg UND der gemerkte Vorzustand neu gesetzt werden.
+ * Sonst zeigt `standVorher` weiter auf das ALTE Projekt, und die naechste
+ * Aenderung legt diesen veralteten Stand als "davor" ab — ein einziges
+ * Rueckgaengig warf dann den kompletten Import weg statt nur die Aenderung.
+ * Genau so gefunden: importieren, Namen tippen, einmal zurueck — und das
+ * importierte Pattern war fort.
+ */
+function projektErsetzt(): void {
+  verlauf.leeren();
+  standVorher = klonProjektFuerVerlauf(project);
+  zeigeVerlaufKnoepfe();
+}
+
 function schrittZurueck(): void {
   const stand = verlauf.zurueck(klonProjektFuerVerlauf(project));
   if (!stand) return;
@@ -185,6 +202,7 @@ export function loadProject(next: EditorProject, opts: { confirmDirty?: boolean 
   dirty = false;
   void sicherung?.erledigt();
   lastNote.clear();
+  projektErsetzt();
   renderAll();
   return true;
 }
@@ -890,6 +908,7 @@ async function openProject(file: File): Promise<void> {
     cur = 0;
     dirty = false;
     void sicherung?.erledigt();
+    projektErsetzt();
     renderAll();
   } catch (err) {
     alert(err instanceof Error ? err.message : String(err));
@@ -2025,6 +2044,7 @@ export function initEditor(): void {
     cur = 0;
     dirty = false;
     void sicherung?.erledigt();
+    projektErsetzt();
     renderAll();
   });
   const projFile = $<HTMLInputElement>("projFile");
@@ -2139,8 +2159,7 @@ async function rettungAnbieten(): Promise<void> {
       // Bleibt absichtlich "geaendert": der Stand steht ja noch nirgends als
       // richtige Projektdatei.
       dirty = true;
-      verlauf.leeren();
-      standVorher = klonProjektFuerVerlauf(project);
+      projektErsetzt();
       leiste.classList.add("hidden");
       sicherung?.fortsetzen();
       renderAll();
