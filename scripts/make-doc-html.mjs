@@ -31,6 +31,7 @@ const abschnitte = [
       "Eigene WAVs importieren, den Parts zuweisen und direkt am Rechner vorhören.",
       "Sample-Pool als Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken gegen das ~24-MB-Sample-RAM.",
       "<b>Sample-Editor</b> — Wellenform ansehen, Anfang und Ende ziehen, stille Ränder finden, kürzen, ein- und ausblenden, normalisieren, umkehren und den Loop setzen.",
+      "<b>Bank ordnen</b> — Lücken schließen oder nach Name, Länge oder Nummer sortieren. Jede Nummernänderung zieht die Verweise der Patterns mit, damit nichts ins Leere zeigt.",
       "Export als <code>.e2spat</code> (Einzel-Pattern), <code>.e2sallpat</code> (Bank mit 250 Slots) und <code>.all</code> (Sample-Bank).",
       "Direkter Draht zum Gerät: Patterns per SysEx in einen Slot schreiben oder von dort holen.",
     ],
@@ -44,7 +45,7 @@ const abschnitte = [
     punkte: [
       "<b>Lied hineingeben</b> — als Datei oder per YouTube-/SoundCloud-Link. Tempo, Tonart (mit Camelot-Angabe) und die markanten Stellen werden gemessen.",
       "<b>Stems trennen</b> — Demucs zerlegt das Lied in Melodie, Bass, Drums und Vocals. Aus dem Drums-Stem schneidet TekkForge einzelne Kick-, Snare- und Hat-Shots.",
-      "<b>Ganze Vocalspur</b> — alle hörbaren 8-Takt-Abschnitte werden getrennt und der Reihe nach auf die Patterns verteilt. Wer die Kette durchspielt, hat das Lied einmal komplett gehört.",
+      "<b>Ganze Vocalspur</b> — alle hörbaren 8-Takt-Abschnitte werden getrennt und der Reihe nach auf die Patterns verteilt. Wer die Kette durchspielt, hat das Lied einmal komplett gehört. Wahlweise sparsam gespeichert, dann passt doppelt so viel Lied in eine Bank.",
       "<b>Aufbau-Kette</b> — die Patterns verketten sich von einer dünnen Anfangsstufe bis zum Drop; gespielt wird durch Entmuten am Gerät.",
       "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Snare-Fill, im Drop gehen die Kicks auf Maximum.",
       "<b>KI-Rezept</b> — auf Wunsch übersetzt Claude eine Beschreibung wie „düster, Vocal nur im Break“ in das Arrangement.",
@@ -231,6 +232,8 @@ const firmwareSeiten = `
       <tr><td>Belegungszähler der Presets</td><td>ein Byte</td><td class="halb">nur lesen</td></tr>
     </tbody>
   </table>
+  <h3 class="unter-h">Komplettsicherung</h3>
+  <p>Alles Lesbare am Stück auslesen und als Datei ablegen — Effekt-Presets, Groove-Vorlagen, Zähler; rund 100 kB. Umgekehrt lässt sich das Gerät gegen eine ältere Sicherung halten: TekkForge nennt dann genau die Bereiche, die sich seither geändert haben, mit Byte-Zahl und erster Fundstelle. Bricht die Lesung unterwegs ab, entsteht bewusst <b>keine</b> Datei — eine lückenhafte Sicherung wäre schlimmer als gar keine.</p>
   <h3 class="unter-h">Die Sicherungen</h3>
   <ul>
     <li><b>Nur der Arbeitsspeicher, niemals der Flash.</b> Für die Flash-Befehle gibt es absichtlich keinen Bauplan im Werkzeug: Ein Fehler im Arbeitsspeicher ist nach dem Aus- und Einschalten weg, ein Fehler im Flash bleibt für immer.</li>
@@ -247,7 +250,6 @@ const firmwareSeiten = `
   <h2>Was über den Speicherzugriff noch möglich wird</h2>
   <p class="lead">Effekt-Presets und Groove-Vorlagen sind inzwischen gebaut. Was bleibt, ist nicht der Zugang, sondern das Wissen, welches Byte welche Bedeutung hat.</p>
   <div class="karten">
-    <div class="karte"><h3>Sicherung des ganzen Geräts</h3><p>Alle erreichbaren Bereiche in einem Rutsch auslesen und als Sicherung ablegen — ein Rückweg, den es bisher nur für einzelne Blöcke gibt.</p></div>
     <div class="karte"><h3>Die versteckten Schalter finden</h3><p>Drei Einstellungen gibt es nur über MIDI; veröffentlicht ist eine. Mit Werkbank und Spiegel lassen sich die anderen suchen — etwa der Schalter, der das Gerät überhaupt erst zurückmelden lässt.</p></div>
     <div class="karte"><h3>Regler-Bewegungen schreiben</h3><p>Aufgezeichnete Bewegungen werden heute nur gelesen. Sie auch setzen zu können, würde Arrangements in Bewegung bringen.</p></div>
     <div class="karte"><h3>Sequenz-Steps von außen</h3><p>Das Gerät nimmt inzwischen auch Befehle für einzelne Schritte entgegen. Was die Kennziffern bedeuten, steht nirgends — genau dafür ist die Werkbank da.</p></div>
@@ -270,7 +272,7 @@ const roadmap = [
   },
   {
     titel: "Vocals sparsamer speichern",
-    wann: "geplant",
+    wann: "gebaut, ungeprüft",
     text: "Ein vocal-lastiges Lied bringt schnell 30 Segmente mit — mehr, als die ~24 MB Sample-RAM auf einmal fassen. Ideen: Vocals mit halber Abtastrate ablegen (doppelte Abdeckung) oder klanglich ähnliche Abschnitte zusammenfassen.",
   },
   {
@@ -392,7 +394,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>592</b><span>automatische Tests</span></div>
+    <div><b>605</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -452,7 +454,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>592 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>605 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
