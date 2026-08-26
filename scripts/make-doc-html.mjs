@@ -55,6 +55,7 @@ const abschnitte = [
       "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Sechzehntel-Wirbel auf der Snare, der von der gedimmten Aufbau-Höhe bis ans Maximum ansteigt, und im Drop gehen die Kicks auf 127. Den Wirbel bauen Generator und Pattern-Editor aus derselben Definition — eine Verbesserung trifft damit immer beide.",
       "<b>Als WAV ausrechnen</b> — die ganze Kette wird zu einer Audiodatei gerechnet, zum Anhören auf Kopfhörern oder unterwegs. Dieselbe vereinfachte Vorschau wie beim Vorhören: kein Filter, keine Effekte, also nicht der Geräteklang — aber genug, um Dichte, Aufbau und Verhältnis der Ebenen zu beurteilen, ohne dass das Gerät in Reichweite ist. Und es macht die eigenen Behauptungen nachprüfbar: dass der Wirbel wirklich ansteigt, dass die Kick sich nicht wiederholt und dass der schlanke Satz mehr Ruhe lässt, steht als Messung am gerenderten Ergebnis in den Tests.",
       "<b>Vorhören am Rechner</b> — jedes erzeugte Pattern lässt sich sofort anhören, ohne Gerät und ohne Umweg über den Editor. Gespielt wird der Weg über die fertige Bank-Datei, samt Stummschaltungen, Anschlag, Lautstärke, Panorama und Tonhöhe: was hier klingt, klingt auch dort. Damit lassen sich Varianten wie schlanker gegen dichten Satz direkt vergleichen.",
+      "<b>Stapelbetrieb ohne Fenster</b> — <code>tekkforge lied &lt;ordner&gt;</code> fährt denselben Weg für einen ganzen Ordner: je Lied eine Sample-Bank und eine Pattern-Bank, auf Wunsch mit Stem-Trennung. Sechzehn Lieder umzusetzen ist damit ein Aufruf statt sechzehn Durchgängen. Gemessen: ein Lied mit Trennung in knapp einer Minute auf der Grafikkarte.",
       "<b>KI-Rezept</b> — auf Wunsch übersetzt Claude eine Beschreibung wie „düster, Vocal nur im Break“ in das Arrangement.",
     ],
     bild: ["generator-lied", "Ein kompletter Durchlauf: 30 Vocal-Segmente aus dem Lied, 5 geschnittene Drum-Shots, daraus 15 verkettete Patterns im gemessenen Tempo von 209,5 BPM."],
@@ -400,7 +401,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>751</b><span>automatische Tests</span></div>
+    <div><b>760</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
