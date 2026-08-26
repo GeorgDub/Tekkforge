@@ -195,7 +195,10 @@ const firmwareSeiten = `
     <li><b>Eigene Länge</b> — steht sie auf 13 statt 64, läuft das Muster gegen den Takt und ergibt schiefe, wandernde Grooves.</li>
     <li>Auch hier: als Datei sichern und weitergeben.</li>
   </ul>
-  ${img("groove", "Die Step-Tabelle mit gesetztem Swing: jeder zweite Step um 24 nach hinten, dazwischen unverändert.")}
+  <h3 class="unter-h">Groove aus einem Lied</h3>
+  <p>Der interessanteste Weg zu einer eigenen Vorlage führt über ein Vorbild: Ein Stück klingt nicht deshalb lebendig, weil die Schläge genau auf dem Raster liegen, sondern weil sie <b>daneben</b> liegen — mal früher, mal später, mit wechselnder Anschlagstärke. TekkForge misst genau das. Lied hineingeben, Tempo und Anschläge werden bestimmt, ein Raster darübergelegt, und für jeden Schritt festgehalten, wie weit der Schlag danebenliegt. Über alle Takte gemittelt, damit ein einzelner Ausreißer nicht die ganze Vorlage verbiegt.</p>
+  <p>Das Ergebnis ist eine Vorlage, die dein eigenes Pattern im Timing-Gefühl des Vorbilds laufen lässt.</p>
+  ${img("groove-aus-lied", "Aus einem echten Track gemessen: 105 BPM, alle 64 Schritte belegt, 19 davon spürbar versetzt — kleine Abweichungen von wenigen Einheiten, dazu leicht schwankende Anschlagstärke.")}
   <div class="hinweis"><b>Vorsicht, wo Quellen sich widersprechen:</b> Zwei Beschreibungen des Formats nennen unterschiedliche Stellen für die Step-Tabelle. TekkForge folgt der Fassung des Hacktribe-Autors und prüft beim Lesen zusätzlich ein Muster, das nur an der richtigen Stelle auftritt. Passt es nicht, verweigert der Schreibknopf — lieber nichts schreiben als zwölf Byte daneben.</div>
 </section>
 
@@ -389,7 +392,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>584</b><span>automatische Tests</span></div>
+    <div><b>592</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -449,7 +452,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>584 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>592 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>

@@ -32,6 +32,8 @@ import {
   type Groove,
 } from "../core/e2Groove";
 import { baueMidiThru } from "../core/fxLive";
+import { grooveAusAudio } from "../core/grooveAusLied";
+import { dekodiere } from "./audioDecode";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
 
 export interface FxPresetHooks {
@@ -394,6 +396,37 @@ function sichern(): void {
   setStatus(`„${roh}“ als ${name}.${endung} gesichert.`);
 }
 
+/**
+ * Timing eines Lieds messen und als Groove-Vorlage uebernehmen. Der Rest der
+ * Vorlage (Name, Laenge) bleibt bearbeitbar — geschrieben wird erst auf Knopf.
+ */
+async function grooveAusLied(f: File): Promise<void> {
+  setStatus(`Lese ${f.name} …`);
+  try {
+    const { pcm } = await dekodiere(f);
+    setStatus("Messe Tempo und Anschläge …");
+    await new Promise((r) => setTimeout(r, 0));
+    const r = grooveAusAudio(pcm, 44100, { name: f.name.replace(/\.[^.]+$/, "") });
+    if (r.belegteSteps === 0) {
+      setStatus("Keine Anschläge gefunden — anderes Material probieren (am besten mit deutlichen Drums).");
+      return;
+    }
+    // Auf Groove-Ansicht umschalten, falls gerade ein Preset offen war
+    ($("fxpArt") as HTMLSelectElement).value = "groove";
+    groove = r.groove;
+    basis = basis && basis.length === GROOVE_SIZE ? basis : initGrooveBytes();
+    quelleAdresse = null;
+    render();
+    const versetzt = r.groove.steps.filter((s) => Math.abs(s.trigger) >= 4).length;
+    setStatus(
+      `${Math.round(r.bpm)} BPM gemessen · ${r.belegteSteps} von ${r.groove.laenge} Steps belegt · ` +
+        `${versetzt} davon spürbar versetzt. Zum Schreiben erst den Ziel-Platz vom Gerät lesen.`,
+    );
+  } catch (e) {
+    setStatus("Groove aus Lied fehlgeschlagen: " + (e instanceof Error ? e.message : String(e)));
+  }
+}
+
 async function ausDatei(f: File): Promise<void> {
   const bytes = new Uint8Array(await f.arrayBuffer());
   const erwartet = istGroove() ? GROOVE_SIZE : FX_PRESET_SIZE;
@@ -428,6 +461,11 @@ async function ausDatei(f: File): Promise<void> {
   setStatus(`„${preset.name}“ geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen (Vorher-Stand).`);
 }
 
+/** „Groove aus Lied" gibt es nur bei Groove-Vorlagen. */
+function zeigeGrooveKnopf(): void {
+  document.getElementById("fxpGrooveLied")?.classList.toggle("hidden", !istGroove());
+}
+
 export function initFxPresetPanel(h: FxPresetHooks): void {
   hooks = h;
   const artSel = document.getElementById("fxpArt") as HTMLSelectElement | null;
@@ -450,7 +488,9 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
     }
     render();
     setStatus("bereit");
+    zeigeGrooveKnopf();
   });
+  zeigeGrooveKnopf();
   // MIDI-Thru: versteckte Global-Einstellung aus Diskussion #189 des
   // hacktribe-Repos — im Geraetemenue gibt es sie nicht.
   const thru = (an: boolean) => {
@@ -469,6 +509,11 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   $("fxpWrite").addEventListener("click", () => void schreiben());
   $("fxpUndo").addEventListener("click", () => void zurueck());
   $("fxpSave").addEventListener("click", sichern);
+  $("fxpGrooveLied").addEventListener("click", () => ($("fxpLiedIn") as HTMLInputElement).click());
+  $("fxpLiedIn").addEventListener("change", () => {
+    const f = ($("fxpLiedIn") as HTMLInputElement).files?.[0];
+    if (f) void grooveAusLied(f);
+  });
   $("fxpFile").addEventListener("click", () => ($("fxpFileIn") as HTMLInputElement).click());
   $("fxpFileIn").addEventListener("change", () => {
     const f = ($("fxpFileIn") as HTMLInputElement).files?.[0];
