@@ -33,12 +33,14 @@ const abschnitte = [
       "<b>Sample-Editor</b> — Wellenform ansehen, Anfang und Ende ziehen, stille Ränder finden, kürzen, ein- und ausblenden, normalisieren, umkehren und den Loop setzen.",
       "<b>Bank ordnen</b> — Lücken schließen oder nach Name, Länge oder Nummer sortieren. Jede Nummernänderung zieht die Verweise der Patterns mit, damit nichts ins Leere zeigt.",
       "<b>Song-Modus</b> — Patterns zu einem Track aneinanderreihen: Abschnitt wählen, Durchgänge festlegen, Kette schreiben. Danach spielt das Gerät den Song von allein durch.",
+      "<b>Varianten aus einem Pattern</b> — aus einer fertigen Figur entsteht auf Knopfdruck eine Abwandlung als neues Pattern: Fill (Snare-Wirbel im letzten Viertel mit ansteigendem Anschlag), halbes und doppeltes Tempo, ausgedünnt fürs Intro, rückwärts, oder mit gestreutem Anschlag gegen den Maschinen-Klang. Das Original bleibt unberührt. Hing es in einer Kette, wird die Variante dazwischengehängt — genau der Fall „Fill vor dem Drop“.",
       "<b>Rückgängig und Wiederherstellen</b> — dreißig Schritte weit zurück, über Strg+Z und Strg+Y oder die beiden Pfeile in der Werkzeugleiste. Gemerkt werden ganze Zustände, nicht einzelne Handgriffe: dadurch kann keine Bearbeitung vergessen werden, auch keine, die erst später dazukommt.",
       "Export als <code>.e2spat</code> (Einzel-Pattern), <code>.e2sallpat</code> (Bank mit 250 Slots) und <code>.all</code> (Sample-Bank).",
       "Direkter Draht zum Gerät: Patterns per SysEx in einen Slot schreiben oder von dort holen.",
     ],
     bild: ["editor", "Der Editor mit geladenem Akkord-Pattern: links die Pattern-Liste, in der Mitte das Step-Grid über 16 Parts, rechts der Sample-Pool mit RAM-Anzeige."],
-    extra: `<div style="margin-top:10px">${img("sample-editor", "Der Sample-Editor: Wellenform mit ziehbarem Anfang und Ende, darunter die Werkzeuge — bis „Übernehmen“ bleibt das Original unberührt.")}</div>`,
+    extra: `<div style="margin-top:10px">${img("sample-editor", "Der Sample-Editor: Wellenform mit ziehbarem Anfang und Ende, darunter die Werkzeuge — bis „Übernehmen“ bleibt das Original unberührt.")}</div>
+    <div style="margin-top:10px">${img("varianten", "Ein Fill aus „DROP“: links das Varianten-Feld mit Erklärung, im Raster der Snare-Wirbel auf den letzten vier Steps — heller werdend, weil der Anschlag zum Ende hin ansteigt. Das Original steht unverändert als Pattern 1 daneben.")}</div>`,
   },
   {
     nr: "02",
@@ -394,7 +396,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>650</b><span>automatische Tests</span></div>
+    <div><b>685</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>

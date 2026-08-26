@@ -554,6 +554,16 @@
             <button id="patDup" class="ghost" style="width:100%">Duplizieren</button>
             <div style="height:6px"></div>
             <button id="patDel" class="ghost" style="width:100%">Löschen</button>
+            <details id="varPanel" style="margin-top:10px;border:1px solid var(--border);border-radius:6px;padding:6px">
+              <summary style="cursor:pointer;color:var(--accent2);font-weight:600;font-size:12px">⧉ Variante aus diesem Pattern</summary>
+              <p class="sub" style="font-size:10px;margin:6px 0">
+                Legt eine Abwandlung als neues Pattern ans Ende der Liste. Das
+                Original bleibt, wie es ist.
+              </p>
+              <select id="varArt" style="width:100%"></select>
+              <p id="varHinweis" class="sub" style="font-size:10px;margin:6px 0;min-height:28px"></p>
+              <button id="varMachen" class="ghost" style="width:100%">Variante anlegen</button>
+            </details>
             <details id="songPanel" style="margin-top:10px;border:1px solid var(--border);border-radius:6px;padding:6px">
               <summary style="cursor:pointer;color:var(--accent2);font-weight:600;font-size:12px">♫ Song — Patterns aneinanderreihen</summary>
               <p class="sub" style="font-size:10px;margin:6px 0">

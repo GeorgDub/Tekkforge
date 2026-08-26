@@ -50,6 +50,7 @@ export class Autosicherung {
   /** Verhindert, dass dieselbe Stoerung bei jedem Durchgang neu gemeldet wird. */
   private gestoert = false;
   private aus = false;
+  private pausiert = false;
 
   constructor(
     private readonly ablage: AutosaveAblage,
@@ -68,7 +69,7 @@ export class Autosicherung {
    * jetzt. Tippen im Namensfeld loest so einen Schreibvorgang aus, nicht zehn.
    */
   angestossen(): void {
-    if (this.aus) return;
+    if (this.aus || this.pausiert) return;
     this.offen = true;
     if (this.termin !== null) return;
     this.termin = this.planen(() => {
@@ -91,6 +92,8 @@ export class Autosicherung {
   async erledigt(): Promise<void> {
     this.terminLoeschen();
     this.offen = false;
+    // Die Entscheidung ist gefallen — ab hier wird wieder normal gesichert.
+    this.pausiert = false;
     await this.ruhe();
     try {
       await this.ablage.loeschen();
@@ -114,6 +117,21 @@ export class Autosicherung {
     while (this.laeuft) await this.laeuft;
   }
 
+  /**
+   * Vorlaeufig nichts mehr ablegen. Gedacht fuer die Rettungsleiste: solange
+   * dort ein alter Stand zur Wahl steht, darf das frische (womoeglich leere)
+   * Projekt ihn nicht ueberschreiben. Sonst ist bei einem zweiten Absturz
+   * genau die Arbeit weg, die zu retten war.
+   */
+  anhalten(): void {
+    this.pausiert = true;
+    this.terminLoeschen();
+  }
+
+  fortsetzen(): void {
+    this.pausiert = false;
+  }
+
   /** Schaltet die Sicherung ab (z. B. wenn die Bruecke fehlt). */
   stillegen(): void {
     this.aus = true;
@@ -128,7 +146,7 @@ export class Autosicherung {
   }
 
   private async schreibeWennNoetig(): Promise<void> {
-    if (this.aus || !this.offen) return;
+    if (this.aus || this.pausiert || !this.offen) return;
     // Laeuft schon einer, wird nichts parallel geschrieben: `offen` bleibt
     // stehen, der wartende Aufruf zieht den neueren Stand danach nach.
     if (this.laeuft) {

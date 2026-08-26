@@ -89,6 +89,8 @@ import {
   validateRamRange,
   verifyRamWrite,
 } from "../core/hacktribeRam";
+import { baueVariante, kettenNachEinschub, VARIANTEN, type VariantenArt } from "../core/patternVarianten";
+import { MAX_PATTERNS_PER_BANK } from "../core/electribeImport";
 import { Autosicherung, wiederherstellungsFrage } from "../core/autosicherung";
 import { autosaveAblage } from "./tekkAutosave";
 import { PreviewPlayer } from "./preview";
@@ -1916,11 +1918,15 @@ export function initEditor(): void {
   $("patDup").addEventListener("click", () => {
     const copy = clonePattern(project.patterns[cur]);
     copy.name = (copy.name + " KOPIE").slice(0, 16);
+    // Erst die Ketten mitziehen, dann einfügen: `chainTo` ist der Listenplatz,
+    // ein Einschub in der Mitte verschöbe sonst stumm jeden Verweis dahinter.
+    kettenNachEinschub(project.patterns, cur + 1);
     project.patterns.splice(cur + 1, 0, copy);
     cur++;
     markDirty();
     renderAll();
   });
+  setupVarianten();
   $("patDel").addEventListener("click", () => {
     if (project.patterns.length <= 1) return alert("Das letzte Pattern kann nicht gelöscht werden.");
     if (!confirm(`Pattern „${project.patterns[cur].name}" löschen?`)) return;
@@ -2052,6 +2058,57 @@ export function initEditor(): void {
 }
 
 /**
+ * Varianten-Panel. Die Abwandlung landet bewusst am ENDE der Liste, nicht
+ * hinter dem Original: `chainTo` zeigt auf den Listenplatz, und ein Einschub
+ * in der Mitte verschöbe stumm jede bestehende Kette.
+ */
+function setupVarianten(): void {
+  const wahl = $<HTMLSelectElement>("varArt");
+  const hinweis = $("varHinweis");
+  wahl.innerHTML = (Object.keys(VARIANTEN) as VariantenArt[])
+    .map((a) => `<option value="${a}">${escapeHtml(VARIANTEN[a].titel)}</option>`)
+    .join("");
+  const zeigeHinweis = (): void => {
+    hinweis.textContent = VARIANTEN[wahl.value as VariantenArt]?.hinweis ?? "";
+  };
+  wahl.addEventListener("change", zeigeHinweis);
+  zeigeHinweis();
+
+  $("varMachen").addEventListener("click", () => {
+    const original = project.patterns[cur];
+    if (!original) return;
+    let variante;
+    try {
+      variante = baueVariante(original, wahl.value as VariantenArt);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (project.patterns.length >= MAX_PATTERNS_PER_BANK) {
+      alert(`Die Bank fasst ${MAX_PATTERNS_PER_BANK} Patterns — für eine weitere Variante ist kein Platz mehr.`);
+      return;
+    }
+    project.patterns.push(variante);
+    const nummer = project.patterns.length;
+
+    // Hing das Original in einer Kette, wird die Variante dazwischengehängt —
+    // genau der Fall "Fill vor dem Drop". Ohne Kette bleibt alles, wie es ist:
+    // eine Kette zu erfinden, die es vorher nicht gab, wäre eine Überraschung.
+    let kettentext = "";
+    if (original.chainTo !== undefined && original.chainTo > 0) {
+      variante.chainTo = original.chainTo;
+      variante.chainRepeat = original.chainRepeat ?? 1;
+      original.chainTo = nummer;
+      kettentext = ` und zwischen „${escapeHtml(original.name)}" und Pattern ${variante.chainTo} in die Kette gehängt`;
+    }
+    cur = project.patterns.length - 1;
+    markDirty();
+    renderAll();
+    setMidiStatus?.(`Variante „${variante.name}" als Pattern ${nummer} angelegt${kettentext}.`);
+  });
+}
+
+/**
  * Liegt ein Notfall-Stand herum, ist die letzte Sitzung nicht sauber zu Ende
  * gegangen. Angeboten wird er als Leiste im Editor, nicht als Dialog — siehe
  * `wiederherstellungsFrage`. Verworfen wird die Datei erst auf ausdrueckliche
@@ -2069,6 +2126,10 @@ async function rettungAnbieten(): Promise<void> {
 
   text.textContent = wiederherstellungsFrage(stand, Date.now());
   leiste.classList.remove("hidden");
+  // Solange die Frage offen steht, wird NICHT gesichert: sonst überschriebe
+  // das frische, leere Projekt genau den Stand, der hier zur Rettung steht —
+  // und ein zweiter Absturz kostete die Arbeit endgültig.
+  sicherung?.anhalten();
 
   ja.addEventListener("click", () => {
     try {
@@ -2081,6 +2142,7 @@ async function rettungAnbieten(): Promise<void> {
       verlauf.leeren();
       standVorher = klonProjektFuerVerlauf(project);
       leiste.classList.add("hidden");
+      sicherung?.fortsetzen();
       renderAll();
       // Der gerettete Stand gehört in den Editor — dort sieht man ihn auch.
       document.getElementById("tabEditor")?.click();

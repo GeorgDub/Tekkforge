@@ -227,3 +227,44 @@ describe("wiederherstellungsFrage", () => {
     expect(text).toMatch(/5 Stunden/);
   });
 });
+
+describe("Autosicherung — angehalten", () => {
+  it("schreibt nichts, solange sie angehalten ist", async () => {
+    const ablage = ablageAttrappe();
+    const zeit = zeitgeber();
+    const s = new Autosicherung(ablage, () => "NEU", { planen: zeit.planen, abbrechen: zeit.abbrechen });
+
+    // Genau der Fall der Rettungsleiste: ein alter Stand liegt da und darf
+    // nicht vom frischen, leeren Projekt überschrieben werden, bevor der
+    // Nutzer sich entschieden hat.
+    s.anhalten();
+    s.angestossen();
+    expect(zeit.anstehend).toBe(false);
+    zeit.ablaufen();
+    await s.ruhe();
+    expect(ablage.geschrieben).toEqual([]);
+  });
+
+  it("nimmt die Arbeit nach dem Fortsetzen wieder auf", async () => {
+    const ablage = ablageAttrappe();
+    const zeit = zeitgeber();
+    const s = new Autosicherung(ablage, () => "NEU", { planen: zeit.planen, abbrechen: zeit.abbrechen });
+
+    s.anhalten();
+    s.angestossen();
+    s.fortsetzen();
+    s.angestossen();
+    zeit.ablaufen();
+    await s.ruhe();
+    expect(ablage.geschrieben).toEqual(["NEU"]);
+  });
+
+  it("erledigt räumt auch im angehaltenen Zustand auf", async () => {
+    const ablage = ablageAttrappe();
+    const zeit = zeitgeber();
+    const s = new Autosicherung(ablage, () => "NEU", { planen: zeit.planen, abbrechen: zeit.abbrechen });
+    s.anhalten();
+    await s.erledigt();
+    expect(ablage.geloescht).toBe(1);
+  });
+});
