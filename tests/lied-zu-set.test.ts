@@ -7,8 +7,7 @@ const TEKK = path.resolve("examples/e2s/tekk4.all");
 const tekkDrums = fs.existsSync(TEKK) ? new Uint8Array(fs.readFileSync(TEKK)) : undefined;
 
 /** Ein Lied bauen: Kick auf jeder Viertel, dazu ein Ton — reicht für die Analyse. */
-function liedchen(sekunden = 40, bpm = 180): Float32Array {
-  const sr = 44100;
+function liedchen(sekunden = 40, bpm = 180, sr = 44100): Float32Array {
   const y = new Float32Array(Math.round(sekunden * sr));
   const beat = Math.round((60 / bpm) * sr);
   for (let i = 0; i < y.length; i++) y[i] = Math.sin((2 * Math.PI * 220 * i) / sr) * 0.25;
@@ -92,5 +91,108 @@ describe("liedZuSet", () => {
   it("die Sample-Namen bleiben im Geräte-Rahmen", () => {
     const set = liedZuSet(pcm, 44100, { name: "Ein sehr langer Liedname", stems: stemsAttrappe(true) });
     for (const s of set.projekt.samples) expect(s.name.length).toBeLessThanOrEqual(16);
+  });
+});
+
+describe("liedZuSet: das Tempo der Samples und der Patterns muss dasselbe sein", () => {
+  /**
+   * Der Fehler, den der Nutzer am Gerät hörte (2026-08-26): "weder eine
+   * richtige Melo noch Vocal drin". Die Fenster wurden auf 180 BPM gedehnt,
+   * das Pattern lief aber mit 209,5 — also 16 % zu schnell und entsprechend
+   * verstimmt. Vom Lied blieb nichts wiedererkennbar übrig.
+   *
+   * Die App macht es richtig: erst in einem Vorlauf das Tekk-Tempo bestimmen,
+   * dann MIT diesem Ziel analysieren. Der Kern muss dasselbe tun.
+   */
+  it("die Fenster sind auf dasselbe Tempo gedehnt, mit dem die Patterns laufen", () => {
+    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", tekkDrums });
+    // Das Lied wurde mit 105 gemessen und auf 210 verdoppelt — die Samples
+    // müssen für 210 gedehnt sein, nicht für 180.
+    expect(set.bpm).toBeCloseTo(set.gemessen * set.oktave, 0);
+    expect(set.patterns[0].bpm).toBe(set.bpm);
+    expect(set.zielBpm, "die Analyse lief auf ein anderes Ziel als das Pattern").toBeCloseTo(set.bpm, 1);
+  });
+
+  it("auch bei fest vorgegebenem Tempo", () => {
+    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", bpm: 200, tekkDrums });
+    expect(set.zielBpm).toBeCloseTo(200, 1);
+    expect(set.patterns[0].bpm).toBe(200);
+  });
+
+  it("ein Loop-Sample passt zur Taktlänge des Patterns", () => {
+    // Vier Takte bei 210 BPM sind 4,57 s. Stimmt das Dehnziel nicht, weicht
+    // die Länge sichtbar ab und der Loop läuft im Pattern aus dem Takt.
+    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", tekkDrums });
+    const takte = (s: { sekunden: number }) => (s.sekunden * set.bpm) / (60 * 4);
+    for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
+      const t = takte(s);
+      expect(Math.abs(t - Math.round(t)), `${s.name}: ${t.toFixed(2)} Takte`).toBeLessThan(0.08);
+    }
+  });
+});
+
+describe("liedZuSet: die Melodie darf nicht von den Vocals verdrängt werden", () => {
+  /** Stem-Attrappe mit sehr vielen Vocal-Segmenten — wie ein vocal-lastiges Lied. */
+  function vieleVox(fenster: { id: string; pcm: Float32Array; nurVox: boolean }[]): StemErgebnis[] {
+    return fenster.map((f) => ({
+      id: f.id,
+      melo: f.nurVox ? null : f.pcm,
+      vox: f.pcm,
+      drums: f.nurVox ? null : f.pcm,
+    }));
+  }
+
+  it("in der Bank steht mindestens eine Melodie", () => {
+    // Der Fehler am Gerät (2026-08-26): das Amphegott-Set enthielt 44 Samples
+    // — Drums und 53 Vocal-Schnipsel, aber KEINE einzige Melodie. Die drei
+    // Fenster waren vom Budget in ein zweites Volume gedrängt worden, und
+    // geschrieben wird nur das erste. Ohne Melodie ist kein Lied wiedererkennbar.
+    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", tekkDrums, stems: vieleVox });
+    const melos = set.projekt.samples.filter((s) => s.rolle === "melo");
+    expect(melos.length, `nur ${set.projekt.samples.map((s) => s.rolle).join(",")}`).toBeGreaterThan(0);
+  });
+
+  it("und die Vocals sind trotzdem noch dabei", () => {
+    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", tekkDrums, stems: vieleVox });
+    expect(set.projekt.samples.some((s) => s.rolle === "vox")).toBe(true);
+  });
+
+  it("das Drop-Pattern hat eine Melodie auf den Melo-Parts", () => {
+    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", tekkDrums, stems: vieleVox });
+    const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;
+    expect(drop.parts[12].muted, "Part 13 (Melo) stumm — keine Melodie im Set").toBe(false);
+  });
+});
+
+describe("liedZuSet: fremde Abtastraten", () => {
+  /**
+   * Am Gerät gehört (2026-08-26): das Lied war im Set nicht wiederzuerkennen.
+   * Die Quelldateien laufen mit 48 kHz (Amphegott) und 96 kHz (Sturmmaske),
+   * dieser Kern schrieb aber überall fest 44100 in die Einträge. Damit stimmte
+   * die angegebene Dauer nicht mehr mit den Daten überein — Tonhöhe und Tempo
+   * liefen auseinander, und vom Lied blieb nichts übrig.
+   */
+  for (const rate of [48000, 96000]) {
+    it(`${rate} Hz ergibt taktgenaue Loops`, () => {
+      const set = liedZuSet(liedchen(60, 105, rate), rate, { name: "Fremd", tekkDrums });
+      expect(set.projekt.samples.length).toBeGreaterThan(0);
+      for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
+        const takte = (s.sekunden * set.bpm) / 240;
+        expect(Math.abs(takte - Math.round(takte)), `${s.name}: ${takte.toFixed(2)} Takte`).toBeLessThan(0.08);
+      }
+    });
+
+    it(`${rate} Hz: die Samples sind auf 44,1 kHz gebracht`, () => {
+      const set = liedZuSet(liedchen(60, 105, rate), rate, { name: "Fremd", tekkDrums });
+      for (const s of set.projekt.samples) expect(s.sampleRate ?? 44100).toBe(44100);
+    });
+  }
+
+  it("44,1 kHz bleibt unverändert", () => {
+    const set = liedZuSet(liedchen(60, 105, 44100), 44100, { name: "Normal", tekkDrums });
+    for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
+      const takte = (s.sekunden * set.bpm) / 240;
+      expect(Math.abs(takte - Math.round(takte))).toBeLessThan(0.08);
+    }
   });
 });

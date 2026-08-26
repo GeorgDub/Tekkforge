@@ -17,6 +17,7 @@
  */
 
 import { analysiereLied } from "./liedAnalyse";
+import { polyPhaseResample } from "./audioProcessor";
 import { voxSegmentEintrag } from "./generatorSession";
 import { rmsDb, peakVon, familie, type ScanEintrag } from "./sampleScan";
 import { schneideDrums, type DrumTreffer } from "./drumSchnitt";
@@ -61,6 +62,11 @@ export interface LiedSet {
   gemessen: number;
   oktave: number;
   bpm: number;
+  /**
+   * Tempo, auf das die Fenster tatsaechlich gedehnt wurden. Muss `bpm` sein —
+   * steht hier, damit ein Auseinanderlaufen auffaellt statt zu klingen.
+   */
+  zielBpm: number;
   projekt: Projekt;
   bank: ArrayBuffer;
   patterns: E2PatternInput[];
@@ -104,12 +110,41 @@ function drumEintrag(lied: string, t: DrumTreffer, nr: number): ScanEintrag {
   } as ScanEintrag;
 }
 
-export function liedZuSet(pcm: Float32Array, sr: number, opts: LiedZuSetOptionen): LiedSet {
+export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOptionen): LiedSet {
   const name = opts.name;
-  const zielBpm = opts.zielBpm ?? 180;
-  const analyse = analysiereLied(pcm, sr, { zielBpm, bpmHinweis: opts.bpm });
-  // Das Tekk-Tempo ist das gemessene MAL der gewaehlten Oktave.
-  const bpm = opts.bpm ?? Math.round(analyse.bpm * analyse.k * 10) / 10;
+  /**
+   * Zuerst auf 44,1 kHz bringen — ALLES dahinter rechnet damit.
+   *
+   * Die Eintraege tragen fest `sampleRate: 44100` und `sekunden = laenge/44100`.
+   * Kommt das Lied mit 48 oder 96 kHz herein (beides lag hier auf der Platte),
+   * stimmt diese Angabe nicht mehr mit den Daten ueberein: die Bank haelt ein
+   * Sample fuer kuerzer, als es ist, spielt es entsprechend verstimmt ab, und
+   * ein Vier-Takt-Loop wird zu 4,5 Takten und laeuft aus dem Takt. Am Geraet
+   * gehoert: vom Lied bleibt nichts wiedererkennbar.
+   *
+   * Der Generator-Tab hat das Problem nie gehabt, weil die Web-Audio-Dekodierung
+   * dort ohnehin auf 44,1 kHz liefert. Beim Herausloesen in diesen Kern fiel
+   * diese stille Voraussetzung weg — also hier ausdruecklich herstellen.
+   */
+  const sr = 44100;
+  const pcm = srRoh === sr ? pcmRoh : polyPhaseResample(pcmRoh, srRoh, sr, 1);
+  /**
+   * ZWEI Durchgaenge — und das ist keine Feinheit, sondern der Unterschied
+   * zwischen "man erkennt das Lied" und "man erkennt gar nichts".
+   *
+   * `analysiereLied` dehnt die Fenster auf `zielBpm`. Wer mit 180 analysiert,
+   * das Pattern aber mit 209,5 laufen laesst, spielt jedes Sample 16 % zu
+   * schnell und entsprechend verstimmt ab — die Melodie ist keine Melodie mehr,
+   * das Vocal kein Vocal, und ein Vier-Takt-Loop ist ploetzlich 4,5 Takte lang
+   * und laeuft aus dem Takt. Genau so klang es am Geraet.
+   *
+   * Also erst in einem billigen Vorlauf (ein Fenster) das Tekk-Tempo bestimmen
+   * und DANN mit diesem Ziel richtig analysieren. So macht es der Generator-Tab
+   * seit jeher; hier war es beim Herausloesen verlorengegangen.
+   */
+  const vorlauf = analysiereLied(pcm, sr, { zielBpm: opts.zielBpm ?? 180, bpmHinweis: opts.bpm, anzahl: 1 });
+  const bpm = opts.bpm ?? Math.round(vorlauf.bpm * vorlauf.k * 10) / 10;
+  const analyse = analysiereLied(pcm, sr, { zielBpm: bpm, bpmHinweis: opts.bpm });
 
   const eintraege: ScanEintrag[] = [];
   const zaehler = { fenster: 0, vox: 0, drums: 0 };
@@ -169,9 +204,10 @@ export function liedZuSet(pcm: Float32Array, sr: number, opts: LiedZuSetOptionen
 
   return {
     name,
-    gemessen: analyse.bpm,
-    oktave: analyse.k,
+    gemessen: vorlauf.bpm,
+    oktave: vorlauf.k,
     bpm,
+    zielBpm: bpm,
     projekt,
     bank,
     patterns: gebaut.patterns,
