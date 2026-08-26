@@ -10,6 +10,7 @@ import { parseElectribeAllPatBank, parseElectribePattern } from "../src/core/ele
 import { e2PatternRefToBankNumber } from "../src/core/e2sPatternSampleLink";
 import { voxSegmentEintrag } from "../src/core/generatorSession";
 import { voxPaare } from "../src/core/patternGen";
+import { fillSchlaege } from "../src/core/patternVarianten";
 import { E2S_ALLPAT_PREFIX_SIZE, E2S_BODY_SIZE, PATTERN_CHAIN_TO_OFF } from "../src/core/e2sExport";
 
 const KORG3 = path.resolve("examples/e2s/korg3");
@@ -180,6 +181,21 @@ describe("patternGen", () => {
     expect(fill).toBeGreaterThanOrEqual(6);
     expect(drop.parts[2].steps.slice(48).filter((s) => s.active).length).toBeLessThan(fill);
     expect(drop.parts[8].volume!).toBeGreaterThan(auf1.parts[8].volume!);
+  });
+  it("der Snare-Fill kommt aus derselben Definition wie im Editor", () => {
+    // Generator und Editor bauten den Wirbel frueher getrennt und mit
+    // verschiedenen Werten. Dieser Test faellt, sobald sie wieder auseinander-
+    // laufen — und nicht erst, wenn es jemand am Geraet hoert.
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
+    const letzteAuf = patterns[dropIdx - 1];
+    for (const schlag of fillSchlaege(64)) {
+      const s = letzteAuf.parts[2].steps[schlag.index];
+      expect(s.active).toBe(true);
+      expect(s.velocity).toBe(schlag.velocity);
+      expect(s.gate).toBe(schlag.gate);
+    }
   });
   it("vocal-abdeckung pro melo: Paare laufen ueber die Ketten weiter, Extras nur am Ende", () => {
     const { projekt: pv, paarA } = projektMitVox();

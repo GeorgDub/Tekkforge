@@ -51,7 +51,7 @@ const abschnitte = [
       "<b>Stems trennen</b> — Demucs zerlegt das Lied in Melodie, Bass, Drums und Vocals. Aus dem Drums-Stem schneidet TekkForge einzelne Kick-, Snare- und Hat-Shots. Wahlweise schnell oder genau. Eine Grafikkarte wird genutzt, sobald sie verfügbar ist — gemessen der Faktor 7: eine Minute Musik in 2,4 statt 17,7 Sekunden.",
       "<b>Ganze Vocalspur</b> — alle hörbaren 8-Takt-Abschnitte werden getrennt und der Reihe nach auf die Patterns verteilt. Wer die Kette durchspielt, hat das Lied einmal komplett gehört. Wahlweise sparsam gespeichert, dann passt doppelt so viel Lied in eine Bank.",
       "<b>Aufbau-Kette</b> — die Patterns verketten sich von einer dünnen Anfangsstufe bis zum Drop; gespielt wird durch Entmuten am Gerät.",
-      "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Snare-Fill, im Drop gehen die Kicks auf Maximum.",
+      "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Sechzehntel-Wirbel auf der Snare, der von der gedimmten Aufbau-Höhe bis ans Maximum ansteigt, und im Drop gehen die Kicks auf 127. Den Wirbel bauen Generator und Pattern-Editor aus derselben Definition — eine Verbesserung trifft damit immer beide.",
       "<b>KI-Rezept</b> — auf Wunsch übersetzt Claude eine Beschreibung wie „düster, Vocal nur im Break“ in das Arrangement.",
     ],
     bild: ["generator-lied", "Ein kompletter Durchlauf: 30 Vocal-Segmente aus dem Lied, 5 geschnittene Drum-Shots, daraus 15 verkettete Patterns im gemessenen Tempo von 209,5 BPM."],
@@ -396,7 +396,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>690</b><span>automatische Tests</span></div>
+    <div><b>695</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>

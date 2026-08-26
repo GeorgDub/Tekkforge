@@ -12,6 +12,7 @@ import { bankNumberToE2PatternRef } from "./e2sPatternSampleLink";
 import type { Projekt, ProjektSample } from "./bankPlan";
 import { type Rezept, type Abschnitt, type Thema, type KickFigur, type BassFigur, type StabFigur, type Lage, pools } from "./rezept";
 import { stabAusRaster, bassAnMelo } from "./meloRaster";
+import { fillSchlaege } from "./patternVarianten";
 
 const N = 64;
 const MONO1 = 0;
@@ -246,13 +247,23 @@ export function baueAufbau(
     ps.map((p, idx) =>
       idx <= 11 ? { ...p, steps: p.steps.map((s) => (s.active && s.velocity ? { ...s, velocity: Math.round(s.velocity * AUFBAU_DIMM) } : s)) } : p,
     );
-  // Snare-Fill im letzten Takt der letzten Aufbau-Stufe — der Uebergang in den Drop
-  const fill = (ps: E2PartInput[]): E2PartInput[] =>
-    ps.map((p, idx) =>
+  // Snare-Fill im letzten Takt der letzten Aufbau-Stufe — der Uebergang in den
+  // Drop. Die Schlaege kommen aus derselben Definition wie im Editor
+  // (patternVarianten), damit eine Verbesserung nicht nur eine Haelfte trifft.
+  const fill = (ps: E2PartInput[]): E2PartInput[] => {
+    const schlaege = new Map(fillSchlaege(N).map((s) => [s.index, s]));
+    return ps.map((p, idx) =>
       idx === 2
-        ? { ...p, steps: p.steps.map((s, i) => (i >= 48 && i % 2 === 0 ? hit([60], 90 + Math.round(((i - 48) / 14) * 37), 10) : s)) }
+        ? {
+            ...p,
+            steps: p.steps.map((s, i) => {
+              const schlag = schlaege.get(i);
+              return schlag ? hit([60], schlag.velocity, schlag.gate) : s;
+            }),
+          }
         : p,
     );
+  };
   // Drop-Punch: Kicks auf Maximum, Bass lauter
   const punch = (ps: E2PartInput[]): E2PartInput[] =>
     ps.map((p, idx) =>

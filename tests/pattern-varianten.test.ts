@@ -8,7 +8,7 @@ import {
   EDITOR_MAX_STEPS,
   type EditorPattern,
 } from "../src/core/editorModel";
-import { baueVariante, kettenNachEinschub, VARIANTEN, type VariantenArt } from "../src/core/patternVarianten";
+import { baueVariante, fillSchlaege, kettenNachEinschub, VARIANTEN, type VariantenArt } from "../src/core/patternVarianten";
 
 /** Setzt Steps auf einem Part; `muster` ist eine Liste von Step-Indizes. */
 function setze(p: EditorPattern, part: number, muster: number[], velocity = 100): void {
@@ -384,5 +384,32 @@ const BEISPIEL = path.resolve(process.cwd(), "examples", "e2s", "CHORDTEST.e2spa
     const v = baueVariante(p, "fill");
     const zurueck = importE2Patterns(buildPatternFile(v)).patterns[0];
     expect(aktive(zurueck, 2)).toEqual([12, 13, 14, 15]);
+  });
+});
+
+describe("fillSchlaege — die gemeinsame Definition", () => {
+  it("belegt das letzte Viertel lückenlos", () => {
+    expect(fillSchlaege(16).map((s) => s.index)).toEqual([12, 13, 14, 15]);
+    expect(fillSchlaege(32).map((s) => s.index)).toEqual([24, 25, 26, 27, 28, 29, 30, 31]);
+    expect(fillSchlaege(64).map((s) => s.index)).toEqual(Array.from({ length: 16 }, (_, i) => 48 + i));
+  });
+
+  it("steigert den Anschlag von der gedimmten Aufbau-Höhe bis ans Maximum", () => {
+    const s = fillSchlaege(64);
+    // Startet dort, wo der gedimmte Aufbau liegt — der Wirbel soll anschließen,
+    // nicht danebenspringen.
+    expect(s[0].velocity).toBe(90);
+    expect(s[s.length - 1].velocity).toBe(127);
+    for (let i = 1; i < s.length; i++) expect(s[i].velocity).toBeGreaterThanOrEqual(s[i - 1].velocity);
+  });
+
+  it("hält die Töne kurz, damit der Wirbel nicht verschmiert", () => {
+    for (const s of fillSchlaege(16)) expect(s.gate).toBe(10);
+  });
+
+  it("kommt auch mit einem einzelnen Schlag zurecht", () => {
+    const s = fillSchlaege(4);
+    expect(s).toHaveLength(1);
+    expect(s[0].velocity).toBe(127);
   });
 });

@@ -92,6 +92,44 @@ export interface VariantenOptionen {
  */
 const NAME_MAX = 16;
 
+/** Ein Schlag des Fill-Wirbels: wohin, wie fest, wie lang. */
+export interface FillSchlag {
+  index: number;
+  velocity: number;
+  gate: number;
+}
+
+/** Anschlag am Anfang des Wirbels — die Hoehe, auf der der gedimmte Aufbau laeuft. */
+const FILL_VON = 90;
+/** Kurze Toene, sonst verschmiert der Wirbel zu einem Rauschen. */
+const FILL_GATE = 10;
+
+/**
+ * Der Fill-Wirbel — EINE Definition fuer den Editor und den Generator.
+ *
+ * Beide bauten ihn vorher getrennt und mit verschiedenen Werten: der Generator
+ * in Achteln ab 90, der Editor in Sechzehnteln ab 70. Damit verbesserte jede
+ * Aenderung nur eine Haelfte. Vereinheitlicht auf Sechzehntel — der Uebergang
+ * in den Drop soll druecken — und auf den Anschlag-Startwert des Generators,
+ * weil der Wirbel dort an den gedimmten Aufbau anschliesst statt danebenzu-
+ * springen.
+ *
+ * Belegt wird das letzte Viertel der genutzten Laenge: bei 64 Steps der letzte
+ * Takt, bei 16 Steps das letzte Viertel.
+ */
+export function fillSchlaege(stepLength: number): FillSchlag[] {
+  const ab = stepLength - Math.floor(stepLength / 4);
+  const anzahl = stepLength - ab;
+  // Die Rampe ist am ENDE verankert, nicht am Anfang: der letzte Schlag liegt
+  // immer auf 127, weil er den Drop anschiebt. Damit stimmt auch der Grenzfall
+  // eines einzelnen Schlags von selbst, ohne Sonderbehandlung.
+  return Array.from({ length: anzahl }, (_, k) => ({
+    index: ab + k,
+    velocity: Math.max(1, Math.round(127 - ((127 - FILL_VON) * (anzahl - 1 - k)) / Math.max(1, anzahl - 1))),
+    gate: FILL_GATE,
+  }));
+}
+
 export function variantenName(quelle: string, art: VariantenArt): string {
   const kuerzel = VARIANTEN[art].kuerzel;
   const platz = NAME_MAX - kuerzel.length - 1;
@@ -248,19 +286,17 @@ function menschlich(p: EditorPattern, streuung: number, startwert: number): void
 }
 
 function fill(p: EditorPattern, partIndex: number): void {
-  const n = p.stepLength;
-  const ab = n - Math.floor(n / 4); // letztes Viertel
   const part = p.parts[partIndex];
   if (!part) return;
-  const laenge = n - ab;
-  for (let k = 0; k < laenge; k++) {
+  for (const schlag of fillSchlaege(p.stepLength)) {
+    const alt = part.steps[schlag.index];
     const s = leererStep();
     s.on = true;
-    // Ansteigend zum Ende hin — der Wirbel soll in den Drop schieben.
-    s.velocity = Math.min(127, Math.max(1, Math.round(70 + (57 * k) / Math.max(1, laenge - 1))));
-    s.note = part.steps[ab + k].on ? part.steps[ab + k].note : part.steps[0].note;
-    s.gate = 24;
-    part.steps[ab + k] = s;
+    s.velocity = schlag.velocity;
+    s.gate = schlag.gate;
+    // Den Ton des Parts behalten: was dort schon lag, sonst den vom ersten Step.
+    s.note = alt.on ? alt.note : part.steps[0].note;
+    part.steps[schlag.index] = s;
   }
   // Ein stummer Fill-Part waere sinnlos.
   part.muted = false;
