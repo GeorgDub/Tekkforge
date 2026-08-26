@@ -138,12 +138,22 @@ export interface Erzeugt {
 }
 
 /**
- * Der Dichte-Schalter der Oberflaeche schlaegt auf das Rezept durch — auch auf
- * eines, das die KI geliefert oder der Nutzer gespeichert hat. Ohne Haken gilt
- * schlank; das war die Antwort auf "ueberladen und anstrengend zu hoeren".
+ * Der Dichte-Schalter der Oberflaeche schaltet den dichten Satz EIN — er nimmt
+ * ihn aber nicht weg.
+ *
+ * Der Unterschied ist wichtig: die Dichte kann auch aus der Beschreibung
+ * kommen ("fett", "dicht", "wall of …" in `figurenAus`) oder aus einem Rezept,
+ * das die KI geliefert oder der Nutzer gespeichert hat. Wuerde der Schalter im
+ * ausgeschalteten Zustand "schlank" erzwingen, ueberschriebe er beides wortlos
+ * — zwei Stellen, die sich still widersprechen, und der Nutzer sieht nur, dass
+ * sein "fett" nichts bewirkt.
+ *
+ * Ohne Angabe von irgendwoher gilt schlank; das war die Antwort auf
+ * "ueberladen und anstrengend zu hoeren".
  */
 function mitDichte(r: Rezept, voll?: boolean): Rezept {
-  return { ...r, figuren: { ...r.figuren, dichte: voll ? "voll" : "schlank" } };
+  const dichte = voll ? "voll" : (r.figuren.dichte ?? "schlank");
+  return { ...r, figuren: { ...r.figuren, dichte } };
 }
 
 export function erzeuge(

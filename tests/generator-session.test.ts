@@ -92,3 +92,29 @@ describe("generatorSession", () => {
     expect(e.warumSo).toContain("Melodien");
   });
 });
+
+describe("Dichte: Beschreibung und Schalter", () => {
+  const offeneHat = (e: ReturnType<typeof erzeuge>) =>
+    e.patterns[e.patterns.length - 1].parts[5].steps.filter((s) => s.active).length;
+
+  it("ohne Angabe wird schlank gebaut", () => {
+    expect(offeneHat(erzeuge(projekt, { modus: "jam", bpm: 180 }))).toBeLessThanOrEqual(16);
+  });
+
+  it("der Schalter schaltet auf den dichten Satz", () => {
+    expect(offeneHat(erzeuge(projekt, { modus: "jam", bpm: 180, dichteVoll: true }))).toBe(32);
+  });
+
+  it("„fett“ in der Beschreibung wirkt auch ohne Schalter", () => {
+    // Sonst widersprechen sich zwei Stellen still: figurenAus() liest das Wort
+    // aus der Beschreibung, und der Schalter ueberschreibt es wortlos wieder.
+    const e = erzeuge(projekt, { modus: "jam", bpm: 180, beschreibung: "fett, dichter Satz" });
+    expect(offeneHat(e)).toBe(32);
+  });
+
+  it("ein mitgegebenes Rezept behält seine Dichte", () => {
+    const basis = erzeuge(projekt, { modus: "jam", bpm: 180 });
+    const rezept = { ...basis.rezepte[0], figuren: { ...basis.rezepte[0].figuren, dichte: "voll" as const } };
+    expect(offeneHat(erzeuge(projekt, { modus: "jam", bpm: 180, rezept }))).toBe(32);
+  });
+});

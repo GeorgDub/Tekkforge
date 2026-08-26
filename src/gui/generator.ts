@@ -182,6 +182,15 @@ async function ladeTekkDrums(): Promise<Uint8Array | null> {
 }
 
 function render(): void {
+  // Die Vorschau gehoert zu EINEM Ergebnis. Verschwindet es (neuer Scan, neue
+  // Bank, neues Erzeugen), muss der Ton weg — sonst laeuft die Schleife weiter,
+  // waehrend der Knopf zum Stoppen aus der Liste verschwunden ist. Hier statt
+  // an den fuenf Stellen, an denen z.ergebnis genullt wird: aufhoeren darf
+  // nicht davon abhaengen, dass jemand daran denkt.
+  if (z.hoertPattern !== null && vorschauFuer !== z.ergebnis) {
+    player.stop();
+    z.hoertPattern = null;
+  }
   const host = $("viewGenerator");
   const zs = z.zusammen;
   const fsb = tekkFs();
