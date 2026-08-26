@@ -53,6 +53,14 @@ contextBridge.exposeInMainWorld("tekkUpdate", {
   pruefen: () => ipcRenderer.invoke("update:pruefen"),
   /** GitHub-Link im Browser oeffnen. */
   oeffnen: (url) => ipcRenderer.invoke("update:oeffnen", url),
+  /** Installer nach Downloads laden und im Explorer zeigen (startet ihn NICHT). */
+  laden: (url, name) => ipcRenderer.invoke("update:laden", url, name),
+  /** Fortschritt des Downloads; gibt eine Abmelde-Funktion zurueck. */
+  onFortschritt: (cb) => {
+    const handler = (_e, d) => cb(d);
+    ipcRenderer.on("update:fortschritt", handler);
+    return () => ipcRenderer.removeListener("update:fortschritt", handler);
+  },
 });
 
 // ── Lied-Bruecke fuer den Generator-Tab (Python/Demucs-Probe, Stems) ──

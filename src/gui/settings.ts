@@ -12,8 +12,10 @@ import { version } from "../../package.json";
 
 interface TekkUpdate {
   available: boolean;
-  pruefen(): Promise<{ tag: string | null; url: string }>;
+  pruefen(): Promise<{ tag: string | null; url: string; datei?: { name: string; url: string; groesse: number } | null }>;
   oeffnen(url: string): Promise<void>;
+  laden?(url: string, name: string): Promise<{ pfad: string; bytes: number }>;
+  onFortschritt?(cb: (d: { geladen: number; gesamt: number }) => void): () => void;
 }
 
 function tekkUpdate(): TekkUpdate | undefined {
@@ -23,6 +25,34 @@ function tekkUpdate(): TekkUpdate | undefined {
 
 let updateMeldung = "";
 let updateUrl = "";
+let updateDatei: { name: string; url: string; groesse: number } | null = null;
+let updateLaeuft = false;
+
+/** Installer holen — der Nutzer startet ihn selbst, wir legen ihn nur bereit. */
+async function updateHerunterladen(): Promise<void> {
+  const up = tekkUpdate();
+  if (!up?.laden || !updateDatei || updateLaeuft) return;
+  updateLaeuft = true;
+  const abmelden = up.onFortschritt?.((d) => {
+    const mb = (n: number) => (n / 1024 / 1024).toFixed(0);
+    updateMeldung = d.gesamt
+      ? `Lade ${updateDatei!.name} … ${mb(d.geladen)} von ${mb(d.gesamt)} MB`
+      : `Lade ${updateDatei!.name} … ${mb(d.geladen)} MB`;
+    const el = document.getElementById("setUpdateInfo");
+    if (el) el.textContent = updateMeldung;
+  });
+  render();
+  try {
+    const r = await up.laden(updateDatei.url, updateDatei.name);
+    updateMeldung = `Geladen nach ${r.pfad} — der Ordner ist offen. Zum Aktualisieren die Datei selbst starten und TekkForge vorher schließen.`;
+  } catch (e) {
+    updateMeldung = "Download fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
+  } finally {
+    abmelden?.();
+    updateLaeuft = false;
+  }
+  render();
+}
 
 async function updatePruefen(): Promise<void> {
   const up = tekkUpdate();
@@ -40,7 +70,13 @@ async function updatePruefen(): Promise<void> {
         lage === "neuer"
           ? `Version ${res.tag} ist verfuegbar (installiert: v${version}).`
           : `v${version} ist aktuell (letztes Release: ${res.tag}).`;
-      if (lage === "neuer") updateUrl = res.url;
+      if (lage === "neuer") {
+        updateUrl = res.url;
+        updateDatei = res.datei ?? null;
+        if (updateDatei) {
+          updateMeldung += ` Installer: ${updateDatei.name} (${Math.round(updateDatei.groesse / 1024 / 1024)} MB).`;
+        }
+      }
     }
   } catch (e) {
     updateMeldung = "Update-Check fehlgeschlagen: " + (e instanceof Error ? e.message : String(e));
@@ -158,9 +194,10 @@ function render(): void {
       ${
         tekkUpdate()
           ? `<div class="zeileEinst">
-              <button id="setUpdate" class="ghost">Nach Updates suchen</button>
-              ${updateUrl ? `<button id="setUpdateAuf" class="primary">Release öffnen</button>` : ""}
-              ${updateMeldung ? `<span class="sub" style="margin:0">${escapeAttr(updateMeldung)}</span>` : ""}
+              <button id="setUpdate" class="ghost" ${updateLaeuft ? "disabled" : ""}>Nach Updates suchen</button>
+              ${updateDatei && tekkUpdate()?.laden ? `<button id="setUpdateLaden" class="primary" ${updateLaeuft ? "disabled" : ""}>⇩ Installer laden</button>` : ""}
+              ${updateUrl ? `<button id="setUpdateAuf" class="ghost">Release öffnen</button>` : ""}
+              ${updateMeldung ? `<span class="sub" id="setUpdateInfo" style="margin:0">${escapeAttr(updateMeldung)}</span>` : ""}
             </div>`
           : ""
       }
@@ -191,6 +228,7 @@ function render(): void {
     b.addEventListener("click", () => void backupZurueck(b.dataset.backup!));
   }
   document.getElementById("setUpdate")?.addEventListener("click", () => void updatePruefen());
+  document.getElementById("setUpdateLaden")?.addEventListener("click", () => void updateHerunterladen());
   document.getElementById("setUpdateAuf")?.addEventListener("click", () => {
     if (updateUrl) void tekkUpdate()?.oeffnen(updateUrl);
   });

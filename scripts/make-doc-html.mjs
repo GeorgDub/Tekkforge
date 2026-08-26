@@ -131,7 +131,7 @@ const abschnitte = [
     punkte: [
       "Sechs Farbthemen plus frei wählbare Akzentfarbe — Aufbau und Bedienung bleiben gleich.",
       "<b>Auto-Backup</b> — beim Überschreiben landet der alte Stand in <code>backups/</code>, 20 Stände je Datei, mit Wiederherstellen-Knopf.",
-      "Update-Prüfung gegen die Veröffentlichungen auf GitHub.",
+      "Update-Prüfung gegen die Veröffentlichungen auf GitHub — inklusive Download des passenden Installers, den man selbst startet.",
     ],
     bild: ["einstellungen", "Themenauswahl, Backup-Manager und Update-Prüfung."],
   },
@@ -195,7 +195,7 @@ const firmwareSeiten = `
     <li><b>96 Vorlagen</b> liegen im Gerät; jede lässt sich lesen, ändern und zurückschreiben.</li>
     <li><b>Swing auf Knopfdruck</b> — jeder zweite Step wandert um den eingestellten Betrag nach hinten. Ein halber Step ist der Maximalwert.</li>
     <li><b>Eigene Länge</b> — steht sie auf 13 statt 64, läuft das Muster gegen den Takt und ergibt schiefe, wandernde Grooves.</li>
-    <li>Auch hier: als Datei sichern und weitergeben.</li>
+    <li>Auch hier: als Datei sichern und weitergeben — oder mehrere Presets und Vorlagen zu einer <b>Sammlung</b> bündeln, die sich als ein Paket verschicken lässt.</li>
   </ul>
   <h3 class="unter-h">Groove aus einem Lied</h3>
   <p>Der interessanteste Weg zu einer eigenen Vorlage führt über ein Vorbild: Ein Stück klingt nicht deshalb lebendig, weil die Schläge genau auf dem Raster liegen, sondern weil sie <b>daneben</b> liegen — mal früher, mal später, mit wechselnder Anschlagstärke. TekkForge misst genau das. Lied hineingeben, Tempo und Anschläge werden bestimmt, ein Raster darübergelegt, und für jeden Schritt festgehalten, wie weit der Schlag danebenliegt. Über alle Takte gemittelt, damit ein einzelner Ausreißer nicht die ganze Vorlage verbiegt.</p>
@@ -303,8 +303,8 @@ const roadmap = [
   },
   {
     titel: "Automatische Updates",
-    wann: "vorgemerkt",
-    text: "Die Prüfung meldet neue Veröffentlichungen bereits. Das Herunterladen und Einspielen soll die App künftig selbst übernehmen.",
+    wann: "halb fertig",
+    text: "Neue Veröffentlichungen werden gemeldet und der passende Installer lässt sich mit einem Klick herunterladen — er landet im Download-Ordner und wird dort angezeigt. Starten muss man ihn selbst: ein Werkzeug, das sich unbeaufsichtigt selbst austauscht, ist genau die Art Automatik, die man nicht will. Offen bleibt, die alte Fassung dabei sauber abzulösen.",
   },
 ];
 
@@ -395,7 +395,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>608</b><span>automatische Tests</span></div>
+    <div><b>614</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -455,7 +455,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>608 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>614 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>

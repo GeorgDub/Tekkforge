@@ -508,6 +508,15 @@
                   <input id="fxpSicherungIn" type="file" accept=".tfbak,.json" class="hidden" />
                   <span class="sub" id="fxpSicherungInfo" style="margin:0">Effekt-Presets, Groove-Vorlagen und Zähler — rund 100 kB.</span>
                 </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Sammlung:</b></span>
+                  <button id="fxpSamAdd" class="ghost" title="Das gerade Bearbeitete in die Sammlung legen">+ Aktuelles aufnehmen</button>
+                  <button id="fxpSamSpeichern" class="ghost">Sammlung sichern…</button>
+                  <button id="fxpSamLaden" class="ghost">Sammlung laden…</button>
+                  <input id="fxpSamIn" type="file" accept=".tfsam,.json" class="hidden" />
+                  <span class="sub" id="fxpSamInfo" style="margin:0">noch leer</span>
+                </div>
+                <div id="fxpSamListe" style="margin-top:6px"></div>
                 <div id="fxpEditor" style="margin-top:10px"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
                   <button id="fxpWrite" class="primary hidden">⚠ Auf das Gerät schreiben</button>

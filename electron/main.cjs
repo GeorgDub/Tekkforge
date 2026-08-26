@@ -584,7 +584,7 @@ function createWindow() {
 // ── Update-Check (GitHub Releases, MKM-Angleich) ──
 const UPDATE_REPO = "GeorgDub/Tekkforge";
 
-function registerUpdateIpc() {
+function registerUpdateIpc(win) {
   ipcMain.handle("update:pruefen", async () => {
     const antwort = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
       headers: { "User-Agent": "TekkForge", Accept: "application/vnd.github+json" },
@@ -593,7 +593,39 @@ function registerUpdateIpc() {
     if (antwort.status === 404) return { tag: null, url: `https://github.com/${UPDATE_REPO}/releases` };
     if (!antwort.ok) throw new Error(`GitHub antwortet mit ${antwort.status}`);
     const json = await antwort.json();
-    return { tag: json.tag_name || null, url: json.html_url || `https://github.com/${UPDATE_REPO}/releases` };
+    // Passenden Installer heraussuchen (Windows-Setup); ohne Treffer bleibt nur der Browser
+    const setup = (json.assets || []).find((a) => /Setup.*\.exe$/i.test(a.name || ""));
+    return {
+      tag: json.tag_name || null,
+      url: json.html_url || `https://github.com/${UPDATE_REPO}/releases`,
+      datei: setup ? { name: setup.name, url: setup.browser_download_url, groesse: setup.size } : null,
+    };
+  });
+  /**
+   * Installer herunterladen und im Explorer zeigen. Bewusst NICHT ausfuehren:
+   * Ein Installer, der sich selbst startet, waere genau die Art von Automatik,
+   * die man einem Werkzeug nicht zutrauen will. Der Nutzer klickt selbst.
+   */
+  ipcMain.handle("update:laden", async (_e, url, name) => {
+    const u = String(url || "");
+    if (!/^https:\/\/(github\.com|objects\.githubusercontent\.com)\//.test(u)) {
+      throw new Error("Nur Downloads von GitHub");
+    }
+    const sicher = String(name || "update.exe").replace(/[^A-Za-z0-9._ -]/g, "");
+    const ziel = path.join(app.getPath("downloads"), sicher);
+    const antwort = await fetch(u, { headers: { "User-Agent": "TekkForge" } });
+    if (!antwort.ok) throw new Error(`Download fehlgeschlagen (${antwort.status})`);
+    const gesamt = Number(antwort.headers.get("content-length")) || 0;
+    const teile = [];
+    let geladen = 0;
+    for await (const stueck of antwort.body) {
+      teile.push(stueck);
+      geladen += stueck.length;
+      if (win && !win.isDestroyed()) win.webContents.send("update:fortschritt", { geladen, gesamt });
+    }
+    fs.writeFileSync(ziel, Buffer.concat(teile));
+    shell.showItemInFolder(ziel);
+    return { pfad: ziel, bytes: geladen };
   });
   ipcMain.handle("update:oeffnen", (_e, url) => {
     const u = String(url || "");
@@ -611,7 +643,7 @@ app.whenReady().then(() => {
   registerKiIpc();
   registerLiedIpc(win);
   registerUrlIpc(win);
-  registerUpdateIpc();
+  registerUpdateIpc(win);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();

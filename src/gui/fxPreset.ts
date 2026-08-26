@@ -34,6 +34,7 @@ import {
 import { baueMidiThru } from "../core/fxLive";
 import { grooveAusAudio } from "../core/grooveAusLied";
 import { sicherungsPlan, baueSicherung, leseSicherung, vergleicheSicherung, type SicherungsBlock } from "../core/geraetSicherung";
+import { baueSammlung, leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { dekodiere } from "./audioDecode";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
 
@@ -397,6 +398,93 @@ function sichern(): void {
   setStatus(`„${roh}“ als ${name}.${endung} gesichert.`);
 }
 
+// ─── Sammlung ────────────────────────────────────────────────────────────────
+
+/** Die Sammlung lebt fuer die Sitzung; gesichert wird bewusst als Datei. */
+let sammlung: SammlungsEintrag[] = [];
+
+function renderSammlung(): void {
+  const info = document.getElementById("fxpSamInfo");
+  const liste = document.getElementById("fxpSamListe");
+  if (info) info.textContent = sammlung.length ? `${sammlung.length} Eintrag/Einträge` : "noch leer";
+  if (!liste) return;
+  liste.innerHTML = sammlung.length
+    ? `<div class="startListe">${sammlung
+        .map(
+          (e, i) =>
+            `<div><span class="rolle">${e.art.toUpperCase()}</span><span style="flex:1">${escapeHtml(e.name)}</span>` +
+            `<button class="ghost fxpSamNutz" data-i="${i}" style="padding:2px 8px;font-size:11px">bearbeiten</button>` +
+            `<button class="ghost fxpSamWeg" data-i="${i}" style="padding:2px 8px;font-size:11px">✕</button></div>`,
+        )
+        .join("")}</div>`
+    : "";
+  for (const b of liste.querySelectorAll<HTMLButtonElement>(".fxpSamNutz")) {
+    b.addEventListener("click", () => sammlungsEintragOeffnen(Number(b.dataset.i)));
+  }
+  for (const b of liste.querySelectorAll<HTMLButtonElement>(".fxpSamWeg")) {
+    b.addEventListener("click", () => {
+      sammlung.splice(Number(b.dataset.i), 1);
+      renderSammlung();
+    });
+  }
+}
+
+/** Einen Eintrag der Sammlung in den Editor holen. */
+function sammlungsEintragOeffnen(i: number): void {
+  const e = sammlung[i];
+  if (!e) return;
+  ($("fxpArt") as HTMLSelectElement).value = e.art;
+  basis = e.bytes.slice();
+  quelleAdresse = null;
+  if (e.art === "groove") {
+    groove = decodeGroove(e.bytes);
+    preset = null;
+  } else {
+    preset = decodeFxPreset(e.bytes, e.art === "mfx");
+    groove = null;
+  }
+  zeigeGrooveKnopf();
+  render();
+  setStatus(`„${e.name}" aus der Sammlung geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen.`);
+}
+
+function sammlungAufnehmen(): void {
+  const gv = istGroove();
+  if (gv ? !groove : !preset) return;
+  const bytes = gv ? encodeGroove(groove!, basis ?? undefined) : encodeFxPreset(preset!, basis ?? undefined);
+  const name = (gv ? groove!.name : preset!.name) || (gv ? "Groove" : "Preset");
+  sammlung.push({ art: gv ? "groove" : istMfx() ? "mfx" : "ifx", name, bytes });
+  renderSammlung();
+  setStatus(`„${name}" in die Sammlung gelegt (${sammlung.length} insgesamt). Zum Behalten die Sammlung sichern.`);
+}
+
+function sammlungSpeichern(): void {
+  if (!sammlung.length) {
+    setStatus("Die Sammlung ist leer — erst etwas aufnehmen.");
+    return;
+  }
+  const titel = window.prompt("Titel der Sammlung:", "Meine Effekte") ?? "Sammlung";
+  const text = baueSammlung(sammlung, { titel });
+  const datei = `${titel.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "sammlung"}.tfsam`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  a.download = datei;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus(`${sammlung.length} Eintrag/Einträge als ${datei} gesichert.`);
+}
+
+async function sammlungLaden(f: File): Promise<void> {
+  try {
+    const s = leseSammlung(await f.text());
+    sammlung = s.eintraege;
+    renderSammlung();
+    setStatus(`„${s.titel}"${s.autor ? ` von ${s.autor}` : ""} geladen — ${s.eintraege.length} Eintrag/Einträge.`);
+  } catch (e) {
+    setStatus("Sammlung nicht lesbar: " + (e instanceof Error ? e.message : String(e)));
+  }
+}
+
 // ─── Komplettsicherung ───────────────────────────────────────────────────────
 
 const sicherungsInfo = (t: string): void => {
@@ -581,6 +669,14 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   $("fxpWrite").addEventListener("click", () => void schreiben());
   $("fxpUndo").addEventListener("click", () => void zurueck());
   $("fxpSave").addEventListener("click", sichern);
+  $("fxpSamAdd").addEventListener("click", sammlungAufnehmen);
+  $("fxpSamSpeichern").addEventListener("click", sammlungSpeichern);
+  $("fxpSamLaden").addEventListener("click", () => ($("fxpSamIn") as HTMLInputElement).click());
+  $("fxpSamIn").addEventListener("change", () => {
+    const f = ($("fxpSamIn") as HTMLInputElement).files?.[0];
+    if (f) void sammlungLaden(f);
+  });
+  renderSammlung();
   $("fxpSichern").addEventListener("click", () => void geraetSichern());
   $("fxpVergleichen").addEventListener("click", () => ($("fxpSicherungIn") as HTMLInputElement).click());
   $("fxpSicherungIn").addEventListener("change", () => {
