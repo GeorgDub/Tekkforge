@@ -33,6 +33,7 @@ const abschnitte = [
       "<b>Sample-Editor</b> — Wellenform ansehen, Anfang und Ende ziehen, stille Ränder finden, kürzen, ein- und ausblenden, normalisieren, umkehren und den Loop setzen.",
       "<b>Bank ordnen</b> — Lücken schließen oder nach Name, Länge oder Nummer sortieren. Jede Nummernänderung zieht die Verweise der Patterns mit, damit nichts ins Leere zeigt.",
       "<b>Song-Modus</b> — Patterns zu einem Track aneinanderreihen: Abschnitt wählen, Durchgänge festlegen, Kette schreiben. Danach spielt das Gerät den Song von allein durch.",
+      "<b>Rückgängig und Wiederherstellen</b> — dreißig Schritte weit zurück, über Strg+Z und Strg+Y oder die beiden Pfeile in der Werkzeugleiste. Gemerkt werden ganze Zustände, nicht einzelne Handgriffe: dadurch kann keine Bearbeitung vergessen werden, auch keine, die erst später dazukommt.",
       "Export als <code>.e2spat</code> (Einzel-Pattern), <code>.e2sallpat</code> (Bank mit 250 Slots) und <code>.all</code> (Sample-Bank).",
       "Direkter Draht zum Gerät: Patterns per SysEx in einen Slot schreiben oder von dort holen.",
     ],
@@ -132,9 +133,11 @@ const abschnitte = [
     punkte: [
       "Sechs Farbthemen plus frei wählbare Akzentfarbe — Aufbau und Bedienung bleiben gleich.",
       "<b>Auto-Backup</b> — beim Überschreiben landet der alte Stand in <code>backups/</code>, 20 Stände je Datei, mit Wiederherstellen-Knopf.",
+      "<b>Schutz vor Abstürzen</b> — der Arbeitsstand wird still im Hintergrund beiseitegelegt, auch wenn noch nie gespeichert wurde. Kommt es zum Absturz oder fällt der Strom aus, bietet der nächste Start den letzten Stand mit Uhrzeit zum Zurückholen an. Wer regulär speichert, sieht davon nie etwas — die Sicherung räumt sich dann selbst weg. Verloren gehen kann höchstens die letzte Minute; ein Ersatz fürs Speichern ist sie ausdrücklich nicht.",
       "Update-Prüfung gegen die Veröffentlichungen auf GitHub — inklusive Download des passenden Installers, den man selbst startet.",
     ],
     bild: ["einstellungen", "Themenauswahl, Backup-Manager und Update-Prüfung."],
+    extra: `<div style="margin-top:10px">${img("notfall", "Nach einem Absturz: Das Angebot steht über allen Modulen, damit es nicht übersehen wird — mit Uhrzeit des Standes und der Wahl zwischen Laden und Verwerfen.")}</div>`,
   },
 ];
 
@@ -288,11 +291,6 @@ const roadmap = [
     text: "Bis zu vier Töne je Step stehen. Als Nächstes: erkannte Stimmen automatisch auf mehrere Parts verteilen und Anschläge sauberer von gehaltenen Tönen trennen.",
   },
   {
-    titel: "Bank-Manager",
-    wann: "vorgemerkt",
-    text: "Samples innerhalb einer Bank umsortieren und ersetzen, ohne dass die Verweise in den Patterns brechen.",
-  },
-  {
     titel: "Motion-Sequenzen",
     wann: "vorgemerkt",
     text: "Regler-Bewegungen werden bisher nur gelesen. Sie auch schreiben zu können, würde ganze Arrangements lebendiger machen.",
@@ -396,7 +394,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>622</b><span>automatische Tests</span></div>
+    <div><b>650</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>

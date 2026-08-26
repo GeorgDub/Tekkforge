@@ -385,6 +385,48 @@ function laufen(cmd, args, opts) {
   });
 }
 
+/**
+ * Notfall-Sicherung des Projekts.
+ *
+ * Liegt bewusst in userData und nicht beim Projekt: Sie soll auch dann
+ * auffindbar sein, wenn noch nie gespeichert wurde — genau dann tut ein
+ * Absturz am meisten weh. Beim regulaeren Speichern wird sie geloescht, damit
+ * beim naechsten Start nicht nach einer Wiederherstellung gefragt wird, die
+ * niemand braucht.
+ */
+function autosavePfad() {
+  return path.join(app.getPath("userData"), "notfall-stand.tekkforge");
+}
+
+function registerAutosaveIpc() {
+  ipcMain.handle("autosave:schreiben", (_e, text) => {
+    const ziel = autosavePfad();
+    fs.mkdirSync(path.dirname(ziel), { recursive: true });
+    // Erst daneben schreiben, dann drueberziehen. Ein Absturz mitten im
+    // Schreiben darf keine halbe Datei hinterlassen — genau die wuerde beim
+    // naechsten Start als Rettung angeboten und waere unlesbar.
+    const tmp = `${ziel}.tmp`;
+    fs.writeFileSync(tmp, String(text), "utf8");
+    fs.renameSync(tmp, ziel);
+    return { pfad: ziel, bytes: Buffer.byteLength(String(text)) };
+  });
+  ipcMain.handle("autosave:lesen", () => {
+    const ziel = autosavePfad();
+    if (!fs.existsSync(ziel)) return null;
+    const stat = fs.statSync(ziel);
+    return { text: fs.readFileSync(ziel, "utf8"), wann: stat.mtimeMs };
+  });
+  ipcMain.handle("autosave:loeschen", () => {
+    const ziel = autosavePfad();
+    try {
+      if (fs.existsSync(ziel)) fs.unlinkSync(ziel);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 function registerLiedIpc(win) {
   ipcMain.handle("lied:pythonStatus", async () => {
     const py = pythonPfad();
@@ -681,6 +723,7 @@ app.whenReady().then(() => {
   registerLiedIpc(win);
   registerUrlIpc(win);
   registerUpdateIpc(win);
+  registerAutosaveIpc();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();

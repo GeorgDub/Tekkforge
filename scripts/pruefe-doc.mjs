@@ -20,7 +20,10 @@ const fenster = app.windows();
 const seite = fenster[fenster.length - 1];
 const anzahl = await seite.evaluate(() => document.querySelectorAll(".seite").length);
 console.log(`HTML-Abschnitte: ${anzahl}`);
-for (const i of [3, 10, 11, 12]) {
+// Welche Abschnitte abgelichtet werden: `node scripts/pruefe-doc.mjs <pdf> 9 10`
+// (0-basierte Indizes der .seite-Elemente). Ohne Angabe eine feste Stichprobe.
+const wunsch = process.argv.slice(3).map(Number).filter(Number.isInteger);
+for (const i of wunsch.length ? wunsch : [3, 10, 11, 12]) {
   const el = seite.locator(".seite").nth(i);
   if ((await el.count()) === 0) continue;
   await el.screenshot({ path: `.tekkforge-shots/pdfseite-${i + 1}.png` });

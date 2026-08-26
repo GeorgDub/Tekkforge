@@ -202,6 +202,9 @@
       .globals { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
       .globals label { display: block; color: var(--muted); font-size: 10px; margin-bottom: 2px; }
       .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
+      .rettungsleiste { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        margin-bottom: 8px; padding: 8px 12px; border-radius: 6px;
+        border: 1px solid var(--akzent, #d9a441); background: rgba(217, 164, 65, 0.12); }
 
       .gridWrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
       .gridRow { display: flex; align-items: center; gap: 0; border-bottom: 1px solid var(--border); }
@@ -310,7 +313,7 @@
         <button id="tabMidi" class="railBtn" title="MIDI zu Korg">♪</button>
         <span class="railSpacer"></span>
         <button id="tabSettings" class="railBtn" title="Einstellungen">⚙</button>
-        <span class="railVersion">v0.5</span>
+        <span class="railVersion">v0.6</span>
       </aside>
       <div class="mainCol">
       <header class="top">
@@ -322,6 +325,17 @@
       </header>
       <div class="wrap">
 
+      <!--
+        Rettungsangebot nach einem Absturz. Steht bewusst ÜBER den Tabs und
+        nicht im Editor: die App startet auf "Start", dort wäre das Angebot
+        unsichtbar und der gerettete Stand bliebe unbemerkt liegen.
+      -->
+      <div id="edRettung" class="rettungsleiste hidden">
+        <span id="edRettungText"></span>
+        <button id="edRettungJa" class="ghost">Stand laden</button>
+        <button id="edRettungNein" class="ghost">Verwerfen</button>
+      </div>
+
       <!-- ═══════════ START ═══════════ -->
       <section id="viewStart"></section>
 
@@ -331,6 +345,8 @@
           <button id="projNew" class="ghost">Neues Projekt</button>
           <button id="projOpen" class="ghost">Projekt öffnen…</button>
           <button id="projSave" class="ghost">Projekt speichern</button>
+          <button id="edUndo" class="ghost" title="Rückgängig (Strg+Z)" disabled>↶</button>
+          <button id="edRedo" class="ghost" title="Wiederherstellen (Strg+Y)" disabled>↷</button>
           <input id="projFile" type="file" accept=".tekkforge,.json" class="hidden" />
           <button id="importE2" class="ghost" title="Geräte-Pattern-Bank oder Einzel-Pattern (optional mit .all-Sample-Bank) laden">
             ⇪ .e2spat / .e2sallpat importieren

@@ -14,7 +14,8 @@ import { deserialisiereDeck, type PadDeck } from "./padDeck";
 import { buildE2AllPatFile, buildE2PatternFileV2 } from "./e2sExport";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { convertToE2sSpec, downmixToMono } from "./audioProcessor";
-import { parseWav, encodeWav16, bytesToBase64, base64ToBytes } from "./wavCodec";
+import { parseWav, bytesToBase64, base64ToBytes } from "./wavCodec";
+import { wavBase64 } from "./wavMemo";
 import {
   parseElectribeBank,
   isElectribeAllPatBank,
@@ -257,6 +258,25 @@ export function processWavToMono(
     name: sanitizeSampleName(filename.replace(/\.[^.]+$/, "")),
     sampleRate: processed.sampleRate,
     pcm: processed.pcm,
+  };
+}
+
+/**
+ * Schnappschuss fuers Rueckgaengigmachen: Patterns werden echt kopiert, die
+ * **Klangdaten aber nur verwiesen**.
+ *
+ * Das ist der Kniff, der einen Verlauf ueberhaupt bezahlbar macht: Ein Pool
+ * kann 24 MB Audio enthalten — bei dreissig gemerkten Staenden waeren das
+ * Gigabytes. Die Audiodaten aendern sich beim Bearbeiten eines Samples ohnehin
+ * nicht in place, sondern werden ersetzt; der alte Puffer bleibt also gueltig,
+ * solange ein Schnappschuss ihn haelt.
+ */
+export function klonProjektFuerVerlauf(p: EditorProject): EditorProject {
+  return {
+    version: p.version,
+    patterns: p.patterns.map(clonePattern),
+    samples: p.samples.map((s) => ({ ...s })),
+    ...(p.padDeck ? { padDeck: JSON.parse(JSON.stringify(p.padDeck)) as PadDeck } : {}),
   };
 }
 
@@ -628,7 +648,7 @@ export function serializeProject(project: EditorProject): string {
     samples: project.samples.map((s) => ({
       number: s.number,
       name: s.name,
-      wavB64: bytesToBase64(encodeWav16(s.pcm, s.sampleRate, 1)),
+      wavB64: wavBase64(s.pcm, s.sampleRate),
       ...(s.gain12db ? { gain12db: true } : {}),
       ...(s.kategorie ? { kategorie: s.kategorie } : {}),
     })),

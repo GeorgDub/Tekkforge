@@ -154,3 +154,45 @@ describe("editorModel — Pattern-Erstellung ohne ESX", () => {
     expect(noteName(61)).toBe("C#4");
   });
 });
+
+describe("serializeProject — Klangdaten-Zwischenspeicher", () => {
+  it("liefert bei unveränderten Klangdaten dasselbe Ergebnis", () => {
+    const p = createProject();
+    p.samples.push({ number: 501, name: "S", sampleRate: 44100, pcm: new Float32Array([0.5, -0.5, 0.25]) });
+    const a = serializeProject(p);
+    p.patterns[0].parts[0].steps[0].on = true; // nur das Pattern ändert sich
+    const b = serializeProject(p);
+    expect(JSON.parse(a).samples).toEqual(JSON.parse(b).samples);
+  });
+
+  it("bemerkt neue Klangdaten trotz Zwischenspeicher", () => {
+    const p = createProject();
+    const s = { number: 501, name: "S", sampleRate: 44100, pcm: new Float32Array([0.5, -0.5]) };
+    p.samples.push(s);
+    const a = JSON.parse(serializeProject(p)).samples[0].wavB64;
+    s.pcm = new Float32Array([0.1, 0.2]); // sampleEdit gibt immer NEUE Arrays zurück
+    const b = JSON.parse(serializeProject(p)).samples[0].wavB64;
+    expect(b).not.toBe(a);
+  });
+
+  it("bemerkt eine geänderte Abtastrate bei gleichen Klangdaten", () => {
+    const pcm = new Float32Array([0.5, -0.5]);
+    const p = createProject();
+    const s = { number: 501, name: "S", sampleRate: 44100, pcm };
+    p.samples.push(s);
+    const a = JSON.parse(serializeProject(p)).samples[0].wavB64;
+    s.sampleRate = 22050;
+    const b = JSON.parse(serializeProject(p)).samples[0].wavB64;
+    expect(b).not.toBe(a);
+  });
+
+  it("bleibt rundlauffähig — der Zwischenspeicher ändert nichts am Inhalt", () => {
+    const p = createProject();
+    p.samples.push({ number: 501, name: "S", sampleRate: 44100, pcm: new Float32Array([0.5, -0.5, 0.25]) });
+    serializeProject(p); // füllt den Zwischenspeicher
+    const zurueck = deserializeProject(serializeProject(p));
+    expect(zurueck.samples[0].sampleRate).toBe(44100);
+    expect(zurueck.samples[0].pcm.length).toBe(3);
+    expect(zurueck.samples[0].pcm[0]).toBeCloseTo(0.5, 3);
+  });
+});

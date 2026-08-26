@@ -46,6 +46,17 @@ contextBridge.exposeInMainWorld("tekkKi", {
   chat: (anfrage) => ipcRenderer.invoke("ki:chat", anfrage),
 });
 
+// ── Notfall-Sicherung des Projekts (userData) ──
+contextBridge.exposeInMainWorld("tekkAutosave", {
+  available: true,
+  /** Projekt-JSON ablegen. */
+  schreiben: (text) => ipcRenderer.invoke("autosave:schreiben", text),
+  /** { text, wann } oder null. */
+  lesen: () => ipcRenderer.invoke("autosave:lesen"),
+  /** Nach regulaerem Speichern aufraeumen. */
+  loeschen: () => ipcRenderer.invoke("autosave:loeschen"),
+});
+
 // ── Update-Check (GitHub Releases) ──
 contextBridge.exposeInMainWorld("tekkUpdate", {
   available: true,

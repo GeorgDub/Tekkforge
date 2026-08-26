@@ -6,6 +6,7 @@
 
 import {
   createProject,
+  klonProjektFuerVerlauf,
   createPattern,
   clonePattern,
   importSampleFromWav,
@@ -70,6 +71,7 @@ import { initFxPresetPanel } from "./fxPreset";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
+import { Verlauf } from "../core/verlauf";
 import {
   E2_RAM_MAP,
   RAM_CMD,
@@ -87,6 +89,8 @@ import {
   validateRamRange,
   verifyRamWrite,
 } from "../core/hacktribeRam";
+import { Autosicherung, wiederherstellungsFrage } from "../core/autosicherung";
+import { autosaveAblage } from "./tekkAutosave";
 import { PreviewPlayer } from "./preview";
 import { $, download, escapeHtml } from "./shared";
 
@@ -97,8 +101,70 @@ let dirty = false;
 const lastNote = new Map<number, number>();
 const player = new PreviewPlayer();
 
+/**
+ * Rueckgaengig/Wiederherstellen. Gemerkt werden STAENDE, nicht Aktionen —
+ * `markDirty()` wird nach jeder Aenderung ohnehin gerufen, also legen wir dort
+ * den Stand von davor ab. So kann keine Bearbeitung vergessen werden, auch
+ * keine, die spaeter dazukommt.
+ */
+const verlauf = new Verlauf<EditorProject>(30);
+let standVorher = klonProjektFuerVerlauf(project);
+
+/**
+ * Notfall-Sicherung. Faengt Abstuerze und Stromausfaelle ab — die Warnung beim
+ * Schliessen tut das nicht. Ohne Electron-Bruecke (reiner Browser) gibt es sie
+ * nicht; der Editor laeuft dann unveraendert weiter.
+ *
+ * Bewusst KEIN Schreiben im `beforeunload`: dort laesst sich der IPC-Aufruf
+ * nicht mehr abwarten, und der Absturzfall ruft den Handler ohnehin nie. Das
+ * Zeitfenster ist also "bis zu ein Abstand" — so steht es auch in der Doku.
+ */
+const sicherung = (() => {
+  const ablage = autosaveAblage();
+  if (!ablage) return undefined;
+  return new Autosicherung(ablage, () => serializeProject(project), {
+    melden: (t) => setMidiStatus?.(t),
+  });
+})();
+
 function markDirty(): void {
   dirty = true;
+  verlauf.merke(standVorher);
+  standVorher = klonProjektFuerVerlauf(project);
+  sicherung?.angestossen();
+  zeigeVerlaufKnoepfe();
+}
+
+function zeigeVerlaufKnoepfe(): void {
+  const z = document.getElementById("edUndo") as HTMLButtonElement | null;
+  const v = document.getElementById("edRedo") as HTMLButtonElement | null;
+  if (z) z.disabled = !verlauf.kannZurueck;
+  if (v) v.disabled = !verlauf.kannVor;
+}
+
+/** Einen Stand einspielen, ohne ihn erneut in den Verlauf zu legen. */
+function standSetzen(neu: EditorProject): void {
+  project = neu;
+  standVorher = klonProjektFuerVerlauf(project);
+  if (cur >= project.patterns.length) cur = Math.max(0, project.patterns.length - 1);
+  dirty = true;
+  sicherung?.angestossen();
+  renderAll();
+  zeigeVerlaufKnoepfe();
+}
+
+function schrittZurueck(): void {
+  const stand = verlauf.zurueck(klonProjektFuerVerlauf(project));
+  if (!stand) return;
+  standSetzen(stand);
+  setMidiStatus?.("Ein Schritt zurückgenommen.");
+}
+
+function schrittVor(): void {
+  const stand = verlauf.vor(klonProjektFuerVerlauf(project));
+  if (!stand) return;
+  standSetzen(stand);
+  setMidiStatus?.("Wiederhergestellt.");
 }
 
 export function isDirty(): boolean {
@@ -115,6 +181,7 @@ export function loadProject(next: EditorProject, opts: { confirmDirty?: boolean 
   project = next;
   cur = 0;
   dirty = false;
+  void sicherung?.erledigt();
   lastNote.clear();
   renderAll();
   return true;
@@ -812,6 +879,7 @@ function exportBank(): void {
 function saveProject(): void {
   download(serializeProject(project), "projekt.tekkforge", "application/json");
   dirty = false;
+  void sicherung?.erledigt();
 }
 
 async function openProject(file: File): Promise<void> {
@@ -819,6 +887,7 @@ async function openProject(file: File): Promise<void> {
     project = deserializeProject(await file.text());
     cur = 0;
     dirty = false;
+    void sicherung?.erledigt();
     renderAll();
   } catch (err) {
     alert(err instanceof Error ? err.message : String(err));
@@ -1784,6 +1853,25 @@ function richteSongEin(): void {
 export function initEditor(): void {
   // Sample-Editor: geänderte Daten zurück in den Pool, Vorhören über denselben
   // Player wie die Pool-Liste
+  document.getElementById("edUndo")?.addEventListener("click", schrittZurueck);
+  document.getElementById("edRedo")?.addEventListener("click", schrittVor);
+  // Tastenkürzel — aber nicht, während in einem Feld getippt wird: dort
+  // erwartet man das Rückgängig des Textfelds, nicht das des Projekts.
+  window.addEventListener("keydown", (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    const ziel = e.target as HTMLElement | null;
+    if (ziel && /^(INPUT|TEXTAREA|SELECT)$/.test(ziel.tagName)) return;
+    if ($("viewEditor").classList.contains("hidden")) return;
+    const taste = e.key.toLowerCase();
+    if (taste === "z" && !e.shiftKey) {
+      e.preventDefault();
+      schrittZurueck();
+    } else if (taste === "y" || (taste === "z" && e.shiftKey)) {
+      e.preventDefault();
+      schrittVor();
+    }
+  });
+
   richteSongEin();
 
   // Bank ordnen: Nummern verschieben und die Part-Verweise mitziehen
@@ -1930,6 +2018,7 @@ export function initEditor(): void {
     project = createProject();
     cur = 0;
     dirty = false;
+    void sicherung?.erledigt();
     renderAll();
   });
   const projFile = $<HTMLInputElement>("projFile");
@@ -1959,4 +2048,56 @@ export function initEditor(): void {
   });
 
   renderAll();
+  void rettungAnbieten();
+}
+
+/**
+ * Liegt ein Notfall-Stand herum, ist die letzte Sitzung nicht sauber zu Ende
+ * gegangen. Angeboten wird er als Leiste im Editor, nicht als Dialog — siehe
+ * `wiederherstellungsFrage`. Verworfen wird die Datei erst auf ausdrueckliche
+ * Ansage; bis dahin bleibt sie liegen und wird beim naechsten Mal erneut
+ * angeboten.
+ */
+async function rettungAnbieten(): Promise<void> {
+  const stand = await sicherung?.liegengebliebenerStand();
+  if (!stand) return;
+  const leiste = document.getElementById("edRettung");
+  const text = document.getElementById("edRettungText");
+  const ja = document.getElementById("edRettungJa");
+  const nein = document.getElementById("edRettungNein");
+  if (!leiste || !text || !ja || !nein) return;
+
+  text.textContent = wiederherstellungsFrage(stand, Date.now());
+  leiste.classList.remove("hidden");
+
+  ja.addEventListener("click", () => {
+    try {
+      const wieder = deserializeProject(stand.text);
+      project = wieder;
+      cur = 0;
+      // Bleibt absichtlich "geaendert": der Stand steht ja noch nirgends als
+      // richtige Projektdatei.
+      dirty = true;
+      verlauf.leeren();
+      standVorher = klonProjektFuerVerlauf(project);
+      leiste.classList.add("hidden");
+      renderAll();
+      // Der gerettete Stand gehört in den Editor — dort sieht man ihn auch.
+      document.getElementById("tabEditor")?.click();
+      setMidiStatus?.("Notfall-Stand geladen — bitte als Projekt speichern.");
+    } catch (err) {
+      // Eine unlesbare Sicherung ist wertlos; sie darf aber nicht bei jedem
+      // Start erneut aufpoppen.
+      leiste.classList.add("hidden");
+      void sicherung?.erledigt();
+      setMidiStatus?.(
+        `Notfall-Stand ließ sich nicht laden (${err instanceof Error ? err.message : String(err)}) — er wurde verworfen.`,
+      );
+    }
+  });
+  nein.addEventListener("click", () => {
+    leiste.classList.add("hidden");
+    void sicherung?.erledigt();
+    setMidiStatus?.("Notfall-Stand verworfen.");
+  });
 }
