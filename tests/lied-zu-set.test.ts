@@ -34,7 +34,7 @@ describe("liedZuSet", () => {
   const pcm = liedchen();
 
   it("baut aus einem Lied eine Bank und eine Aufbau-Kette", () => {
-    const set = liedZuSet(pcm, 44100, { name: "Testlied", tekkDrums });
+    const set = liedZuSet(pcm, 44100, { name: "Testlied", kanaele: 1, tekkDrums });
     expect(set.projekt.samples.length).toBeGreaterThan(0);
     expect(set.patterns.length).toBeGreaterThan(1);
     expect(set.bank.byteLength).toBeGreaterThan(1000);
@@ -42,13 +42,13 @@ describe("liedZuSet", () => {
   });
 
   it("wählt die Tempo-Oktave und legt das Tekk-Tempo fest", () => {
-    const set = liedZuSet(pcm, 44100, { name: "T", tekkDrums });
+    const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, tekkDrums });
     expect(set.bpm).toBeCloseTo(set.gemessen * set.oktave, 0);
     expect(set.bpm).toBeGreaterThanOrEqual(140);
   });
 
   it("eine feste BPM-Angabe schlägt die Messung", () => {
-    const set = liedZuSet(pcm, 44100, { name: "T", bpm: 200, tekkDrums });
+    const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, bpm: 200, tekkDrums });
     expect(set.bpm).toBe(200);
     expect(set.patterns[0].bpm).toBe(200);
   });
@@ -56,21 +56,21 @@ describe("liedZuSet", () => {
   it("sagt es, wenn ohne Stems und ohne Drums gebaut wird", () => {
     // Genau die Falle, die im Stapellauf auffiel: aus dem Vollmix entstehen nur
     // Melodie-Fenster, und ohne tekk4 hat der Drop keine Kick.
-    const set = liedZuSet(pcm, 44100, { name: "T" });
+    const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1 });
     expect(set.hinweise.join(" ")).toMatch(/kein Schlagzeug/i);
     expect(set.zaehler.drums).toBe(0);
     expect(set.zaehler.vox).toBe(0);
   });
 
   it("mit tekk4 hat der Drop ein Schlagzeug", () => {
-    const set = liedZuSet(pcm, 44100, { name: "T", tekkDrums });
+    const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, tekkDrums });
     const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;
     expect(drop.parts[0].muted).toBe(false);
     expect(drop.parts[0].steps.filter((s) => s.active).length).toBeGreaterThan(8);
   });
 
   it("mit Stem-Trennung entstehen eigene Drums und Vocals", () => {
-    const set = liedZuSet(pcm, 44100, { name: "T", stems: stemsAttrappe(true) });
+    const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, stems: stemsAttrappe(true) });
     expect(set.zaehler.drums).toBeGreaterThan(0);
     expect(set.zaehler.vox).toBeGreaterThan(0);
     expect(set.projekt.samples.some((s) => s.rolle === "vox")).toBe(true);
@@ -78,18 +78,18 @@ describe("liedZuSet", () => {
   });
 
   it("ohne erkannte Vocals steht das im Hinweis", () => {
-    const set = liedZuSet(pcm, 44100, { name: "T", stems: stemsAttrappe(false) });
+    const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, stems: stemsAttrappe(false) });
     expect(set.zaehler.vox).toBe(0);
     expect(set.hinweise.join(" ")).toMatch(/Vocals/i);
   });
 
   it("kann auch ein einzelnes Jam-Pattern statt der Kette", () => {
-    const set = liedZuSet(pcm, 44100, { name: "T", tekkDrums, aufbau: false });
+    const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, tekkDrums, aufbau: false });
     expect(set.patterns).toHaveLength(1);
   });
 
   it("die Sample-Namen bleiben im Geräte-Rahmen", () => {
-    const set = liedZuSet(pcm, 44100, { name: "Ein sehr langer Liedname", stems: stemsAttrappe(true) });
+    const set = liedZuSet(pcm, 44100, { name: "Ein sehr langer Liedname", kanaele: 1, stems: stemsAttrappe(true) });
     for (const s of set.projekt.samples) expect(s.name.length).toBeLessThanOrEqual(16);
   });
 });
@@ -105,7 +105,7 @@ describe("liedZuSet: das Tempo der Samples und der Patterns muss dasselbe sein",
    * dann MIT diesem Ziel analysieren. Der Kern muss dasselbe tun.
    */
   it("die Fenster sind auf dasselbe Tempo gedehnt, mit dem die Patterns laufen", () => {
-    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", tekkDrums });
+    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", kanaele: 1, tekkDrums });
     // Das Lied wurde mit 105 gemessen und auf 210 verdoppelt — die Samples
     // müssen für 210 gedehnt sein, nicht für 180.
     expect(set.bpm).toBeCloseTo(set.gemessen * set.oktave, 0);
@@ -114,7 +114,7 @@ describe("liedZuSet: das Tempo der Samples und der Patterns muss dasselbe sein",
   });
 
   it("auch bei fest vorgegebenem Tempo", () => {
-    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", bpm: 200, tekkDrums });
+    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", kanaele: 1, bpm: 200, tekkDrums });
     expect(set.zielBpm).toBeCloseTo(200, 1);
     expect(set.patterns[0].bpm).toBe(200);
   });
@@ -122,7 +122,7 @@ describe("liedZuSet: das Tempo der Samples und der Patterns muss dasselbe sein",
   it("ein Loop-Sample passt zur Taktlänge des Patterns", () => {
     // Vier Takte bei 210 BPM sind 4,57 s. Stimmt das Dehnziel nicht, weicht
     // die Länge sichtbar ab und der Loop läuft im Pattern aus dem Takt.
-    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", tekkDrums });
+    const set = liedZuSet(liedchen(40, 105), 44100, { name: "T", kanaele: 1, tekkDrums });
     const takte = (s: { sekunden: number }) => (s.sekunden * set.bpm) / (60 * 4);
     for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
       const t = takte(s);
@@ -147,18 +147,18 @@ describe("liedZuSet: die Melodie darf nicht von den Vocals verdrängt werden", (
     // — Drums und 53 Vocal-Schnipsel, aber KEINE einzige Melodie. Die drei
     // Fenster waren vom Budget in ein zweites Volume gedrängt worden, und
     // geschrieben wird nur das erste. Ohne Melodie ist kein Lied wiedererkennbar.
-    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", tekkDrums, stems: vieleVox });
+    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", kanaele: 1, tekkDrums, stems: vieleVox });
     const melos = set.projekt.samples.filter((s) => s.rolle === "melo");
     expect(melos.length, `nur ${set.projekt.samples.map((s) => s.rolle).join(",")}`).toBeGreaterThan(0);
   });
 
   it("und die Vocals sind trotzdem noch dabei", () => {
-    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", tekkDrums, stems: vieleVox });
+    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", kanaele: 1, tekkDrums, stems: vieleVox });
     expect(set.projekt.samples.some((s) => s.rolle === "vox")).toBe(true);
   });
 
   it("das Drop-Pattern hat eine Melodie auf den Melo-Parts", () => {
-    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", tekkDrums, stems: vieleVox });
+    const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", kanaele: 1, tekkDrums, stems: vieleVox });
     const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;
     expect(drop.parts[12].muted, "Part 13 (Melo) stumm — keine Melodie im Set").toBe(false);
   });
@@ -174,7 +174,7 @@ describe("liedZuSet: fremde Abtastraten", () => {
    */
   for (const rate of [48000, 96000]) {
     it(`${rate} Hz ergibt taktgenaue Loops`, () => {
-      const set = liedZuSet(liedchen(60, 105, rate), rate, { name: "Fremd", tekkDrums });
+      const set = liedZuSet(liedchen(60, 105, rate), rate, { name: "Fremd", kanaele: 1, tekkDrums });
       expect(set.projekt.samples.length).toBeGreaterThan(0);
       for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
         const takte = (s.sekunden * set.bpm) / 240;
@@ -183,16 +183,57 @@ describe("liedZuSet: fremde Abtastraten", () => {
     });
 
     it(`${rate} Hz: die Samples sind auf 44,1 kHz gebracht`, () => {
-      const set = liedZuSet(liedchen(60, 105, rate), rate, { name: "Fremd", tekkDrums });
+      const set = liedZuSet(liedchen(60, 105, rate), rate, { name: "Fremd", kanaele: 1, tekkDrums });
       for (const s of set.projekt.samples) expect(s.sampleRate ?? 44100).toBe(44100);
     });
   }
 
   it("44,1 kHz bleibt unverändert", () => {
-    const set = liedZuSet(liedchen(60, 105, 44100), 44100, { name: "Normal", tekkDrums });
+    const set = liedZuSet(liedchen(60, 105, 44100), 44100, { name: "Normal", kanaele: 1, tekkDrums });
     for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
       const takte = (s.sekunden * set.bpm) / 240;
       expect(Math.abs(takte - Math.round(takte))).toBeLessThan(0.08);
+    }
+  });
+});
+
+describe("liedZuSet: Stereo-Quellen", () => {
+  /** Verschränktes Stereo — genau das, was parseWav liefert. */
+  function stereo(mono: Float32Array): Float32Array {
+    const out = new Float32Array(mono.length * 2);
+    for (let i = 0; i < mono.length; i++) {
+      out[i * 2] = mono[i];
+      out[i * 2 + 1] = mono[i];
+    }
+    return out;
+  }
+
+  it("Stereo klingt nicht halb so langsam wie Mono", () => {
+    // Der Fehler am Gerät (2026-08-26): "die vocals sind zu langsam, das klingt
+    // furchtbar". parseWav gibt VERSCHRÄNKTES Stereo zurück; als Mono
+    // weitergereicht ist das Feld doppelt so lang, also spielt alles halb so
+    // schnell — und die abwechselnden Kanäle klingen obendrein zerhackt.
+    const mono = liedchen(60, 105);
+    const a = liedZuSet(mono, 44100, { name: "M", kanaele: 1, tekkDrums });
+    const b = liedZuSet(stereo(mono), 44100, { name: "S", kanaele: 2, tekkDrums });
+    expect(b.bpm).toBeCloseTo(a.bpm, 0);
+    const laenge = (s: typeof a) => s.projekt.samples.filter((x) => x.kind === "loop")[0]?.sekunden ?? 0;
+    expect(laenge(b)).toBeCloseTo(laenge(a), 1);
+  });
+
+  it("Stereo ergibt taktgenaue Loops", () => {
+    const set = liedZuSet(stereo(liedchen(60, 105)), 44100, { name: "S", kanaele: 2, tekkDrums });
+    for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
+      const takte = (s.sekunden * set.bpm) / 240;
+      expect(Math.abs(takte - Math.round(takte)), `${s.name}: ${takte.toFixed(2)} Takte`).toBeLessThan(0.08);
+    }
+  });
+
+  it("Stereo mit 48 kHz — beides zusammen", () => {
+    const set = liedZuSet(stereo(liedchen(60, 105, 48000)), 48000, { name: "S48", kanaele: 2, tekkDrums });
+    for (const s of set.projekt.samples.filter((x) => x.kind === "loop")) {
+      const takte = (s.sekunden * set.bpm) / 240;
+      expect(Math.abs(takte - Math.round(takte)), `${s.name}: ${takte.toFixed(2)} Takte`).toBeLessThan(0.08);
     }
   });
 });

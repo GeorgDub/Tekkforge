@@ -273,6 +273,7 @@ function cmdLied(args: string[]): void {
     const name = path.basename(datei).replace(/\.[^.]+$/, "");
     const set = liedZuSet(roh.pcm, roh.sampleRate, {
       name,
+      kanaele: roh.channels,
       tekkDrums,
       stems,
       bpm: opts.bpm,

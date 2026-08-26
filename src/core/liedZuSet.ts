@@ -17,7 +17,7 @@
  */
 
 import { analysiereLied } from "./liedAnalyse";
-import { polyPhaseResample } from "./audioProcessor";
+import { polyPhaseResample, downmixToMono } from "./audioProcessor";
 import { voxSegmentEintrag } from "./generatorSession";
 import { rmsDb, peakVon, familie, type ScanEintrag } from "./sampleScan";
 import { schneideDrums, type DrumTreffer } from "./drumSchnitt";
@@ -39,6 +39,16 @@ export interface StemErgebnis {
 export interface LiedZuSetOptionen {
   /** Name des Lieds (fuer Sample- und Pattern-Namen). */
   name: string;
+  /**
+   * Kanalzahl der uebergebenen Daten — ABSICHTLICH ohne Vorgabewert.
+   *
+   * `parseWav` liefert VERSCHRAENKTES Stereo (L,R,L,R). Wer das als Mono
+   * weiterreicht, hat ein doppelt so langes Feld: alles spielt halb so schnell,
+   * und die abwechselnden Kanaele klingen zerhackt. Genau so ist es passiert.
+   * Ohne Vorgabe muss jeder Aufrufer eine Zahl hinschreiben und dabei kurz
+   * nachsehen, was er da eigentlich hat.
+   */
+  kanaele: number;
   /** Zielrichtung fuer die Oktavwahl des Tempos. */
   zielBpm?: number;
   /** Feste BPM statt der gemessenen. */
@@ -127,7 +137,10 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
    * diese stille Voraussetzung weg — also hier ausdruecklich herstellen.
    */
   const sr = 44100;
-  const pcm = srRoh === sr ? pcmRoh : polyPhaseResample(pcmRoh, srRoh, sr, 1);
+  // Erst auf einen Kanal, dann auf 44,1 kHz — in dieser Reihenfolge, sonst
+  // rechnet der Resampler auf verschraenkten Daten und verruehrt die Kanaele.
+  const einKanal = opts.kanaele > 1 ? downmixToMono(pcmRoh).pcm : pcmRoh;
+  const pcm = srRoh === sr ? einKanal : polyPhaseResample(einKanal, srRoh, sr, 1);
   /**
    * ZWEI Durchgaenge — und das ist keine Feinheit, sondern der Unterschied
    * zwischen "man erkennt das Lied" und "man erkennt gar nichts".
