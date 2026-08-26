@@ -143,6 +143,32 @@ describe("bankPlan", () => {
     expect(t.map((x) => x.takte)).toEqual([4, 4]);
     expect(t[0].pcm.length + t[1].pcm.length).toBe(frames);
   });
+  it("sparsameVocals: Vocal-Loops belegen halb so viel, Melos bleiben unberuehrt", () => {
+    const sr = 44100;
+    const frames = Math.round(8 * (240 / 180) * sr);
+    const mach = (name: string) => {
+      const pcm = new Float32Array(frames).map((_, i) => Math.sin(i / 20) * 0.5);
+      return scanne([{ name, pcm, sampleRate: sr }]).eintraege[0];
+    };
+    const vox = mach("GZUZ V01.wav");
+    const melo = mach("HyPer MeLo.wav");
+    expect([vox.rolle, melo.rolle]).toEqual(["vox", "melo"]);
+    const voll = planeBank([vox, melo], { name: "v", bpm: 180, bankZeit: "x" });
+    const sparsam = planeBank([vox, melo], { name: "s", bpm: 180, bankZeit: "x", sparsameVocals: true });
+    const sek = (p: typeof voll.projekt, rolle: string) =>
+      p.samples.filter((s) => s.rolle === rolle).reduce((a, b) => a + b.sekunden, 0);
+    // Vocals: halbe Abtastrate -> halbe Datenmenge bei gleicher Spieldauer
+    const vollVox = voll.projekt.samples.filter((s) => s.rolle === "vox");
+    const sparVox = sparsam.projekt.samples.filter((s) => s.rolle === "vox");
+    expect(sparVox.length).toBe(vollVox.length);
+    expect(sparsam.projekt.samples.find((s) => s.rolle === "vox")!.sampleRate).toBe(22050);
+    expect(voll.projekt.samples.find((s) => s.rolle === "vox")!.sampleRate).toBe(44100);
+    // Spieldauer bleibt gleich (Takte unveraendert), nur die Rate halbiert sich
+    expect(sek(sparsam.projekt, "vox")).toBeCloseTo(sek(voll.projekt, "vox"), 2);
+    // Melos ruehrt das nicht an
+    expect(sparsam.projekt.samples.find((s) => s.rolle === "melo")!.sampleRate).toBe(44100);
+  });
+
   it("waehleVolumes: Budget teilt in Scheiben, nichts geht verloren", () => {
     const { eintraege } = scanne(eingaben(alle));
     const vol = waehleVolumes(eintraege, 180, 30);

@@ -488,6 +488,8 @@
                   <button id="fxpRead" class="ghost">Vom Gerät lesen</button>
                   <button id="fxpFile" class="ghost">Aus Datei…</button>
                   <button id="fxpSave" class="ghost">Als Datei sichern</button>
+                  <button id="fxpGrooveLied" class="ghost hidden" title="Timing eines Lieds messen und als Groove-Vorlage übernehmen">♪ Groove aus Lied…</button>
+                  <input id="fxpLiedIn" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" class="hidden" />
                   <input id="fxpFileIn" type="file" accept=".e2fxp,.e2gv,.ifx,.mfx,.gv,.bin" class="hidden" />
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
@@ -498,6 +500,13 @@
                     Gibt es nur über MIDI, nicht im Menü. Danach am Gerät ins Global-Menü und
                     <b>Write</b> drücken, sonst ist es nach dem Ausschalten wieder weg.
                   </span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Komplettsicherung:</b></span>
+                  <button id="fxpSichern" class="ghost" title="Alle lesbaren Bereiche am Stück auslesen und als Datei ablegen">Gerät sichern…</button>
+                  <button id="fxpVergleichen" class="ghost" title="Gerät gegen eine gesicherte Datei halten">Gegen Datei vergleichen…</button>
+                  <input id="fxpSicherungIn" type="file" accept=".tfbak,.json" class="hidden" />
+                  <span class="sub" id="fxpSicherungInfo" style="margin:0">Effekt-Presets, Groove-Vorlagen und Zähler — rund 100 kB.</span>
                 </div>
                 <div id="fxpEditor" style="margin-top:10px"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
@@ -581,6 +590,17 @@
               <div id="poolRamBalken"></div>
             </div>
             <div id="poolRamText" class="sub" style="margin:2px 0 0"></div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
+              <span class="sub" style="margin:0;font-size:10px">Ordnen:</span>
+              <button id="poolPacken" class="ghost" style="padding:2px 8px;font-size:11px" title="Lücken schließen — die Parts werden mitgezogen">Lücken schließen</button>
+              <select id="poolSortNach" style="font-size:11px;padding:2px">
+                <option value="name">nach Name</option>
+                <option value="laenge">nach Länge</option>
+                <option value="nummer">nach Nummer</option>
+              </select>
+              <button id="poolSortieren" class="ghost" style="padding:2px 8px;font-size:11px" title="Neu ordnen und lückenlos durchnummerieren">Sortieren</button>
+            </div>
+            <div id="poolOrdnenInfo" class="sub" style="margin:2px 0 0;font-size:10px"></div>
             <p class="sub" style="margin-top:6px">
               # / Name direkt editierbar · ✎ bearbeiten · ↻ Audio ersetzen · ▶ anhören · ✕ entfernen.
               Nummer ändern remappt verlinkte Parts.

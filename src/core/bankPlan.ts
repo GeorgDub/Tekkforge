@@ -41,6 +41,12 @@ export interface ProjektSample {
   raster?: MeloRaster;
   /** Lied-Kuerzel, wenn das Sample aus einer Lied-Analyse stammt (Multi-Select-Zuordnung) */
   lied?: string;
+  /**
+   * Abtastrate des Slots — normalerweise 44100, bei sparsamen Vocals 22050.
+   * Optional, weil aeltere Projektdateien das Feld nicht haben; fehlt es,
+   * gilt 44100.
+   */
+  sampleRate?: number;
 }
 export interface Projekt {
   name: string;
@@ -60,6 +66,17 @@ export interface PlanOptionen {
   volume?: number;
   tekkDrumsBank?: Uint8Array;
   bankZeit?: string;
+  /**
+   * Vocal-Loops mit halber Abtastrate ablegen — halbiert ihren Speicherbedarf
+   * und verdoppelt damit die moegliche Abdeckung eines Lieds. Gesang traegt
+   * kaum Anteile ueber 11 kHz, der Verlust faellt weit weniger auf als bei
+   * Drums oder Melodien (die bleiben unangetastet).
+   *
+   * ⚠ Am Geraet noch nicht abgenommen: Das Bankformat speichert die Rate je
+   * Slot, ob die Electribe sie beim Abspielen wirklich beachtet, ist ungeprueft.
+   * Tut sie es nicht, klaengen betroffene Samples doppelt so schnell.
+   */
+  sparsameVocals?: boolean;
 }
 export interface Teil {
   name: string;
@@ -253,6 +270,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
       samples.push({
         nr, name: s.name.trim(), rolle: TEKK_ROLLE[praefix], familie: "tekk", kind: "oneshot", takte: 0,
         sekunden: pcm.length / s.sampleRate, rmsDb: rmsDb(pcm), quelle: `tekk4.all #${nr}`, gruppe: "tekk",
+        sampleRate: s.sampleRate,
       });
       vergeben.add(s.name.trim().toLowerCase());
     }
@@ -264,9 +282,13 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
     const { teile } = bereiteAuf(e, opts.bpm);
     for (const t of teile) {
       const name = eindeutig(t.name, vergeben);
-      slots.push({ slotIndex: displayNumberToSlotIndex(nr), sampleNumber: displayNumberToOsc(nr), name, category: KAT[e.rolle], pcmData: t.pcm, sampleRate: SR, channels: 1, loopType: 1 });
+      // Sparsame Vocals: halbe Rate, halber Speicher, gleiche Spieldauer
+      const sparsam = opts.sparsameVocals && e.rolle === "vox" && t.kind === "loop";
+      const rate = sparsam ? SR / 2 : SR;
+      const pcm = sparsam ? polyPhaseResample(t.pcm, SR, rate, 1) : t.pcm;
+      slots.push({ slotIndex: displayNumberToSlotIndex(nr), sampleNumber: displayNumberToOsc(nr), name, category: KAT[e.rolle], pcmData: pcm, sampleRate: rate, channels: 1, loopType: 1 });
       samples.push({
-        nr, name, rolle: e.rolle, familie: e.familie, kind: t.kind, takte: t.takte, sekunden: t.pcm.length / SR, rmsDb: rmsDb(t.pcm), quelle: e.datei,
+        nr, name, rolle: e.rolle, familie: e.familie, kind: t.kind, takte: t.takte, sekunden: pcm.length / rate, rmsDb: rmsDb(pcm), quelle: e.datei, sampleRate: rate,
         gruppe: t.kind === "loop" ? `${e.rolle}:${e.familie}` : e.rolle,
         ...(t.chunk !== undefined ? { chunk: t.chunk, chunks: 2 as const } : {}),
         ...(e.rolle === "melo" && t.kind === "loop" ? { raster: meloRaster(t.pcm, SR, t.takte) } : {}),

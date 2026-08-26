@@ -33,6 +33,7 @@ import {
 } from "../core/e2Groove";
 import { baueMidiThru } from "../core/fxLive";
 import { grooveAusAudio } from "../core/grooveAusLied";
+import { sicherungsPlan, baueSicherung, leseSicherung, vergleicheSicherung, type SicherungsBlock } from "../core/geraetSicherung";
 import { dekodiere } from "./audioDecode";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
 
@@ -396,6 +397,77 @@ function sichern(): void {
   setStatus(`„${roh}“ als ${name}.${endung} gesichert.`);
 }
 
+// ─── Komplettsicherung ───────────────────────────────────────────────────────
+
+const sicherungsInfo = (t: string): void => {
+  const el = document.getElementById("fxpSicherungInfo");
+  if (el) el.textContent = t;
+};
+
+/**
+ * Alle Bereiche der RAM-Karte am Stueck lesen. Das sind rund 400 Anfragen —
+ * darum Fortschritt anzeigen und bei der ersten Fehlmeldung abbrechen, statt
+ * eine lueckenhafte Sicherung zu schreiben.
+ */
+async function alleBloeckeLesen(): Promise<SicherungsBlock[] | null> {
+  if (!hooks) return null;
+  const plan = sicherungsPlan();
+  const gesamt = plan.reduce((s, p) => s + p.laenge, 0);
+  const out: SicherungsBlock[] = [];
+  let fertig = 0;
+  for (const p of plan) {
+    const bytes = new Uint8Array(p.laenge);
+    for (let off = 0; off < p.laenge; off += 0x100) {
+      const len = Math.min(0x100, p.laenge - off);
+      const r = await hooks.lesen(p.adresse + off, len);
+      if (!r.ok) {
+        setStatus(`Sicherung abgebrochen bei ${p.label} +0x${off.toString(16)}: ${r.reason}`);
+        return null;
+      }
+      bytes.set(r.bytes.subarray(0, len), off);
+      fertig += len;
+      sicherungsInfo(`${p.label} … ${Math.round((fertig / gesamt) * 100)} %`);
+    }
+    out.push({ ...p, bytes });
+  }
+  return out;
+}
+
+async function geraetSichern(): Promise<void> {
+  setStatus("Lese alle Bereiche — das dauert eine Weile …");
+  const bloecke = await alleBloeckeLesen();
+  if (!bloecke) return;
+  const text = baueSicherung(bloecke, { geraet: "E2S", firmware: "hacktribe" });
+  const name = `tekkforge-geraet-${new Date().toISOString().slice(0, 10)}.tfbak`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const kb = Math.round(bloecke.reduce((s, b) => s + b.laenge, 0) / 1024);
+  sicherungsInfo(`${bloecke.length} Bereiche, ${kb} kB gesichert.`);
+  setStatus(`Sicherung als ${name} abgelegt.`);
+}
+
+async function gegenSicherungVergleichen(f: File): Promise<void> {
+  try {
+    const alt = leseSicherung(await f.text());
+    setStatus(`Lese das Gerät zum Vergleich mit „${f.name}" …`);
+    const jetzt = await alleBloeckeLesen();
+    if (!jetzt) return;
+    const d = vergleicheSicherung(alt.bloecke, jetzt);
+    sicherungsInfo(alt.wann ? `Sicherung vom ${new Date(alt.wann).toLocaleString("de-DE")}` : "");
+    setStatus(
+      d.length === 0
+        ? "Kein Unterschied — das Gerät steht genau wie in der Sicherung."
+        : `${d.length} Bereich(e) weichen ab: ` +
+          d.map((x) => `${x.label} (${x.hinweis ?? `${x.abweichendeBytes} Byte ab +${x.ersteStelle}`})`).join(", "),
+    );
+  } catch (e) {
+    setStatus("Vergleich fehlgeschlagen: " + (e instanceof Error ? e.message : String(e)));
+  }
+}
+
 /**
  * Timing eines Lieds messen und als Groove-Vorlage uebernehmen. Der Rest der
  * Vorlage (Name, Laenge) bleibt bearbeitbar — geschrieben wird erst auf Knopf.
@@ -509,6 +581,12 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   $("fxpWrite").addEventListener("click", () => void schreiben());
   $("fxpUndo").addEventListener("click", () => void zurueck());
   $("fxpSave").addEventListener("click", sichern);
+  $("fxpSichern").addEventListener("click", () => void geraetSichern());
+  $("fxpVergleichen").addEventListener("click", () => ($("fxpSicherungIn") as HTMLInputElement).click());
+  $("fxpSicherungIn").addEventListener("change", () => {
+    const f = ($("fxpSicherungIn") as HTMLInputElement).files?.[0];
+    if (f) void gegenSicherungVergleichen(f);
+  });
   $("fxpGrooveLied").addEventListener("click", () => ($("fxpLiedIn") as HTMLInputElement).click());
   $("fxpLiedIn").addEventListener("change", () => {
     const f = ($("fxpLiedIn") as HTMLInputElement).files?.[0];

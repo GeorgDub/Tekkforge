@@ -68,6 +68,7 @@ import {
 } from "../core/firmwareMode";
 import { initFxPresetPanel } from "./fxPreset";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
+import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import {
   E2_RAM_MAP,
   RAM_CMD,
@@ -1703,6 +1704,27 @@ function renderAll(): void {
 export function initEditor(): void {
   // Sample-Editor: geänderte Daten zurück in den Pool, Vorhören über denselben
   // Player wie die Pool-Liste
+  // Bank ordnen: Nummern verschieben und die Part-Verweise mitziehen
+  const ordnenInfo = (t: string) => {
+    const el = document.getElementById("poolOrdnenInfo");
+    if (el) el.textContent = t;
+  };
+  const nachOrdnen = (b: { verschoben: number; aenderungen: { von: number; nach: number }[] }) => {
+    if (b.verschoben === 0) {
+      ordnenInfo("Nichts zu tun — die Bank ist bereits lückenlos in dieser Reihenfolge.");
+      return;
+    }
+    markDirty();
+    renderAll();
+    const bsp = b.aenderungen.slice(0, 3).map((a) => `${a.von}→${a.nach}`).join(", ");
+    ordnenInfo(`${b.verschoben} Sample(s) umnummeriert (${bsp}${b.aenderungen.length > 3 ? " …" : ""}). Parts wurden mitgezogen.`);
+  };
+  document.getElementById("poolPacken")?.addEventListener("click", () => nachOrdnen(packeNummernNeu(project)));
+  document.getElementById("poolSortieren")?.addEventListener("click", () => {
+    const nach = ($("poolSortNach") as HTMLSelectElement).value as SortierSchluessel;
+    nachOrdnen(sortiereBank(project, nach));
+  });
+
   initSampleEditor({
     uebernehmen: (nummer, pcm, loop) => {
       const s = project.samples.find((x) => x.number === nummer);

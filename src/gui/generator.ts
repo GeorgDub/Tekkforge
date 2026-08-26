@@ -67,6 +67,8 @@ interface Zustand {
   liedDrumsEigene: boolean;
   /** Ziel-BPM der letzten Lied-Analyse — Bank und Patterns muessen im selben Tempo laufen wie die geschnittenen Fenster */
   liedBpm: number | null;
+  /** Vocals mit halber Abtastrate in die Bank (spart Speicher, am Geraet noch unbestaetigt) */
+  sparsameVocals: boolean;
   /** yt-dlp/ffmpeg-Probe fuer den URL-Import (nur Electron) */
   url: { ok: boolean; meldung: string } | null;
   urlLaeuft: boolean;
@@ -88,7 +90,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false, liedBpm: null,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false,
   url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
@@ -325,6 +327,7 @@ function render(): void {
         <input id="genLiedBpm" type="number" min="40" max="300" placeholder="messen" style="width:80px" />
         <label title="${escapeHtml(z.python?.meldung ?? "Probe laeuft …")}"><input id="genDemucs" type="checkbox" ${z.python?.demucs ? (z.demucsGewuenscht ? "checked" : "") : "disabled"} /> Stems per Demucs${z.python ? (z.python.demucs ? "" : " (nicht verfuegbar)") : " (Probe …)"}</label>
         <label title="Ohne Haken werden Kick/Snare/Hat aus dem Drums-Stem des Lieds geschnitten; mit Haken kommen die Drums aus tekk4 bzw. dem gescannten Ordner."><input id="genLiedEigene" type="checkbox" ${z.liedDrumsEigene ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> eigene Drums statt Lied-Drums</label>
+        <label title="Vocals mit halber Abtastrate ablegen — halber Speicher, doppelt so viel Lied passt in eine Bank. Gesang verliert dabei kaum hörbar. ⚠ Am Gerät noch nicht abgenommen: klingen die Vocals doppelt so schnell, beachtet die Electribe die gespeicherte Rate nicht — dann Haken wieder raus."><input id="genSparsameVox" type="checkbox" ${z.sparsameVocals ? "checked" : ""} /> Vocals sparsam (halbe Rate)</label>
         <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
         <button id="genLiedAlles" class="primary" ${z.liedLaeuft ? "disabled" : ""} title="Analysieren → Stems → Drums schneiden → Bank bauen → Patterns erzeugen in einem Ablauf">${z.liedLaeuft ? "Laeuft …" : "Alles aus dem Lied"}</button>
       </div>
@@ -385,6 +388,9 @@ function verdrahte(): void {
   });
   document.getElementById("genDemucs")?.addEventListener("change", (e) => {
     z.demucsGewuenscht = (e.target as HTMLInputElement).checked;
+  });
+  document.getElementById("genSparsameVox")?.addEventListener("change", (e) => {
+    z.sparsameVocals = (e.target as HTMLInputElement).checked;
   });
   knopf("genBankSpeichern", () => {
     if (z.bank && z.projekt) download(z.bank, `${z.projekt.name}.all`, "application/octet-stream");
@@ -719,7 +725,9 @@ async function setsBauen(gruppen: LiedGruppe[]): Promise<void> {
     render();
     await new Promise((r) => setTimeout(r, 0));
     try {
-      const { projekt, bank } = planeBank(eintraege, { name, bpm, volume: 1, tekkDrumsBank: tekk ?? undefined });
+      const { projekt, bank } = planeBank(eintraege, {
+        name, bpm, volume: 1, tekkDrumsBank: tekk ?? undefined, sparsameVocals: z.sparsameVocals,
+      });
       const ergebnis = erzeuge(projekt, { modus: "promelo", bpm, aufbau: z.aufbau, startSlot: 1 });
       z.sets.push({
         name,
@@ -753,7 +761,9 @@ async function bankBauen(): Promise<void> {
   if (tekkGewuenscht && !tekk) alert("tekk4.all nicht gefunden (examples/e2s/tekk4.all) — Bank ohne tekk-Drums.");
   const name = z.ordner.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 12) || "projekt";
   try {
-    const { projekt, bank, warnungen } = planeBank(z.eintraege, { name, bpm, volume, tekkDrumsBank: tekk ?? undefined });
+    const { projekt, bank, warnungen } = planeBank(z.eintraege, {
+      name, bpm, volume, tekkDrumsBank: tekk ?? undefined, sparsameVocals: z.sparsameVocals,
+    });
     z.projekt = projekt;
     z.bank = new Uint8Array(bank);
     z.pool = importSamplesFromAll(z.bank);
