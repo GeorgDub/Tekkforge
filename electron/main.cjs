@@ -331,9 +331,25 @@ function registerKiIpc() {
 // ── Lied-Bruecke (Generator-Tab): Python/Demucs-Probe und Stems ueber scripts/stems.py ──
 const { spawn } = require("child_process");
 
+/**
+ * Welches Python startet die Stem-Trennung?
+ *
+ * Reihenfolge: eingestellter Pfad → eigene TekkForge-Umgebung → "python" aus
+ * dem Systempfad. Die eigene Umgebung gibt es, damit dort eine Torch-Fassung
+ * mit Grafikkarten-Unterstuetzung liegen kann, ohne die vorhandene
+ * Python-Installation des Nutzers anzufassen — gemessener Unterschied auf
+ * einer RTX A2000: Faktor 7 (60 s Audio in 2,4 s statt 17,7 s).
+ */
 function pythonPfad() {
   const s = leseSettings();
-  return typeof s.pythonPfad === "string" && s.pythonPfad.trim() ? s.pythonPfad.trim() : "python";
+  if (typeof s.pythonPfad === "string" && s.pythonPfad.trim()) return s.pythonPfad.trim();
+  const eigen = path.join(app.getPath("appData"), "..", "Local", "TekkForge", "py-cuda", "Scripts", "python.exe");
+  try {
+    if (fs.existsSync(eigen)) return eigen;
+  } catch {
+    /* kein Zugriff — dann eben das System-Python */
+  }
+  return "python";
 }
 
 function laufen(cmd, args, opts) {

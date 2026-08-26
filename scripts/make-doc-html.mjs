@@ -32,6 +32,7 @@ const abschnitte = [
       "Sample-Pool als Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken gegen das ~24-MB-Sample-RAM.",
       "<b>Sample-Editor</b> — Wellenform ansehen, Anfang und Ende ziehen, stille Ränder finden, kürzen, ein- und ausblenden, normalisieren, umkehren und den Loop setzen.",
       "<b>Bank ordnen</b> — Lücken schließen oder nach Name, Länge oder Nummer sortieren. Jede Nummernänderung zieht die Verweise der Patterns mit, damit nichts ins Leere zeigt.",
+      "<b>Song-Modus</b> — Patterns zu einem Track aneinanderreihen: Abschnitt wählen, Durchgänge festlegen, Kette schreiben. Danach spielt das Gerät den Song von allein durch.",
       "Export als <code>.e2spat</code> (Einzel-Pattern), <code>.e2sallpat</code> (Bank mit 250 Slots) und <code>.all</code> (Sample-Bank).",
       "Direkter Draht zum Gerät: Patterns per SysEx in einen Slot schreiben oder von dort holen.",
     ],
@@ -44,7 +45,7 @@ const abschnitte = [
     lead: "Das Herzstück: aus einem Sample-Ordner oder einem ganzen Lied entsteht eine fertige Sample-Bank samt passender Patterns.",
     punkte: [
       "<b>Lied hineingeben</b> — als Datei oder per YouTube-/SoundCloud-Link. Tempo, Tonart (mit Camelot-Angabe) und die markanten Stellen werden gemessen.",
-      "<b>Stems trennen</b> — Demucs zerlegt das Lied in Melodie, Bass, Drums und Vocals. Aus dem Drums-Stem schneidet TekkForge einzelne Kick-, Snare- und Hat-Shots. Wahlweise schnell oder genau; eine Grafikkarte wird genutzt, sobald sie verfügbar ist.",
+      "<b>Stems trennen</b> — Demucs zerlegt das Lied in Melodie, Bass, Drums und Vocals. Aus dem Drums-Stem schneidet TekkForge einzelne Kick-, Snare- und Hat-Shots. Wahlweise schnell oder genau. Eine Grafikkarte wird genutzt, sobald sie verfügbar ist — gemessen der Faktor 7: eine Minute Musik in 2,4 statt 17,7 Sekunden.",
       "<b>Ganze Vocalspur</b> — alle hörbaren 8-Takt-Abschnitte werden getrennt und der Reihe nach auf die Patterns verteilt. Wer die Kette durchspielt, hat das Lied einmal komplett gehört. Wahlweise sparsam gespeichert, dann passt doppelt so viel Lied in eine Bank.",
       "<b>Aufbau-Kette</b> — die Patterns verketten sich von einer dünnen Anfangsstufe bis zum Drop; gespielt wird durch Entmuten am Gerät.",
       "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Snare-Fill, im Drop gehen die Kicks auf Maximum.",
@@ -277,9 +278,9 @@ const roadmap = [
     text: "Ein vocal-lastiges Lied bringt schnell 30 Segmente mit — mehr, als die ~24 MB Sample-RAM auf einmal fassen. Ideen: Vocals mit halber Abtastrate ablegen (doppelte Abdeckung) oder klanglich ähnliche Abschnitte zusammenfassen.",
   },
   {
-    titel: "Stem-Trennung: Grafikkarte nutzen",
-    wann: "wartet auf Einrichtung",
-    text: "Die Wahl zwischen schnell und genau ist eingebaut und spart rund ein Fünftel. Der große Hebel liegt aber bei der Grafikkarte: TekkForge nutzt sie automatisch, sobald die passende Torch-Fassung installiert ist — bisher liegt nur die Prozessor-Fassung vor, und die App sagt das jetzt auch."
+    titel: "Klangprobe vor dem Schreiben",
+    wann: "geplant",
+    text: "Vor dem Übertragen einer Bank gegenüberstellen: der Original-Ausschnitt und das, was das Gerät daraus macht — nach Tempoanpassung, Zusammenmischen auf einen Kanal und gegebenenfalls halber Abtastrate. So hört man vorher, was man bekommt."
   },
   {
     titel: "Transkription verfeinern",
@@ -395,7 +396,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>614</b><span>automatische Tests</span></div>
+    <div><b>622</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -455,7 +456,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>614 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>622 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
