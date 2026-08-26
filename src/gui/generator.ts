@@ -63,6 +63,8 @@ interface Zustand {
   liedStatus: string;
   /** Aufbau-Kette: Steps ueberall gesetzt, entmutet wird stufenweise; Drop kickt haerter, Vocal-Paare wandern ueber die Kette */
   aufbau: boolean;
+  /** Index des gerade vorgehoerten Patterns, sonst null. */
+  hoertPattern: number | null;
   /** Erste Aufbau-Stufe nur mit jedem zweiten Schlagzeug-Schlag. */
   duennesIntro: boolean;
   /** Alter, dichter Satz statt des schlanken. */
@@ -96,7 +98,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, duennesIntro: false, dichteVoll: false, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, hoertPattern: null, duennesIntro: false, dichteVoll: false, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
   url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
@@ -309,7 +311,7 @@ function render(): void {
       <div class="liste">${z.ergebnis.patterns
         .map(
           (p, i) =>
-            `<div><span class="takte">${i + 1}</span><span style="flex:1">${escapeHtml(p.name)}</span><span class="fortschritt">${p.parts.filter((x) => !x.muted).length} Parts · ${p.bpm} BPM${p.chainTo ? ` → ${p.chainTo}` : ""}</span></div>`,
+            `<div><span class="takte">${i + 1}</span><span style="flex:1">${escapeHtml(p.name)}</span><span class="fortschritt">${p.parts.filter((x) => !x.muted).length} Parts · ${p.bpm} BPM${p.chainTo ? ` → ${p.chainTo}` : ""}</span><button class="genPatPlay" data-pat="${i}" title="Am Rechner vorhoeren — genau das, was auch aufs Geraet ginge">${z.hoertPattern === i ? "■" : "▶"}</button></div>`,
         )
         .join("")}</div>
       <div class="warum"><b>Warum so?</b> ${escapeHtml(z.ergebnis.warumSo)}</div>
@@ -455,9 +457,63 @@ function verdrahte(): void {
   for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genPlay")) {
     b.addEventListener("click", () => hoeren(Number(b.dataset.nr)));
   }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genPatPlay")) {
+    b.addEventListener("click", () => patternHoeren(Number(b.dataset.pat)));
+  }
   for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genFensterPlay")) {
     b.addEventListener("click", () => fensterHoeren(b.dataset.datei ?? ""));
   }
+}
+
+/**
+ * Vorhoeren eines erzeugten Patterns.
+ *
+ * Der Umweg ueber die fertige Bank-Datei ist Absicht: gespielt wird GENAU das,
+ * was auch aufs Geraet ginge, samt Mutes, Anschlag, Lautstaerke, Panorama und
+ * Tonhoehe. Eine Vorschau, die den Umweg abkuerzt, klaenge womoeglich besser
+ * als das Ergebnis — und waere damit wertlos.
+ *
+ * Die Wandlung kostet ein paar Zehntel (4-MB-Bank bauen und wieder lesen),
+ * deshalb wird sie gemerkt, bis ein neues Ergebnis entsteht.
+ */
+let vorschauProjekt: EditorProject | null = null;
+/**
+ * Wofuer die gemerkte Vorschau gilt. Ueber die Objektidentitaet statt ueber
+ * ein Zuruecksetzen an fuenf Stellen: ein neues Ergebnis ungueltig zu machen
+ * darf nicht davon abhaengen, dass jemand daran denkt.
+ */
+let vorschauFuer: unknown = null;
+
+function vorschauStoppen(): void {
+  if (z.hoertPattern === null) return;
+  player.stop();
+  z.hoertPattern = null;
+}
+
+function patternHoeren(i: number): void {
+  if (z.hoertPattern === i) {
+    player.stop();
+    z.hoertPattern = null;
+    render();
+    return;
+  }
+  if (!z.ergebnis || !z.bank) return;
+  try {
+    if (vorschauFuer !== z.ergebnis) {
+      vorschauProjekt = editorProjectFromE2Files(new Uint8Array(alsAllPat(z.ergebnis.patterns)), z.bank);
+      vorschauFuer = z.ergebnis;
+    }
+  } catch (err) {
+    z.meldung = `Vorhoeren nicht moeglich: ${err instanceof Error ? err.message : String(err)}`;
+    render();
+    return;
+  }
+  const projekt = vorschauProjekt;
+  const pat = projekt?.patterns[i];
+  if (!projekt || !pat) return;
+  player.start(pat, projekt.samples);
+  z.hoertPattern = i;
+  render();
 }
 
 function hoeren(nr: number): void {
@@ -941,6 +997,7 @@ async function generieren(): Promise<void> {
   }
   // Beschreibung und Auswahl bleiben nach dem Rendern erhalten
   const text = beschreibung;
+  vorschauStoppen();
   z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept, rezepte, aufbau: z.aufbau, duennesIntro: z.duennesIntro, dichteVoll: z.dichteVoll });
   z.sendeStatus = "";
   render();

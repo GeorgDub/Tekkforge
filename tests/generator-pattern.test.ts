@@ -7,6 +7,7 @@ import { planeBank } from "../src/core/bankPlan";
 import { regelRezept, regelRezeptProMelo } from "../src/core/rezept";
 import { baueRezept, baueProMelo, baueAufbau, baueProMeloAufbau, alsAllPat, alsPat } from "../src/core/patternGen";
 import { parseElectribeAllPatBank, parseElectribePattern } from "../src/core/electribeImport";
+import { editorProjectFromE2Files } from "../src/core/editorModel";
 import { e2PatternRefToBankNumber } from "../src/core/e2sPatternSampleLink";
 import { voxSegmentEintrag } from "../src/core/generatorSession";
 import { voxPaare } from "../src/core/patternGen";
@@ -28,9 +29,9 @@ const nummern = new Set(projekt.samples.map((s) => s.nr));
 function projektMitVox() {
   const frames = Math.round(8 * (240 / 180) * 44100);
   const voxE = [1, 2, 3].map((n) => voxSegmentEintrag("Amph", n, new Float32Array(frames).map((_, i) => Math.sin(i / (18 + 3 * n)) * 0.5)));
-  const { projekt: pv } = planeBank(scanne(eingaben).eintraege.concat(voxE), { name: "amph", bpm: 180, bankZeit: "x" });
+  const { projekt: pv, bank } = planeBank(scanne(eingaben).eintraege.concat(voxE), { name: "amph", bpm: 180, bankZeit: "x" });
   const paarA = pv.samples.filter((s) => s.rolle === "vox" && s.chunk === 0 && /^Amph V/.test(s.name)).sort((a, b) => a.nr - b.nr);
-  return { projekt: pv, paarA };
+  return { projekt: pv, paarA, bank: new Uint8Array(bank) };
 }
 
 describe("patternGen", () => {
@@ -357,5 +358,60 @@ describe("ausgedünnte Anfangsstufe (Option)", () => {
     const vollLauf = baueAufbau(r, pv).patterns;
     expect(hits(patterns[dropIdx], 0)).toBe(hits(vollLauf[dropIdx], 0));
     expect(hits(patterns[1], 2)).toBe(hits(vollLauf[1], 2));
+  });
+});
+
+// ─── Vorhören am Rechner ─────────────────────────────────────────────────────
+//
+// Der Generator baut E2PatternInput, der Vorhoer-Spieler braucht EditorPattern.
+// Der Weg dorthin fuehrt ueber die fertige Bank-Datei — die Vorschau spielt
+// also GENAU das, was auch aufs Geraet ginge. Das ist nur etwas wert, wenn
+// dabei nichts verlorengeht: ohne Mutes klaenge jede Aufbau-Stufe gleich, und
+// die ganze Vorschau waere irrefuehrend statt hilfreich.
+describe("Vorhören: der Weg vom Generator in den Spieler", () => {
+  it("Mutes, Steps, Tempo und Sample-Zuordnung überstehen die Wandlung", () => {
+    const { projekt: pv, bank } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const ep = editorProjectFromE2Files(new Uint8Array(alsAllPat(patterns)), bank);
+
+    patterns.forEach((quelle, i) => {
+      const ziel = ep.patterns[i];
+      expect(ziel, `Pattern ${i + 1} fehlt`).toBeDefined();
+      expect(ziel.bpm).toBeCloseTo(quelle.bpm, 1);
+      expect(ziel.stepLength).toBe(quelle.stepLength);
+      for (let idx = 0; idx < 16; idx++) {
+        expect(!!ziel.parts[idx].muted, `Pattern ${i + 1} Part ${idx + 1} Mute`).toBe(!!quelle.parts[idx].muted);
+        const quellSteps = quelle.parts[idx].steps.map((s) => !!s.active).join("");
+        const zielSteps = ziel.parts[idx].steps.slice(0, quelle.stepLength).map((s) => s.on).map(Boolean).join("");
+        expect(zielSteps, `Pattern ${i + 1} Part ${idx + 1} Steps`).toBe(quellSteps);
+      }
+    });
+  });
+
+  it("die Klangdaten zu den Parts sind wirklich da — sonst bliebe es stumm", () => {
+    const { projekt: pv, bank } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const ep = editorProjectFromE2Files(new Uint8Array(alsAllPat(patterns)), bank);
+    const drop = ep.patterns[patterns.findIndex((p) => p.name.endsWith("DROP"))];
+    const nummern = new Set(ep.samples.map((s) => s.number));
+    let geprueft = 0;
+    for (const part of drop.parts) {
+      if (part.muted || part.sampleNumber === null) continue;
+      expect(nummern.has(part.sampleNumber), `Sample ${part.sampleNumber} fehlt im Pool`).toBe(true);
+      const s = ep.samples.find((x) => x.number === part.sampleNumber)!;
+      expect(s.pcm.length).toBeGreaterThan(0);
+      geprueft++;
+    }
+    expect(geprueft).toBeGreaterThan(4);
+  });
+
+  it("die Aufbau-Stufen klingen unterschiedlich — sonst wäre die Vorschau wertlos", () => {
+    const { projekt: pv, bank } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const ep = editorProjectFromE2Files(new Uint8Array(alsAllPat(patterns)), bank);
+    const hoerbar = (i: number) => ep.patterns[i].parts.filter((p) => !p.muted && p.steps.some((s) => s.on)).length;
+    // Stufe fuer Stufe kommt etwas dazu; der Drop ist am vollsten.
+    for (let i = 1; i < patterns.length; i++) expect(hoerbar(i)).toBeGreaterThanOrEqual(hoerbar(i - 1));
+    expect(hoerbar(patterns.length - 1)).toBeGreaterThan(hoerbar(0));
   });
 });

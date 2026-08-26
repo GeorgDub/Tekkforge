@@ -53,9 +53,11 @@ const abschnitte = [
       "<b>Aufbau-Kette</b> — die Patterns verketten sich von einer dünnen Anfangsstufe bis zum Drop; gespielt wird durch Entmuten am Gerät. Auf Wunsch spielt die erste Stufe nur jeden zweiten Schlagzeug-Schlag; Melodie und Vocals bleiben dabei ganz.",
       "<b>Luft im Pattern</b> — die erste Fassung war zu voll: nachgemessen lag auf <b>jedem</b> der 64 Sechzehntel mindestens ein Schlag, 109 insgesamt. Der schlanke Satz kommt auf 82 Schläge und 16 freie Stellen. Konkret: die offene HiHat rasselte auf jedem zweiten Step und ist jetzt ein Achtel-Akzent, der Clap lag in jedem Takt auf derselben Stelle wie die Snare und kommt jetzt nur noch in Takt 2 und 4, und die Kick bekommt einen eigenen vierten Takt statt viermal derselben Zeile. Der alte, dichte Satz bleibt als Schalter erhalten.",
       "<b>Drop mit Druck</b> — der Aufbau läuft gedimmt, vor dem Drop steht ein Sechzehntel-Wirbel auf der Snare, der von der gedimmten Aufbau-Höhe bis ans Maximum ansteigt, und im Drop gehen die Kicks auf 127. Den Wirbel bauen Generator und Pattern-Editor aus derselben Definition — eine Verbesserung trifft damit immer beide.",
+      "<b>Vorhören am Rechner</b> — jedes erzeugte Pattern lässt sich sofort anhören, ohne Gerät und ohne Umweg über den Editor. Gespielt wird der Weg über die fertige Bank-Datei, samt Stummschaltungen, Anschlag, Lautstärke, Panorama und Tonhöhe: was hier klingt, klingt auch dort. Damit lassen sich Varianten wie schlanker gegen dichten Satz direkt vergleichen.",
       "<b>KI-Rezept</b> — auf Wunsch übersetzt Claude eine Beschreibung wie „düster, Vocal nur im Break“ in das Arrangement.",
     ],
     bild: ["generator-lied", "Ein kompletter Durchlauf: 30 Vocal-Segmente aus dem Lied, 5 geschnittene Drum-Shots, daraus 15 verkettete Patterns im gemessenen Tempo von 209,5 BPM."],
+    extra: `<div style="margin-top:10px">${img("vorhoeren", "Jedes erzeugte Pattern lässt sich am Rechner anhören. Gespielt wird der Umweg über die fertige Bank-Datei — also genau das, was auch aufs Gerät ginge. Die Part-Zahlen 2 → 4 → 7 → 9 → 11 zeigen die Aufbau-Kette, die dritte Stufe läuft gerade.")}</div>`,
   },
   {
     nr: "03",
@@ -397,7 +399,7 @@ const html = `<!doctype html>
     <div><b>8</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>704</b><span>automatische Tests</span></div>
+    <div><b>707</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
