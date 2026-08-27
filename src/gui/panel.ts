@@ -204,10 +204,13 @@ function baueDom(): void {
       📡 Geräte-Spiegel &amp; NRPN-Werkbank (Hacktribe)
     </summary>
     <div class="sub" style="font-size:11px;margin:8px 0">
-      Hacktribe meldet jeden Griff am Gerät als NRPN — Pad-Modus, Bedienelement und Wert.
-      Hier siehst du live, was das Gerät sendet. <b>Dafür muss am Gerät die versteckte
-      Einstellung „NRPN-Ausgabe“ aktiv sein</b>; ihr Byte-Index ist nirgends veröffentlicht,
-      mit der Werkbank unten lässt er sich suchen.
+      Hier siehst du live, was das Gerät sendet. <b>Dafür muss die versteckte Einstellung
+      „MIDI-Thru“ an sein</b> — der Knopf dafür sitzt im FX-Panel, oder von Hand mit der
+      Werkbank unten: Kategorie 3 (Global), LSB 0, DATA-MSB 44, Wert 1.
+      <br>Am Gerät gemessen (2026-08-27): mit dem Schalter meldet die Electribe jede
+      Reglerbewegung als gewöhnliches CC (Cutoff = CC 74), ohne ihn kommt gar nichts —
+      auch kein Echo. Er lebt im RAM; damit er einen Neustart übersteht, am Gerät ins
+      Global-Menü und „Write“ drücken.
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button id="e2sSpiegelLeeren" class="ghost">Liste leeren</button>
