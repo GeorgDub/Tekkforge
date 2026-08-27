@@ -11,6 +11,12 @@
 # "Geraete-Schreibtest".
 launch
 ram-open
+# ZUERST suchen: ohne das steht der MIDI-Kanal nicht, und JEDE RAM-Anfrage
+# laeuft stumm in den Timeout — was wie eine fehlende Hacktribe-Firmware
+# aussieht und keine ist (am 2026-08-27 zehn Minuten damit verloren).
+click #midiSearch
+ms 3500
+eval document.getElementById('midiStatus').textContent
 # Das Geraet darf nicht spielen — sonst kollidiert der Write mit der Wiedergabe.
 ms 2500
 eval 'spielende Noten (muss 0 sein): ' + document.getElementById('midiMonitor').textContent.split('\n').filter(l=>/IN MIDI/.test(l)).length
