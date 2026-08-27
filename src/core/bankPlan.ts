@@ -7,7 +7,7 @@
 import { type ScanEintrag, type Rolle, sauberName, rmsDb, peakVon, LANG_AB } from "./sampleScan";
 import { taktPassung, tempoSchaetzen } from "./tempoAnalyse";
 import { meloRaster, type MeloRaster } from "./meloRaster";
-import { polyPhaseResample, peakNormalize, downmixToMono } from "./audioProcessor";
+import { polyPhaseResample, peakNormalize, rmsNormalize, downmixToMono } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { parseE2sBank } from "./e2sBankReader";
 import { displayNumberToOsc, displayNumberToSlotIndex, oscToDisplayNumber } from "./e2sPatternSampleLink";
@@ -135,10 +135,32 @@ function eigentempoTakte(pcm: Float32Array, bpm: number): number | null {
   return rate >= 0.77 && rate <= 1.3 ? takte : null;
 }
 
+/**
+ * Zielpegel fuer Vocal-Schleifen (RMS in dBFS).
+ *
+ * Gemessen an einem fertigen Set (2026-08-27): die Melodie lag bei -11,4 dB
+ * und klang richtig, die Vocals bei -17,5 dB und gingen unter der Kick unter —
+ * der Nutzerbefund lautete „erst nach dem Muten der Kick ging es". Dazu
+ * streuten die Vocal-Segmente untereinander um 12,6 dB, weil die
+ * Spitzen-Normalisierung eine Phrase mit viel Pause genauso behandelt wie
+ * einen dichten Loop. Der Zielwert liegt daher bei der Melodie.
+ */
+const VOX_ZIEL_RMS_DB = -12;
+
 /** Ein Scan-Eintrag → ein oder zwei Teile (Haelften) fuer die Bank. */
 export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
   const taktSek = 240 / bpm;
   const basis = sauberName(e.stem);
+  /**
+   * Vocals nach Lautheit, alles andere nach Spitze.
+   *
+   * Nur die Vocals: Schlagzeug und Melodie hat der Nutzer im selben Durchlauf
+   * ausdruecklich als gut befunden („hat gut gekickt") — daran wird nichts
+   * geaendert, damit die Korrektur eine Korrektur bleibt und keine neue
+   * Mischung ist.
+   */
+  const pegel = (pcm: Float32Array): Float32Array =>
+    e.rolle === "vox" ? rmsNormalize(pcm, VOX_ZIEL_RMS_DB, 0.95, { weich: true }) : peakNormalize(pcm, 0.95);
   const oneshot = (pcm: Float32Array): Teil => ({ name: basis, pcm: peakNormalize(fades(trimme(pcm), 0.002, 0.01), 0.95), kind: "oneshot", takte: 0 });
   if (e.sekunden < LANG_AB || !LOOP_ROLLEN.includes(e.rolle)) return { teile: [oneshot(e.pcm)] };
   // Melo- und Vocal-Fenster sind schon taktgenau geschnitten — ein Silence-Trim
@@ -151,7 +173,7 @@ export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
     const eigen = eigentempoTakte(y, bpm);
     if (eigen !== null) takte = eigen;
     else if (y.length / SR / taktSek <= 8) {
-      return { teile: [{ name: basis, pcm: peakNormalize(fades(y, 0.002, 0.01), 0.95), kind: "oneshot", takte: 0 }] };
+      return { teile: [{ name: basis, pcm: pegel(fades(y, 0.002, 0.01)), kind: "oneshot", takte: 0 }] };
     }
   }
   const ziel = takte * taktSek;
@@ -159,14 +181,14 @@ export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
   // Vocals ab 5 Takten als zwei Haelften: die Vers-Parts 15/16 spielen A/B per
   // Alternate hintereinander und sind am Geraet einzeln entmutbar
   const ganzBis = e.rolle === "vox" ? 4 : 8;
-  if (takte <= ganzBis) return { teile: [{ name: basis, pcm: peakNormalize(fades(y, 0.002, 0.004), 0.95), kind: "loop", takte }] };
+  if (takte <= ganzBis) return { teile: [{ name: basis, pcm: pegel(fades(y, 0.002, 0.004)), kind: "loop", takte }] };
   const h = y.length >> 1;
   const kurz = sauberName(e.stem, 14);
   const haelfte = Math.round(takte / 2);
   return {
     teile: [
-      { name: `${kurz} A`, pcm: peakNormalize(fades(y.subarray(0, h), 0.002, 0.004), 0.95), kind: "loop", takte: haelfte, chunk: 0 },
-      { name: `${kurz} B`, pcm: peakNormalize(fades(y.subarray(h), 0.002, 0.004), 0.95), kind: "loop", takte: haelfte, chunk: 1 },
+      { name: `${kurz} A`, pcm: pegel(fades(y.subarray(0, h), 0.002, 0.004)), kind: "loop", takte: haelfte, chunk: 0 },
+      { name: `${kurz} B`, pcm: pegel(fades(y.subarray(h), 0.002, 0.004)), kind: "loop", takte: haelfte, chunk: 1 },
     ],
   };
 }

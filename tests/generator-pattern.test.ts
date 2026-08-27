@@ -429,14 +429,28 @@ describe("Dichte: die Melodie deckt nicht mehr alles zu", () => {
     return patterns.find((p) => p.name.endsWith("DROP"))!;
   };
 
-  it("im schlanken Satz sind Melodie und Vocals leiser als im dichten", () => {
+  it("im schlanken Satz ist die MELODIE leiser als im dichten", () => {
     // Gemessen am gerenderten Ergebnis: die Schleifen lagen +3,8 dB ueber dem
     // GESAMTEN Schlagzeug und klangen 87 % der Zeit — sie deckten damit genau
     // die Luecken zu, die das Ausduennen geschaffen hat.
     const schlank = dropVon2("schlank");
     const voll = dropVon2("voll");
-    for (const idx of [12, 13, 14, 15]) {
+    for (const idx of [12, 13]) {
       expect(schlank.parts[idx].volume!).toBeLessThan(voll.parts[idx].volume!);
+    }
+  });
+
+  it("die VOCALS werden dabei nicht mitgedämpft", () => {
+    // Der urspruengliche Satz nahm Melodie und Vocals gemeinsam zurueck. Am
+    // Geraet gehoert (2026-08-27) war das Ergebnis: die Vocals lagen 9,1 dB
+    // unter dem Schlagzeug und kamen erst durch, nachdem die Kick
+    // stummgeschaltet war. Die Melodie deckt zu, der Gesang soll tragen —
+    // deshalb gilt die Daempfung nur noch fuer 12/13.
+    const schlank = dropVon2("schlank");
+    const voll = dropVon2("voll");
+    for (const idx of [14, 15]) {
+      expect(schlank.parts[idx].volume).toBe(voll.parts[idx].volume);
+      expect(schlank.parts[idx].volume).toBe(127);
     }
   });
 

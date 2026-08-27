@@ -74,7 +74,7 @@ function kickMitViertemTakt(steps: E2StepInput[]): E2StepInput[] {
 const SHOT_A = () => baue((s) => (s === 0 || s === 32 ? hit([60], 118, 96) : null));
 const SHOT_B = () => baue((s) => (s === 24 || s === 56 ? hit([60], 112, 96) : null));
 //            K1   K2   SN   CL   HH  HH2   PC  PC2  BASS STAB SHA  SHB  MELA MELB VRA  VRB
-const VOLUME = [127, 104, 110, 96, 88, 82, 84, 80, 118, 100, 112, 108, 112, 112, 114, 114];
+const VOLUME = [127, 104, 110, 96, 88, 82, 84, 80, 118, 100, 112, 108, 112, 112, 127, 127];
 
 /**
  * Wie weit Melodie und Vocals im schlanken Satz zurueckgenommen werden.
@@ -190,7 +190,11 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
     return {
       sampleId: smp ? bankNumberToE2PatternRef(smp.nr) : 0,
       steps: an || (stepsImmer && smp) ? st : leer(),
-      volume: idx >= 12 && schlank ? Math.round(VOLUME[idx] * SCHLEIFEN_DAEMPFUNG) : VOLUME[idx],
+      // Nur die MELODIE wird im schlanken Satz zurueckgenommen (12/13), nicht
+      // die Vocals (14/15). Beide gleich zu daempfen war der Fehler: am Geraet
+      // gehoert (2026-08-27) lagen die Vocals 9,1 dB unter dem Schlagzeug und
+      // kamen erst durch, nachdem der Nutzer die Kick stummgeschaltet hatte.
+      volume: idx >= 12 && idx <= 13 && schlank ? Math.round(VOLUME[idx] * SCHLEIFEN_DAEMPFUNG) : VOLUME[idx],
       params,
       muted: !an,
     };

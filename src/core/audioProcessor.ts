@@ -280,6 +280,76 @@ function resampleLinearMono(
   return out;
 }
 
+/** Effektivwert (RMS) eines Puffers — 0 bei Stille. */
+export function rmsVon(pcm: Float32Array): number {
+  if (!pcm.length) return 0;
+  let summe = 0;
+  for (let i = 0; i < pcm.length; i++) {
+    const v = pcm[i];
+    if (Number.isFinite(v)) summe += v * v;
+  }
+  return Math.sqrt(summe / pcm.length);
+}
+
+/**
+ * Lautheits-Normalisierung auf einen RMS-Zielwert, begrenzt durch die Spitze.
+ *
+ * Warum nicht einfach Peak-Normalisierung: die richtet alle Samples auf
+ * dieselbe SPITZE aus, nicht auf dieselbe Lautheit. Ein dichter Drumloop und
+ * eine Gesangsphrase mit viel Pause haben danach denselben Maximalwert — die
+ * Phrase wirkt aber deutlich leiser, weil zwischen den Spitzen nichts steht.
+ * Am Geraet gemessen (2026-08-27, Nutzerbefund „Vocals zu leise"): die
+ * Vocal-Samples eines Sets lagen im Schnitt 6 dB unter der Melodie und
+ * streuten untereinander um 12,6 dB — einzelne Segmente waren praktisch
+ * unhoerbar.
+ *
+ * Die Spitzengrenze bleibt hart: lieber leiser als uebersteuert. Wo sie
+ * greift, wird das Ziel eben nicht erreicht — ein Signal mit hohem Scheitel-
+ * faktor laesst sich nicht beliebig laut machen, ohne es zu verbiegen.
+ */
+export function rmsNormalize(
+  pcm: Float32Array,
+  zielRmsDb: number,
+  maxPeak = 0.95,
+  opts: { weich?: boolean } = {},
+): Float32Array {
+  if (!pcm.length) return new Float32Array(0);
+  const rms = rmsVon(pcm);
+  if (rms === 0) return pcm.slice();
+  let faktor = Math.pow(10, zielRmsDb / 20) / rms;
+  let peak = 0;
+  for (let i = 0; i < pcm.length; i++) {
+    const abs = Math.abs(pcm[i]);
+    if (Number.isFinite(abs) && abs > peak) peak = abs;
+  }
+  if (!opts.weich && peak * faktor > maxPeak) faktor = maxPeak / peak;
+  const out = new Float32Array(pcm.length);
+  for (let i = 0; i < pcm.length; i++) out[i] = pcm[i] * faktor;
+  // Mit weicher Begrenzung darf die Verstaerkung ueber die Spitze hinausgehen —
+  // die Kurve faengt sie danach ein. Ohne sie bliebe ein Signal mit hohem
+  // Scheitelfaktor (Gesang!) fuer immer leise, egal welches Ziel man setzt.
+  return opts.weich ? weichBegrenzen(out, maxPeak) : out;
+}
+
+/**
+ * Weiche Begrenzung auf eine Decke — die Spitzen werden eingefangen, statt
+ * abgeschnitten zu werden.
+ *
+ * `ceiling · tanh(x / ceiling)`: unterhalb der Decke fast unveraendert (bei
+ * halber Decke rund 4 % Abweichung), darueber zunehmend flacher, und nie
+ * ueber der Decke. Hartes Abschneiden erzeugt an jeder Kante Oberwellen, die
+ * man als Kratzen hoert; diese Kurve ist stetig und monoton.
+ */
+export function weichBegrenzen(pcm: Float32Array, ceiling = 0.95): Float32Array {
+  const out = new Float32Array(pcm.length);
+  if (!(ceiling > 0)) return out;
+  for (let i = 0; i < pcm.length; i++) {
+    const v = pcm[i];
+    out[i] = Number.isFinite(v) ? ceiling * Math.tanh(v / ceiling) : 0;
+  }
+  return out;
+}
+
 /**
  * Peak-Normalize: skaliert den Buffer so dass das Maximum exakt `target` ist.
  * Silent-Inputs werden unverändert zurückgegeben (keine 0/0-Division).
