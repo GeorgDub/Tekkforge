@@ -125,6 +125,19 @@ const abschnitte = [
   },
   {
     nr: "07",
+    titel: "Sample-Bank-Werkstatt",
+    lead: "Zwei Bänke nebeneinander: links laden, rechts zusammenstellen.",
+    punkte: [
+      "<b>Aus mehreren Bänken sammeln</b> — links eine <code>.all</code> laden, ankreuzen, herüberholen. Die Quelle bleibt unberührt; man kann nacheinander beliebig viele Bänke öffnen und aus jeder das Passende nehmen.",
+      "<b>Nummern werden neu vergeben</b> — und das ist der eigentliche Punkt. Zwei Bänke haben beide ein Sample 501; in der Zielbank kann nur eines die 501 behalten. Jede Nummer wandert deshalb über eine Abbildung, und Pattern-Verweise ziehen mit.",
+      "<b>Verweise ohne Ziel werden geleert</b>, nicht geraten. Bliebe die alte Nummer stehen, spielte das Gerät dort ein fremdes Sample — still und falsch. Ein Part, der schweigt, ist besser als einer, der unbemerkt den falschen Klang bringt; gemeldet wird es zusätzlich.",
+      "Filter Alle/Factory/User mit Zählern, Suche, +12-dB-Flag, Länge und Größe je Sample, Speicheranzeige gegen das ~24-MB-Limit.",
+      "Fertige Bank als <code>.all</code> sichern oder direkt auf die Speicherkarte schreiben.",
+    ],
+    bild: ["sample-manager", "Zwei Bänke: links „drogen.all“ mit 62 Samples, rechts die Zielbank aus zwei verschiedenen Quellbänken zusammengestellt — beide brachten ein Sample 501 mit, in der Zielbank stehen sie sauber als 501 bis 504."],
+  },
+  {
+    nr: "08",
     titel: "Start-Übersicht & Assistent",
     lead: "Der Einstieg: Status auf einen Blick und ein Assistent für Rückfragen.",
     punkte: [
@@ -135,7 +148,7 @@ const abschnitte = [
     bild: ["start", "Das Start-Dashboard mit Statuskacheln, letzten Dateien und dem Assistenten."],
   },
   {
-    nr: "08",
+    nr: "09",
     titel: "Einstellungen",
     lead: "Aussehen, Sicherheit, Aktualität.",
     punkte: [
@@ -399,7 +412,7 @@ const html = `<!doctype html>
   <h1>Tekk<span>Forge</span> 0.6.0</h1>
   <p class="unter">Ein Werkzeugkasten für den KORG Electribe 2 Sampler: aus einem Lied wird ein spielbares Pattern-Set — Sample-Bank, Arrangement und Gerätesteuerung in einer Anwendung. Alles läuft lokal, keine Datei verlässt den Rechner.</p>
   <div class="kennz">
-    <div><b>8</b><span>Module in einer App</span></div>
+    <div><b>9</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
     <div><b>760</b><span>automatische Tests</span></div>

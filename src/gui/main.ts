@@ -14,9 +14,10 @@ import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
 import { initGenerator, generatorWirdSichtbar } from "./generator";
 import { initMidiImport, midiImportWirdSichtbar } from "./midiImport";
+import { initSampleManager, sampleManagerWirdSichtbar } from "./sampleManager";
 import type { EditorProject } from "../core/editorModel";
 
-type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "settings";
+type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "bank" | "settings";
 
 const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?: () => void }> = {
   start: { view: "viewStart", knopf: "tabStart", titel: "Start", sichtbar: startWirdSichtbar },
@@ -27,6 +28,7 @@ const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?:
   paddeck: { view: "viewPadDeck", knopf: "tabPadDeck", titel: "Pad-Deck", sichtbar: padDeckWirdSichtbar },
   generator: { view: "viewGenerator", knopf: "tabGenerator", titel: "Generator", sichtbar: generatorWirdSichtbar },
   midi: { view: "viewMidi", knopf: "tabMidi", titel: "MIDI zu Korg", sichtbar: midiImportWirdSichtbar },
+  bank: { view: "viewBank", knopf: "tabBank", titel: "Sample-Manager", sichtbar: sampleManagerWirdSichtbar },
   settings: { view: "viewSettings", knopf: "tabSettings", titel: "Einstellungen", sichtbar: settingsWirdSichtbar },
 };
 
@@ -68,6 +70,7 @@ for (const [name, t] of Object.entries(TABS) as [Tab, (typeof TABS)[Tab]][]) {
 }
 
 initEditor();
+initSampleManager();
 initPanel();
 initPadDeck(() => aktiverTab === "paddeck");
 // Converter-Handoff: konvertiertes ESX-Ergebnis in den Editor laden + Tab wechseln.
