@@ -9,6 +9,7 @@
  * Kopie, und ein Zurück-Knopf holt jeden Schritt zurueck.
  */
 import { $, escapeHtml } from "./shared";
+import { wieAmGeraet, GERAET_RATE } from "../core/geraeteKlang";
 import {
   schneide,
   blenden,
@@ -159,6 +160,17 @@ function render(): void {
       <button id="seHoeren" class="ghost">▶ Auswahl</button>
       <button id="seZurueck" class="ghost">↶ Zurück</button>
     </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <span class="sub" style="margin:0"><b>Klangprobe:</b></span>
+      <button id="seProbeOrig" class="ghost" title="Die Auswahl so, wie sie hier vorliegt">▶ Original</button>
+      <button id="seProbeGeraet" class="ghost" title="Auf einen Kanal, auf 16 Bit quantisiert — der Weg durch die Bank">▶ Wie am Gerät</button>
+      ${
+        offen.sampleRate !== GERAET_RATE
+          ? `<button id="seProbeIgnoriert" class="ghost" title="Falls die Electribe die gespeicherte Rate nicht beachtet">▶ …wenn die Rate ignoriert wird</button>
+             <span class="sub" style="margin:0">Gespeichert mit ${offen.sampleRate} Hz — am Gerät noch nicht abgenommen.</span>`
+          : `<span class="sub" style="margin:0">44,1 kHz: hier ändert das Speichern nur die Wortbreite.</span>`
+      }
+    </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
       <label><input type="checkbox" id="seLoop" ${loop.loopType === LOOP_VORWAERTS ? "checked" : ""} /> Schleife (statt One-Shot)</label>
       <div><label style="display:block;color:var(--muted);font-size:10px">Loop-Start (Frame)</label>
@@ -209,6 +221,9 @@ function render(): void {
   $("seNorm").addEventListener("click", () => setze(normalisiere(arbeit, 0.95), "Normalisiert"));
   $("seUm").addEventListener("click", () => setze(umkehren(arbeit), "Umgekehrt"));
   $("seHoeren").addEventListener("click", () => hooks?.anhoeren(schneide(arbeit, auswahl.von, auswahl.bis), offen!.sampleRate));
+  $("seProbeOrig").addEventListener("click", () => probe("orig"));
+  $("seProbeGeraet").addEventListener("click", () => probe("geraet"));
+  document.getElementById("seProbeIgnoriert")?.addEventListener("click", () => probe("ignoriert"));
   $("seZurueck").addEventListener("click", () => {
     const vorher = verlauf.pop();
     if (!vorher) return;
@@ -243,6 +258,33 @@ function render(): void {
 
   zeichne();
   renderInfo();
+}
+
+/**
+ * Klangprobe: die Auswahl einmal so, wie sie hier liegt, und einmal so, wie
+ * das Geraet sie spielt.
+ *
+ * Der Vergleich lohnt vor allem bei einer gespeicherten Rate unter 44,1 kHz:
+ * beachtet die Electribe sie, klingt es wie das Original — beachtet sie sie
+ * nicht, laeuft dasselbe Sample doppelt so schnell. Am Geraet ist das noch
+ * nicht abgenommen, also kann man wenigstens vorher beide Faelle hoeren.
+ */
+function probe(was: "orig" | "geraet" | "ignoriert"): void {
+  if (!offen || !hooks) return;
+  const teil = schneide(arbeit, auswahl.von, auswahl.bis);
+  if (was === "orig") {
+    hooks.anhoeren(teil, offen.sampleRate);
+    setStatus(`Original: ${sek(teil.length)} s bei ${offen.sampleRate} Hz.`);
+    return;
+  }
+  const r = wieAmGeraet(teil, offen.sampleRate, { rateBeachtet: was !== "ignoriert" });
+  hooks.anhoeren(r.pcm, r.sampleRate);
+  const dauer = (r.pcm.length / r.sampleRate).toFixed(2);
+  setStatus(
+    (was === "ignoriert" ? "Rate ignoriert" : "Wie am Gerät") +
+      `: ${dauer} s bei ${r.sampleRate} Hz.` +
+      (r.hinweise.length ? ` ${r.hinweise.join(" ")}` : ""),
+  );
 }
 
 function schliesse(): void {

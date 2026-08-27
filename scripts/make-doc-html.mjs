@@ -34,12 +34,14 @@ const abschnitte = [
       "<b>Bank ordnen</b> — Lücken schließen oder nach Name, Länge oder Nummer sortieren. Jede Nummernänderung zieht die Verweise der Patterns mit, damit nichts ins Leere zeigt.",
       "<b>Song-Modus</b> — Patterns zu einem Track aneinanderreihen: Abschnitt wählen, Durchgänge festlegen, Kette schreiben. Danach spielt das Gerät den Song von allein durch. Eine Kette, die schon im Projekt steckt — auch die eines importierten fremden Sets — wird angezeigt, und die ganze Kette lässt sich am Rechner zu einer Audiodatei ausrechnen und anhören.",
       "<b>Varianten aus einem Pattern</b> — aus einer fertigen Figur entsteht auf Knopfdruck eine Abwandlung als neues Pattern: Fill (Snare-Wirbel im letzten Viertel mit ansteigendem Anschlag), halbes und doppeltes Tempo, ausgedünnt fürs Intro, rückwärts, oder mit gestreutem Anschlag gegen den Maschinen-Klang. Das Original bleibt unberührt. Hing es in einer Kette, wird die Variante dazwischengehängt — genau der Fall „Fill vor dem Drop“.",
+      "<b>Klangprobe vor dem Schreiben</b> — dieselbe Stelle einmal so, wie sie am Rechner liegt, und einmal so, wie das Gerät sie spielt: auf einen Kanal gelegt, auf 16 Bit quantisiert, im Tempo angepasst. Bei einem Sample mit gespeicherter Rate unter 44,1 kHz kommt ein dritter Knopf dazu — er spielt den Fall, dass die Electribe diese Rate NICHT beachtet und alles doppelt so schnell läuft. Genau diese Frage ist am Gerät noch offen; bis sie entschieden ist, kann man wenigstens beide Fälle vorher hören und hinterher am Klang erkennen, welcher eingetreten ist.",
       "<b>Rückgängig und Wiederherstellen</b> — dreißig Schritte weit zurück, über Strg+Z und Strg+Y oder die beiden Pfeile in der Werkzeugleiste. Gemerkt werden ganze Zustände, nicht einzelne Handgriffe: dadurch kann keine Bearbeitung vergessen werden, auch keine, die erst später dazukommt.",
       "Export als <code>.e2spat</code> (Einzel-Pattern), <code>.e2sallpat</code> (Bank mit 250 Slots) und <code>.all</code> (Sample-Bank).",
       "Direkter Draht zum Gerät: Patterns per SysEx in einen Slot schreiben oder von dort holen.",
     ],
     bild: ["editor", "Der Editor mit geladenem Akkord-Pattern: links die Pattern-Liste, in der Mitte das Step-Grid über 16 Parts, rechts der Sample-Pool mit RAM-Anzeige."],
     extra: `<div style="margin-top:10px">${img("sample-editor", "Der Sample-Editor: Wellenform mit ziehbarem Anfang und Ende, darunter die Werkzeuge — bis „Übernehmen“ bleibt das Original unberührt.")}</div>
+    <div style="margin-top:10px">${img("klangprobe", "Die Klangprobe im Sample-Editor: „Original“ gegen „Wie am Gerät“, daneben die Angabe, was das Speichern an dieser Stelle überhaupt ändert.")}</div>
     <div style="margin-top:10px">${img("varianten", "Ein Fill aus „DROP“: links das Varianten-Feld mit Erklärung, im Raster der Snare-Wirbel auf den letzten vier Steps — heller werdend, weil der Anschlag zum Ende hin ansteigt. Das Original steht unverändert als Pattern 1 daneben.")}</div>`,
   },
   {
@@ -342,8 +344,8 @@ const roadmap = [
   },
   {
     titel: "Klangprobe vor dem Schreiben",
-    wann: "geplant",
-    text: "Vor dem Übertragen einer Bank gegenüberstellen: der Original-Ausschnitt und das, was das Gerät daraus macht — nach Tempoanpassung, Zusammenmischen auf einen Kanal und gegebenenfalls halber Abtastrate. So hört man vorher, was man bekommt."
+    wann: "gebaut",
+    text: "Im Sample-Editor stehen Original und Geräte-Fassung nebeneinander: ein Kanal, 16 Bit, Tempoanpassung. Offen bleibt nur, was ohne Gerät nicht zu klären ist — ob die Electribe eine gespeicherte Rate unter 44,1 kHz beachtet. Beide Fälle lassen sich anhören, damit die Antwort am Klang sofort erkennbar ist."
   },
   {
     titel: "Transkription verfeinern",
@@ -454,7 +456,7 @@ const html = `<!doctype html>
     <div><b>9</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>870</b><span>automatische Tests</span></div>
+    <div><b>883</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -514,7 +516,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>870 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>883 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
