@@ -15,10 +15,28 @@ export interface TekkLied {
     fenster: { id: string; bytes: Uint8Array | number[]; nurVox?: boolean }[];
     /** „schnell" spart rund ein Fuenftel der Zeit, „genau" mittelt zusaetzlich. */
     qualitaet?: "schnell" | "genau";
+    /**
+     * Welche Teile herausfallen sollen. Ohne Angabe melo/vox/drums wie bisher.
+     * Steht "bass" drin, faellt der Bass als EIGENER Teil heraus und wird aus
+     * der Melodie herausgenommen — sonst haette man ihn zweimal im Set.
+     */
+    teile?: StemTeil[];
   }): Promise<{
-    fenster: { id: string; melo: Uint8Array | number[] | null; vox: Uint8Array | number[] | null; drums?: Uint8Array | number[] | null; voxDb: number }[];
+    fenster: StemErgebnis[];
   }>;
   onFortschritt(cb: (text: string) => void): () => void;
+}
+
+/** Die vier Teile, die Demucs trennt. */
+export type StemTeil = "melo" | "vox" | "drums" | "bass";
+
+export interface StemErgebnis {
+  id: string;
+  melo: Uint8Array | number[] | null;
+  vox: Uint8Array | number[] | null;
+  drums?: Uint8Array | number[] | null;
+  bass?: Uint8Array | number[] | null;
+  voxDb: number;
 }
 
 export function tekkLied(): TekkLied | undefined {

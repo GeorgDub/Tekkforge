@@ -6,6 +6,7 @@
  * core/projektStatus.ts.
  */
 import { rendereKette } from "../core/patternRender";
+import { STEM_VORGABE, TEIL_NAME, teileAus, pruefeAuswahl, auswahlText, ALLE_TEILE, type StemAuswahl } from "../core/stemAuswahl";
 import { $, download, escapeHtml } from "./shared";
 import { dekodiere } from "./audioDecode";
 import { PreviewPlayer } from "./preview";
@@ -64,6 +65,8 @@ interface Zustand {
   liedStatus: string;
   /** Aufbau-Kette: Steps ueberall gesetzt, entmutet wird stufenweise; Drop kickt haerter, Vocal-Paare wandern ueber die Kette */
   aufbau: boolean;
+  /** Welche Stems aus dem Lied geholt werden (Vorgabe: Melodie+Vocals+Drums). */
+  stemAuswahl: StemAuswahl;
   /** Index des gerade vorgehoerten Patterns, sonst null. */
   hoertPattern: number | null;
   /** Erste Aufbau-Stufe nur mit jedem zweiten Schlagzeug-Schlag. */
@@ -99,7 +102,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, hoertPattern: null, duennesIntro: false, dichteVoll: false, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, stemAuswahl: { ...STEM_VORGABE }, hoertPattern: null, duennesIntro: false, dichteVoll: false, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
   url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
@@ -352,6 +355,11 @@ function render(): void {
         <input id="genLiedBpm" type="number" min="40" max="300" placeholder="messen" style="width:80px" />
         <label title="${escapeHtml(z.python?.meldung ?? "Probe laeuft …")}"><input id="genDemucs" type="checkbox" ${z.python?.demucs ? (z.demucsGewuenscht ? "checked" : "") : "disabled"} /> Stems per Demucs${z.python ? (z.python.demucs ? "" : " (nicht verfuegbar)") : " (Probe …)"}</label>
         <label title="Ohne Haken werden Kick/Snare/Hat aus dem Drums-Stem des Lieds geschnitten; mit Haken kommen die Drums aus tekk4 bzw. dem gescannten Ordner."><input id="genLiedEigene" type="checkbox" ${z.liedDrumsEigene ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> eigene Drums statt Lied-Drums</label>
+      </div>
+      <div class="zeile" title="Welche Teile aus dem Lied herausgetrennt werden. Weniger Teile heißt mehr Platz im Sample-RAM für das, was du wirklich brauchst.">
+        <label style="min-width:110px">Stems holen</label>
+        ${ALLE_TEILE.map((t) => `<label><input type="checkbox" class="genStemTeil" data-teil="${t}" ${z.stemAuswahl[t] ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> ${TEIL_NAME[t]}</label>`).join(" ")}
+        <span class="fortschritt" id="genStemInfo">${escapeHtml(auswahlText(z.stemAuswahl))}</span>
         <label title="Genauer mittelt über zusätzlich verschobene Durchläufe — rund ein Viertel mehr Zeit für einen meist kaum hörbaren Unterschied."><input id="genTrennungGenau" type="checkbox" ${z.trennungGenau ? "checked" : ""} ${z.python?.demucs ? "" : "disabled"} /> Trennung genauer (langsamer)</label>
         <label title="Vocals mit halber Abtastrate ablegen — halber Speicher, doppelt so viel Lied passt in eine Bank. Gesang verliert dabei kaum hörbar. ⚠ Am Gerät noch nicht abgenommen: klingen die Vocals doppelt so schnell, beachtet die Electribe die gespeicherte Rate nicht — dann Haken wieder raus."><input id="genSparsameVox" type="checkbox" ${z.sparsameVocals ? "checked" : ""} /> Vocals sparsam (halbe Rate)</label>
         <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
@@ -434,6 +442,17 @@ function verdrahte(): void {
   document.getElementById("genAufbau")?.addEventListener("change", (e) => {
     z.aufbau = (e.target as HTMLInputElement).checked;
   });
+  for (const b of document.querySelectorAll<HTMLInputElement>("#viewGenerator .genStemTeil")) {
+    b.addEventListener("change", () => {
+      const teil = b.dataset.teil as keyof StemAuswahl;
+      z.stemAuswahl = { ...z.stemAuswahl, [teil]: b.checked };
+      const p = pruefeAuswahl(z.stemAuswahl, { tekkDrums: z.liedDrumsEigene });
+      const info = document.getElementById("genStemInfo");
+      // Hinweise stehen daneben, nicht im Weg: wer nur Vocals will, darf das —
+      // er soll nur vorher wissen, was dem Set dann fehlt.
+      if (info) info.textContent = auswahlText(z.stemAuswahl) + (p.hinweise.length ? " — " + p.hinweise.join(" ") : "");
+    });
+  }
   document.getElementById("genIntroDuenn")?.addEventListener("change", (e) => {
     z.duennesIntro = (e.target as HTMLInputElement).checked;
   });
@@ -585,6 +604,15 @@ function fensterEintrag(liedName: string, label: string, pcm: Float32Array): Sca
 const DRUM_KURZ: Record<DrumRolle, string> = { kick: "KICK", snare: "SNR", hat: "HAT" };
 
 /** Ein geschnittener Drum-Shot als Scan-Eintrag — Name "<Lied> KICK1" usw., Familie teilt der Lied-Stamm. */
+/** Bass-Loop aus dem getrennten Bass-Stem — eigene Rolle, damit er auf Part 9 landet. */
+function bassEintrag(liedName: string, label: string, pcm: Float32Array): ScanEintrag {
+  const stem = `${liedName.slice(0, 10)} B${label.slice(0, 4)}`;
+  return {
+    datei: `${stem}.wav`, stem, rolle: "ton", familie: familie(stem), sekunden: pcm.length / 44100,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName,
+  };
+}
+
 function drumEintrag(liedName: string, t: DrumTreffer, nr: number): ScanEintrag {
   const label = `${DRUM_KURZ[t.rolle]}${nr}`;
   const kurz = liedName.slice(0, Math.max(3, 16 - label.length - 1));
@@ -683,6 +711,7 @@ async function liedAnalysieren(): Promise<void> {
         render();
         const antwort = await lied.stems({
           qualitaet: z.trennungGenau ? "genau" : "schnell",
+          teile: teileAus(z.stemAuswahl),
           fenster: [
             ...res.fenster.map((f) => ({ id: f.label, bytes: encodeWav16(f.pcm, 44100, 1) })),
             ...rest.map((s) => ({ id: `SEG${s.index}`, bytes: encodeWav16(s.pcm, 44100, 1), nurVox: true })),
@@ -699,6 +728,13 @@ async function liedAnalysieren(): Promise<void> {
           const fensterLabel = res.fenster.find((f) => f.index === s.index)?.label;
           const r = je.get(fensterLabel ?? `SEG${s.index}`);
           if (r?.vox) neue.push(voxSegmentEintrag(liedName, ++vNr, parseWav(Uint8Array.from(r.vox)).pcm));
+        }
+        // Bass als eigener Teil (nur wenn angehakt) — ein Loop je Fenster.
+        if (z.stemAuswahl.bass) {
+          for (const f of res.fenster) {
+            const r = je.get(f.label) as { bass?: Uint8Array | number[] | null } | undefined;
+            if (r?.bass) neue.push(bassEintrag(liedName, f.label, parseWav(Uint8Array.from(r.bass)).pcm));
+          }
         }
         // Drums aus dem Lied: den Stem des lautesten Fensters (DROP) schneiden
         if (!z.liedDrumsEigene) {

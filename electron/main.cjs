@@ -507,6 +507,7 @@ function registerLiedIpc(win) {
           melo: f.melo ? new Uint8Array(fs.readFileSync(f.melo)) : null,
           vox: f.vox ? new Uint8Array(fs.readFileSync(f.vox)) : null,
           drums: f.drums ? new Uint8Array(fs.readFileSync(f.drums)) : null,
+          bass: f.bass ? new Uint8Array(fs.readFileSync(f.bass)) : null,
           voxDb: f.voxDb,
         })),
       };

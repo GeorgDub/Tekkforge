@@ -3,7 +3,8 @@ stems.py — Demucs (htdemucs) auf fertig geschnittenen Fenster-WAVs fuer den
 Generator-Tab. Eingabe ist ein JSON (Pfad als Argument):
 
   { "fenster": [ { "id": "DROP", "wav": "<pfad zum mono-44.1k-wav>", "nurVox": false }, ... ],
-    "ziel": "<ordner>" }
+    "ziel": "<ordner>",
+    "teile": ["melo", "vox", "drums", "bass"] }   # optional, Vorgabe ohne "bass"
 
 Je Fenster entstehen <ziel>/<id>-melo.wav (bass + other; Vocals werden
 eingefaltet, wenn sie leiser als -36 dB sind), <ziel>/<id>-vox.wav (nur
@@ -87,6 +88,10 @@ def main():
     anfrage = json.load(open(sys.argv[1], encoding="utf-8"))
     ziel = anfrage["ziel"]
     qualitaet = anfrage.get("qualitaet", "schnell")
+    # Welche Teile sollen ueberhaupt herausfallen? Ohne Angabe alle ausser Bass
+    # (der steckt dann wie bisher in der Melodie mit drin) — so bleiben aeltere
+    # Aufrufer unveraendert.
+    teile = set(anfrage.get("teile") or ["melo", "vox", "drums"])
     os.makedirs(ziel, exist_ok=True)
     ergebnis = []
     fenster = anfrage["fenster"]
@@ -106,25 +111,35 @@ def main():
         vox_stark = rms_db(st["vocals"]) > -36
         if f.get("nurVox"):
             vox_pfad = None
-            if vox_stark:
+            if vox_stark and "vox" in teile:
                 vox_pfad = os.path.join(ziel, f"{f['id']}-vox.wav")
                 sf.write(vox_pfad, normalisiere(st["vocals"]), SR, subtype="PCM_16")
             log(f"  … {time.perf_counter() - t0:.1f} s")
             ergebnis.append({"id": f["id"], "melo": None, "vox": vox_pfad, "drums": None, "voxDb": round(rms_db(st["vocals"]), 1)})
             continue
-        melo = st["bass"] + st["other"] + (0 if vox_stark else st["vocals"])
-        melo_pfad = os.path.join(ziel, f"{f['id']}-melo.wav")
-        sf.write(melo_pfad, normalisiere(melo), SR, subtype="PCM_16")
+        # Bass gehoert normalerweise zur Melodie. Wird er ausdruecklich als
+        # eigener Teil gewuenscht, faellt er dort heraus — sonst haette man ihn
+        # zweimal im Set und die Melodie waere basslastig.
+        bass_extra = "bass" in teile
+        melo = st["other"] + (0 if bass_extra else st["bass"]) + (0 if vox_stark else st["vocals"])
+        melo_pfad = None
+        if "melo" in teile:
+            melo_pfad = os.path.join(ziel, f"{f['id']}-melo.wav")
+            sf.write(melo_pfad, normalisiere(melo), SR, subtype="PCM_16")
+        bass_pfad = None
+        if bass_extra and rms_db(st["bass"]) > -45:
+            bass_pfad = os.path.join(ziel, f"{f['id']}-bass.wav")
+            sf.write(bass_pfad, normalisiere(st["bass"]), SR, subtype="PCM_16")
         vox_pfad = None
-        if vox_stark:
+        if vox_stark and "vox" in teile:
             vox_pfad = os.path.join(ziel, f"{f['id']}-vox.wav")
             sf.write(vox_pfad, normalisiere(st["vocals"]), SR, subtype="PCM_16")
         drums_pfad = None
-        if rms_db(st["drums"]) > -45:
+        if "drums" in teile and rms_db(st["drums"]) > -45:
             drums_pfad = os.path.join(ziel, f"{f['id']}-drums.wav")
             sf.write(drums_pfad, normalisiere(st["drums"]), SR, subtype="PCM_16")
         log(f"  … {time.perf_counter() - t0:.1f} s")
-        ergebnis.append({"id": f["id"], "melo": melo_pfad, "vox": vox_pfad, "drums": drums_pfad, "voxDb": round(rms_db(st["vocals"]), 1)})
+        ergebnis.append({"id": f["id"], "melo": melo_pfad, "vox": vox_pfad, "drums": drums_pfad, "bass": bass_pfad, "voxDb": round(rms_db(st["vocals"]), 1)})
     print(json.dumps({"fenster": ergebnis}))
 
 
