@@ -19,6 +19,11 @@ export interface TekkFs {
   backupZurueck?(ordner: string, name: string): Promise<{ original: string }>;
   /** Ordner im Explorer oeffnen. */
   ordnerOeffnen?(ordner: string): Promise<string>;
+  /**
+   * Ausweichordner, wenn keine Karte steckt (<Downloads>\TekkForge).
+   * Fehlt bei aelteren Bruecken — dann bleibt nur der Browser-Download.
+   */
+  standardOrdner?(): Promise<string>;
 }
 
 export function tekkFs(): TekkFs | undefined {

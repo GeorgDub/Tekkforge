@@ -57,6 +57,20 @@ contextBridge.exposeInMainWorld("tekkAutosave", {
   loeschen: () => ipcRenderer.invoke("autosave:loeschen"),
 });
 
+// ── Pattern-Bibliothek (userData/bibliothek) ──
+contextBridge.exposeInMainWorld("tekkBib", {
+  available: true,
+  /** Kopfdaten aller Eintraege, neueste zuerst. */
+  liste: () => ipcRenderer.invoke("bib:liste"),
+  /** Eintrag als JSON ablegen (id bestimmt den Dateinamen). */
+  speichern: (id, text) => ipcRenderer.invoke("bib:speichern", id, text),
+  /** Vollen Eintrag lesen, sonst null. */
+  lesen: (id) => ipcRenderer.invoke("bib:lesen", id),
+  loeschen: (id) => ipcRenderer.invoke("bib:loeschen", id),
+  /** Ordner im Explorer zeigen. */
+  ordner: () => ipcRenderer.invoke("bib:ordner"),
+});
+
 // ── Update-Check (GitHub Releases) ──
 contextBridge.exposeInMainWorld("tekkUpdate", {
   available: true,
@@ -125,6 +139,8 @@ contextBridge.exposeInMainWorld("tekkFs", {
   backupZurueck: (ordner, name) => ipcRenderer.invoke("fs:backupZurueck", ordner, name),
   /** Ordner im Explorer oeffnen. */
   ordnerOeffnen: (ordner) => ipcRenderer.invoke("fs:ordnerOeffnen", ordner),
+  /** Ausweichordner, wenn keine SD-Karte steckt (unter Downloads). */
+  standardOrdner: () => ipcRenderer.invoke("fs:standardOrdner"),
   /** examples/e2s/tekk4.all aus dem App-Verzeichnis als Byte-Array, sonst null. */
   tekkDrums: () => ipcRenderer.invoke("fs:tekkDrums"),
 });

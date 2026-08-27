@@ -211,6 +211,15 @@ function registerFsIpc() {
     if (typeof ordner !== "string" || !path.isAbsolute(ordner)) throw new Error("Ordner muss ein absoluter Pfad sein");
     return shell.openPath(ordner);
   });
+  /**
+   * Ausweichordner, wenn keine Karte steckt: <Downloads>\TekkForge.
+   *
+   * Der Browser-Download (`<a download>` auf ein Blob) fuehrt in der
+   * Electron-Huelle zu KEINER Datei — er wird still verworfen. Eine Oberflaeche,
+   * die danach „gespeichert" meldet, luegt. Darum schreibt die App auch den
+   * Ausweichfall ueber `fs:schreibe`, das den Pfad zurueckmeldet.
+   */
+  ipcMain.handle("fs:standardOrdner", () => path.join(app.getPath("downloads"), "TekkForge"));
   ipcMain.handle("fs:tekkDrums", () => {
     const kandidaten = [path.join(app.getAppPath(), "examples", "e2s", "tekk4.all")];
     if (process.resourcesPath) kandidaten.push(path.join(process.resourcesPath, "examples", "e2s", "tekk4.all"));
@@ -436,6 +445,79 @@ function registerAutosaveIpc() {
     } catch {
       return false;
     }
+  });
+}
+
+/**
+ * Pattern-Bibliothek: je Eintrag eine Datei in userData/bibliothek.
+ *
+ * Eine Datei je Eintrag, nicht eine grosse Sammeldatei: so kostet das Anlegen
+ * eines Eintrags nicht das Neuschreiben von Megabytes, und ein beschaedigter
+ * Eintrag reisst nicht die ganze Bibliothek mit. Geschrieben wird ueber eine
+ * Nebendatei und Umbenennen — ein Absturz mitten im Schreiben darf keinen
+ * halben Eintrag hinterlassen.
+ */
+function bibliothekOrdner() {
+  const p = path.join(app.getPath("userData"), "bibliothek");
+  fs.mkdirSync(p, { recursive: true });
+  return p;
+}
+
+function sichererName(id) {
+  const s = String(id).replace(/[^A-Za-z0-9_-]/g, "");
+  if (!s) throw new Error("Ungueltige Bibliotheks-Kennung");
+  return s;
+}
+
+function registerBibliothekIpc() {
+  ipcMain.handle("bib:liste", () => {
+    const ordner = bibliothekOrdner();
+    const out = [];
+    for (const name of fs.readdirSync(ordner)) {
+      if (!name.endsWith(".json")) continue;
+      try {
+        const roh = JSON.parse(fs.readFileSync(path.join(ordner, name), "utf8"));
+        // Nur die Kopfdaten — die Samples bleiben auf der Platte, bis sie
+        // gebraucht werden. Sonst haette man die ganze Bibliothek im Speicher.
+        out.push({
+          id: roh.id,
+          name: roh.name,
+          wann: roh.wann,
+          samples: Number.isFinite(roh.sampleAnzahl)
+            ? roh.sampleAnzahl
+            : (roh.projekt && Array.isArray(roh.projekt.samples) ? roh.projekt.samples.length : 0),
+          bytes: fs.statSync(path.join(ordner, name)).size,
+        });
+      } catch {
+        /* beschaedigter Eintrag: ueberspringen statt die Liste zu verlieren */
+      }
+    }
+    return out.sort((a, b) => b.wann - a.wann);
+  });
+  ipcMain.handle("bib:speichern", (_e, id, text) => {
+    const ziel = path.join(bibliothekOrdner(), `${sichererName(id)}.json`);
+    const tmp = `${ziel}.tmp`;
+    fs.writeFileSync(tmp, String(text), "utf8");
+    fs.renameSync(tmp, ziel);
+    return { pfad: ziel, bytes: Buffer.byteLength(String(text)) };
+  });
+  ipcMain.handle("bib:lesen", (_e, id) => {
+    const ziel = path.join(bibliothekOrdner(), `${sichererName(id)}.json`);
+    return fs.existsSync(ziel) ? fs.readFileSync(ziel, "utf8") : null;
+  });
+  ipcMain.handle("bib:loeschen", (_e, id) => {
+    const ziel = path.join(bibliothekOrdner(), `${sichererName(id)}.json`);
+    try {
+      if (fs.existsSync(ziel)) fs.unlinkSync(ziel);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  ipcMain.handle("bib:ordner", () => {
+    const ordner = bibliothekOrdner();
+    void shell.openPath(ordner);
+    return ordner;
   });
 }
 
@@ -737,6 +819,7 @@ app.whenReady().then(() => {
   registerUrlIpc(win);
   registerUpdateIpc(win);
   registerAutosaveIpc();
+  registerBibliothekIpc();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();

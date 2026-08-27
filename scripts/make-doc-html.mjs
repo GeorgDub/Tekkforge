@@ -138,6 +138,24 @@ const abschnitte = [
   },
   {
     nr: "08",
+    titel: "Pattern-Bibliothek",
+    lead: "Patterns mit ihrer Sample-Bank ablegen — und in einem Zug aufs Gerät bringen.",
+    punkte: [
+      "<b>Ein Eintrag ist ein Pattern MIT seinen Samples.</b> Abgelegt wird nicht der ganze Pool, sondern genau das, worauf die Parts zeigen. Damit endet die Sucherei nach der Bank, die zu einem Pattern von vorletzter Woche gehört.",
+      "Ankreuzen, was mitsoll — und unten steht, wohin: <b>per USB auf die Geräte-Slots</b>, <b>als einzelne <code>.e2spat</code> in den Pattern-Ordner der Karte</b>, oder als <b>Set</b> aus einer <code>.e2sallpat</code> und den Bänken dazu.",
+      "<b>Das Set gibt es in zwei Fassungen.</b> Getrennt: jedes Pattern behält seine Nummern, jede Bank bleibt für sich, am Gerät lädt man zu jedem Pattern die passende. Gemeinsam: alle Samples wandern in EINE Bank, die Nummern werden neu vergeben und die Verweise nachgezogen — ein Import, alles spielbar. Auf Wunsch hängen sich die Patterns dabei gleich zu einer Kette aneinander.",
+      "<b>Eine Pattern-Datei wird nie ohne die Bank geschrieben, auf die sie zeigt.</b> Die Nummern sind das Einzige, was Pattern und Sample verbindet; passen sie nicht zusammen, lädt das Gerät trotzdem und spielt fremde Samples. Es gibt keinen Fehler — es klingt nur falsch, und man sucht die Ursache im Pattern. Deshalb liefert jeder Set-Weg ein fertiges Paar, statt das Zusammenstellen dem Nutzer zu überlassen.",
+      "<b>Was das Gerät nicht laden kann, wird nicht geschrieben.</b> Passt eine Bank nicht ins ~24-MB-Sample-RAM, bleibt auch die Pattern-Datei aus, und es steht da, wie viele Megabyte es waren. Ein halbes Set auf der Karte wäre eine Fehlersuche für später.",
+      "Die USB-Übertragung nennt vorher die Slots, die überschrieben werden, und hinterher die Sample-Nummern, die die Patterns erwarten — über MIDI gehen nur Patterns, die Bank muss am Gerät geladen sein.",
+      "Die Einträge liegen als je eine Datei im Anwendungsordner: einen neuen anzulegen schreibt keine Megabyte neu, und ein beschädigter Eintrag reißt nicht die ganze Bibliothek mit.",
+    ],
+    bild: [
+      "pattern-bibliothek",
+      "Drei abgelegte Patterns aus einem HARDTEKK-Set, je 16 Samples; zwei sind markiert, und die vier Wege aufs Gerät stehen darunter mit der Anzahl im Knopf.",
+    ],
+  },
+  {
+    nr: "09",
     titel: "Start-Übersicht & Assistent",
     lead: "Der Einstieg: Status auf einen Blick und ein Assistent für Rückfragen.",
     punkte: [
@@ -148,7 +166,7 @@ const abschnitte = [
     bild: ["start", "Das Start-Dashboard mit Statuskacheln, letzten Dateien und dem Assistenten."],
   },
   {
-    nr: "09",
+    nr: "10",
     titel: "Einstellungen",
     lead: "Aussehen, Sicherheit, Aktualität.",
     punkte: [
@@ -165,7 +183,7 @@ const abschnitte = [
 /** Seiten zu Firmware, Speicherzugriff und Effekten — der technische Kern. */
 const firmwareSeiten = `
 <section class="seite">
-  <span class="nr">09</span>
+  <span class="nr">11</span>
   <h2>Zwei Firmware-Welten</h2>
   <p class="lead">Die Electribe 2 gibt es mit der Firmware ab Werk und mit <b>Hacktribe</b> — einer von der Szene erweiterten Fassung, die dem Gerät Funktionen beibringt, die KORG nie vorgesehen hat. TekkForge spricht mit beiden und richtet sich selbst danach aus.</p>
   <table>
@@ -185,7 +203,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">10</span>
+  <span class="nr">12</span>
   <h2>Effekte — was Hacktribe möglich macht</h2>
   <p class="lead">Ab Werk stellt man einen Effekt am Gerät ein und dreht ihn dort von Hand. Mit Hacktribe wird er zum fernsteuerbaren Baustein.</p>
   <ul>
@@ -198,7 +216,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">11</span>
+  <span class="nr">13</span>
   <h2>Eigene Effekte und Grooves bauen</h2>
   <p class="lead">Was am Gerät nur auswählbar ist, lässt sich hier entwerfen: ein Effekt-Preset mit eigenem Namen, eigenen Algorithmen und eigener Belegung der Bedienelemente — und ein eigenes Timing-Gefühl.</p>
   <h3 class="unter-h">Effekt-Presets</h3>
@@ -213,7 +231,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">12</span>
+  <span class="nr">14</span>
   <h2>Groove-Vorlagen — eigener Swing</h2>
   <p class="lead">Eine Groove-Vorlage legt für jeden Step drei Dinge fest: den Zeitversatz, die Anschlagstärke und die Tonlänge. Genau daraus entsteht das Timing-Gefühl.</p>
   <ul>
@@ -230,7 +248,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">13</span>
+  <span class="nr">15</span>
   <h2>Geräte-Spiegel und Werkbank</h2>
   <p class="lead">Hacktribe meldet jeden Griff am Gerät zurück: welcher Modus aktiv ist, welches Bedienelement bewegt wurde, wohin. TekkForge zeigt diesen Strom in Klartext.</p>
   <ul>
@@ -244,7 +262,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">14</span>
+  <span class="nr">16</span>
   <h2>Zugriff auf den Arbeitsspeicher</h2>
   <p class="lead">Hacktribe erlaubt, direkt in den Speicher des laufenden Geräts zu schauen und zu schreiben. Das ist mächtig und heikel zugleich — deshalb ist der Weg dorthin bewusst umständlich gebaut.</p>
   <h3 class="unter-h">Was heute erreichbar ist</h3>
@@ -272,7 +290,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">15</span>
+  <span class="nr">17</span>
   <h2>Was über den Speicherzugriff noch möglich wird</h2>
   <p class="lead">Effekt-Presets und Groove-Vorlagen sind inzwischen gebaut. Was bleibt, ist nicht der Zugang, sondern das Wissen, welches Byte welche Bedeutung hat.</p>
   <div class="karten">
@@ -415,7 +433,7 @@ const html = `<!doctype html>
     <div><b>9</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>760</b><span>automatische Tests</span></div>
+    <div><b>847</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -450,7 +468,7 @@ ${abschnitte
 ${firmwareSeiten}
 
 <section class="seite">
-  <span class="nr">16 · AUSBLICK</span>
+  <span class="nr">18 · AUSBLICK</span>
   <h2>Was als Nächstes kommt</h2>
   <p class="lead">Der Stand von heute ist benutzbar und getestet. Diese Punkte stehen als Nächstes an — geordnet nach Dringlichkeit, nicht nach Aufwand.</p>
   <div class="rm">
@@ -466,7 +484,7 @@ ${firmwareSeiten}
 </section>
 
 <section class="seite">
-  <span class="nr">17 · TECHNIK</span>
+  <span class="nr">19 · TECHNIK</span>
   <h2>Grundlagen in Kürze</h2>
   <p class="lead">Was unter der Oberfläche gilt — die Regeln, an denen sich alles ausrichtet.</p>
   <div class="karten">
@@ -475,7 +493,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>622 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>847 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>

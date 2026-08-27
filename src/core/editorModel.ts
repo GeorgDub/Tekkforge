@@ -707,6 +707,14 @@ export function deserializeProject(text: string): EditorProject {
     const base = createPattern(p.name || `PATTERN ${i + 1}`);
     base.bpm = Number.isFinite(p.bpm) ? Math.min(300, Math.max(20, p.bpm)) : 165;
     base.stepLength = p.stepLength === 32 || p.stepLength === 64 ? p.stepLength : 16;
+    // Kette mitnehmen. Ohne das wäre chainTo beim Laden undefined — und dann
+    // schriebe `patternToE2Input` die Kettenbytes gar nicht, sodass der
+    // wiederhergestellte Roh-Body still die Kette von damals weiterspielte.
+    // Ein Pattern, das beim Abspielen woandershin springt, merkt man erst am
+    // Gerät.
+    if (Number.isFinite(p.chainTo)) base.chainTo = Math.min(250, Math.max(0, Math.round(p.chainTo as number)));
+    if (Number.isFinite(p.chainRepeat))
+      base.chainRepeat = Math.min(64, Math.max(1, Math.round(p.chainRepeat as number)));
     for (let pi = 0; pi < EDITOR_PARTS; pi++) {
       const src = p.parts?.[pi];
       if (!src) continue;
