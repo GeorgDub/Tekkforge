@@ -36,6 +36,7 @@ import { grooveAusAudio } from "../core/grooveAusLied";
 import { sicherungsPlan, baueSicherung, leseSicherung, vergleicheSicherung, type SicherungsBlock } from "../core/geraetSicherung";
 import { baueSammlung, leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { dekodiere } from "./audioDecode";
+import { legeAb, zeigeAblage } from "./ablage";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
 
 export interface FxPresetHooks {
@@ -487,6 +488,11 @@ async function sammlungLaden(f: File): Promise<void> {
 
 // ─── Komplettsicherung ───────────────────────────────────────────────────────
 
+/** Unter dem Standardordner der App — Sicherungen gehoeren nicht auf die SD-Karte. */
+const SICHERUNGS_ORDNER = "Sicherungen";
+/** Pfad der zuletzt geschriebenen Sicherung (fuer „Ordner zeigen"). */
+let letzteSicherung: string | null = null;
+
 const sicherungsInfo = (t: string): void => {
   const el = document.getElementById("fxpSicherungInfo");
   if (el) el.textContent = t;
@@ -527,14 +533,25 @@ async function geraetSichern(): Promise<void> {
   if (!bloecke) return;
   const text = baueSicherung(bloecke, { geraet: "E2S", firmware: "hacktribe" });
   const name = `tekkforge-geraet-${new Date().toISOString().slice(0, 10)}.tfbak`;
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
   const kb = Math.round(bloecke.reduce((s, b) => s + b.laenge, 0) / 1024);
-  sicherungsInfo(`${bloecke.length} Bereiche, ${kb} kB gesichert.`);
-  setStatus(`Sicherung als ${name} abgelegt.`);
+  // Eine Sicherung darf nicht am Browser-Download haengen: der meldet nicht,
+  // ob eine Datei entstanden ist. „Gesichert" zu sagen, ohne es zu wissen, ist
+  // genau der Fehler, der erst auffaellt, wenn man die Sicherung braucht.
+  try {
+    const ab = await legeAb(name, text, SICHERUNGS_ORDNER, "application/json");
+    sicherungsInfo(`${bloecke.length} Bereiche, ${kb} kB gesichert.`);
+    setStatus(
+      ab.pfad
+        ? `Sicherung geschrieben: ${ab.pfad}`
+        : `Sicherung als ${name} zum Herunterladen angeboten — im Browser kann TekkForge nicht pruefen, ob sie ankam.`,
+    );
+    letzteSicherung = ab.pfad;
+    const knopf = document.getElementById("fxpSicherungZeigen");
+    if (knopf) knopf.classList.toggle("hidden", !ab.pfad);
+  } catch (err) {
+    sicherungsInfo(`${bloecke.length} Bereiche gelesen, aber nicht geschrieben.`);
+    setStatus(`Sicherung NICHT abgelegt: ${(err as Error).message}`);
+  }
 }
 
 async function gegenSicherungVergleichen(f: File): Promise<void> {
@@ -678,6 +695,9 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   });
   renderSammlung();
   $("fxpSichern").addEventListener("click", () => void geraetSichern());
+  $("fxpSicherungZeigen").addEventListener("click", () => {
+    if (letzteSicherung) void zeigeAblage(letzteSicherung);
+  });
   $("fxpVergleichen").addEventListener("click", () => ($("fxpSicherungIn") as HTMLInputElement).click());
   $("fxpSicherungIn").addEventListener("change", () => {
     const f = ($("fxpSicherungIn") as HTMLInputElement).files?.[0];
