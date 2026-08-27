@@ -1787,6 +1787,17 @@ player.onStep = (step) => {
 
 // ─── Render + Wiring ─────────────────────────────────────────────────────────
 
+/**
+ * Beim Tabwechsel neu zeichnen.
+ *
+ * Andere Module legen Patterns und Samples direkt ins Projekt (Stem-Werkbank,
+ * Bibliothek). Ohne diesen Aufruf standen sie zwar im Projekt, aber der Editor
+ * zeigte weiter den Stand von vorher — man sah seine eigenen Schnitte nicht.
+ */
+export function editorWirdSichtbar(): void {
+  renderAll();
+}
+
 function renderAll(): void {
   renderPatList();
   renderGlobals();

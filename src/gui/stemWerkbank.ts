@@ -125,13 +125,23 @@ function spieleAb(frame: number): void {
 /** Wo der Kopf gerade steht, in Frames der Zeitachse (−1 wenn still). */
 function kopfFrame(): number {
   if (!z.spielt || !ctx) return -1;
-  const sr = z.spuren[0]?.sampleRate ?? 44100;
+  // Die Rate der laengsten Spur — sie spannt die Achse auf. Die erste Spur zu
+  // nehmen ginge schief, sobald eine Spur mit anderer Rate dazukommt: der Kopf
+  // liefe dann gegen die gezeichnete Wellenform davon.
+  const sr = achsenRate();
   const f = startFrame + (ctx.currentTime - startZeit) * sr;
   if (f > zeitachse(z.spuren)) {
     stoppe();
     return -1;
   }
   return f;
+}
+
+/** Abtastrate der Spur, die die Zeitachse vorgibt. */
+function achsenRate(): number {
+  let laengste: Spur | null = null;
+  for (const s of z.spuren) if (!laengste || s.pcm.length > laengste.pcm.length) laengste = s;
+  return laengste?.sampleRate ?? 44100;
 }
 
 // ── Zeichnen ─────────────────────────────────────────────────────────────────
@@ -454,17 +464,17 @@ function werkzeug(was: string): void {
   const hatAuswahl = z.auswahl.bis > z.auswahl.von;
   const von = hatAuswahl ? Math.max(0, Math.round(z.auswahl.von)) : 0;
   const bis = hatAuswahl ? Math.min(s.pcm.length, Math.round(z.auswahl.bis)) : s.pcm.length;
+  if (was === "behalten" && !hatAuswahl) {
+    melde("Zum Kürzen erst einen Bereich ziehen.");
+    return;
+  }
   stoppe();
-  merke(s);
   const teil = s.pcm.subarray(von, bis);
   let neu: Float32Array;
   let text: string;
   switch (was) {
     case "behalten":
-      if (!hatAuswahl) {
-        melde("Zum Kürzen erst einen Bereich ziehen.");
-        return;
-      }
+      merke(s);
       neu = schneide(s.pcm, von, bis);
       s.pcm = neu;
       // Marken wandern mit; was ausserhalb lag, ist weg.
@@ -475,23 +485,29 @@ function werkzeug(was: string): void {
     case "stille": {
       const g = stilleGrenzen(s.pcm, 45);
       if (g.bis <= g.von) {
+        // Ohne Ruecksprung stuende jetzt ein Rueckgaengig-Schritt bereit, der
+        // nichts rueckgaengig macht.
         melde("Da ist alles still — nichts zu kürzen.");
         return;
       }
+      merke(s);
       s.pcm = schneide(s.pcm, g.von, g.bis);
       s.marken = s.marken.filter((m) => m > g.von && m < g.bis).map((m) => m - g.von);
       melde(`Stille Ränder weg: ${sek(s.pcm.length, s.sampleRate)} s übrig.`);
       return;
     }
     case "blenden":
+      merke(s);
       neu = blenden(teil.slice(), 10, 10, s.sampleRate);
       text = "ein- und ausgeblendet";
       break;
     case "normal":
+      merke(s);
       neu = normalisiere(teil.slice());
       text = "normalisiert";
       break;
     case "umkehren":
+      merke(s);
       neu = umkehren(teil.slice());
       text = "umgekehrt";
       break;
@@ -637,4 +653,14 @@ export function initStemWerkbank(): void {
 
 export function stemWerkbankWirdSichtbar(): void {
   render();
+}
+
+/**
+ * Tab verlassen: Ton aus.
+ *
+ * Sonst spielt die Werkbank weiter, waehrend man laengst woanders ist — und
+ * der Zeichentakt malt Wellenformen in einen versteckten Abschnitt.
+ */
+export function stemWerkbankVerlassen(): void {
+  stoppe();
 }

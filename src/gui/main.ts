@@ -8,7 +8,7 @@ import { $ } from "./shared";
 import { initTheme } from "./theme";
 import { initStart, startWirdSichtbar } from "./start";
 import { initSettings, settingsWirdSichtbar } from "./settings";
-import { initEditor, loadProject, panelBridge } from "./editor";
+import { initEditor, loadProject, panelBridge, editorWirdSichtbar } from "./editor";
 import { initConverter } from "./converter";
 import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
@@ -16,14 +16,14 @@ import { initGenerator, generatorWirdSichtbar } from "./generator";
 import { initMidiImport, midiImportWirdSichtbar } from "./midiImport";
 import { initSampleManager, sampleManagerWirdSichtbar } from "./sampleManager";
 import { initPatternBibliothek, bibliothekWirdSichtbar } from "./patternBibliothek";
-import { initStemWerkbank, stemWerkbankWirdSichtbar, ladeAlsSpuren } from "./stemWerkbank";
+import { initStemWerkbank, stemWerkbankWirdSichtbar, ladeAlsSpuren, stemWerkbankVerlassen } from "./stemWerkbank";
 import type { EditorProject } from "../core/editorModel";
 
 type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "bank" | "bib" | "stems" | "settings";
 
 const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?: () => void }> = {
   start: { view: "viewStart", knopf: "tabStart", titel: "Start", sichtbar: startWirdSichtbar },
-  editor: { view: "viewEditor", knopf: "tabEditor", titel: "Pattern-Editor" },
+  editor: { view: "viewEditor", knopf: "tabEditor", titel: "Pattern-Editor", sichtbar: editorWirdSichtbar },
   converter: { view: "viewConverter", knopf: "tabConverter", titel: "ESX-Converter" },
   // Panel und Pad-Deck zeigen Editor-Daten — beim Umschalten frisch rendern.
   panel: { view: "viewPanel", knopf: "tabPanel", titel: "E2S Panel", sichtbar: panelWirdSichtbar },
@@ -39,6 +39,9 @@ const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?:
 let aktiverTab: Tab = "start";
 
 function switchTab(tab: Tab): void {
+  // Die Werkbank spielt weiter, wenn man sie nur verlaesst — Ton aus einem
+  // Tab, den man nicht mehr sieht, ist ein Geist, den niemand sucht.
+  if (aktiverTab === "stems" && tab !== "stems") stemWerkbankVerlassen();
   aktiverTab = tab;
   for (const [name, t] of Object.entries(TABS) as [Tab, (typeof TABS)[Tab]][]) {
     $(t.view).classList.toggle("hidden", name !== tab);
