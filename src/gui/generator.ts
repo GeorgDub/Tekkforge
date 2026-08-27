@@ -151,6 +151,8 @@ function fensterHoeren(datei: string): void {
   render();
 }
 let onEditor: (p: EditorProject) => void = () => {};
+/** Vom Hauptmodul gesetzt: Lied an die Stem-Werkbank uebergeben und dorthin wechseln. */
+let onWerkbank: (dateien: File[]) => void = () => {};
 let tekkBytes: Uint8Array | null = null;
 
 function speicher(): { getItem(k: string): string | null; setItem(k: string, v: string): void } | null {
@@ -364,6 +366,7 @@ function render(): void {
         <label title="Vocals mit halber Abtastrate ablegen — halber Speicher, doppelt so viel Lied passt in eine Bank. Gesang verliert dabei kaum hörbar. ⚠ Am Gerät noch nicht abgenommen: klingen die Vocals doppelt so schnell, beachtet die Electribe die gespeicherte Rate nicht — dann Haken wieder raus."><input id="genSparsameVox" type="checkbox" ${z.sparsameVocals ? "checked" : ""} /> Vocals sparsam (halbe Rate)</label>
         <button id="genLiedLos" ${z.liedLaeuft ? "disabled" : ""}>${z.liedLaeuft ? "Analysiere …" : "Fenster holen"}</button>
         <button id="genLiedAlles" class="primary" ${z.liedLaeuft ? "disabled" : ""} title="Analysieren → Stems → Drums schneiden → Bank bauen → Patterns erzeugen in einem Ablauf">${z.liedLaeuft ? "Laeuft …" : "Alles aus dem Lied"}</button>
+        <button id="genWerkbank" ${z.liedLaeuft ? "disabled" : ""} title="Das gewaehlte Lied in der Stem-Werkbank oeffnen: Spuren untereinander, anhoeren, von Hand schneiden.">In die Stem-Werkbank</button>
       </div>
       ${z.liedStatus ? `<div class="fortschritt" id="genLiedStatus">${escapeHtml(z.liedStatus)}</div>` : ""}
       ${
@@ -402,6 +405,18 @@ function verdrahte(): void {
   ordner.addEventListener("change", () => void scanneOrdner(ordner.files));
   knopf("genBank", () => void bankBauen());
   knopf("genLiedLos", () => void liedAnalysieren());
+  knopf("genWerkbank", () => {
+    // Das gewaehlte Lied weiterreichen, statt es dort noch einmal auswaehlen
+    // zu lassen — inklusive der per URL geholten Datei.
+    const inp = document.getElementById("genLied") as HTMLInputElement | null;
+    const dateien = inp?.files?.length ? Array.from(inp.files) : z.urlDatei ? [z.urlDatei] : [];
+    if (!dateien.length) {
+      z.liedStatus = "Erst eine Audiodatei waehlen (oder per URL holen).";
+      render();
+      return;
+    }
+    onWerkbank(dateien);
+  });
   knopf("genLiedAlles", () => void alleAusLied());
   knopf("genUrlHolen", () => void urlHolen());
   knopf("genSetsSd", () => void aufSd());
@@ -1125,8 +1140,9 @@ async function anGeraet(): Promise<void> {
   }
 }
 
-export function initGenerator(cb: (p: EditorProject) => void): void {
+export function initGenerator(cb: (p: EditorProject) => void, werkbank?: (dateien: File[]) => void): void {
   onEditor = cb;
+  if (werkbank) onWerkbank = werkbank;
   const sp = speicher();
   z.marker = sp ? markerLesen(sp) : null;
   render();

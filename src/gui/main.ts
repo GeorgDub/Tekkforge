@@ -16,9 +16,10 @@ import { initGenerator, generatorWirdSichtbar } from "./generator";
 import { initMidiImport, midiImportWirdSichtbar } from "./midiImport";
 import { initSampleManager, sampleManagerWirdSichtbar } from "./sampleManager";
 import { initPatternBibliothek, bibliothekWirdSichtbar } from "./patternBibliothek";
+import { initStemWerkbank, stemWerkbankWirdSichtbar, ladeAlsSpuren } from "./stemWerkbank";
 import type { EditorProject } from "../core/editorModel";
 
-type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "bank" | "bib" | "settings";
+type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "bank" | "bib" | "stems" | "settings";
 
 const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?: () => void }> = {
   start: { view: "viewStart", knopf: "tabStart", titel: "Start", sichtbar: startWirdSichtbar },
@@ -31,6 +32,7 @@ const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?:
   midi: { view: "viewMidi", knopf: "tabMidi", titel: "MIDI zu Korg", sichtbar: midiImportWirdSichtbar },
   bank: { view: "viewBank", knopf: "tabBank", titel: "Sample-Manager", sichtbar: sampleManagerWirdSichtbar },
   bib: { view: "viewBib", knopf: "tabBib", titel: "Pattern-Bibliothek", sichtbar: bibliothekWirdSichtbar },
+  stems: { view: "viewStems", knopf: "tabStems", titel: "Stem-Werkbank", sichtbar: stemWerkbankWirdSichtbar },
   settings: { view: "viewSettings", knopf: "tabSettings", titel: "Einstellungen", sichtbar: settingsWirdSichtbar },
 };
 
@@ -74,6 +76,7 @@ for (const [name, t] of Object.entries(TABS) as [Tab, (typeof TABS)[Tab]][]) {
 initEditor();
 initSampleManager();
 initPatternBibliothek();
+initStemWerkbank();
 initPanel();
 initPadDeck(() => aktiverTab === "paddeck");
 // Converter-Handoff: konvertiertes ESX-Ergebnis in den Editor laden + Tab wechseln.
@@ -86,12 +89,20 @@ initConverter((project: EditorProject) => {
   }
 });
 // Generator-Handoff: erzeugte Patterns + Bank in den Editor laden + Tab wechseln.
-initGenerator((project: EditorProject) => {
-  if (loadProject(project)) {
-    switchTab("editor");
-    alert(`Generator → Editor: ${project.patterns.length} Pattern(s), ${project.samples.length} Sample(s).`);
-  }
-});
+initGenerator(
+  (project: EditorProject) => {
+    if (loadProject(project)) {
+      switchTab("editor");
+      alert(`Generator → Editor: ${project.patterns.length} Pattern(s), ${project.samples.length} Sample(s).`);
+    }
+  },
+  // Zweiter Weg aus dem Generator: dasselbe Lied von Hand zerlegen, statt es
+  // dort noch einmal auszuwaehlen.
+  (dateien: File[]) => {
+    switchTab("stems");
+    void ladeAlsSpuren(dateien);
+  },
+);
 // MIDI-Import-Handoff: gebaute Patterns in den Editor laden + Tab wechseln.
 initMidiImport((project: EditorProject) => {
   if (loadProject(project)) {

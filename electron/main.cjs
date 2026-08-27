@@ -560,9 +560,21 @@ function registerLiedIpc(win) {
         return f.nurVox ? { id: f.id, wav, nurVox: true } : { id: f.id, wav };
       });
       const anfragePfad = path.join(basis, "anfrage.json");
+      // `teile` MUSS mitgehen. Ohne diese Zeile nahm stems.py seine Vorgabe
+      // (melo/vox/drums), und die Stem-Auswahl in der Oberflaeche hatte keine
+      // Wirkung: Bass fiel nie als eigener Teil heraus, und Abwaehlen sparte
+      // keine Rechenzeit. Aufgefallen erst, als die Werkbank vier Spuren
+      // anforderte und drei zurueckkamen.
+      const ERLAUBT = new Set(["melo", "vox", "drums", "bass"]);
+      const teile = Array.isArray(anfrage.teile) ? anfrage.teile.filter((t) => ERLAUBT.has(t)) : null;
       fs.writeFileSync(
         anfragePfad,
-        JSON.stringify({ fenster: liste, ziel: basis, qualitaet: anfrage.qualitaet === "genau" ? "genau" : "schnell" }),
+        JSON.stringify({
+          fenster: liste,
+          ziel: basis,
+          qualitaet: anfrage.qualitaet === "genau" ? "genau" : "schnell",
+          ...(teile && teile.length ? { teile } : {}),
+        }),
       );
       // gepackt liegt stems.py als extraResource neben der App (asar kann Python nicht lesen)
       const kandidaten = [path.join(app.getAppPath(), "scripts", "stems.py")];

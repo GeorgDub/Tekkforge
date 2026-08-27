@@ -138,6 +138,27 @@ const abschnitte = [
   },
   {
     nr: "08",
+    titel: "Stem-Werkbank",
+    lead: "Die Spuren eines Lieds untereinander auf einer Zeitachse — anhören, Marken setzen, von Hand schneiden.",
+    punkte: [
+      "<b>Ein Lied hinein, vier Spuren heraus.</b> Melodie, Vocals, Drums und Bass werden in <b>einem</b> Durchgang über die ganze Länge getrennt und liegen danach untereinander, jede mit ihrer Wellenform. Gemessen (Grafikkarte): zwei Minuten Musik in 13,8 s. In 30-Sekunden-Stücken war derselbe Stoff langsamer — deshalb wird nicht gestückelt.",
+      "<b>Anhören, wie es zusammen klingt.</b> Alle Spuren laufen aus einem einzigen Klangwerk, deshalb bleiben sie zusammen; je Spur gibt es stumm, solo und Pegel. Ein eigener Abspieler pro Spur wäre einfacher gewesen und innerhalb eines Taktes hörbar auseinandergelaufen — bei Stems desselben Lieds ist das der Unterschied zwischen „passt“ und „klingt falsch“.",
+      "<b>Marken setzen mit der Maus</b> — Klick setzt, Umschalt+Klick nimmt weg, Ziehen wählt einen Bereich, Doppelklick spielt ab dort. Ein Raster aus Tempo und Taktzahl legt die Marken auf die Taktgrenzen, wahlweise auf alle Spuren oder nur auf eine.",
+      "<b>Jede Marke schnappt auf den nächsten Nulldurchgang.</b> Ein Schnitt mitten in der Halbwelle knackt hörbar — und das fällt sonst erst auf, wenn die Bank schon auf dem Gerät ist.",
+      "<b>Marken gehören zur Spur, nicht zur Zeitachse.</b> Naheliegend wäre ein gemeinsames Raster, denn die Spuren teilen sich ja die Zeit. Aber die Vocals will man in acht Phrasen zerlegen und die Melodie höchstens halbieren — mit gemeinsamen Marken ginge beides nicht nebeneinander.",
+      "<b>Direkt bearbeiten</b> — auf die Auswahl kürzen, stille Ränder weg, ein- und ausblenden, normalisieren, umkehren, und zehn Schritte zurück. Dieselben Rechnungen wie im Sample-Editor.",
+      "<b>Abschnitte in den Pool</b> — die Stücke zwischen den Marken werden zu nummerierten Samples. Was nicht ins ~24-MB-Sample-RAM passt, wird gar nicht erst angelegt; zu kurze Schnipsel fallen weg, statt als Knacken mit eigener Nummer in der Bank zu landen. Zerfällt eine <b>Melodie</b> in mehr als zwei Teile, steht der Hinweis dabei — von Hand ist es erlaubt, aber es soll Absicht sein.",
+      "Aus dem Generator führt ein Knopf direkt hierher: dasselbe Lied, ohne es noch einmal auszuwählen.",
+    ],
+    bild: [
+      "stem-werkbank",
+      "Ein getrenntes Lied: oben der Mix, darunter Melodie und Vocals. Nur die Vocalspur ist im 8-Takt-Raster markiert und in 12 Abschnitte geschnitten — die Melodie bleibt ganz, genau wie es sein soll.",
+    ],
+    extra:
+      "<div class=\"hinweis\"><b>Ein stiller Fehler kam dabei ans Licht:</b> Die Auswahl, welche Teile herausfallen sollen, wurde von der Oberfläche zwar geschickt, auf dem Weg zur Trennung aber weggelassen. Der Bass fiel deshalb nie als eigener Teil heraus, und Abwählen sparte keine Rechenzeit. Aufgefallen ist es erst, als die Werkbank vier Spuren anforderte und drei zurückkamen.</div>",
+  },
+  {
+    nr: "09",
     titel: "Pattern-Bibliothek",
     lead: "Patterns mit ihrer Sample-Bank ablegen — und in einem Zug aufs Gerät bringen.",
     punkte: [
@@ -155,7 +176,7 @@ const abschnitte = [
     ],
   },
   {
-    nr: "09",
+    nr: "10",
     titel: "Start-Übersicht & Assistent",
     lead: "Der Einstieg: Status auf einen Blick und ein Assistent für Rückfragen.",
     punkte: [
@@ -166,7 +187,7 @@ const abschnitte = [
     bild: ["start", "Das Start-Dashboard mit Statuskacheln, letzten Dateien und dem Assistenten."],
   },
   {
-    nr: "10",
+    nr: "11",
     titel: "Einstellungen",
     lead: "Aussehen, Sicherheit, Aktualität.",
     punkte: [
@@ -183,7 +204,7 @@ const abschnitte = [
 /** Seiten zu Firmware, Speicherzugriff und Effekten — der technische Kern. */
 const firmwareSeiten = `
 <section class="seite">
-  <span class="nr">11</span>
+  <span class="nr">12</span>
   <h2>Zwei Firmware-Welten</h2>
   <p class="lead">Die Electribe 2 gibt es mit der Firmware ab Werk und mit <b>Hacktribe</b> — einer von der Szene erweiterten Fassung, die dem Gerät Funktionen beibringt, die KORG nie vorgesehen hat. TekkForge spricht mit beiden und richtet sich selbst danach aus.</p>
   <table>
@@ -203,7 +224,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">12</span>
+  <span class="nr">13</span>
   <h2>Effekte — was Hacktribe möglich macht</h2>
   <p class="lead">Ab Werk stellt man einen Effekt am Gerät ein und dreht ihn dort von Hand. Mit Hacktribe wird er zum fernsteuerbaren Baustein.</p>
   <ul>
@@ -216,7 +237,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">13</span>
+  <span class="nr">14</span>
   <h2>Eigene Effekte und Grooves bauen</h2>
   <p class="lead">Was am Gerät nur auswählbar ist, lässt sich hier entwerfen: ein Effekt-Preset mit eigenem Namen, eigenen Algorithmen und eigener Belegung der Bedienelemente — und ein eigenes Timing-Gefühl.</p>
   <h3 class="unter-h">Effekt-Presets</h3>
@@ -231,7 +252,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">14</span>
+  <span class="nr">15</span>
   <h2>Groove-Vorlagen — eigener Swing</h2>
   <p class="lead">Eine Groove-Vorlage legt für jeden Step drei Dinge fest: den Zeitversatz, die Anschlagstärke und die Tonlänge. Genau daraus entsteht das Timing-Gefühl.</p>
   <ul>
@@ -248,7 +269,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">15</span>
+  <span class="nr">16</span>
   <h2>Geräte-Spiegel und Werkbank</h2>
   <p class="lead">Hacktribe meldet jeden Griff am Gerät zurück: welcher Modus aktiv ist, welches Bedienelement bewegt wurde, wohin. TekkForge zeigt diesen Strom in Klartext.</p>
   <ul>
@@ -262,7 +283,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">16</span>
+  <span class="nr">17</span>
   <h2>Zugriff auf den Arbeitsspeicher</h2>
   <p class="lead">Hacktribe erlaubt, direkt in den Speicher des laufenden Geräts zu schauen und zu schreiben. Das ist mächtig und heikel zugleich — deshalb ist der Weg dorthin bewusst umständlich gebaut.</p>
   <h3 class="unter-h">Was heute erreichbar ist</h3>
@@ -290,7 +311,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">17</span>
+  <span class="nr">18</span>
   <h2>Was über den Speicherzugriff noch möglich wird</h2>
   <p class="lead">Effekt-Presets und Groove-Vorlagen sind inzwischen gebaut. Was bleibt, ist nicht der Zugang, sondern das Wissen, welches Byte welche Bedeutung hat.</p>
   <div class="karten">
@@ -433,7 +454,7 @@ const html = `<!doctype html>
     <div><b>9</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>847</b><span>automatische Tests</span></div>
+    <div><b>870</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -468,7 +489,7 @@ ${abschnitte
 ${firmwareSeiten}
 
 <section class="seite">
-  <span class="nr">18 · AUSBLICK</span>
+  <span class="nr">19 · AUSBLICK</span>
   <h2>Was als Nächstes kommt</h2>
   <p class="lead">Der Stand von heute ist benutzbar und getestet. Diese Punkte stehen als Nächstes an — geordnet nach Dringlichkeit, nicht nach Aufwand.</p>
   <div class="rm">
@@ -484,7 +505,7 @@ ${firmwareSeiten}
 </section>
 
 <section class="seite">
-  <span class="nr">19 · TECHNIK</span>
+  <span class="nr">20 · TECHNIK</span>
   <h2>Grundlagen in Kürze</h2>
   <p class="lead">Was unter der Oberfläche gilt — die Regeln, an denen sich alles ausrichtet.</p>
   <div class="karten">
@@ -493,7 +514,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>847 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>870 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
