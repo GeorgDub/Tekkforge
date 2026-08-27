@@ -163,7 +163,7 @@ const firmwareSeiten = `
       <tr><td>Effekt-Parameter live verändern, während das Gerät spielt</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
       <tr><td>Effekt-Presets und Groove-Vorlagen selbst bauen</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
       <tr><td>Direkter Zugriff auf den Arbeitsspeicher des Geräts</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
-      <tr><td>Gerät meldet jeden Knopfdruck zurück</td><td class="nein">nicht möglich</td><td class="ja">ja</td></tr>
+      <tr><td>Gerät meldet jeden Knopfdruck zurück</td><td class="nein">nicht möglich</td><td class="ja">ja — am Gerät bestätigt</td></tr>
     </tbody>
   </table>
   <p>Welche Fassung läuft, muss niemand raten: Ein Knopf schickt eine harmlose Vier-Byte-Leseanfrage. Kommt eine Antwort, ist es Hacktribe; bleibt es still, die Werksfirmware. Funktionen, die nur Hacktribe kann, sind ab Werk gar nicht erst sichtbar — statt eines Knopfes, der nichts tut, steht dort der Grund.</p>
@@ -262,7 +262,7 @@ const firmwareSeiten = `
   <h2>Was über den Speicherzugriff noch möglich wird</h2>
   <p class="lead">Effekt-Presets und Groove-Vorlagen sind inzwischen gebaut. Was bleibt, ist nicht der Zugang, sondern das Wissen, welches Byte welche Bedeutung hat.</p>
   <div class="karten">
-    <div class="karte"><h3>Die versteckten Schalter finden</h3><p>Drei Einstellungen gibt es nur über MIDI; veröffentlicht ist eine. Mit Werkbank und Spiegel lassen sich die anderen suchen — etwa der Schalter, der das Gerät überhaupt erst zurückmelden lässt.</p></div>
+    <div class="karte"><h3>Die versteckten Schalter finden</h3><p>Drei Einstellungen gibt es nur über MIDI. Der Schalter, der das Gerät überhaupt erst zurückmelden lässt, ist gefunden und am Gerät belegt; mit Werkbank und Spiegel lassen sich die übrigen mit demselben Verfahren suchen.</p></div>
     <div class="karte"><h3>Regler-Bewegungen schreiben</h3><p>Aufgezeichnete Bewegungen werden heute nur gelesen. Sie auch setzen zu können, würde Arrangements in Bewegung bringen.</p></div>
     <div class="karte"><h3>Sequenz-Steps von außen</h3><p>Das Gerät nimmt inzwischen auch Befehle für einzelne Schritte entgegen. Was die Kennziffern bedeuten, steht nirgends — genau dafür ist die Werkbank da.</p></div>
     <div class="karte"><h3>Preset-Sammlungen</h3><p>Ein Preset ist eine kleine Datei. Als Sammlung veröffentlicht, wird daraus etwas, das andere Electribe-Besitzer nutzen können.</p></div>
@@ -279,8 +279,8 @@ const roadmap = [
   },
   {
     titel: "Die versteckten Schalter aufspüren",
-    wann: "als Nächstes",
-    text: "Drei Einstellungen sind nur über MIDI erreichbar, veröffentlicht ist eine. Ausgerechnet der Schalter, der das Gerät zum Zurückmelden bringt, fehlt — ohne ihn bleibt der Geräte-Spiegel stumm. Werkbank und Spiegel bilden zusammen die Suchschleife.",
+    wann: "einer gefunden",
+    text: "Drei Einstellungen sind nur über MIDI erreichbar. Der wichtigste ist gefunden und am Gerät belegt: mit ihm meldet die Electribe jede Reglerbewegung als gewöhnlichen Controller-Wert zurück, ohne ihn bleibt sie stumm — sauber im Vergleich gemessen, einmal mit und einmal ohne. Genau daran hing der Geräte-Spiegel. Die beiden übrigen Schalter lassen sich mit derselben Suchschleife finden.",
   },
   {
     titel: "Vocals sparsamer speichern",
