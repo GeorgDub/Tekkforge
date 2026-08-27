@@ -64,7 +64,7 @@ describe("patternGen", () => {
     const { patterns } = baueRezept(regelRezept(projekt, { modus: "miniset" }), projekt, { startSlot: 10 });
     expect(patterns).toHaveLength(6);
     expect(patterns.map((p) => p.chainTo)).toEqual([11, 12, 13, 14, 15, 0]);
-    expect(patterns[0].chainRepeat).toBe(2);
+    expect(patterns[0].chainRepeat).toBe(1); // seit 2026-08-27 einmal je Stufe
     const wach = (p: (typeof patterns)[0]) => p.parts.filter((x) => !x.muted).length;
     expect(wach(patterns[2])).toBeGreaterThan(wach(patterns[0]));
     expect(patterns.map((p) => p.name)).toEqual(["BaRe INTRO", "BaRe AUFBAU", "BaRe DROP 1", "BaRe BREAK", "BaRe DROP 2", "BaRe OUTRO"]);
@@ -150,7 +150,7 @@ describe("patternGen", () => {
     patterns.slice(0, -1).forEach((p, i) => expect(p.chainTo).toBe(i + 2));
     expect(patterns[patterns.length - 1].chainTo).toBe(0);
     expect(patterns[dropIdx].chainRepeat).toBe(4);
-    for (const p of extras) expect(p.chainRepeat).toBe(2);
+    for (const p of extras) expect(p.chainRepeat).toBe(1) // seit 2026-08-27: einmal je Stufe, sonst laeuft das Lied in Zeitlupe;
   });
   it("vocal-abdeckung: Paar liegt als A/B auf Parts 15/16, beide mit Steps, im Drop wach", () => {
     const { projekt: pv, paarA } = projektMitVox();
@@ -452,5 +452,50 @@ describe("Dichte: die Melodie deckt nicht mehr alles zu", () => {
     const schlank = dropVon2("schlank");
     // Nicht unter zwei Drittel: die ganze Vocalspur soll hoerbar bleiben.
     expect(schlank.parts[14].volume!).toBeGreaterThan(114 * 0.66);
+  });
+});
+
+describe("Das Lied darf nicht in Zeitlupe durchlaufen", () => {
+  /**
+   * Nutzerbefund (2026-08-27): einzeln klangen Vocal-Sample, Vocal-Pattern und
+   * Melodie-Pattern alle richtig — die ganze Kette aber "zu langsam". Der Grund
+   * lag nicht im Klang, sondern in der Kette: jedes Pattern lief ZWEIMAL, bevor
+   * das nächste Vocal-Segment kam. Damit schreitet das Lied halb so schnell
+   * voran wie im Original, obwohl jedes einzelne Sample stimmt.
+   *
+   * Die Vorgabe war und ist: wer die Kette einmal durchspielt, hat das Lied
+   * einmal gehört — nicht in doppelter Länge.
+   */
+  it("Vocal-Patterns laufen einmal, nicht zweimal", () => {
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const vrs = patterns.filter((p) => / VRS\d+$/.test(p.name));
+    for (const p of vrs) expect(p.chainRepeat ?? 1, `${p.name} läuft ${p.chainRepeat}×`).toBe(1);
+  });
+
+  it("auch die Aufbau-Stufen halten nicht doppelt auf", () => {
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
+    for (let i = 0; i < dropIdx; i++)
+      expect(patterns[i].chainRepeat ?? 1, `${patterns[i].name} läuft ${patterns[i].chainRepeat}×`).toBe(1);
+  });
+
+  it("der Drop darf stehen bleiben — dort soll es tragen", () => {
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    const drop = patterns.find((p) => p.name.endsWith("DROP"))!;
+    expect(drop.chainRepeat ?? 1).toBeGreaterThan(1);
+  });
+
+  it("die Kette dauert nicht länger als das Lied, das sie abdeckt", () => {
+    const { projekt: pv } = projektMitVox();
+    const { patterns } = baueAufbau(regelRezept(pv, { modus: "jam" }), pv);
+    // Vier Takte je Durchgang; die Vocal-Segmente sind ebenfalls vier Takte.
+    const durchgaenge = patterns.reduce((a, p) => a + (p.chainRepeat ?? 1), 0);
+    const vocalPatterns = patterns.filter((p) => p.parts[14].steps.some((s) => s.active)).length;
+    // Grosszügig: der Drop darf mehrfach laufen, aber nicht das Doppelte
+    // der abgedeckten Segmente herauskommen.
+    expect(durchgaenge).toBeLessThan(vocalPatterns * 2);
   });
 });

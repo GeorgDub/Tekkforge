@@ -385,7 +385,14 @@ export function baueAufbau(
       stufenPegel(mitMutes(dropParts, an), i, stufen.length),
     ),
     chainTo: start + i + 1,
-    chainRepeat: 2,
+    // EINMAL je Stufe, nicht zweimal.
+    //
+    // Nutzerbefund (2026-08-27): einzeln klangen Sample, Vocal-Pattern und
+    // Melodie-Pattern alle richtig, die ganze Kette aber "zu langsam". Es lag
+    // nicht am Klang, sondern hieran: jedes Pattern lief zweimal, also
+    // schritt das Lied halb so schnell voran wie im Original. Nebenbei zog
+    // sich der Aufbau damit auf ueber vierzig Sekunden.
+    chainRepeat: 1,
   }));
   const extras = opts.versExtras === false ? 0 : Math.max(0, paare.length - ab - 2);
   patterns.push({
@@ -403,7 +410,9 @@ export function baueAufbau(
       name: `${tag} VRS${ab + k + 3}`.slice(0, 16),
       parts: punch(mitMutes(partsFuer(versFuer(2 + k)), null)),
       chainTo: k < extras - 1 ? start + patterns.length + 1 : 0,
-      chainRepeat: 2,
+      // Je Durchgang ein Vocal-Segment weiter — sonst dauert die Kette doppelt
+      // so lang wie das Lied, das sie abdecken soll.
+      chainRepeat: 1,
     });
   }
   if (!t.melo) hinweise.push("keine Melodie im Projekt — Aufbau nur ueber Drums/Bass/Shots");
