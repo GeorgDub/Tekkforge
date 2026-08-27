@@ -64,7 +64,7 @@ describe("patternGen", () => {
     const { patterns } = baueRezept(regelRezept(projekt, { modus: "miniset" }), projekt, { startSlot: 10 });
     expect(patterns).toHaveLength(6);
     expect(patterns.map((p) => p.chainTo)).toEqual([11, 12, 13, 14, 15, 0]);
-    expect(patterns[0].chainRepeat).toBe(1); // seit 2026-08-27 einmal je Stufe
+    expect(patterns[0].chainRepeat).toBe(2); // Miniset: die Wiederholungen kommen aus dem Rezept
     const wach = (p: (typeof patterns)[0]) => p.parts.filter((x) => !x.muted).length;
     expect(wach(patterns[2])).toBeGreaterThan(wach(patterns[0]));
     expect(patterns.map((p) => p.name)).toEqual(["BaRe INTRO", "BaRe AUFBAU", "BaRe DROP 1", "BaRe BREAK", "BaRe DROP 2", "BaRe OUTRO"]);
@@ -118,7 +118,7 @@ describe("patternGen", () => {
     }
     patterns.slice(0, -1).forEach((p, i) => {
       expect(p.chainTo).toBe(5 + i + 1);
-      expect(p.chainRepeat).toBe(i === dropIdx ? 4 : 2);
+      expect(p.chainRepeat).toBe(i === dropIdx ? 4 : 1);
     });
     expect(patterns[patterns.length - 1].chainTo).toBe(0);
   });
@@ -150,7 +150,7 @@ describe("patternGen", () => {
     patterns.slice(0, -1).forEach((p, i) => expect(p.chainTo).toBe(i + 2));
     expect(patterns[patterns.length - 1].chainTo).toBe(0);
     expect(patterns[dropIdx].chainRepeat).toBe(4);
-    for (const p of extras) expect(p.chainRepeat).toBe(1) // seit 2026-08-27: einmal je Stufe, sonst laeuft das Lied in Zeitlupe;
+    for (const p of extras) expect(p.chainRepeat).toBe(1); // einmal je Stufe, sonst laeuft das Lied in Zeitlupe
   });
   it("vocal-abdeckung: Paar liegt als A/B auf Parts 15/16, beide mit Steps, im Drop wach", () => {
     const { projekt: pv, paarA } = projektMitVox();
