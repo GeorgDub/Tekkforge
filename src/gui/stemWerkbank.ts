@@ -35,6 +35,7 @@ import {
 } from "../core/stemWerkbank";
 import { nextFreeSampleNumber, type PoolSample } from "../core/editorModel";
 import { RAM_BUDGET_BYTES } from "../core/zielBank";
+import { ramBytesFuer } from "../core/sampleRam";
 
 const BREITE = 900;
 const HOEHE = 78;
@@ -612,7 +613,7 @@ async function trenne(): Promise<void> {
 /** Was der Pool schon belegt — dieselbe Rechnung wie im Sample-Manager. */
 function poolBytes(samples: readonly PoolSample[]): number {
   let b = 0;
-  for (const s of samples) b += Math.round((s.pcm.length / s.sampleRate) * 44100) * 2;
+  for (const s of samples) b += ramBytesFuer(s);
   return b;
 }
 

@@ -18,6 +18,7 @@
  */
 
 import type { PoolSample } from "./editorModel";
+import { ramBytesFuer } from "./sampleRam";
 
 /** Wie nah zwei Klicks sein duerfen, bevor sie als dieselbe Marke gelten. */
 export const MARKE_TOLERANZ_MS = 8;
@@ -182,7 +183,7 @@ export function schneideSpur(
     pcm: spur.pcm.slice(a.von, a.bis),
   }));
   let bytes = 0;
-  for (const s of samples) bytes += Math.round((s.pcm.length / s.sampleRate) * 44100) * 2;
+  for (const s of samples) bytes += ramBytesFuer(s);
   return { samples, hinweise, bytes };
 }
 

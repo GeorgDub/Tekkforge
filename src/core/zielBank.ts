@@ -14,6 +14,7 @@
  * Verweis ohne Ziel wird geleert und gemeldet statt geraten.
  */
 
+import { ramBytesFuer } from "./sampleRam";
 import { EDITOR_SAMPLE_BASE, EDITOR_SAMPLE_MAX, clonePattern, type EditorPattern, type PoolSample } from "./editorModel";
 
 /** Sample-RAM des Geraets in Bytes (16 Bit Mono bei 44,1 kHz, rund 24 MB). */
@@ -50,7 +51,7 @@ export function leereZielBank(): ZielBank {
 /** Belegter Geraete-Speicher in Bytes. */
 export function ramBytes(bank: ZielBank): number {
   let b = 0;
-  for (const e of bank.eintraege) b += Math.round((e.pcm.length / e.sampleRate) * 44100) * 2;
+  for (const e of bank.eintraege) b += ramBytesFuer(e);
   return b;
 }
 

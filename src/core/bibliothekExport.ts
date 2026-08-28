@@ -29,6 +29,7 @@ import {
 import { buildE2AllPatFile } from "./e2sExport";
 import { fuehreZusammen, type BibliothekEintrag } from "./bibliothek";
 import { RAM_BUDGET_BYTES } from "./zielBank";
+import { ramBytesFuer } from "./sampleRam";
 
 export interface ExportDatei {
   name: string;
@@ -66,7 +67,7 @@ function eindeutig(vergeben: Set<string>, wunsch: string, endung: string): strin
 /** Belegter Geraetespeicher einer Sample-Liste in Bytes (16 Bit bei 44,1 kHz). */
 function ramBytesVon(samples: readonly PoolSample[]): number {
   let b = 0;
-  for (const s of samples) b += Math.round((s.pcm.length / s.sampleRate) * 44100) * 2;
+  for (const s of samples) b += ramBytesFuer(s);
   return b;
 }
 

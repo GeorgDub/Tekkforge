@@ -3,6 +3,8 @@
  * (Editor-Pool und Start-Dashboard). Rein und DOM-frei.
  */
 
+import { ramBytesFuer } from "./sampleRam";
+
 export type PoolFilter = "alle" | "factory" | "user";
 
 /** Erste User-Sample-Nummer am Geraet (1–500 = Factory). */
@@ -30,6 +32,6 @@ export function filterePool<S extends PoolFilterbar>(samples: readonly S[], filt
 /** Geraete-RAM-Belegung in MB: Sekunden × 44100 × 2 Bytes (16-Bit-Mono). */
 export function poolRamMb(samples: readonly { pcm: { length: number }; sampleRate: number }[]): number {
   let bytes = 0;
-  for (const s of samples) bytes += (s.pcm.length / s.sampleRate) * 44100 * 2;
+  for (const s of samples) bytes += ramBytesFuer(s);
   return bytes / (1024 * 1024);
 }

@@ -27,6 +27,7 @@ import {
   type ZielBank,
 } from "../core/zielBank";
 import { filterePool, type PoolFilter } from "../core/poolFilter";
+import { ramBytesFuer } from "../core/sampleRam";
 import { tekkFs } from "./tekkFs";
 import { download, escapeHtml } from "./shared";
 
@@ -55,7 +56,7 @@ const z: Zustand = {
 };
 
 const mb = (bytes: number): string => (bytes / 1048576).toFixed(2);
-const bytesVon = (s: PoolSample): number => Math.round((s.pcm.length / s.sampleRate) * 44100) * 2;
+const bytesVon = (s: PoolSample): number => ramBytesFuer(s);
 
 function gefiltert(): PoolSample[] {
   return filterePool(z.quelle, z.filter, z.suche);
@@ -129,7 +130,7 @@ function render(): void {
           <button id="bkSd" class="ghost" ${z.ziel.eintraege.length ? "" : "disabled"}>Auf SD…</button>
         </div>
         <div style="max-height:392px;overflow:auto">${tabelle(
-          z.ziel.eintraege.map((e) => ({ nummer: e.nummer, name: e.name, kategorie: e.kategorie, gain12db: e.gain12db, sekunden: e.pcm.length / e.sampleRate, bytes: Math.round((e.pcm.length / e.sampleRate) * 44100) * 2 })),
+          z.ziel.eintraege.map((e) => ({ nummer: e.nummer, name: e.name, kategorie: e.kategorie, gain12db: e.gain12db, sekunden: e.pcm.length / e.sampleRate, bytes: ramBytesFuer(e) })),
           z.markiertZiel,
           "bkZ",
         )}</div>

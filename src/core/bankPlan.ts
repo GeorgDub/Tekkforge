@@ -205,8 +205,44 @@ function punkte(e: ScanEintrag, bpm: number): number {
 }
 
 /** Rangliste (taktgenau, laut, "melo", je Familie erst das beste) in Budget-Scheiben. */
+/**
+ * Vocals reihum aus den beteiligten Liedern nehmen.
+ *
+ * Die Rangliste allein entscheidet nach Pegel und Taktpassung — und wenn ein
+ * Lied durchweg lauter ist, gewinnt es sie durchgehend. Bei drei Rap-Tracks in
+ * einem Set (2026-08-29) hatte ein Lied 7 Vocal-Abschnitte in der Bank, eines
+ * 2, und das dritte KEINEN, obwohl noch 7 MB frei waren. Wer drei Lieder in ein
+ * Set gibt, will aus jedem etwas hoeren.
+ *
+ * Die Reihenfolge INNERHALB eines Lieds bleibt die der Rangliste — es wird nur
+ * abwechselnd zugegriffen. Bei einem einzigen Lied aendert sich dadurch nichts.
+ */
+function voxVerschraenkt(kand: ScanEintrag[]): ScanEintrag[] {
+  const stellen: number[] = [];
+  const nachLied = new Map<string, ScanEintrag[]>();
+  kand.forEach((e, i) => {
+    if (e.rolle !== "vox") return;
+    stellen.push(i);
+    const key = e.lied ?? "";
+    const liste = nachLied.get(key) ?? [];
+    liste.push(e);
+    nachLied.set(key, liste);
+  });
+  if (nachLied.size < 2) return kand;
+  const reihum: ScanEintrag[] = [];
+  const listen = [...nachLied.values()];
+  for (let runde = 0; reihum.length < stellen.length; runde++) {
+    for (const l of listen) if (l[runde]) reihum.push(l[runde]);
+  }
+  const raus = [...kand];
+  stellen.forEach((stelle, i) => (raus[stelle] = reihum[i]));
+  return raus;
+}
+
 export function waehleVolumes(eintraege: ScanEintrag[], bpm: number, budgetSekunden: number): ScanEintrag[][] {
-  const kand = eintraege.filter((e) => e.rolle !== "track").sort((a, b) => punkte(b, bpm) - punkte(a, bpm));
+  const kand = voxVerschraenkt(
+    eintraege.filter((e) => e.rolle !== "track").sort((a, b) => punkte(b, bpm) - punkte(a, bpm)),
+  );
   const erste: ScanEintrag[] = [];
   const zweite: ScanEintrag[] = [];
   const gesehen = new Set<string>();

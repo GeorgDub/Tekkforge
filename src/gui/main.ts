@@ -18,6 +18,7 @@ import { initSampleManager, sampleManagerWirdSichtbar } from "./sampleManager";
 import { initPatternBibliothek, bibliothekWirdSichtbar } from "./patternBibliothek";
 import { initStemWerkbank, stemWerkbankWirdSichtbar, ladeAlsSpuren, stemWerkbankVerlassen } from "./stemWerkbank";
 import type { EditorProject } from "../core/editorModel";
+import { ramBytesFuer } from "../core/sampleRam";
 
 type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "bank" | "bib" | "stems" | "settings";
 
@@ -60,7 +61,7 @@ export function aktuellerTab(): Tab {
 /** Sample-RAM-Belegung des Pools in MB (16-Bit-Mono bei 44,1 kHz, wie im Gerät). */
 function poolRamMb(): number {
   let bytes = 0;
-  for (const s of panelBridge.project.samples) bytes += (s.pcm.length / s.sampleRate) * 44100 * 2;
+  for (const s of panelBridge.project.samples) bytes += ramBytesFuer(s);
   return bytes / (1024 * 1024);
 }
 
