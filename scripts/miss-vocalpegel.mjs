@@ -28,7 +28,8 @@ const NR = Number(process.argv[3] ?? 7);
 
 const GRUPPEN = [
   ["Schlagzeug", [0, 1, 2, 3, 4, 5, 6, 7]],
-  ["Bass/Stab", [8, 9]],
+  ["Bass", [8]],
+  ["Stab", [9]],
   ["Shots", [10, 11]],
   ["Melodie", [12, 13]],
   ["Vocals", [14, 15]],

@@ -73,8 +73,19 @@ function kickMitViertemTakt(steps: E2StepInput[]): E2StepInput[] {
 
 const SHOT_A = () => baue((s) => (s === 0 || s === 32 ? hit([60], 118, 96) : null));
 const SHOT_B = () => baue((s) => (s === 24 || s === 56 ? hit([60], 112, 96) : null));
+/**
+ * Part-Lautstaerken. Der Bass steht bewusst weit unten.
+ *
+ * Nutzerbefund am Geraet (2026-08-29): „Unison Bass muss mehr in den
+ * Hintergrund, weil es sonst zu dominant ist." Nachgemessen war der
+ * Bass-Sample mit -6,8 dB das LAUTESTE der ganzen Bank — rund 4 dB ueber den
+ * Kicks — und stand mit 118 direkt hinter der Haupt-Kick. Ein gehaltener Ton
+ * wirkt gegenueber Schlaegen ohnehin praesenter, als sein Effektivwert
+ * vermuten laesst; deshalb 70 statt 118 (rund 4,5 dB zurueck). Im Drop hebt
+ * `punch()` ihn weiterhin um 6 an.
+ */
 //            K1   K2   SN   CL   HH  HH2   PC  PC2  BASS STAB SHA  SHB  MELA MELB VRA  VRB
-const VOLUME = [127, 104, 110, 96, 88, 82, 84, 80, 118, 100, 112, 108, 112, 112, 127, 127];
+const VOLUME = [127, 104, 110, 96, 88, 82, 84, 80, 70, 100, 112, 108, 112, 112, 127, 127];
 
 /**
  * Wie weit Melodie und Vocals im schlanken Satz zurueckgenommen werden.

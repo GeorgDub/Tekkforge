@@ -454,6 +454,18 @@ describe("Dichte: die Melodie deckt nicht mehr alles zu", () => {
     }
   });
 
+  it("der Bass steht deutlich hinter der Kick", () => {
+    // Nutzerbefund am Gerät (2026-08-29): „Unison Bass muss mehr in den
+    // Hintergrund, weil es sonst zu dominant ist." Gemessen war das
+    // Bass-Sample mit -6,8 dB das lauteste der Bank und stand mit Part-Wert
+    // 118 direkt hinter der Kick (127). Ein gehaltener Ton wirkt gegenüber
+    // Schlägen präsenter, als sein Effektivwert vermuten lässt.
+    const drop = dropVon2("schlank");
+    const kick = drop.parts[0].volume!;
+    const bass = drop.parts[8].volume!;
+    expect(bass).toBeLessThan(kick * 0.7);
+  });
+
   it("das Schlagzeug bleibt unangetastet — nur das Verhältnis ändert sich", () => {
     const schlank = dropVon2("schlank");
     const voll = dropVon2("voll");

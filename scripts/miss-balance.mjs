@@ -24,7 +24,8 @@ if (!p) throw new Error(`Pattern ${nr} gibt es nicht (${patterns.length} vorhand
 /** Part-Gruppen nach der festen Belegung des Generators. */
 const GRUPPEN = [
   ["Schlagzeug", [0, 1, 2, 3, 4, 5, 6, 7]],
-  ["Bass/Stab", [8, 9]],
+  ["Bass", [8]],
+  ["Stab", [9]],
   ["Shots", [10, 11]],
   ["Melodie", [12, 13]],
   ["Vocals", [14, 15]],
