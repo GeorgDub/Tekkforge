@@ -86,7 +86,18 @@ export function analysiereLied(
   const oktavAbstand = (v: number) => Math.abs(Math.log2(Math.max(1e-6, v) / opts.zielBpm));
   const k = [0.5, 1, 2].reduce((a, b) => (oktavAbstand(bpm * b) < oktavAbstand(bpm * a) ? b : a));
   const rate = (bpm * k) / opts.zielBpm;
-  const y = Math.abs(rate - 1) < 0.002 ? y0 : polyPhaseResample(y0, Math.round(sr * rate), sr, 1);
+  // Richtung: ein Lied bei B soll bei Z laufen, also um Z/B schneller — die
+  // Bildzahl aendert sich um B/Z, und das ist `rate`. Mit
+  // `polyPhaseResample(y, sr, sr * rate)` kommen genau `laenge * rate` Bilder
+  // heraus.
+  //
+  // Vorher standen die beiden Raten vertauscht (`sr * rate` → `sr`), was die
+  // Bildzahl um 1/rate aenderte — die Anpassung lief in die GEGENRICHTUNG.
+  // Aufgefallen ist das nie, weil bisher nur Tekk-Lieder verarbeitet wurden:
+  // dort ist `rate` rund 1 und die Richtung egal. Erst bei drei Rap-Tracks
+  // (2026-08-29) kam der Befund „musste hochpitchen, war zu tief" — nachgemessen
+  // wurde aus 120 BPM 160 statt 180, und aus 240 BPM 320 statt 180.
+  const y = Math.abs(rate - 1) < 0.002 ? y0 : polyPhaseResample(y0, sr, Math.round(sr * rate), 1);
   const beatSek = 60 / opts.zielBpm;
   const offsetSek = downbeatPhase(y, sr, beatSek) * beatSek;
   const n = Math.round(fensterTakte * 4 * beatSek * sr);
