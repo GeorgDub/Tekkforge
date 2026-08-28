@@ -133,12 +133,31 @@ const MINISET: Abschnitt[] = [
   { name: "OUTRO", wiederholungen: 2, intensitaet: 2, kick: "vier", lagen: ["melo", "bass"] },
 ];
 
+/**
+ * Aus einem Topf nur das nehmen, was zum selben Lied gehoert.
+ *
+ * Stammen die Samples aus mehreren Liedern, muessen Melodie und Vers aus
+ * demselben stammen — sonst singt im SpongeBob-Block jemand anders. Genau das
+ * ist passiert (Nutzerbefund am Geraet, 2026-08-29): der Vers wurde reihum aus
+ * dem gemeinsamen Vocal-Topf gezogen, ohne Ruecksicht auf die Herkunft.
+ *
+ * Gibt es zum Lied nichts Passendes, bleibt der ganze Topf — ein fremdes Vocal
+ * ist besser als ein stummer Vers, und bei einem Ein-Lied-Set aendert sich
+ * ohnehin nichts.
+ */
+function ausLied(topf: ProjektSample[], melo?: ProjektSample): ProjektSample[] {
+  if (!melo?.lied) return topf;
+  const eigene = topf.filter((s) => s.lied === melo.lied);
+  return eigene.length ? eigene : topf;
+}
+
 function themaFuer(pl: Pools, i: number, melo?: ProjektSample): Thema {
   const fam = rot(pl.familien, i);
-  const vers = rot(pl.voxLoops.filter((v) => v.chunk === undefined || v.chunk === 0), i);
+  const vers = rot(ausLied(pl.voxLoops.filter((v) => v.chunk === undefined || v.chunk === 0), melo), i);
   const bassFallback = pl.kicks.filter((k) => k.sekunden >= 0.6).concat(pl.kicks);
-  const shotPool = pl.voxShots.length ? pl.voxShots : pl.fxShots;
-  const shotPoolB = pl.fxShots.length ? pl.fxShots : pl.voxShots;
+  const voxShots = ausLied(pl.voxShots, melo);
+  const shotPool = voxShots.length ? voxShots : pl.fxShots;
+  const shotPoolB = pl.fxShots.length ? pl.fxShots : voxShots;
   return {
     melo: nm(melo),
     vers: nm(vers),
