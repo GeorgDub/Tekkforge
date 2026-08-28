@@ -174,7 +174,28 @@ function registerFsIpc() {
         }
       }
     }
-    return out;
+    // Leere Schaechte aussortieren und die echte Karte nach vorn.
+    //
+    // Ein Kartenleser meldet JEDEN Schacht als Wechselmedium, auch den leeren.
+    // Wer dann das erste nimmt, schreibt ins Leere: das Schreiben scheitert an
+    // einem Laufwerk ohne Datentraeger, landet im Fehlerzweig, und der Nutzer
+    // sieht nur, dass nichts passiert ist. Genau so war es am 2026-08-29 —
+    // F: war der leere Schacht, H: die Karte.
+    const bewertet = [];
+    for (const m of out) {
+      let bereit = false;
+      let korg = false;
+      try {
+        bereit = fs.existsSync(`${m.pfad}\\`);
+        korg = bereit && fs.existsSync(path.join(`${m.pfad}\\`, "KORG"));
+      } catch {
+        /* nicht bereit — faellt raus */
+      }
+      if (bereit) bewertet.push({ ...m, korg });
+    }
+    // KORG-Karten zuerst: sie sind fast immer gemeint.
+    bewertet.sort((a, b) => Number(b.korg) - Number(a.korg));
+    return bewertet;
   });
   // Backups eines Ordners auflisten: [{ name, original, wann (ms), bytes }]
   ipcMain.handle("fs:backups", (_e, ordner) => {

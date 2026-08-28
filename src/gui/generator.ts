@@ -7,7 +7,7 @@
  */
 import { rendereKette } from "../core/patternRender";
 import { STEM_VORGABE, TEIL_NAME, teileAus, pruefeAuswahl, auswahlText, ALLE_TEILE, type StemAuswahl } from "../core/stemAuswahl";
-import { $, download, escapeHtml } from "./shared";
+import { $, download, escapeHtml, frageText, frageAuswahl } from "./shared";
 import { dekodiere } from "./audioDecode";
 import { PreviewPlayer } from "./preview";
 import { panelBridge } from "./editor";
@@ -477,11 +477,11 @@ function verdrahte(): void {
   });
   knopf("genKeySpeichern", () => void keySpeichern(($("genKey") as HTMLInputElement).value));
   knopf("genKeyLoeschen", () => void keySpeichern(""));
-  document.getElementById("genModell")?.addEventListener("change", (e) => {
+  document.getElementById("genModell")?.addEventListener("change", async (e) => {
     const sel = e.target as HTMLSelectElement;
     let modell = sel.value;
     if (modell === "__frei") {
-      const eingabe = prompt("Modell-ID (z. B. claude-opus-5):", z.ki?.modell ?? KI_MODELL_STANDARD);
+      const eingabe = await frageText("Modell-ID (z. B. claude-opus-5):", z.ki?.modell ?? KI_MODELL_STANDARD);
       if (!eingabe) {
         sel.value = z.ki?.modell ?? KI_MODELL_STANDARD;
         return;
@@ -965,10 +965,14 @@ async function aufSd(): Promise<void> {
     return;
   }
   let wahl = medien[0];
-  if (medien.length > 1) {
-    const antwort = prompt(medien.map((m, i) => `${i + 1}: ${m.pfad} ${m.label}`).join("\n") + "\n\nNummer der Karte:", "1");
-    const i = Number(antwort) - 1;
-    if (!(i >= 0 && i < medien.length)) return;
+  // Steckt genau EINE KORG-Karte, ist die Frage ueberfluessig.
+  const korgKarten = medien.filter((m) => (m as { korg?: boolean }).korg);
+  if (korgKarten.length === 1) wahl = korgKarten[0];
+  else if (medien.length > 1) {
+    // Kein `prompt()`: Electron kennt es nicht und wirft — die Kopie brach
+    // genau dann ab, wenn mehr als eine Karte steckte, und meldete nichts.
+    const i = await frageAuswahl("Auf welche Karte?", medien.map((m) => `${m.pfad}  ${m.label}`));
+    if (i === null) return;
     wahl = medien[i];
   }
   try {

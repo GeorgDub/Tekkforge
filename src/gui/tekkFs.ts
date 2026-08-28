@@ -9,8 +9,11 @@ export interface TekkFs {
   pfadVon(file: File): string;
   /** Dateien in einen (absoluten) Ordner schreiben; Ordner wird angelegt. */
   schreibe(ordner: string, dateien: { name: string; bytes: Uint8Array }[]): Promise<{ ordner: string; geschrieben: string[] }>;
-  /** Wechselmedien, z. B. [{ pfad: "H:", label: "SD" }]. */
-  wechselmedien(): Promise<{ pfad: string; label: string }[]>;
+  /**
+   * Wechselmedien, z. B. [{ pfad: "H:", label: "SD", korg: true }].
+   * KORG-Karten stehen vorn; leere Kartenschaechte sind schon aussortiert.
+   */
+  wechselmedien(): Promise<{ pfad: string; label: string; korg?: boolean }[]>;
   /** examples/e2s/tekk4.all als Byte-Array, sonst null. */
   tekkDrums(): Promise<number[] | null>;
   /** Auto-Backups eines Ordners (neueste zuerst); fehlt bei aelteren Bridges. */

@@ -5,7 +5,7 @@
  * RAM-Panels (Schnappschuss + Rueckleseprobe), die hier hineingereicht werden —
  * damit gibt es nur EINEN Schreibpfad und nur eine Stelle mit Sicherungen.
  */
-import { $, escapeHtml } from "./shared";
+import { $, escapeHtml, frageText } from "./shared";
 import {
   decodeFxPreset,
   encodeFxPreset,
@@ -459,12 +459,12 @@ function sammlungAufnehmen(): void {
   setStatus(`„${name}" in die Sammlung gelegt (${sammlung.length} insgesamt). Zum Behalten die Sammlung sichern.`);
 }
 
-function sammlungSpeichern(): void {
+async function sammlungSpeichern(): Promise<void> {
   if (!sammlung.length) {
     setStatus("Die Sammlung ist leer — erst etwas aufnehmen.");
     return;
   }
-  const titel = window.prompt("Titel der Sammlung:", "Meine Effekte") ?? "Sammlung";
+  const titel = (await frageText("Titel der Sammlung:", "Meine Effekte")) ?? "Sammlung";
   const text = baueSammlung(sammlung, { titel });
   const datei = `${titel.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "sammlung"}.tfsam`;
   const a = document.createElement("a");
@@ -687,7 +687,7 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   $("fxpUndo").addEventListener("click", () => void zurueck());
   $("fxpSave").addEventListener("click", sichern);
   $("fxpSamAdd").addEventListener("click", sammlungAufnehmen);
-  $("fxpSamSpeichern").addEventListener("click", sammlungSpeichern);
+  $("fxpSamSpeichern").addEventListener("click", () => void sammlungSpeichern());
   $("fxpSamLaden").addEventListener("click", () => ($("fxpSamIn") as HTMLInputElement).click());
   $("fxpSamIn").addEventListener("change", () => {
     const f = ($("fxpSamIn") as HTMLInputElement).files?.[0];

@@ -15,7 +15,7 @@
  */
 
 import { panelBridge } from "./editor";
-import { $, download, escapeHtml } from "./shared";
+import { $, download, escapeHtml, frageText } from "./shared";
 import { requestSysex } from "./midi";
 import {
   aktuellesPanelPattern,
@@ -464,8 +464,8 @@ function renderSeiten(): void {
     }),
   );
   $("pdSeiten").querySelectorAll<HTMLButtonElement>("button").forEach((b) =>
-    b.addEventListener("dblclick", () => {
-      const neu = prompt("Seitenname", deck.seiten[Number(b.dataset.seite)].name);
+    b.addEventListener("dblclick", async () => {
+      const neu = await frageText("Seitenname", deck.seiten[Number(b.dataset.seite)].name);
       if (neu) { deck.seiten[Number(b.dataset.seite)].name = neu.slice(0, 24); speichere(); renderSeiten(); }
     }),
   );
