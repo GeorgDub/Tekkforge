@@ -156,9 +156,21 @@ const COMMANDS = {
     const sel = arg.slice(0, i).trim();
     const datei = path.resolve(APP_DIR, arg.slice(i + 1).trim());
     if (!fs.existsSync(datei)) throw new Error("Datei fehlt: " + datei);
-    // Verzeichnis → Playwright reicht den Pfad an ein webkitdirectory-Feld (z. B. #genOrdner) durch
-    await p.setInputFiles(sel, datei);
-    const liste = fs.statSync(datei).isDirectory() ? fs.readdirSync(datei) : [datei];
+    // Verzeichnis → Playwright reicht den Pfad an ein webkitdirectory-Feld (z. B. #genOrdner) durch.
+    // Bei einem gewoehnlichen `multiple`-Feld (z. B. #genLied) waere das nichts wert; dort
+    // werden die enthaltenen Dateien einzeln uebergeben. So kommt man an Ablaeufe heran,
+    // die MEHRERE Dateien auf einmal brauchen — etwa ein Set aus drei Liedern.
+    const istOrdner = fs.statSync(datei).isDirectory();
+    const wkdir = istOrdner && (await p.evaluate((s) => !!document.querySelector(s)?.webkitdirectory, sel));
+    const eingabe =
+      istOrdner && !wkdir
+        ? fs
+            .readdirSync(datei)
+            .map((n) => path.join(datei, n))
+            .filter((f) => fs.statSync(f).isFile())
+        : datei;
+    await p.setInputFiles(sel, eingabe);
+    const liste = Array.isArray(eingabe) ? eingabe : istOrdner ? fs.readdirSync(datei) : [datei];
     console.log("files", sel, "->", liste.length === 1 ? path.basename(datei) : `${liste.length} Dateien aus ${path.basename(datei)}`);
   },
 

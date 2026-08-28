@@ -4,6 +4,38 @@
  * Reine Zahlen, keine Dekodierung, kein DOM.
  */
 
+/**
+ * Der Tempobereich, in dem Tekk stattfindet.
+ *
+ * Darunter ist es Techno oder Rap, darueber Frenchcore/Speedcore. Die Grenzen
+ * sind kein Naturgesetz, aber sie trennen genau die Faelle, um die es geht.
+ */
+export const TEKK_MIN = 165;
+export const TEKK_MAX = 210;
+export const TEKK_MITTE = 180;
+
+/**
+ * Aus einem gemessenen Tempo ein Tekk-Tempo machen.
+ *
+ * Der Anlass (2026-08-29): drei Rap-Tracks sollten Tekk werden. Bei 127 BPM
+ * liegt die Verdopplung auf 254 rechnerisch **0,006** naeher am 180er-Ziel als
+ * die 127 selbst — ein Muenzwurf entschied, ob das Set bei 254 BPM landet.
+ * Genau das ist passiert. Dazu gab das ERSTE Lied das Tempo fuer alle vor.
+ *
+ * Die Regel hier ist absichtlich stumpf und vorhersagbar: passt eine Oktave in
+ * den Tekk-Bereich, nimm sie; passt keine, nimm die Mitte des Bereichs und
+ * lass den Varispeed den Rest machen. Aus „nicht Tekk" wird so verlaesslich
+ * Tekk, statt je nach Rundung irgendetwas.
+ */
+export function tekkZielTempo(bpm: number): number {
+  if (!Number.isFinite(bpm) || bpm <= 0) return TEKK_MITTE;
+  const passt = (x: number) => x >= TEKK_MIN && x <= TEKK_MAX;
+  for (const kandidat of [bpm, bpm * 2, bpm / 2, bpm * 4, bpm / 4]) {
+    if (passt(kandidat)) return Math.round(kandidat * 10) / 10;
+  }
+  return TEKK_MITTE;
+}
+
 /** Naechste ganze Taktzahl (1..16) fuer eine Dauer bei `bpm` und die relative Abweichung. */
 export function taktPassung(sekunden: number, bpm: number): { takte: number; abweichung: number } {
   const taktSek = 240 / bpm;

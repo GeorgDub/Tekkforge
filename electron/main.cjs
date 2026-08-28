@@ -373,6 +373,45 @@ function pythonPfad() {
   return "python";
 }
 
+/**
+ * Die erste Python-Umgebung, in der `modul` wirklich steckt.
+ *
+ * Es gibt hier nicht EIN Python: Demucs braucht die eigene py-cuda-Umgebung
+ * (nur dort liegt die Grafikkarten-Fassung von Torch, Faktor 7), yt-dlp haengt
+ * dagegen oft im System-Python. Wer fuer beides dieselbe Umgebung nimmt,
+ * bekommt genau einen der beiden Wege — und der andere meldet „nicht
+ * installiert", obwohl das Werkzeug auf dem Rechner ist. Genau so war der
+ * URL-Import tot, waehrend die Stem-Trennung lief.
+ *
+ * Nur Treffer werden gemerkt: wer waehrenddessen nachinstalliert, soll nicht
+ * bis zum naechsten Start warten muessen.
+ */
+const pythonTreffer = new Map();
+function pythonMit(modul) {
+  const gemerkt = pythonTreffer.get(modul);
+  if (gemerkt) return gemerkt;
+  const kandidaten = [];
+  const s = leseSettings();
+  if (typeof s.pythonPfad === "string" && s.pythonPfad.trim()) kandidaten.push(s.pythonPfad.trim());
+  const eigen = path.join(app.getPath("appData"), "..", "Local", "TekkForge", "py-cuda", "Scripts", "python.exe");
+  try {
+    if (fs.existsSync(eigen)) kandidaten.push(eigen);
+  } catch {
+    /* kein Zugriff — dann eben nicht */
+  }
+  kandidaten.push("python");
+  for (const kandidat of kandidaten) {
+    try {
+      execFileSync(kandidat, ["-c", `import ${modul}`], { stdio: "ignore", timeout: 20000, windowsHide: true });
+      pythonTreffer.set(modul, kandidat);
+      return kandidat;
+    } catch {
+      /* naechster Kandidat */
+    }
+  }
+  return null;
+}
+
 function laufen(cmd, args, opts) {
   return new Promise((resolve, reject) => {
     let out = "";
@@ -622,8 +661,10 @@ const URL_HOSTS = new Set([
 ]);
 
 async function ffmpegPfad() {
+  const py = pythonMit("imageio_ffmpeg");
+  if (!py) return null;
   try {
-    const { out } = await laufen(pythonPfad(), ["-c", "import imageio_ffmpeg,sys;print(imageio_ffmpeg.get_ffmpeg_exe())"], { timeoutMs: 20000 });
+    const { out } = await laufen(py, ["-c", "import imageio_ffmpeg,sys;print(imageio_ffmpeg.get_ffmpeg_exe())"], { timeoutMs: 20000 });
     const p = out.trim().split(/\r?\n/).pop();
     return p && fs.existsSync(p) ? p : null;
   } catch {
@@ -634,7 +675,9 @@ async function ffmpegPfad() {
 function registerUrlIpc(win) {
   ipcMain.handle("url:probe", async () => {
     try {
-      const { out } = await laufen(pythonPfad(), ["-m", "yt_dlp", "--version"], { timeoutMs: 20000 });
+      const py = pythonMit("yt_dlp");
+      if (!py) return { ok: false, meldung: "Kein yt-dlp gefunden (pip install yt-dlp)" };
+      const { out } = await laufen(py, ["-m", "yt_dlp", "--version"], { timeoutMs: 20000 });
       const version = out.trim();
       const ff = await ffmpegPfad();
       if (!ff) return { ok: false, meldung: `yt-dlp ${version} da, aber kein ffmpeg (pip install imageio-ffmpeg)` };
@@ -661,8 +704,10 @@ function registerUrlIpc(win) {
     };
     try {
       melde("Lade Audio von der URL …");
+      const py = pythonMit("yt_dlp");
+      if (!py) throw new Error("Kein yt-dlp gefunden (pip install yt-dlp)");
       await laufen(
-        pythonPfad(),
+        py,
         [
           "-m", "yt_dlp", "--no-playlist", "--newline", "-x", "--audio-format", "wav", "--audio-quality", "0",
           "--postprocessor-args", "ffmpeg:-ar 44100", "--ffmpeg-location", ff, "--write-info-json",

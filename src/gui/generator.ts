@@ -15,6 +15,7 @@ import { tekkFs, ordnerVon } from "./tekkFs";
 import { tekkKi } from "./tekkKi";
 import { tekkLied } from "./tekkLied";
 import { analysiereLied, type LiedFenster } from "../core/liedAnalyse";
+import { tekkZielTempo, TEKK_MITTE } from "../core/tempoAnalyse";
 import { encodeWav16, parseWav } from "../core/wavCodec";
 import { rmsDb, peakVon, familie } from "../core/sampleScan";
 import { schneideDrums, type DrumTreffer, type DrumRolle } from "../core/drumSchnitt";
@@ -703,8 +704,12 @@ async function liedAnalysieren(): Promise<void> {
       render();
       await new Promise((r) => setTimeout(r, 0));
       if (!zielBpm) {
-        const vor = analysiereLied(eingabe.pcm, 44100, { zielBpm: 180, bpmHinweis: hinweis, anzahl: 1 });
-        zielBpm = Math.round(vor.bpm * vor.k * 10) / 10;
+        const vor = analysiereLied(eingabe.pcm, 44100, { zielBpm: TEKK_MITTE, bpmHinweis: hinweis, anzahl: 1 });
+        // Die gewaehlte Oktave darf nicht aus dem Tekk-Bereich fallen. Bei drei
+        // Rap-Tracks (2026-08-29) gewann die Verdopplung von 127 auf 254 um
+        // 0,006 — und weil das ERSTE Lied das Tempo fuer alle vorgibt, waere
+        // das ganze Set bei 254 BPM gelandet.
+        zielBpm = tekkZielTempo(vor.bpm * vor.k);
       }
       const res = analysiereLied(eingabe.pcm, 44100, { zielBpm, bpmHinweis: hinweis });
       if (!res.fenster.length) throw new Error(`${datei.name}: kein hoerbares Fenster gefunden`);
