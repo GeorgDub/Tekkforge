@@ -14,3 +14,6 @@ files zum lernen/
 
 # AGPL-Fremddaten fuer die Preset-Gegenprobe (siehe tests/fx-preset-echt.test.ts)
 examples/fx/
+
+# API-Key liegt lokal neben dem Repo — darf nie eingecheckt werden
+antropics_key .txt
