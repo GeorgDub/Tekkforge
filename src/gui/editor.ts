@@ -956,9 +956,9 @@ function setFirmware(mode: FirmwareMode, quelle: "auswahl" | "erkennung" | "star
   if (note) {
     note.textContent =
       mode === "hacktribe"
-        ? "Hacktribe: NRPN-Live-Steuerung (IFX, Part-Mute) und RAM-Zugriff freigeschaltet."
+        ? "Hacktribe: NRPN-Live-Steuerung (IFX) und RAM-Zugriff freigeschaltet."
         : "Stock: SysEx-Übertragung, Slot-Write, Global, Regler-CCs und Auto-Sync. " +
-          "IFX-Live-Senden, NRPN-Mute und RAM-Zugriff sind ausgeblendet (nur Hacktribe).";
+          "IFX-Live-Senden und RAM-Zugriff sind ausgeblendet (nur Hacktribe).";
   }
   if (quelle !== "start") setMidiStatus(`Firmware: ${FIRMWARE_LABEL[mode]}${quelle === "auswahl" ? " (manuell gewählt)" : ""}`);
 }

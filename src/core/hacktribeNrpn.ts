@@ -12,13 +12,16 @@
  * und ignoriert diese Nachrichten stillschweigend: es passiert nichts Schlimmes,
  * aber eben auch nichts.
  *
- * ✔ Am Geraet erprobt (2026-08-15): `buildPanelControl(ch, "mute", part, 1/0)`
- * hat Part 1 hoerbar stumm- und wieder freigeschaltet (E2 Sampler mit
- * Hacktribe, Kanal 1, gesendet aus dem E2S-Panel-Tab). Damit ist der
- * CC-Rahmen als Ganzes belegt; die uebrigen Kategorien/Modi folgen derselben
- * Kodierung, sind aber einzeln noch nicht abgenommen. Zuvor war nur ein
- * `setFxParam`-Send „akustisch belegt" (editor.ts) — die Kodierung stammt
- * aus dem Omnitribe-Pruefprotokoll (siehe `FX_SOURCE_CONTROL`).
+ * ☠ WIDERLEGT am Geraet (2026-08-30): `buildPanelControl(ch, "mute", part, 1/0)`
+ * bewirkt NICHTS. Isoliert gesendet (ohne Auto-Uebertragung) blieb Part 1
+ * beide Male hoerbar, waehrend ein Program Change ueber denselben Weg sichtbar
+ * wirkte — der Sendeweg war also intakt. Das Wiki hat recht: das Geraet SENDET
+ * Panel-NRPN, nimmt sie aber nicht entgegen. Die vermeintliche Bestaetigung
+ * vom 2026-08-15 war verfaelscht: der Panel-Tab schickte nach dem NRPN die
+ * Auto-Uebertragung hinterher, und DIE hat gemutet (part.muted im Pattern).
+ * Akustisch belegt ist damit nur `setFxParam` (Live-FX, erneut 2026-08-30
+ * per MIDImix bestaetigt); die Kodierung stammt aus dem
+ * Omnitribe-Pruefprotokoll (siehe `FX_SOURCE_CONTROL`).
  *
  * Rahmenformat:
  *

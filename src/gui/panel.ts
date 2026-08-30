@@ -10,10 +10,10 @@
  *
  * - LIVE: „Sync" holt den Edit-Buffer des Geräts (0x10-Dump — nur bei
  *   GESTOPPTEM Sequencer zuverlässig, am Gerät gemessen). Danach führt die
- *   UI; Pad-Klick im Part-Mute-Modus schaltet Mute — mit Hacktribe sofort
- *   per NRPN (am Gerät bestätigt 2026-08-15, siehe hacktribeNrpn.ts), mit
- *   Stock-Firmware über die automatische Edit-Buffer-Übertragung (~1 s).
- *   Welche Firmware gilt, entscheidet `panelBridge.firmware` (firmwareMode.ts).
+ *   UI; Pad-Klick im Part-Mute-Modus schaltet Mute — über die automatische
+ *   Edit-Buffer-Übertragung (~1 s), für BEIDE Firmwares. Der NRPN-Weg ist
+ *   am Gerät widerlegt (2026-08-30, siehe hacktribeNrpn.ts): das Gerät nimmt
+ *   Panel-NRPN nicht an; „bestätigt 2026-08-15" war die Auto-Übertragung.
  * - PREPARE: arbeitet auf dem aktuellen Editor-Pattern. Steps setzen im
  *   Sequencer-Pad-Modus, dann „Anhören" (Edit-Buffer, klingt sofort) oder
  *   „→ Slot" (dauerhaft, mit ACK-Prüfung über den Editor-Schreibpfad).
@@ -36,9 +36,8 @@ import {
   decodeDump,
 } from "../core/e2sysex";
 import { requestSysex } from "./midi";
-import { buildPanelControl, buildNrpn } from "../core/hacktribeNrpn";
+import { buildNrpn } from "../core/hacktribeNrpn";
 import { NrpnLeser } from "../core/nrpnEmpfang";
-import { featureAvailable } from "../core/firmwareMode";
 import {
   MIDI_START,
   MIDI_STOP,
@@ -532,18 +531,13 @@ export function aktuellesPanelPattern(): EditorPattern {
  */
 export function setzeMutes(parts: number[], muted: boolean): void {
   const p = aktuellesPattern();
+  // Kein NRPN: Panel-NRPN-Mutes nimmt das Gerät nicht an (widerlegt
+  // 2026-08-30, siehe hacktribeNrpn.ts). Es wirkt allein die
+  // Edit-Buffer-Übertragung unten.
   for (const i of parts) {
     const part = p.parts[i];
     if (!part) continue;
     part.muted = muted;
-    if (modus === "live" && featureAvailable(panelBridge.firmware, "nrpnPanel")) {
-      try {
-        for (const triple of buildPanelControl(panelBridge.midiChannel, "mute", i, muted ? 1 : 0))
-          panelBridge.midi.send(new Uint8Array(triple));
-      } catch {
-        /* Übertragung unten fängt es auf */
-      }
-    }
   }
   if (modus === "live") planeAutoUebertragung();
   else panelBridge.markDirty();
@@ -658,27 +652,13 @@ function padKlick(i: number): void {
     const part = p.parts[i];
     if (!part) return;
     part.muted = !part.muted;
-    if (modus === "live" && !featureAvailable(panelBridge.firmware, "nrpnPanel")) {
-      // Stock-Firmware: kein NRPN. Der Mute geht denselben Weg wie die Steps —
-      // gesammelt per Edit-Buffer-Übertragung, ~1 s später hörbar.
-      setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — wird gleich übertragen (Stock-Firmware: kein Sofort-Mute).`);
+    if (modus === "live") {
+      // Für BEIDE Firmwares derselbe Weg wie die Steps: gesammelt per
+      // Edit-Buffer-Übertragung, ~1 s später hörbar. Ein Sofort-Mute per
+      // Panel-NRPN existiert nicht — am Gerät widerlegt (2026-08-30,
+      // siehe hacktribeNrpn.ts).
+      setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — wird gleich übertragen.`);
       planeAutoUebertragung();
-    } else if (modus === "live") {
-      // Hacktribe-NRPN-Bedienfeldbefehl — ✔ am Gerät bestätigt (2026-08-15):
-      // Part 1 wurde hörbar stumm- und wieder freigeschaltet.
-      try {
-        for (const triple of buildPanelControl(panelBridge.midiChannel, "mute", i, part.muted ? 1 : 0))
-          panelBridge.midi.send(new Uint8Array(triple));
-        // NRPN wirkt sofort hörbar, hält aber nicht im Edit-Buffer — der
-        // Auto-Transfer macht den Zustand dauerhaft (Nutzer-Befund).
-        planeAutoUebertragung();
-        setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} — live gesendet, Übertragung folgt.`);
-      } catch (err) {
-        // Sofort-Mute ging nicht raus — die Übertragung setzt den Zustand
-        // trotzdem, nur eben mit der üblichen Verzögerung.
-        planeAutoUebertragung();
-        setStatus(`Sofort-Mute fehlgeschlagen (${err instanceof Error ? err.message : err}) — wird per Übertragung gesetzt.`);
-      }
     } else {
       panelBridge.markDirty();
       setStatus(`Part ${i + 1} ${part.muted ? "gemutet" : "aktiv"} (Prepare — wirkt beim Übertragen).`);
