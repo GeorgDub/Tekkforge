@@ -302,5 +302,30 @@ Der Laufwerksbuchstabe wechselt; nie fest verdrahten.
     Firmware-Frage: RAM-Lesen kennt nur Hacktribe, nicht die Serien-Firmware.
 
   Für Abläufe ohne Gerät ist beides irrelevant — die laufen immer.
+- **Controller-Eingang (Pad-Deck) bleibt stumm, obwohl der Port gelistet ist →
+  zwei OS-Fallen der Windows MIDI Services (Win11/MidiSrv), beide 2026-08-30
+  real durchlebt.** Erst standalone gegen den Port testen (kleines
+  `@julusian/midi`-Skript, Port per Name suchen — die Indizes wechseln beim
+  Umstecken!), dann:
+
+  1. **Geister-Endpoints:** jedes Umstecken hinterlässt PnP-Einträge mit
+     Status „Unknown"; WinMM bindet den Eingang dann an eine Karteileiche
+     (Öffnen klappt, Daten kommen nie; Senden/LEDs gehen trotzdem). Als Admin:
+     alle `Get-PnpDevice -FriendlyName '<Controller>'` mit Status ≠ OK per
+     `pnputil /remove-device` entfernen, dann `Restart-Service MidiSrv`.
+  2. **Öffnungsreihenfolge:** ein NACH einem offenen Eingang geöffneter
+     zweiter Eingang bleibt stumm. Der Worker (`electron/midi-worker.cjs`,
+     openIn2) öffnet deshalb den Controller ZUERST und das Gerät danach neu —
+     beim „Aufräumen" nicht entfernen.
+
+  Außerdem: MIDI-Learn hört auf Controller UND Gerät — bei laufendem
+  Sequencer schnappt die erste Gerätenote jedem Controller-Learn die
+  Zuweisung weg. Electribe vor Learn-Tests stoppen.
+
+- **Der Nutzer soll während eines Laufs etwas am Controller drücken** → er
+  sieht die Treiber-Ausgabe NICHT live. Lauf als Hintergrund-Task starten und
+  das Zeitfenster in der Chat-Nachricht ankündigen; großzügig warten (45 s+)
+  und den Status mehrfach pollen statt einmal am Ende.
+
 - **Ausgabe erscheint erst am Ende / wirkt hängend** → nicht durch `tail`
   pipen; der Batch-Modus schreibt fortlaufend, `tail` puffert bis Prozessende.
