@@ -1,13 +1,19 @@
 # Beispiel-Presets für Insert- und Master-Effekte
 
-Vierundzwanzig fertig eingestellte FX-Presets für die Electribe 2 mit
-Hacktribe-Firmware — je eine Datei mit dem rohen 524-Byte-Block, plus zwei
-Sammlungen, die alle auf einmal laden:
+Zweiundsiebzig fertig eingestellte FX-Presets für die Electribe 2 mit
+Hacktribe-Firmware — je eine Datei mit dem rohen 524-Byte-Block, plus vier
+Sammlungen, die sie gruppenweise auf einmal laden:
 
-| Art | Endung | Ziel im RAM | Plätze | Sammlung |
+| Art | Endung | Ziel im RAM | Plätze | Sammlungen |
 |---|---|---|---|---|
-| Insert-Effekt (12×) | `.e2fxp` | `0xC00A80F0` | 0–95 | `TekkForge-IFX-Starter.tfsam` |
-| Master-Effekt (12×) | `.mfx` | `0xC00B4F30` | 0–31 | `TekkForge-MFX-Starter.tfsam` |
+| Insert-Effekt | `.e2fxp` | `0xC00A80F0` | 0–95 | `TekkForge-IFX-Starter.tfsam` (12) · `TekkForge-IFX-Variationen.tfsam` (24) |
+| Master-Effekt | `.mfx` | `0xC00B4F30` | 0–31 | `TekkForge-MFX-Starter.tfsam` (12) · `TekkForge-MFX-Variationen.tfsam` (24) |
+
+Zu jedem der 24 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
+zu `01-…`): derselbe Algorithmus, in genau eine Richtung verschoben. Nur so
+ist der Vergleich einer — wer drei Dateien nacheinander in denselben Platz
+schreibt und dieselbe Sequenz laufen lässt, hört den Unterschied und sonst
+nichts.
 
 Gedacht sind sie zum **Ausprobieren des Schreibpfads**: bis hierhin konnte der
 Preset-Editor nur weiterreichen, was vorher vom Gerät kam. Diese Dateien gibt
@@ -60,6 +66,63 @@ ein Zug öffnet das Filter und dreht gleichzeitig die Zerre auf.
 `m11-vinyl-stop` hat zusätzlich eine dritte Zuordnung: **Berühren** der Fläche
 (Quelle `0x41`) setzt `pad_on` auf 1 — das ist der Auslöser des Plattenstopps.
 
+## Variationen — je zwei pro Basis
+
+Zum Vergleichen: gleicher Algorithmus, ein Aspekt verschoben. Steht in der
+Spalte „Regler/X“ etwas, liegt bei dieser Variation ein **anderes Ziel** unter
+dem Bedienelement als bei der Basis.
+
+### Insert
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| Tekk Drive | Tekk Drive Warm | Tekk Drive Fuzz | Zerrgrad 55 / 100 / 127, Ausgangspegel gegenläufig |
+| Bit Tekk | Bit Tekk Rate | Bit Tekk Bits | nur Rate ↓ bzw. nur Auflösung ↓ (b: Regler zieht `bit_depth`) |
+| Kick Press | Kick Press Slow | Kick Press Slam | Attack 90 / 10 / 0 (a: Regler zieht `attack`) |
+| Ring Tekk | Ring Tekk Low | Ring Tekk High | `osc_freq` 14 / 48 / 100 |
+| Echo Sync | Echo Sync Slap | Echo Sync Dub | Rückkopplung 0 / 70 / 110 (a: Regler zieht `wet_level`) |
+| Flange Jet | Flange Jet Slow | Flange Jet Fast | LFO-Rate 1 / 4 / 30 |
+| Phase Sweep | Phase Auto | Phase Wide | a: LFO fährt selbst, Regler auf Resonanz · b: anderer Typ |
+| Gate Chop | Gate Chop Half | Gate Chop Free | halbe Tiefe · ohne Tempo-Kopplung (b: Regler zieht `lfo_speed`) |
+| Kick EQ | Kick EQ Boost | Kick EQ Scoop | alle Bänder ≥ 36 · tiefe Kuhle (b: Regler zieht `b2_gain`) |
+| Acid Filter | Acid Filter Alt | Acid Filter Hot | `output_select` = 1 · Zerre + Resonanz am Anschlag |
+| Punch Filter | Punch Filt Alt2 | Punch Filt Open | `output_select` = 2 · weit offen, wenig Resonanz |
+| Comp Drive | Comp Drive Soft | Comp Drive Max | beide Stufen zurück bzw. am Anschlag |
+
+### Master
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| Master Glue | Glue Soft | Glue Slam | Ansprache 55 / 90 / 127, Attack gegenläufig |
+| Master Limit | Limit Clean | Limit Max | Schwelle 50 / 28 / 8, Röhre 0 / 70 / 127 |
+| Master EQ | EQ Tilt Dark | EQ Tilt Bright | Kippe nach unten bzw. nach oben |
+| Filter Drop | Filter Drop HP | Filter Drop BP | Hochpass bzw. Bandpass statt Tiefpass |
+| Master Drive | Drive Warm | Drive Fuzz | Zerrgrad 50 / 95 / 127 |
+| Tube Warm | Tube Warm Lo | Tube Warm Hot | beide Röhren zurück bzw. am Anschlag |
+| Room Wide | Room Short | Room Long | Länge 18 / 45 / 100, Dämpfung gegenläufig |
+| Tape Echo | Tape Echo Clean | Tape Echo Wash | Rückkopplung 55 / 95 / 118, Sättigung mit |
+| Mod Delay | Mod Delay Dry | Mod Delay Wide | Modulation 0 / 50 / 110 |
+| Grain Stutter | Grain Fine | Grain Rough | `off_duration` 12 / 42 / 90 |
+| Vinyl Stop | Vinyl Slow | Vinyl Scratch | träger Auslauf · Kratzen statt Stoppen (b: X/Y auf `scratch`) |
+| Master Crush | Crush Rate | Crush Bits | nur Rate ↓ bzw. nur Auflösung ↓ (b: X/Y getauscht) |
+
+### Fünf davon sind Sonden
+
+Manche Paare beantworten nebenbei eine Frage, die in den Format-Unterlagen
+offen ist — zwei Dateien, die sich in **einem** Byte unterscheiden, klären am
+Ohr, was keine Tabelle hergibt:
+
+| Sonde | Frage |
+|---|---|
+| `Kick EQ Boost` ↔ `Kick EQ Scoop` | Ist 36 wirklich neutral, und heißt höher lauter? |
+| `EQ Tilt Dark` ↔ `EQ Tilt Bright` | dasselbe für den Master-EQ |
+| `Acid Filter Alt` (1), `Punch Filt Alt2` (2), Basis (0) | Was macht `output_select` beim Filter? |
+| `Grain Fine` ↔ `Grain Rough` | Was tut `off_duration`? |
+| `Bit Tekk Rate` ↔ `Bit Tekk Bits` | Welche der beiden Achsen macht den Crush-Klang aus? |
+
+Was dabei herauskommt, gehört zurück in die Tabellen (`e2FxParams.ts`) — und
+in dieses README.
+
 Die nicht genutzte Seite steht überall auf Thru: in den Insert-Presets der
 Master, in den Master-Presets beide Inserts. Ein Preset soll beim Schreiben
 nicht die andere Hälfte der Kette mit umstellen.
@@ -70,7 +133,7 @@ Im FX-Preset-Bereich, mit verbundenem Gerät:
 
 1. **Datei laden** → eine `.e2fxp` oder `.mfx` wählen. Bei `.mfx` springt die
    Art selbst auf Master-Effekt; bei `.e2fxp` vorher auf **Insert-Effekt**
-   stellen. (Oder **Sammlung laden** → eine der beiden `.tfsam`, dann in der
+   stellen. (Oder **Sammlung laden** → eine der vier `.tfsam`, dann in der
    Liste auf „bearbeiten“ — dort trägt jeder Eintrag seine Art selbst.)
 2. Ziel-Platz eintragen und **Lesen** drücken. Das holt den Vorher-Stand für
    das Zurückschreiben; der geladene Stand bleibt dabei im Editor stehen.
@@ -88,6 +151,12 @@ auf Platz 40.
 **Zurück kommt man immer.** Die Presets liegen im RAM: **Undo** schreibt den
 gelesenen Vorher-Stand zurück, und ein Aus-und-Wieder-Ein stellt ohnehin alles
 her. ⚠ Das Gerät darf während des Schreibens **nicht spielen**.
+
+**Zum Vergleichen** lohnt ein fester Ablauf: eine Sequenz laufen lassen, die
+drei Fassungen (Basis, `a`, `b`) nacheinander in **denselben** Platz schreiben
+und den Part nicht umstellen. So ist der Unterschied wirklich das Preset und
+nicht der Kontext. Auf drei getrennte Plätze geschrieben geht es schneller,
+aber dann wechselt beim Umschalten mehr als nur die Werte.
 
 Dieselben Dateien lassen sich auch in Synthstudio laden (E2s-Preset-Panel,
 „.bin importieren“ — die Art wird an der Größe erkannt) und mit

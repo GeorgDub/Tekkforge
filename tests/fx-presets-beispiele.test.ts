@@ -152,22 +152,72 @@ describe("Master-Presets (.mfx)", () => {
   });
 });
 
+describe("Variationen", () => {
+  /**
+   * `01a-…` und `01b-…` sind Variationen von `01-…`. Die Nummer im Dateinamen
+   * ist die Zuordnung — halten sie sich nicht daran, findet der Test die Basis
+   * nicht und faellt durch, statt still nichts zu pruefen.
+   */
+  const paare = presetDateien
+    .map((f) => ({ variante: f, treffer: /^(m?\d+)[ab]-/.exec(f) }))
+    .filter((x) => x.treffer)
+    .map(({ variante, treffer }) => ({
+      variante,
+      basis: presetDateien.find((f) => f.startsWith(`${treffer![1]}-`)),
+    }));
+
+  it("jede Variation findet ihre Basis", () => {
+    expect(paare.length).toBeGreaterThan(0);
+    for (const p of paare) expect(p.basis, `Basis zu ${p.variante}`).toBeDefined();
+  });
+
+  it.each(paare)("$variante nutzt denselben Algorithmus wie $basis", ({ variante, basis }) => {
+    // Der Sinn einer Variation ist der Vergleich: dieselbe Kette, ein Wert
+    // anders. Ein abweichender Algorithmus macht daraus zwei Presets, die
+    // nebeneinander nichts mehr aussagen.
+    const v = dekodiere(variante);
+    const b = dekodiere(basis!);
+    expect(v.ifx1.device).toBe(b.ifx1.device);
+    expect(v.ifx2.device).toBe(b.ifx2.device);
+    expect(v.mfx.device).toBe(b.mfx.device);
+  });
+
+  it.each(paare)("$variante unterscheidet sich hoerbar von $basis", ({ variante, basis }) => {
+    // Eine Variation, die byte-gleich zur Basis ist, waere ein Kopierfehler:
+    // sie belegt einen Platz am Geraet und beantwortet keine Frage.
+    expect(Buffer.from(lies(variante)).equals(Buffer.from(lies(basis!)))).toBe(false);
+  });
+});
+
 describe("Sammlungen der Beispiel-Presets", () => {
-  const faelle = [
-    { datei: "TekkForge-IFX-Starter.tfsam", art: "ifx", dateien: insertDateien },
-    { datei: "TekkForge-MFX-Starter.tfsam", art: "mfx", dateien: masterDateien },
+  const gruppen = [
+    { art: "ifx", dateien: insertDateien, sammlungen: ["TekkForge-IFX-Starter.tfsam", "TekkForge-IFX-Variationen.tfsam"] },
+    { art: "mfx", dateien: masterDateien, sammlungen: ["TekkForge-MFX-Starter.tfsam", "TekkForge-MFX-Variationen.tfsam"] },
   ];
 
-  it.each(faelle)("$datei laesst sich lesen und enthaelt jedes Preset genau einmal", ({ datei, art, dateien }) => {
-    const s = leseSammlung(fs.readFileSync(path.join(ORDNER, datei), "utf8"));
-    expect(s.eintraege).toHaveLength(dateien.length);
-    expect(s.eintraege.every((e) => e.art === art)).toBe(true);
+  const eintraegeVon = (datei: string) =>
+    leseSammlung(fs.readFileSync(path.join(ORDNER, datei), "utf8")).eintraege;
 
+  it.each(gruppen.flatMap((g) => g.sammlungen.map((datei) => ({ datei, art: g.art }))))(
+    "$datei traegt nur $art und ist nicht leer",
+    ({ datei, art }) => {
+      const eintraege = eintraegeVon(datei);
+      expect(eintraege.length).toBeGreaterThan(0);
+      expect(eintraege.every((e) => e.art === art)).toBe(true);
+    },
+  );
+
+  it.each(gruppen)("$art: die Sammlungen decken jede Einzeldatei genau einmal ab", ({ dateien, sammlungen }) => {
     // Die Bytes in der Sammlung sind dieselben wie in den Einzeldateien —
     // sonst laedt man ueber den bequemen Weg etwas anderes als ueber den
-    // einzelnen, und das faellt niemandem auf.
-    const einzeln = dateien.map((f) => Buffer.from(lies(f)).toString("base64"));
-    const inSammlung = s.eintraege.map((e) => Buffer.from(e.bytes).toString("base64"));
-    expect(inSammlung.sort()).toEqual(einzeln.sort());
+    // einzelnen, und das faellt niemandem auf. Geprueft wird ueber die Menge,
+    // nicht ueber feste Zahlen: eine neue Variation faellt so nicht durchs
+    // Raster, weil jemand vergessen hat, einen Zaehler mitzuziehen.
+    const aufPlatte = dateien.map((f) => Buffer.from(lies(f)).toString("base64")).sort();
+    const inSammlungen = sammlungen
+      .flatMap((s) => eintraegeVon(s))
+      .map((e) => Buffer.from(e.bytes).toString("base64"))
+      .sort();
+    expect(inSammlungen).toEqual(aufPlatte);
   });
 });

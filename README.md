@@ -449,14 +449,19 @@ was ihn beim ersten echten Versuch belegt oder widerlegt.
 
 ### Beispiel-Presets zum Ausprobieren
 
-`examples/fx-presets/` enthaelt vierundzwanzig fertig eingestellte FX-Presets
-als rohe 524-B-Bloecke, plus zwei `.tfsam`-Sammlungen, die sie auf einmal
+`examples/fx-presets/` enthaelt zweiundsiebzig fertig eingestellte FX-Presets
+als rohe 524-B-Bloecke, plus vier `.tfsam`-Sammlungen, die sie gruppenweise
 laden:
 
 - **12 Insert-Presets** (`.e2fxp`, Ziel `0xC00A80F0`) — je eine Zuordnung auf
   den IFX-Regler des Parts.
 - **12 Master-Presets** (`.mfx`, Ziel `0xC00B4F30`) — X- und Y-Achse der
   Flaeche belegt, bei „Vinyl Stop" zusaetzlich das Beruehren.
+- **48 Variationen**, zwei je Basis (`01a-…`/`01b-…` zu `01-…`): derselbe
+  Algorithmus, in eine Richtung verschoben — zum Vergleichen am Geraet. Fuenf
+  Paare sind zugleich **Sonden**: zwei Dateien, die sich in einem Byte
+  unterscheiden, klaeren am Ohr, was in den Format-Unterlagen offen ist (ist
+  36 beim EQ wirklich neutral? was macht `output_select`?).
 
 Alle mit Namen fuers Geraetemenue; die jeweils nicht genutzte Haelfte der Kette
 steht auf Thru, damit ein Schreiben die andere nicht mit umstellt. Die

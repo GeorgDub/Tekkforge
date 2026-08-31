@@ -429,6 +429,397 @@ const MASTER_PRESETS = [
   },
 ].map((p) => ({ ...p, art: "mfx" }));
 
+/**
+ * Variationen — zwei je Basis-Preset, zum Vergleichen am Geraet.
+ *
+ * Eine Variation nutzt **denselben Algorithmus** wie ihre Basis und verschiebt
+ * ihn in genau eine Richtung. Nur so ist der Vergleich einer: wer drei Dateien
+ * nacheinander in denselben Platz schreibt und dieselbe Sequenz laufen laesst,
+ * hoert den Unterschied und sonst nichts.
+ *
+ * Angegeben werden nur die **Abweichungen** von der Basis, je Kettenstufe;
+ * alles andere kommt von dort. `regler` ueberschreibt die Zuordnungen
+ * vollstaendig — noetig, wenn eine Variation ein anderes Ziel unter das
+ * Bedienelement legt (bei „Bit Tekk Bits" die Aufloesung statt der Rate).
+ *
+ * Ein Teil der Paare ist zugleich **Sonde**: zwei Dateien, die sich in genau
+ * einem Byte unterscheiden, beantworten am Ohr eine Frage, die in den
+ * Format-Unterlagen offen ist. `Kick EQ Boost` gegen `Kick EQ Scoop` sagt, ob
+ * 36 wirklich neutral ist und ob hoeher lauter heisst; `Acid Filter Alt` und
+ * `Punch Filt Alt2` setzen `output_select` auf 1 bzw. 2, dessen Bedeutung
+ * nirgends steht. Was dabei herauskommt, gehoert zurueck in die Tabellen.
+ */
+const VARIATIONEN = {
+  "01-tekk-drive": [
+    {
+      datei: "01a-tekk-drive-warm",
+      name: "Tekk Drive Warm",
+      zweck: "Halber Zerrgrad, mehr Ausgangspegel, Hoehen zurueck — Saettigung statt Bruch.",
+      ifx1: { werte: { gain: 55, output_level: 60, post_eq2_gain: 40, post_eq3_gain: 14 } },
+      regler: [{ kette: KETTE.ifx1, param: "gain", min: 20, max: 90 }],
+    },
+    {
+      datei: "01b-tekk-drive-fuzz",
+      name: "Tekk Drive Fuzz",
+      zweck: "Anschlag bis zum Rand, Mitten nach vorn. Das laute Ende der Reihe.",
+      ifx1: { werte: { gain: 127, output_level: 30, post_eq1_gain: 46, post_eq2_gain: 52, post_eq3_gain: 26 } },
+      regler: [{ kette: KETTE.ifx1, param: "gain", min: 60, max: 127 }],
+    },
+  ],
+  "02-bit-tekk": [
+    {
+      datei: "02a-bit-tekk-rate",
+      name: "Bit Tekk Rate",
+      zweck: "Nur die Abtastrate runter, Aufloesung bleibt hoch — Aliasing ohne Rauschen.",
+      ifx1: { werte: { sample_freq: 14, bit_depth: 16 } },
+      regler: [{ kette: KETTE.ifx1, param: "sample_freq", min: 4, max: 60 }],
+    },
+    {
+      datei: "02b-bit-tekk-bits",
+      name: "Bit Tekk Bits",
+      zweck: "Umgekehrt: Rate hoch, Aufloesung runter — Rauschen ohne Aliasing. Der Regler zieht hier die Bits.",
+      ifx1: { werte: { sample_freq: 96, bit_depth: 3 } },
+      regler: [{ kette: KETTE.ifx1, param: "bit_depth", min: 2, max: 16 }],
+    },
+  ],
+  "03-kick-press": [
+    {
+      datei: "03a-kick-press-slow",
+      name: "Kick Press Slow",
+      zweck: "Langsame Ansprache — der Anschlag kommt durch, erst danach greift die Kompression.",
+      ifx1: { werte: { attack: 90 } },
+      regler: [{ kette: KETTE.ifx1, param: "attack", min: 0, max: 127 }],
+    },
+    {
+      datei: "03b-kick-press-slam",
+      name: "Kick Press Slam",
+      zweck: "Volle Ansprache, kein Attack, Tiefen weiter an — die Kick wird flach und breit.",
+      ifx1: { werte: { sensitivity: 127, attack: 0, pre_leq_gain: 50 } },
+      regler: [{ kette: KETTE.ifx1, param: "sensitivity", min: 80, max: 127 }],
+    },
+  ],
+  "04-ring-tekk": [
+    {
+      datei: "04a-ring-tekk-low",
+      name: "Ring Tekk Low",
+      zweck: "Tiefe Modulationsfrequenz — Wummern und Schwebung statt Metall.",
+      ifx1: { werte: { osc_freq: 14, feedback: 20 } },
+      regler: [{ kette: KETTE.ifx1, param: "osc_freq", min: 2, max: 40 }],
+    },
+    {
+      datei: "04b-ring-tekk-high",
+      name: "Ring Tekk High",
+      zweck: "Hohe Modulationsfrequenz, mehr Rueckkopplung, voll nass — schrill und glockig.",
+      ifx1: { werte: { dry_wet: 127, osc_freq: 100, feedback: 80 } },
+      regler: [{ kette: KETTE.ifx1, param: "osc_freq", min: 60, max: 127 }],
+    },
+  ],
+  "05-echo-sync": [
+    {
+      datei: "05a-echo-sync-slap",
+      name: "Echo Sync Slap",
+      zweck: "Ohne Rueckkopplung: eine einzige Wiederholung. Der Regler mischt sie ein.",
+      ifx1: { werte: { fb_depth: 0, wet_level: 90 } },
+      regler: [{ kette: KETTE.ifx1, param: "wet_level", min: 0, max: 127 }],
+    },
+    {
+      datei: "05b-echo-sync-dub",
+      name: "Echo Sync Dub",
+      zweck: "Lange Fahne, Hoehen und Tiefen weggedaempft — die Wiederholungen werden dumpfer.",
+      ifx1: { werte: { fb_depth: 110, wet_level: 85, high_damp: 90, low_damp: 30 } },
+      regler: [{ kette: KETTE.ifx1, param: "fb_depth", min: 40, max: 120 }],
+    },
+  ],
+  "06-flange-jet": [
+    {
+      datei: "06a-flange-jet-slow",
+      name: "Flange Jet Slow",
+      zweck: "Langsamste Bewegung, volle Tiefe — ein Durchgang dauert.",
+      ifx1: { werte: { lfo_speed: 1, mod_int: 127 } },
+    },
+    {
+      datei: "06b-flange-jet-fast",
+      name: "Flange Jet Fast",
+      zweck: "Schnell und flacher — mehr Vibrato als Duesenjet.",
+      ifx1: { werte: { lfo_speed: 30, mod_int: 70, feedback: 80 } },
+    },
+  ],
+  "07-phase-sweep": [
+    {
+      datei: "07a-phase-auto",
+      name: "Phase Auto",
+      zweck: "Der LFO faehrt den Sweep selbst; der Regler bleibt fuer die Resonanz.",
+      ifx1: { werte: { dry_wet: 100, modint: 127, lfo_speed: 12 } },
+      regler: [{ kette: KETTE.ifx1, param: "resonance", min: 0, max: 127 }],
+    },
+    {
+      datei: "07b-phase-wide",
+      name: "Phase Wide",
+      zweck: "Anderer Phaser-Typ (0 statt 1), zahmere Resonanz — breit statt stechend.",
+      ifx1: { werte: { type: 0, modint: 80, resonance: 60 } },
+    },
+  ],
+  "08-gate-chop": [
+    {
+      datei: "08a-gate-chop-half",
+      name: "Gate Chop Half",
+      zweck: "Halbe Modulationstiefe und weichere Flanke — pumpt, statt zu schneiden.",
+      ifx1: { werte: { mod_int: 64, lfo_shape: 64 } },
+    },
+    {
+      datei: "08b-gate-chop-free",
+      name: "Gate Chop Free",
+      zweck: "Ohne Tempo-Kopplung, schnell frei laufend — laeuft gegen das Raster.",
+      ifx1: { werte: { lfo_sync: 0, lfo_speed: 110 } },
+      regler: [{ kette: KETTE.ifx1, param: "lfo_speed", min: 10, max: 127 }],
+    },
+  ],
+  "09-kick-eq": [
+    {
+      datei: "09a-kick-eq-boost",
+      name: "Kick EQ Boost",
+      zweck: "Kein Band unter 36, drei darueber. Zusammen mit „Scoop“ die Probe, ob 36 wirklich neutral ist.",
+      ifx1: { werte: { b1_gain: 56, b2_gain: 36, b3_gain: 40, b4_gain: 52 } },
+      regler: [{ kette: KETTE.ifx1, param: "b1_gain", min: 36, max: 60 }],
+    },
+    {
+      datei: "09b-kick-eq-scoop",
+      name: "Kick EQ Scoop",
+      zweck: "Tiefe Kuhle in den Mitten, Raender hoch — die Gegenprobe zu „Boost“.",
+      ifx1: { werte: { b1_gain: 50, b2_gain: 18, b3_gain: 24, b4_gain: 50 } },
+      regler: [{ kette: KETTE.ifx1, param: "b2_gain", min: 12, max: 40 }],
+    },
+  ],
+  "10-acid-filter": [
+    {
+      datei: "10a-acid-filter-alt",
+      name: "Acid Filter Alt",
+      zweck: "Sonde: gleiches Preset, nur output_select = 1 statt 0. Was das Filter dann tut, steht nirgends.",
+      ifx2: { werte: { output_select: 1 } },
+    },
+    {
+      datei: "10b-acid-filter-hot",
+      name: "Acid Filter Hot",
+      zweck: "Zerre am Anschlag, Filter an der Selbstschwingung — die harte Fassung.",
+      ifx1: { werte: { drive: 127, output_level: 55 } },
+      ifx2: { werte: { resonance: 120 } },
+    },
+  ],
+  "11-punch-filter": [
+    {
+      datei: "11a-punch-filt-alt2",
+      name: "Punch Filt Alt2",
+      zweck: "Zweite Sonde auf output_select: hier 2. Zusammen mit „Acid Filter Alt“ (1) und der Basis (0) die ganze Reihe.",
+      ifx2: { werte: { output_select: 2 } },
+    },
+    {
+      datei: "11b-punch-filt-open",
+      name: "Punch Filt Open",
+      zweck: "Weit offen, kaum Resonanz — fast nur der Punch, das Filter faerbt nur.",
+      ifx2: { werte: { dry_wet: 127, frequency: 110, resonance: 40 } },
+    },
+  ],
+  "12-comp-drive": [
+    {
+      datei: "12a-comp-drive-soft",
+      name: "Comp Drive Soft",
+      zweck: "Beide Stufen zurueckgenommen — Verdichtung mit Anwaermung statt Zerre.",
+      ifx1: { werte: { sens: 60, output_level: 30 } },
+      ifx2: { werte: { drive: 55, output_level: 55 } },
+    },
+    {
+      datei: "12b-comp-drive-max",
+      name: "Comp Drive Max",
+      zweck: "Beide Stufen am Anschlag. Wenn irgendwo etwas uebersteuert, dann hier.",
+      ifx1: { werte: { env_bit_shift: 2, sens: 127, output_level: 14 } },
+      ifx2: { werte: { drive: 127, output_level: 34 } },
+    },
+  ],
+
+  "m01-master-glue": [
+    {
+      datei: "m01a-glue-soft",
+      name: "Glue Soft",
+      zweck: "Wenig Ansprache, langsamer Attack — haelt zusammen, ohne zu pumpen.",
+      mfx: { werte: { sensitivity: 55, attack: 70 } },
+    },
+    {
+      datei: "m01b-glue-slam",
+      name: "Glue Slam",
+      zweck: "Volle Ansprache, kein Attack, Tiefen an — der Mix atmet hoerbar.",
+      mfx: { werte: { sensitivity: 127, attack: 0, pre_leq_gain: 42 } },
+    },
+  ],
+  "m02-master-limit": [
+    {
+      datei: "m02a-limit-clean",
+      name: "Limit Clean",
+      zweck: "Hohe Schwelle, keine Roehre — greift nur bei den Spitzen.",
+      mfx: { werte: { threshold: 50, tube_sat: 0, output_gain: 64 } },
+    },
+    {
+      datei: "m02b-limit-max",
+      name: "Limit Max",
+      zweck: "Schwelle unten, Roehre voll, kurze Freigabe — laut um jeden Preis.",
+      mfx: { werte: { threshold: 8, release: 4, tube_sat: 127, output_gain: 100 } },
+    },
+  ],
+  "m03-master-eq": [
+    {
+      datei: "m03a-eq-tilt-dark",
+      name: "EQ Tilt Dark",
+      zweck: "Kippe nach unten: Tiefen an, Hoehen weg.",
+      mfx: { werte: { b1_gain: 52, b2_gain: 40, b3_gain: 30, b4_gain: 22 } },
+    },
+    {
+      datei: "m03b-eq-tilt-bright",
+      name: "EQ Tilt Bright",
+      zweck: "Kippe nach oben — die Gegenprobe. Wer beide hintereinander hoert, kennt die Richtung der Gain-Bytes.",
+      mfx: { werte: { b1_gain: 26, b2_gain: 32, b3_gain: 44, b4_gain: 54 } },
+    },
+  ],
+  "m04-filter-drop": [
+    {
+      datei: "m04a-filter-drop-hp",
+      name: "Filter Drop HP",
+      zweck: "Hochpass statt Tiefpass — der Aufbau, bei dem die Kick verschwindet.",
+      mfx: { werte: { lpf24_level: 0, hpf_level: 127, frequency: 40 } },
+    },
+    {
+      datei: "m04b-filter-drop-bp",
+      name: "Filter Drop BP",
+      zweck: "Bandpass mit hoher Resonanz — das Telefon-Zwischenspiel.",
+      mfx: { werte: { lpf24_level: 0, bpf_level: 127, resonance: 120, frequency: 60 } },
+    },
+  ],
+  "m05-master-drive": [
+    {
+      datei: "m05a-drive-warm",
+      name: "Drive Warm",
+      zweck: "Halbe Zerre, mehr Pegel, Hoehen zurueck — Anwaermung der Summe.",
+      mfx: { werte: { gain: 50, output_level: 52, post_eq3_gain: 30 } },
+    },
+    {
+      datei: "m05b-drive-fuzz",
+      name: "Drive Fuzz",
+      zweck: "Volle Zerre ueber alles. Grob, und genau dafuer da.",
+      mfx: { werte: { gain: 127, output_level: 30, post_eq2_gain: 46 } },
+    },
+  ],
+  "m06-tube-warm": [
+    {
+      datei: "m06a-tube-warm-lo",
+      name: "Tube Warm Lo",
+      zweck: "Beide Roehren zurueckgenommen — nur ein Hauch.",
+      mfx: { werte: { tube1_gain: 40, tube1_sat: 55, tube2_gain: 40, tube2_sat: 60 } },
+    },
+    {
+      datei: "m06b-tube-warm-hot",
+      name: "Tube Warm Hot",
+      zweck: "Beide Roehren am Anschlag, mehr Vorverstaerkung — dick und komprimiert.",
+      mfx: { werte: { tube1_gain: 80, tube1_sat: 127, tube2_gain: 70, tube2_sat: 127, output_level: 44 } },
+    },
+  ],
+  "m07-room-wide": [
+    {
+      datei: "m07a-room-short",
+      name: "Room Short",
+      zweck: "Kurz, gedaempft, viel Erstreflexion — enger Raum statt Halle.",
+      mfx: { werte: { time: 18, hi_damp: 110, pre_delay: 0, rev_level: 60, er_level: 90 } },
+    },
+    {
+      datei: "m07b-room-long",
+      name: "Room Long",
+      zweck: "Lange Fahne, offen, mit Vorlauf — die grosse Halle.",
+      mfx: { werte: { time: 100, hi_damp: 40, pre_delay: 30, rev_level: 120, er_level: 30 } },
+    },
+  ],
+  "m08-tape-echo": [
+    {
+      datei: "m08a-tape-echo-clean",
+      name: "Tape Echo Clean",
+      zweck: "Wenig Rueckkopplung, kaum Saettigung — ein sauberes Echo.",
+      mfx: { werte: { feedback: 55, saturation: 20, hi_damp: 40, lo_damp: 20 } },
+    },
+    {
+      datei: "m08b-tape-echo-wash",
+      name: "Tape Echo Wash",
+      zweck: "Fast selbstschwingend, gesaettigt, mit Gleichlaufschwankung — die Fahne kippt.",
+      mfx: { werte: { feedback: 118, saturation: 110, hi_damp: 115, lfo_depth: 40 } },
+    },
+  ],
+  "m09-mod-delay": [
+    {
+      datei: "m09a-mod-delay-dry",
+      name: "Mod Delay Dry",
+      zweck: "Ohne Modulation, wenig Rueckkopplung — ein gerades Delay zum Vergleichen.",
+      mfx: { werte: { fb_depth: 40, mod_depth: 0 } },
+    },
+    {
+      datei: "m09b-mod-delay-wide",
+      name: "Mod Delay Wide",
+      zweck: "Volle Modulation, breit verteilt, lange Fahne.",
+      mfx: { werte: { wet_spread: 127, fb_depth: 115, mod_depth: 110, mod_freq: 40 } },
+    },
+  ],
+  "m10-grain-stutter": [
+    {
+      datei: "m10a-grain-fine",
+      name: "Grain Fine",
+      zweck: "Kurze Koerner, schnelle Rate — surrt.",
+      mfx: { werte: { off_duration: 12, off_lfo_freq: 110 } },
+    },
+    {
+      datei: "m10b-grain-rough",
+      name: "Grain Rough",
+      zweck: "Lange Koerner, langsame Rate — stottert hoerbar. Mit „Fine“ zusammen sagt das Paar, was off_duration tut.",
+      mfx: { werte: { off_duration: 90, off_lfo_freq: 20 } },
+    },
+  ],
+  "m11-vinyl-stop": [
+    {
+      datei: "m11a-vinyl-slow",
+      name: "Vinyl Slow",
+      zweck: "Traeger Auslauf: weniger Tonhoehenabfall, laengere Verzoegerung.",
+      mfx: { werte: { delta_pitch: 40, scratch_lag: 20, asobi: 40 } },
+      regler: [
+        { quelle: Q.beruehrt, param: "pad_on", min: 0, max: 1 },
+        { quelle: Q.reglerX, param: "delta_pitch", min: 0, max: 80 },
+        { quelle: Q.achseY, param: "scratch", min: 0, max: 127 },
+      ],
+    },
+    {
+      datei: "m11b-vinyl-scratch",
+      name: "Vinyl Scratch",
+      zweck: "Kratzen statt Stoppen: die Flaeche wird zum Plattenteller. X = Kratzen, Y = Weite.",
+      mfx: { werte: { scratch: 90, scratch_width: 100, scratch_lag: 1 } },
+      regler: [
+        { quelle: Q.beruehrt, param: "pad_on", min: 0, max: 1 },
+        { quelle: Q.reglerX, param: "scratch", min: 0, max: 127 },
+        { quelle: Q.achseY, param: "scratch_width", min: 0, max: 127 },
+      ],
+    },
+  ],
+  "m12-master-crush": [
+    {
+      datei: "m12a-crush-rate",
+      name: "Crush Rate",
+      zweck: "Nur die Abtastrate runter — Aliasing ueber die Summe.",
+      mfx: { werte: { sample_freq: 12, bit_depth: 16 } },
+    },
+    {
+      datei: "m12b-crush-bits",
+      name: "Crush Bits",
+      zweck: "Nur die Aufloesung runter. X zieht hier die Bits, Y bleibt die Rate.",
+      mfx: { werte: { sample_freq: 100, bit_depth: 3 } },
+      regler: [
+        { quelle: Q.reglerX, param: "bit_depth", min: 2, max: 16 },
+        { quelle: Q.achseY, param: "sample_freq", min: 6, max: 127 },
+      ],
+    },
+  ],
+};
+
 // ─── Bauen ───────────────────────────────────────────────────────────────────
 
 const tabelle = (istMfx) => (istMfx ? MFX_TYPES : IFX_TYPES);
@@ -457,6 +848,36 @@ function paramIndex(device, name, istMfx) {
   const i = (tabelle(istMfx)[device]?.params ?? []).indexOf(name);
   if (i < 0) throw new Error(`Zuordnung auf unbekannten Parameter "${name}"`);
   return i;
+}
+
+/**
+ * Eine Variation aus ihrer Basis ableiten: Algorithmus und alle nicht genannten
+ * Parameter kommen von dort, nur die Abweichungen stehen in `v`. Der
+ * Algorithmus ist bewusst **nicht** ueberschreibbar — sonst waere es keine
+ * Variation, sondern ein anderes Preset, und der Vergleich am Geraet ginge
+ * verloren.
+ */
+function variante(basis, v) {
+  const misch = (rolle) =>
+    basis[rolle] || v[rolle]
+      ? { device: basis[rolle]?.device ?? A.thru, werte: { ...(basis[rolle]?.werte ?? {}), ...(v[rolle]?.werte ?? {}) } }
+      : undefined;
+  return {
+    art: basis.art,
+    datei: v.datei,
+    name: v.name,
+    zweck: v.zweck,
+    basisName: basis.name,
+    ifx1: misch("ifx1"),
+    ifx2: misch("ifx2"),
+    mfx: misch("mfx"),
+    regler: v.regler ?? basis.regler,
+  };
+}
+
+/** Alle Variationen zu einer Liste von Basis-Presets, in deren Reihenfolge. */
+function variationen(basisListe) {
+  return basisListe.flatMap((b) => (VARIATIONEN[b.datei] ?? []).map((v) => variante(b, v)));
 }
 
 function baue(def) {
@@ -524,13 +945,16 @@ function schreibeGruppe(presets, endung, sammlungsDatei, titel) {
     const p = decodeFxPreset(bytes, def.art === "mfx");
     const stufe = def.art === "mfx" ? p.mfx : p.ifx1;
     const zweiter = def.art === "ifx" && p.ifx2.device ? ` + ${p.ifx2.algorithmus}` : "";
-    console.log(`${datei.padEnd(46)} „${p.name}" — ${stufe.algorithmus || "Punch"}${zweiter}`);
+    const her = def.basisName ? `  ← ${def.basisName}` : "";
+    console.log(`${datei.padEnd(48)} „${p.name}" — ${stufe.algorithmus || "Punch"}${zweiter}${her}`);
   }
   const ziel = path.join(ZIEL, sammlungsDatei);
   fs.writeFileSync(ziel, baueSammlung(eintraege, { titel, autor: "TekkForge", wann: "2026-08-31T00:00:00.000Z" }));
-  console.log(`${ziel.padEnd(46)} ${eintraege.length} Presets in einer Datei.\n`);
+  console.log(`${ziel.padEnd(48)} ${eintraege.length} Presets in einer Datei.\n`);
 }
 
 fs.mkdirSync(ZIEL, { recursive: true });
 schreibeGruppe(INSERT_PRESETS, "e2fxp", "TekkForge-IFX-Starter.tfsam", "TekkForge IFX Starter");
 schreibeGruppe(MASTER_PRESETS, "mfx", "TekkForge-MFX-Starter.tfsam", "TekkForge MFX Starter");
+schreibeGruppe(variationen(INSERT_PRESETS), "e2fxp", "TekkForge-IFX-Variationen.tfsam", "TekkForge IFX Variationen");
+schreibeGruppe(variationen(MASTER_PRESETS), "mfx", "TekkForge-MFX-Variationen.tfsam", "TekkForge MFX Variationen");
