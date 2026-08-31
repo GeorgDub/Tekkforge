@@ -1,78 +1,52 @@
 # Beispiel-Presets für Insert- und Master-Effekte
 
-Zweiundsiebzig fertig eingestellte FX-Presets für die Electribe 2 mit
-Hacktribe-Firmware — je eine Datei mit dem rohen 524-Byte-Block, plus vier
-Sammlungen, die sie gruppenweise auf einmal laden:
+144 fertig eingestellte FX-Presets für die Electribe 2 mit Hacktribe-Firmware
+— je eine Datei mit dem rohen 524-Byte-Block, dazu acht Sammlungen, die sie
+gruppenweise auf einmal laden.
 
-| Art | Endung | Ziel im RAM | Plätze | Sammlungen |
-|---|---|---|---|---|
-| Insert-Effekt | `.e2fxp` | `0xC00A80F0` | 0–95 | `TekkForge-IFX-Starter.tfsam` (12) · `TekkForge-IFX-Variationen.tfsam` (24) |
-| Master-Effekt | `.mfx` | `0xC00B4F30` | 0–31 | `TekkForge-MFX-Starter.tfsam` (12) · `TekkForge-MFX-Variationen.tfsam` (24) |
+| Set | Art | Endung | Ziel im RAM | Plätze | Sammlungen |
+|---|---|---|---|---|---|
+| **Starter** — Tekk-Werkzeug | Insert | `.e2fxp` | `0xC00A80F0` | 0–95 | `IFX-Starter` (12) · `IFX-Variationen` (24) |
+| **Starter** — Summe | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Starter` (12) · `MFX-Variationen` (24) |
+| **Farben** — Formen statt Zerlegen | Insert | `.e2fxp` | `0xC00A80F0` | 0–95 | `IFX-Farben` (12) · `IFX-Farben-Variationen` (24) |
+| **Raum & Bewegung** | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Raum` (12) · `MFX-Raum-Variationen` (24) |
 
-Zu jedem der 24 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
+Zusammen decken die vier Sets **alle 20 Insert-Algorithmen und 24 der 25
+Master-Algorithmen** der Hacktribe-Firmware ab. Übrig bleibt nur der
+Master-`Mute` — ein gespeichertes Preset, das nichts tut, ist keins.
+
+Zu jedem der 48 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
 zu `01-…`): derselbe Algorithmus, in genau eine Richtung verschoben. Nur so
 ist der Vergleich einer — wer drei Dateien nacheinander in denselben Platz
 schreibt und dieselbe Sequenz laufen lässt, hört den Unterschied und sonst
 nichts.
 
-Gedacht sind sie zum **Ausprobieren des Schreibpfads**: bis hierhin konnte der
-Preset-Editor nur weiterreichen, was vorher vom Gerät kam. Diese Dateien gibt
-es ohne Gerät — mit Namen fürs Gerätemenü, gesetzten Parametern und
-Zuordnungen auf die Bedienelemente, damit beim Drehen bzw. Wischen auch etwas
-passiert.
+Mehr Presets als Plätze: 72 Insert-Presets auf 96 Plätze (davon im Menü nur
+die belegten, siehe unten), 72 Master-Presets auf 32. Das ist Absicht — es
+soll ausgewählt werden, nicht alles gleichzeitig draufpassen.
 
-Die Master-Dateien heißen `.mfx` (wie die des hacktribe-Editors), weil
-`ausDatei()` auf diese Endung die Art selbst umstellt. Ein Master-Preset in
-einen Insert-Platz geschrieben täte schlicht nichts — und das sähe aus wie ein
-Fehler der Übertragung.
+---
 
-## Insert-Effekte — der IFX-Regler pro Part
+## Set „Starter“ — Insert
+
+Der IFX-Regler des Parts liegt auf dem, was den Klang trägt.
 
 | Datei | Name im Menü | IFX 1 | IFX 2 | IFX-Regler zieht |
 |---|---|---|---|---|
-| `01-tekk-drive.e2fxp` | Tekk Drive | Distortion | — | `gain` 40 → 127 |
-| `02-bit-tekk.e2fxp` | Bit Tekk | Decimator | — | `sample_freq` 8 → 90 |
-| `03-kick-press.e2fxp` | Kick Press | MKP2 Comp | — | `sensitivity` 60 → 127 |
-| `04-ring-tekk.e2fxp` | Ring Tekk | Ring Mod | — | `osc_freq` 10 → 120 |
-| `05-echo-sync.e2fxp` | Echo Sync | Short Delay | — | `fb_depth` 0 → 110 |
-| `06-flange-jet.e2fxp` | Flange Jet | Flanger | — | `manual` 0 → 127 |
-| `07-phase-sweep.e2fxp` | Phase Sweep | Phaser | — | `manual` 0 → 127 |
-| `08-gate-chop.e2fxp` | Gate Chop | Tremolo | — | `mod_int` 0 → 127 |
-| `09-kick-eq.e2fxp` | Kick EQ | EQ 4-Band | — | `b1_gain` 36 → 56 |
-| `10-acid-filter.e2fxp` | Acid Filter | Acid Driver | Filter | `frequency` 10 → 127 **und** `drive` 30 → 127 |
-| `11-punch-filter.e2fxp` | Punch Filter | Punch | Filter | `frequency` 5 → 127 |
-| `12-comp-drive.e2fxp` | Comp Drive | Cheap Comp | Acid Driver | `drive` 20 → 127 |
+| `01-tekk-drive` | Tekk Drive | Distortion | — | `gain` 40 → 127 |
+| `02-bit-tekk` | Bit Tekk | Decimator | — | `sample_freq` 8 → 90 |
+| `03-kick-press` | Kick Press | MKP2 Comp | — | `sensitivity` 60 → 127 |
+| `04-ring-tekk` | Ring Tekk | Ring Mod | — | `osc_freq` 10 → 120 |
+| `05-echo-sync` | Echo Sync | Short Delay | — | `fb_depth` 0 → 110 |
+| `06-flange-jet` | Flange Jet | Flanger | — | `manual` 0 → 127 |
+| `07-phase-sweep` | Phase Sweep | Phaser | — | `manual` 0 → 127 |
+| `08-gate-chop` | Gate Chop | Tremolo | — | `mod_int` 0 → 127 |
+| `09-kick-eq` | Kick EQ | EQ 4-Band | — | `b1_gain` 36 → 56 |
+| `10-acid-filter` | Acid Filter | Acid Driver | Filter | `frequency` 10 → 127 **und** `drive` 30 → 127 |
+| `11-punch-filter` | Punch Filter | Punch | Filter | `frequency` 5 → 127 |
+| `12-comp-drive` | Comp Drive | Cheap Comp | Acid Driver | `drive` 20 → 127 |
 
-`10-acid-filter` hat als einziges **zwei** Zuordnungen auf denselben Regler —
-ein Zug öffnet das Filter und dreht gleichzeitig die Zerre auf.
-
-## Master-Effekte — die X/Y-Fläche
-
-| Datei | Name im Menü | Algorithmus | X-Achse | Y-Achse |
-|---|---|---|---|---|
-| `m01-master-glue.mfx` | Master Glue | MKP2 Comp | `sensitivity` 30 → 127 | `attack` 0 → 127 |
-| `m02-master-limit.mfx` | Master Limit | Limiter | `threshold` 8 → 64 | `tube_sat` 0 → 127 |
-| `m03-master-eq.mfx` | Master EQ | EQ 4-Band | `b1_gain` 24 → 52 | `b4_gain` 24 → 52 |
-| `m04-filter-drop.mfx` | Filter Drop | Multimode Filter | `frequency` 5 → 127 | `resonance` 0 → 127 |
-| `m05-master-drive.mfx` | Master Drive | Distortion | `gain` 30 → 127 | `post_eq3_gain` 20 → 52 |
-| `m06-tube-warm.mfx` | Tube Warm | Tube Pre | `tube1_sat` 40 → 127 | `tube2_sat` 40 → 127 |
-| `m07-room-wide.mfx` | Room Wide | Room Reverb | `dry_wet` 0 → 127 | `time` 10 → 100 |
-| `m08-tape-echo.mfx` | Tape Echo | Tape Echo | `feedback` 0 → 115 | `dry_wet` 0 → 127 |
-| `m09-mod-delay.mfx` | Mod Delay | Mod Delay | `fb_depth` 0 → 115 | `dry_wet` 0 → 127 |
-| `m10-grain-stutter.mfx` | Grain Stutter | Grain Shifter | `dry_wet` 0 → 127 | `off_lfo_freq` 5 → 127 |
-| `m11-vinyl-stop.mfx` | Vinyl Stop | Vinyl Break | `delta_pitch` 0 → 127 | `scratch` 0 → 127 |
-| `m12-master-crush.mfx` | Master Crush | Decimator | `sample_freq` 6 → 90 | `bit_depth` 2 → 16 |
-
-`m11-vinyl-stop` hat zusätzlich eine dritte Zuordnung: **Berühren** der Fläche
-(Quelle `0x41`) setzt `pad_on` auf 1 — das ist der Auslöser des Plattenstopps.
-
-## Variationen — je zwei pro Basis
-
-Zum Vergleichen: gleicher Algorithmus, ein Aspekt verschoben. Steht in der
-Spalte „Regler/X“ etwas, liegt bei dieser Variation ein **anderes Ziel** unter
-dem Bedienelement als bei der Basis.
-
-### Insert
+### Variationen
 
 | Basis | a | b | Was sich unterscheidet |
 |---|---|---|---|
@@ -89,7 +63,31 @@ dem Bedienelement als bei der Basis.
 | Punch Filter | Punch Filt Alt2 | Punch Filt Open | `output_select` = 2 · weit offen, wenig Resonanz |
 | Comp Drive | Comp Drive Soft | Comp Drive Max | beide Stufen zurück bzw. am Anschlag |
 
-### Master
+---
+
+## Set „Starter“ — Master
+
+X- und Y-Achse der Fläche sind belegt.
+
+| Datei | Name im Menü | Algorithmus | X-Achse | Y-Achse |
+|---|---|---|---|---|
+| `m01-master-glue` | Master Glue | MKP2 Comp | `sensitivity` 30 → 127 | `attack` 0 → 127 |
+| `m02-master-limit` | Master Limit | Limiter | `threshold` 8 → 64 | `tube_sat` 0 → 127 |
+| `m03-master-eq` | Master EQ | EQ 4-Band | `b1_gain` 24 → 52 | `b4_gain` 24 → 52 |
+| `m04-filter-drop` | Filter Drop | Multimode Filter | `frequency` 5 → 127 | `resonance` 0 → 127 |
+| `m05-master-drive` | Master Drive | Distortion | `gain` 30 → 127 | `post_eq3_gain` 20 → 52 |
+| `m06-tube-warm` | Tube Warm | Tube Pre | `tube1_sat` 40 → 127 | `tube2_sat` 40 → 127 |
+| `m07-room-wide` | Room Wide | Room Reverb | `dry_wet` 0 → 127 | `time` 10 → 100 |
+| `m08-tape-echo` | Tape Echo | Tape Echo | `feedback` 0 → 115 | `dry_wet` 0 → 127 |
+| `m09-mod-delay` | Mod Delay | Mod Delay | `fb_depth` 0 → 115 | `dry_wet` 0 → 127 |
+| `m10-grain-stutter` | Grain Stutter | Grain Shifter | `dry_wet` 0 → 127 | `off_lfo_freq` 5 → 127 |
+| `m11-vinyl-stop` | Vinyl Stop | Vinyl Break | `delta_pitch` 0 → 127 | `scratch` 0 → 127 |
+| `m12-master-crush` | Master Crush | Decimator | `sample_freq` 6 → 90 | `bit_depth` 2 → 16 |
+
+`m11-vinyl-stop` hat eine dritte Zuordnung: **Berühren** der Fläche (Quelle
+`0x41`) setzt `pad_on` — den Auslöser des Plattenstopps.
+
+### Variationen
 
 | Basis | a | b | Was sich unterscheidet |
 |---|---|---|---|
@@ -106,7 +104,111 @@ dem Bedienelement als bei der Basis.
 | Vinyl Stop | Vinyl Slow | Vinyl Scratch | träger Auslauf · Kratzen statt Stoppen (b: X/Y auf `scratch`) |
 | Master Crush | Crush Rate | Crush Bits | nur Rate ↓ bzw. nur Auflösung ↓ (b: X/Y getauscht) |
 
-### Fünf davon sind Sonden
+---
+
+## Set „Farben“ — Insert
+
+Das Starter-Set zerlegt: Zerre, Bitcrusher, Ringmodulator. Dieses formt:
+Kompression, EQ, Anwärmung, Breite. Es benutzt ausschließlich Algorithmen,
+die im Starter-Set nicht vorkommen, plus fünf noch ungenutzte
+Zweier-Kombinationen aus der Leicht-Whitelist.
+
+| Datei | Name im Menü | IFX 1 | IFX 2 | IFX-Regler zieht |
+|---|---|---|---|---|
+| `13-sr1-squeeze` | SR1 Squeeze | SR1 Comp | — | `threshold` 8 → 64 |
+| `14-peak-guard` | Peak Guard | Limiter | — | `threshold` 10 → 80 |
+| `15-two-band` | Two Band | EQ 2-Band | — | `b1_gain` 24 → 56 |
+| `16-air-excite` | Air Excite | Exciter | — | `blend` 0 → 127 |
+| `17-wide-chorus` | Wide Chorus | Chorus | — | `mod_int` 0 → 127 |
+| `18-level-pump` | Level Pump | Level Mod | — | `level_mod_int` 0 → 127 |
+| `19-cut-fader` | Cut Fader | Mute | — | `fader` 0 → 127 |
+| `20-eq-filter` | EQ Filter | EQ 2-Band | Filter | `frequency` 10 → 127 |
+| `21-punch-drive` | Punch Drive | Punch | Acid Driver | `drive` 20 → 127 |
+| `22-comp-filter` | Comp Filter | Cheap Comp | Filter | `frequency` 5 → 127 |
+| `23-filter-drive` | Filter Drive | Filter | Acid Driver | `frequency` 10 → 127 **und** `drive` 30 → 127 |
+| `24-eq-drive` | EQ Drive | EQ 2-Band | Acid Driver | `drive` 20 → 127 |
+
+**`23-filter-drive` ist Absicht:** dieselben Werte und dieselben Zuordnungen
+wie `10-acid-filter`, nur die beiden Inserts vertauscht — erst Filter, dann
+Zerre statt umgekehrt. Zwei Presets, die sich in nichts als der Kettenfolge
+unterscheiden. Was das ausmacht, hört man.
+
+### Variationen
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| SR1 Squeeze | SR1 Squeeze Lo | SR1 Squeeze Hi | Schwelle 60 / 24 / 10, Verhältnis 6 / 20 / 40 |
+| Peak Guard | Peak Guard Soft | Peak Guard Wall | Schwelle 60 / 30 / 8, Freigabe gegenläufig |
+| Two Band | Two Band Smile | Two Band Mid | beide Bänder hoch bzw. beide runter |
+| Air Excite | Air Excite Soft | Air Excite Max | Anteil 40 / 90 / 127 |
+| Wide Chorus | Chorus Narrow | Chorus Deep | Tiefe + Spreizung 40/20 · 90/110 · 127/127 |
+| Level Pump | Level Pump Soft | Level Pump Hard | Tiefe 60 / 127 / 127, Sättigung 10 / 40 / 100 |
+| Cut Fader | Cut Fader Half | Cut Fader Full | `fader` 0 / 64 / 127 |
+| EQ Filter | EQ Filter Dark | EQ Filter Brite | Höhen und Filterlage gegenläufig |
+| Punch Drive | Punch Drive Lo | Punch Drive Hi | Zerre 40 / 80 / 127 |
+| Comp Filter | Comp Filter Lo | Comp Filter Hi | Kompression + Filterlage zusammen |
+| Filter Drive | Filter Drive Lo | Filter Drive Hi | Resonanz 60 / 100 / 120, Zerre 45 / 90 / 127 |
+| EQ Drive | EQ Drive Clean | EQ Drive Fat | Bassanhebung vor der Zerre 40 / 50 / 58 |
+
+---
+
+## Set „Raum & Bewegung“ — Master
+
+Das Starter-Set arbeitet an der Summe (Kompressor, EQ, Zerre, Filter). Dieses
+stellt sie in einen Raum und bringt sie in Bewegung.
+
+| Datei | Name im Menü | Algorithmus | X-Achse | Y-Achse |
+|---|---|---|---|---|
+| `m13-sr1-bus` | SR1 Bus | SR1 Comp | `threshold` 10 → 70 | `ratio` 2 → 40 |
+| `m14-auto-wah` | Auto Wah | Wah | `manual` 0 → 127 | `mod_int` 0 → 127 |
+| `m15-chorus-wide` | Chorus Wide | Chorus | `mod_int` 0 → 127 | `lfo_speed` 2 → 80 |
+| `m16-flanger-sweep` | Flanger Sweep | Flanger | `manual` 0 → 127 | `feedback` 0 → 127 |
+| `m17-phaser-slow` | Phaser Slow | Phaser | `manual` 0 → 127 | `resonance` 0 → 127 |
+| `m18-tremolo-sync` | Tremolo Sync | Tremolo | `mod_int` 0 → 127 | `lfo_shape` 0 → 127 |
+| `m19-pump-master` | Pump Master | Level Mod | `level_mod_int` 0 → 127 | `saturation` 0 → 127 |
+| `m20-hall-big` | Hall Big | Hall Reverb | `dry_wet` 0 → 127 | `time` 5 → 127 |
+| `m21-hall-smooth` | Smooth Hall | Smooth Hall | `dry_wet` 0 → 127 | `time` 5 → 127 |
+| `m22-plate-wet` | Plate Wet | Wet Plate Reverb | `dry_wet` 0 → 127 | `time` 5 → 127 |
+| `m23-plate-dry` | Plate Dry | Dry Plate Reverb | `dry_wet` 0 → 127 | `time` 5 → 127 |
+| `m24-loop-freeze` | Loop Freeze | KPQ Looper | `loop_length` 1 → 127 | `step` 0 → 127 |
+
+`m24-loop-freeze` hat wie „Vinyl Stop“ eine dritte Zuordnung auf das
+**Berühren** der Fläche: das schaltet `loopswitch`, also den Einfrier-Moment.
+
+### Der Hall-Vergleich
+
+`m20`–`m23` sind vier **Algorithmen auf identischen Werten** — alle neun
+Parameter ausdrücklich gleich gesetzt. Das bricht bewusst mit der sonstigen
+Regel „auf Werkswerten aufsetzen“: die vier haben je eigene Werksdefaults
+(Länge 38/38/31/31, Dämpfung 92/78/106/61 …), und wer sie unangetastet
+nebeneinander stellt, hört die Werkseinstellung statt des Algorithmus. Ein
+Vergleich, der zwei Dinge zugleich ändert, ist keiner.
+
+Die Variationen halten den Vergleich durch: `… Short` und `… Long` sind für
+alle vier dieselben drei Längenstufen. Nacheinander in denselben Platz
+geschrieben beantworten die zwölf Dateien die Frage, die kein Datenblatt
+beantwortet — welcher der vier Hall-Algorithmen wofür taugt.
+
+### Variationen
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| SR1 Bus | SR1 Bus Gentle | SR1 Bus Crush | Schwelle 60 / 30 / 10, Verhältnis 6 / 16 / 40 |
+| Auto Wah | Wah Manual | Wah Auto Fast | ganz ohne Automatik bzw. schneller LFO |
+| Chorus Wide | Chorus Subtle | Chorus Extreme | Anteil 45 / 90 / 127, Tiefe mit |
+| Flanger Sweep | Flanger Slow | Flanger Metal | LFO-Rate 1 / 6 / 20 · Rückkopplung am Anschlag |
+| Phaser Slow | Phaser Fast | Phaser Type0 | LFO-Rate 4 / 20 · anderer Typ |
+| Tremolo Sync | Tremolo Soft | Tremolo Chop | Tiefe 55 / 110 / 127, Flanke mit |
+| Pump Master | Pump Soft | Pump Hard | Tiefe 60 / 127, Sättigung 5 / 40 / 110 |
+| Hall Big | Hall Big Short | Hall Big Long | Länge 20 / 60 / 115 |
+| Smooth Hall | Smooth Short | Smooth Long | dieselben drei Stufen |
+| Plate Wet | Plate Wet Short | Plate Wet Long | dieselben drei Stufen |
+| Plate Dry | Plate Dry Short | Plate Dry Long | dieselben drei Stufen |
+| Loop Freeze | Loop Short | Loop Pitch | kurze Schleife · höher gestimmt |
+
+---
+
+## Sieben Paare sind zugleich Sonden
 
 Manche Paare beantworten nebenbei eine Frage, die in den Format-Unterlagen
 offen ist — zwei Dateien, die sich in **einem** Byte unterscheiden, klären am
@@ -116,16 +218,20 @@ Ohr, was keine Tabelle hergibt:
 |---|---|
 | `Kick EQ Boost` ↔ `Kick EQ Scoop` | Ist 36 wirklich neutral, und heißt höher lauter? |
 | `EQ Tilt Dark` ↔ `EQ Tilt Bright` | dasselbe für den Master-EQ |
+| `Two Band Smile` ↔ `Two Band Mid` | dasselbe für den 2-Band-EQ |
 | `Acid Filter Alt` (1), `Punch Filt Alt2` (2), Basis (0) | Was macht `output_select` beim Filter? |
+| `Cut Fader` (0), `Half` (64), `Full` (127) | Ist `fader` beim Mute ein Pegel oder eine Dämpfung? |
 | `Grain Fine` ↔ `Grain Rough` | Was tut `off_duration`? |
 | `Bit Tekk Rate` ↔ `Bit Tekk Bits` | Welche der beiden Achsen macht den Crush-Klang aus? |
+
+Dazu die zwei Vergleiche, die keine Byte-Sonden sind, aber dieselbe Rolle
+spielen: `10-acid-filter` ↔ `23-filter-drive` (macht die Kettenfolge einen
+Unterschied?) und der Hall-Vergleich `m20`–`m23`.
 
 Was dabei herauskommt, gehört zurück in die Tabellen (`e2FxParams.ts`) — und
 in dieses README.
 
-Die nicht genutzte Seite steht überall auf Thru: in den Insert-Presets der
-Master, in den Master-Presets beide Inserts. Ein Preset soll beim Schreiben
-nicht die andere Hälfte der Kette mit umstellen.
+---
 
 ## Laden und aufs Gerät schreiben
 
@@ -133,7 +239,7 @@ Im FX-Preset-Bereich, mit verbundenem Gerät:
 
 1. **Datei laden** → eine `.e2fxp` oder `.mfx` wählen. Bei `.mfx` springt die
    Art selbst auf Master-Effekt; bei `.e2fxp` vorher auf **Insert-Effekt**
-   stellen. (Oder **Sammlung laden** → eine der vier `.tfsam`, dann in der
+   stellen. (Oder **Sammlung laden** → eine der acht `.tfsam`, dann in der
    Liste auf „bearbeiten“ — dort trägt jeder Eintrag seine Art selbst.)
 2. Ziel-Platz eintragen und **Lesen** drücken. Das holt den Vorher-Stand für
    das Zurückschreiben; der geladene Stand bleibt dabei im Editor stehen.
@@ -153,34 +259,37 @@ gelesenen Vorher-Stand zurück, und ein Aus-und-Wieder-Ein stellt ohnehin alles
 her. ⚠ Das Gerät darf während des Schreibens **nicht spielen**.
 
 **Zum Vergleichen** lohnt ein fester Ablauf: eine Sequenz laufen lassen, die
-drei Fassungen (Basis, `a`, `b`) nacheinander in **denselben** Platz schreiben
-und den Part nicht umstellen. So ist der Unterschied wirklich das Preset und
-nicht der Kontext. Auf drei getrennte Plätze geschrieben geht es schneller,
-aber dann wechselt beim Umschalten mehr als nur die Werte.
+Fassungen nacheinander in **denselben** Platz schreiben und den Part nicht
+umstellen. So ist der Unterschied wirklich das Preset und nicht der Kontext.
+Auf getrennte Plätze geschrieben geht es schneller, aber dann wechselt beim
+Umschalten mehr als nur die Werte.
 
 Dieselben Dateien lassen sich auch in Synthstudio laden (E2s-Preset-Panel,
 „.bin importieren“ — die Art wird an der Größe erkannt) und mit
 `omnitribe/tools/hwtest/ifx_preset.py` gegen das Gerät vergleichen.
 
+---
+
 ## Woher die Werte kommen — und woher nicht
 
 Jedes Preset startet auf den **werkseitigen Defaults** seines Algorithmus,
 bit-genau aus hacktribe-editor `utils/ht_fx_ram_format.py`. Nur benannte
-Parameter weichen davon ab.
+Parameter weichen davon ab. Die eine bewusste Ausnahme ist der Hall-Vergleich
+(siehe oben), und sie steht dort begründet.
 
 Was das **nicht** ist: eine Vermessung. Semantische Bereiche und Einheiten der
 Parameter sind in hacktribe nicht hinterlegt (dort als TODO markiert) — bekannt
 ist nur 0..127. Die Abweichungen folgen dem Parameternamen und der Richtung,
 die er nahelegt: `gain` hoch heißt mehr Zerre, `bit_depth` runter heißt mehr
 Krümel, 36 ist bei allen EQ-Bändern der neutrale Werkswert. Wo die Bedeutung
-einer Zahl unbekannt ist — `lfo_sync_note`, `output_select`, `mask_type` —
-steht der Werkswert. Geraten wird nicht.
+einer Zahl unbekannt ist — `lfo_sync_note`, `mask_type`, `loop_type` — steht
+der Werkswert. Geraten wird nicht.
 
 Wo selbst die *Richtung* offen ist, entscheidet nicht das Skript, sondern die
 Hand. Wie viel Hall über der Summe richtig ist, weiß hier niemand: `dry_wet`
 von `m07-room-wide` bleibt deshalb auf dem Werkswert und liegt stattdessen auf
 der X-Achse. Wer wischt, hört in einer Sekunde, was keine Vermutung leisten
-kann. Dasselbe bei den beiden Delays.
+kann. Dasselbe bei den beiden Delays und beim `fader` von `Cut Fader`.
 
 Gehört hat das hier niemand. Genau dafür sind es Testdateien: was am Gerät
 anders klingt als der Name verspricht, gehört gemeldet und korrigiert.
@@ -191,8 +300,10 @@ Ein zweiter Insert ist nur bei „leichten“ Algorithmen erlaubt (Thru, Cheap
 Comp, Punch, EQ 2-Band, Filter, Acid Driver, Mute). Die beiden
 Schwesterprojekte lesen die Regel verschieden — Synthstudio prüft sie gegen
 IFX 2, TekkForges `ifx2Moeglich` gegen IFX 1. Solange das nicht am Gerät
-entschieden ist, nehmen die drei zweistufigen Presets **beide** Slots aus
-dieser Liste; damit sind sie nach jeder der beiden Lesarten gültig.
+entschieden ist, nehmen alle zweistufigen Presets **beide** Slots aus dieser
+Liste; damit sind sie nach jeder der beiden Lesarten gültig. Das ist auch der
+Grund, warum sich die beiden Insert-Sets vier Algorithmen teilen: die
+Whitelist ist klein, und nur aus ihr lassen sich Ketten bauen.
 
 ## Neu erzeugen
 
@@ -202,7 +313,9 @@ npx tsx scripts/make-fx-presets.mjs [zielordner]
 
 Die Definitionen stehen im Kopf des Skripts. `tests/fx-presets-beispiele.test.ts`
 prüft jede erzeugte Datei: Größe, Name, bekannter Algorithmus aus dem richtigen
-Nummernkreis, die jeweils andere Hälfte der Kette auf Thru, die Zwei-Insert-Regel,
-und dass jede Zuordnung auf einen Parameter zeigt, den es bei diesem Algorithmus
-**gibt** — ein Zeiger ins Leere bliebe sonst bis zum Gerät unsichtbar und sähe
-dort wie ein Übertragungsfehler aus.
+Nummernkreis, die jeweils andere Hälfte der Kette auf Thru, die
+Zwei-Insert-Regel, und dass jede Zuordnung auf einen Parameter zeigt, den es
+bei diesem Algorithmus **gibt** — ein Zeiger ins Leere bliebe sonst bis zum
+Gerät unsichtbar und sähe dort wie ein Übertragungsfehler aus. Für Variationen
+zusätzlich: gleicher Algorithmus wie die Basis und ein echter Unterschied zu
+ihr. Für den Hall-Vergleich: vier Algorithmen, identische Werte.

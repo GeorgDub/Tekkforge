@@ -449,19 +449,28 @@ was ihn beim ersten echten Versuch belegt oder widerlegt.
 
 ### Beispiel-Presets zum Ausprobieren
 
-`examples/fx-presets/` enthaelt zweiundsiebzig fertig eingestellte FX-Presets
-als rohe 524-B-Bloecke, plus vier `.tfsam`-Sammlungen, die sie gruppenweise
-laden:
+`examples/fx-presets/` enthaelt 144 fertig eingestellte FX-Presets als rohe
+524-B-Bloecke, plus acht `.tfsam`-Sammlungen, die sie gruppenweise laden — in
+vier Sets:
 
-- **12 Insert-Presets** (`.e2fxp`, Ziel `0xC00A80F0`) — je eine Zuordnung auf
-  den IFX-Regler des Parts.
-- **12 Master-Presets** (`.mfx`, Ziel `0xC00B4F30`) — X- und Y-Achse der
-  Flaeche belegt, bei „Vinyl Stop" zusaetzlich das Beruehren.
-- **48 Variationen**, zwei je Basis (`01a-…`/`01b-…` zu `01-…`): derselbe
-  Algorithmus, in eine Richtung verschoben — zum Vergleichen am Geraet. Fuenf
-  Paare sind zugleich **Sonden**: zwei Dateien, die sich in einem Byte
-  unterscheiden, klaeren am Ohr, was in den Format-Unterlagen offen ist (ist
-  36 beim EQ wirklich neutral? was macht `output_select`?).
+| Set | Art | Inhalt |
+|---|---|---|
+| **Starter** | Insert (`.e2fxp`) | Tekk-Werkzeug: Zerre, Bitcrusher, Ringmodulator, Delay |
+| **Starter** | Master (`.mfx`) | die Summe: Kompressor, EQ, Zerre, Filter, Delays |
+| **Farben** | Insert (`.e2fxp`) | formen statt zerlegen: Kompression, EQ, Exciter, Chorus |
+| **Raum & Bewegung** | Master (`.mfx`) | Hall, Wah, Modulation, Looper |
+
+Je zwoelf Basis-Presets, dazu **zwei Variationen pro Basis** (`01a-…`/`01b-…`
+zu `01-…`): derselbe Algorithmus, in eine Richtung verschoben — zum
+Vergleichen am Geraet. Zusammen decken die vier Sets **alle 20 Insert- und 24
+der 25 Master-Algorithmen** ab.
+
+Sieben Paare sind zugleich **Sonden**: zwei Dateien, die sich in einem Byte
+unterscheiden, klaeren am Ohr, was in den Format-Unterlagen offen ist (ist 36
+beim EQ wirklich neutral? was macht `output_select`?). Dazu zwei Vergleiche
+derselben Art: `10-acid-filter` gegen `23-filter-drive` (dieselben Werte, nur
+die Kettenfolge vertauscht) und der Hall-Vergleich `m20`–`m23` (vier
+Algorithmen auf identischen Werten).
 
 Alle mit Namen fuers Geraetemenue; die jeweils nicht genutzte Haelfte der Kette
 steht auf Thru, damit ein Schreiben die andere nicht mit umstellt. Die

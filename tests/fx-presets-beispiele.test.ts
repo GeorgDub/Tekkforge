@@ -189,10 +189,58 @@ describe("Variationen", () => {
   });
 });
 
+describe("Hall-Vergleich", () => {
+  /**
+   * Vier Hall-Algorithmen auf identischen Werten — nur so sagt der Vergleich
+   * etwas ueber den Algorithmus statt ueber die Werkseinstellung. Die vier
+   * haben je eigene Defaults (Laenge 38/38/31/31, Daempfung 92/78/106/61);
+   * wer sie unangetastet nebeneinander stellt, hoert die Defaults.
+   */
+  const reihen = [
+    { stufe: "Grundlage", dateien: ["m20-hall-big.mfx", "m21-hall-smooth.mfx", "m22-plate-wet.mfx", "m23-plate-dry.mfx"] },
+    { stufe: "kurz", dateien: ["m20a-hall-big-short.mfx", "m21a-smooth-short.mfx", "m22a-plate-wet-short.mfx", "m23a-plate-dry-short.mfx"] },
+    { stufe: "lang", dateien: ["m20b-hall-big-long.mfx", "m21b-smooth-long.mfx", "m22b-plate-wet-long.mfx", "m23b-plate-dry-long.mfx"] },
+  ];
+
+  it.each(reihen)("Stufe $stufe: alle vier unterscheiden sich nur im Algorithmus", ({ dateien }) => {
+    const stufen = dateien.map((f) => dekodiere(f).mfx);
+    // Vier verschiedene Algorithmen …
+    expect(new Set(stufen.map((s) => s.device)).size).toBe(4);
+    // … mit identischen Parameterlisten und identischen Werten.
+    for (const s of stufen) {
+      expect(s.paramNamen).toEqual(stufen[0].paramNamen);
+      expect(s.params).toEqual(stufen[0].params);
+    }
+  });
+
+  it("die drei Stufen unterscheiden sich voneinander", () => {
+    const werte = reihen.map((r) => dekodiere(r.dateien[0]).mfx.params.join(","));
+    expect(new Set(werte).size).toBe(3);
+  });
+});
+
 describe("Sammlungen der Beispiel-Presets", () => {
   const gruppen = [
-    { art: "ifx", dateien: insertDateien, sammlungen: ["TekkForge-IFX-Starter.tfsam", "TekkForge-IFX-Variationen.tfsam"] },
-    { art: "mfx", dateien: masterDateien, sammlungen: ["TekkForge-MFX-Starter.tfsam", "TekkForge-MFX-Variationen.tfsam"] },
+    {
+      art: "ifx",
+      dateien: insertDateien,
+      sammlungen: [
+        "TekkForge-IFX-Starter.tfsam",
+        "TekkForge-IFX-Variationen.tfsam",
+        "TekkForge-IFX-Farben.tfsam",
+        "TekkForge-IFX-Farben-Variationen.tfsam",
+      ],
+    },
+    {
+      art: "mfx",
+      dateien: masterDateien,
+      sammlungen: [
+        "TekkForge-MFX-Starter.tfsam",
+        "TekkForge-MFX-Variationen.tfsam",
+        "TekkForge-MFX-Raum.tfsam",
+        "TekkForge-MFX-Raum-Variationen.tfsam",
+      ],
+    },
   ];
 
   const eintraegeVon = (datei: string) =>

@@ -65,34 +65,53 @@ const ZIEL = process.argv[2] ?? "examples/fx-presets";
 const A = {
   thru: 0x00,
   mkp2Comp: 0x01,
+  sr1Comp: 0x02,
   cheapComp: 0x03,
   punch: 0x04,
+  limiter: 0x05,
+  eq2: 0x06,
   eq4: 0x07,
+  exciter: 0x08,
   decimator: 0x09,
   filter: 0x0a,
   distortion: 0x0f,
   acidDriver: 0x10,
+  chorus: 0x11,
   flanger: 0x12,
   phaser: 0x13,
   tremolo: 0x14,
+  levelMod: 0x15,
   ringMod: 0x16,
   shortDelay: 0x18,
+  mute: 0x27,
 };
 
 /** Master-Algorithmen. Eigene Nummernkreis-Tabelle, nicht mit `A` mischen. */
 const M = {
   thru: 0x00,
   mkp2Comp: 0x28,
+  sr1Comp: 0x29,
   limiter: 0x2a,
   eq4: 0x2b,
+  wah: 0x2c,
   multiFilter: 0x2d,
   distortion: 0x2e,
   tubePre: 0x2f,
+  chorus: 0x31,
+  flanger: 0x32,
+  phaser: 0x33,
+  tremolo: 0x34,
+  levelMod: 0x35,
+  hallReverb: 0x36,
+  smoothHall: 0x37,
+  wetPlate: 0x38,
+  dryPlate: 0x39,
   roomReverb: 0x3a,
   modDelay: 0x3b,
   tapeEcho: 0x3c,
   grainShifter: 0x3d,
   decimator: 0x3e,
+  kpqLooper: 0x3f,
   vinylBreak: 0x40,
 };
 
@@ -425,6 +444,286 @@ const MASTER_PRESETS = [
     regler: [
       { quelle: Q.reglerX, param: "sample_freq", min: 6, max: 90 },
       { quelle: Q.achseY, param: "bit_depth", min: 2, max: 16 },
+    ],
+  },
+].map((p) => ({ ...p, art: "mfx" }));
+
+/**
+ * Zweites Insert-Set: „Farben".
+ *
+ * Das erste Set zerlegt — Zerre, Bitcrusher, Ringmodulator. Dieses formt:
+ * Kompression, EQ, Anwaermung, Breite. Es benutzt **ausschliesslich
+ * Algorithmen, die im ersten Set nicht vorkommen** (SR1 Comp, Limiter,
+ * EQ 2-Band, Exciter, Chorus, Level Mod, Mute) und fuenf noch ungenutzte
+ * Zweier-Kombinationen aus der Leicht-Whitelist. Zusammen decken beide Sets
+ * damit alle 20 Insert-Algorithmen ab.
+ *
+ * `23-filter-drive` ist Absicht: dieselben Werte wie `10-acid-filter`, nur
+ * die Reihenfolge der beiden Inserts vertauscht. Zwei Presets, die sich in
+ * nichts als der Kettenfolge unterscheiden — was das ausmacht, hoert man.
+ */
+const INSERT_FARBEN = [
+  {
+    datei: "13-sr1-squeeze",
+    name: "SR1 Squeeze",
+    zweck: "Der zweite Kompressor der Kiste, mit Roehrensaettigung — dichter und faerbender als MKP2.",
+    ifx1: {
+      device: A.sr1Comp,
+      werte: { dry_wet: 127, threshold: 24, ratio: 20, attack: 6, release: 30, tube_sat: 80, output_gain: 70 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "threshold", min: 8, max: 64 }],
+  },
+  {
+    datei: "14-peak-guard",
+    name: "Peak Guard",
+    zweck: "Limiter auf dem Part: deckelt die Spitzen, bevor die Summe sie sieht.",
+    ifx1: {
+      device: A.limiter,
+      werte: { dry_wet: 127, threshold: 30, attack: 4, release: 10, tubesat: 60, output_gain: 78 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "threshold", min: 10, max: 80 }],
+  },
+  {
+    datei: "15-two-band",
+    name: "Two Band",
+    zweck: "Kleiner Kuhschwanz-EQ: unten und oben je ein Band. 36 ist neutral.",
+    ifx1: {
+      device: A.eq2,
+      werte: { trim: 127, b1_frequency: 12, b1_gain: 48, b2_frequency: 56, b2_gain: 46 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "b1_gain", min: 24, max: 56 }],
+  },
+  {
+    datei: "16-air-excite",
+    name: "Air Excite",
+    zweck: "Exciter: erzeugt Obertoene, die im Sample nicht sind. Bringt dumpfe Vocals nach vorn.",
+    ifx1: {
+      device: A.exciter,
+      werte: { dry_wet: 127, blend: 90, input_trim: 110, pre_heq_gain: 56, pre_heq_frequency: 50, emphatic_point: 40 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "blend", min: 0, max: 127 }],
+  },
+  {
+    datei: "17-wide-chorus",
+    name: "Wide Chorus",
+    zweck: "Chorus mit versetzten Verzoegerungen links/rechts — macht einen Mono-Sound breit.",
+    ifx1: {
+      device: A.chorus,
+      werte: { dry_wet: 90, mod_int: 90, lfo_speed: 18, l_delay: 46, r_delay: 60, spread: 110 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "mod_int", min: 0, max: 127 }],
+  },
+  {
+    datei: "18-level-pump",
+    name: "Level Pump",
+    zweck: "Level Mod: Pegel im Takt moduliert, mit Saettigung. Pumpt, ohne einen Kompressor dafuer zu missbrauchen.",
+    ifx1: {
+      device: A.levelMod,
+      werte: { amp_level: 127, output_gain: 30, level_mod_int: 127, saturation: 40, lfo_sync: 1, lfo_speed: 40 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "level_mod_int", min: 0, max: 127 }],
+  },
+  {
+    datei: "19-cut-fader",
+    name: "Cut Fader",
+    zweck: "Mute mit einem Parameter: der Regler IST der Fader. Der Ruhewert bleibt der Werkswert (0) — was der bedeutet, sagt erst das Ohr.",
+    ifx1: { device: A.mute, werte: {} },
+    regler: [{ kette: KETTE.ifx1, param: "fader", min: 0, max: 127 }],
+  },
+  {
+    datei: "20-eq-filter",
+    name: "EQ Filter",
+    zweck: "Zwei Inserts: EQ formt, Filter faehrt. Der Regler liegt auf dem Filter.",
+    ifx1: { device: A.eq2, werte: { trim: 127, b1_gain: 46, b2_gain: 30 } },
+    ifx2: { device: A.filter, werte: { dry_wet: 127, frequency: 80, resonance: 70 } },
+    regler: [{ kette: KETTE.ifx2, param: "frequency", min: 10, max: 127 }],
+  },
+  {
+    datei: "21-punch-drive",
+    name: "Punch Drive",
+    zweck: "Zwei Inserts: Punch schaerft den Anschlag, Acid Driver zerrt danach.",
+    ifx1: { device: A.punch, werte: {} },
+    ifx2: { device: A.acidDriver, werte: { drive: 80, output_level: 45 } },
+    regler: [{ kette: KETTE.ifx2, param: "drive", min: 20, max: 127 }],
+  },
+  {
+    datei: "22-comp-filter",
+    name: "Comp Filter",
+    zweck: "Zwei Inserts: Cheap Comp verdichtet, Filter nimmt oben weg.",
+    ifx1: { device: A.cheapComp, werte: { sens: 90, output_level: 24 } },
+    ifx2: { device: A.filter, werte: { dry_wet: 127, frequency: 60, resonance: 90 } },
+    regler: [{ kette: KETTE.ifx2, param: "frequency", min: 5, max: 127 }],
+  },
+  {
+    datei: "23-filter-drive",
+    name: "Filter Drive",
+    zweck: "Dieselben Werte wie „Acid Filter“, nur die Reihenfolge vertauscht: erst Filter, dann Zerre. Der Vergleich sagt, was die Kettenfolge ausmacht.",
+    ifx1: { device: A.filter, werte: { dry_wet: 127, frequency: 70, resonance: 100 } },
+    ifx2: { device: A.acidDriver, werte: { drive: 90, output_level: 45 } },
+    regler: [
+      { kette: KETTE.ifx1, param: "frequency", min: 10, max: 127 },
+      { kette: KETTE.ifx2, param: "drive", min: 30, max: 127 },
+    ],
+  },
+  {
+    datei: "24-eq-drive",
+    name: "EQ Drive",
+    zweck: "Zwei Inserts: Tiefen vor der Zerre anheben — die Zerre arbeitet dann am Bass, nicht an den Mitten.",
+    ifx1: { device: A.eq2, werte: { trim: 127, b1_gain: 50, b2_gain: 30 } },
+    ifx2: { device: A.acidDriver, werte: { drive: 95, output_level: 42 } },
+    regler: [{ kette: KETTE.ifx2, param: "drive", min: 20, max: 127 }],
+  },
+].map((p) => ({ ...p, art: "ifx" }));
+
+/**
+ * Gemeinsame Einstellung der vier Hall-Algorithmen — **alle neun Parameter
+ * ausdruecklich gesetzt**, damit sich Hall Big, Smooth Hall, Wet Plate und
+ * Dry Plate in nichts als dem Algorithmus unterscheiden.
+ *
+ * Das bricht bewusst mit der Regel „auf Werkswerten aufsetzen": die vier haben
+ * je eigene Werksdefaults (Laenge 38/38/31/31, Daempfung 92/78/106/61 …), und
+ * wer sie so vergleicht, hoert die Werkseinstellung mit statt des Algorithmus.
+ * Ein Vergleich, der zwei Dinge zugleich aendert, ist keiner.
+ */
+const HALL_VERGLEICH = {
+  dry_wet: 100, time: 60, hi_damp: 70, pre_delay: 12,
+  trim: 50, trim2: 100, lo_eq: 30, hi_eq: 30, pd_thru: 26,
+};
+const HALL_KURZ = { ...HALL_VERGLEICH, time: 20, hi_damp: 110, pre_delay: 0 };
+const HALL_LANG = { ...HALL_VERGLEICH, time: 115, hi_damp: 35, pre_delay: 30 };
+
+/** Die vier Hall-Presets sind bis auf Kennung und Namen gleich gebaut. */
+const hall = (datei, name, device, zweck) => ({
+  datei,
+  name,
+  zweck,
+  mfx: { device, werte: HALL_VERGLEICH },
+  regler: [
+    { quelle: Q.reglerX, param: "dry_wet", min: 0, max: 127 },
+    { quelle: Q.achseY, param: "time", min: 5, max: 127 },
+  ],
+});
+
+/**
+ * Zweites Master-Set: „Raum & Bewegung".
+ *
+ * Das erste Set arbeitet an der Summe (Kompressor, EQ, Zerre, Filter). Dieses
+ * stellt sie in einen Raum und bringt sie in Bewegung — und nutzt dafuer
+ * ausschliesslich Algorithmen, die im ersten Set fehlen.
+ *
+ * Vier davon sind ein **Vergleich**: Hall Big, Smooth Hall, Wet Plate und Dry
+ * Plate stehen auf identischen Werten (siehe `HALL_VERGLEICH`). Nacheinander in
+ * denselben Platz geschrieben beantworten sie die Frage, die kein Datenblatt
+ * beantwortet — welcher der vier Hall-Algorithmen taugt wofuer.
+ */
+const MASTER_RAUM = [
+  {
+    datei: "m13-sr1-bus",
+    name: "SR1 Bus",
+    zweck: "Der zweite Bus-Kompressor, mit Verhaeltnis und Knie. X = Schwelle, Y = Verhaeltnis.",
+    mfx: {
+      device: M.sr1Comp,
+      werte: { dry_wet: 127, threshold: 30, ratio: 16, attack: 8, release: 20, tube_sat: 60, output_gain: 64 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "threshold", min: 10, max: 70 },
+      { quelle: Q.achseY, param: "ratio", min: 2, max: 40 },
+    ],
+  },
+  {
+    datei: "m14-auto-wah",
+    name: "Auto Wah",
+    zweck: "Wah ueber die Summe, huellkurvengesteuert. X faehrt es von Hand, Y setzt die Tiefe.",
+    mfx: {
+      device: M.wah,
+      werte: { dry_wet: 127, mod_int: 110, env_sens: 100, manual: 50, lfo_sync: 0, lfo_speed: 40 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "manual", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "mod_int", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m15-chorus-wide",
+    name: "Chorus Wide",
+    zweck: "Chorus ueber alles, voll gespreizt — macht die Summe breit. X = Tiefe, Y = Rate.",
+    mfx: {
+      device: M.chorus,
+      werte: { dry_wet: 90, mod_int: 90, lfo_speed: 20, r_delay: 70, spread: 127 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "mod_int", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "lfo_speed", min: 2, max: 80 },
+    ],
+  },
+  {
+    datei: "m16-flanger-sweep",
+    name: "Flanger Sweep",
+    zweck: "Flanger auf der Summe. X faehrt den Kamm von Hand, Y die Rueckkopplung.",
+    mfx: {
+      device: M.flanger,
+      werte: { dry_wet: 90, mod_int: 110, lfo_speed: 6, manual: 30, feedback: 110 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "manual", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "feedback", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m17-phaser-slow",
+    name: "Phaser Slow",
+    zweck: "Langsamer Phaser ueber alles. X = Lage, Y = Resonanz.",
+    mfx: {
+      device: M.phaser,
+      werte: { dry_wet: 90, manual: 70, mod_int: 110, resonance: 100, lfo_speed: 4 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "manual", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "resonance", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m18-tremolo-sync",
+    name: "Tremolo Sync",
+    zweck: "Tempo-gekoppeltes Tremolo ueber die Summe. X = Tiefe, Y = Flankenform.",
+    mfx: {
+      device: M.tremolo,
+      werte: { dry_wet: 127, mod_int: 110, lfo_sync: 1, lfo_shape: 100 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "mod_int", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "lfo_shape", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m19-pump-master",
+    name: "Pump Master",
+    zweck: "Level Mod ueber alles: der ganze Mix pumpt im Takt. X = Tiefe, Y = Saettigung.",
+    mfx: {
+      device: M.levelMod,
+      werte: { amp_level: 127, output_gain_adjust: 30, level_mod_int: 127, saturation: 40, lfo_sync: 1 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "level_mod_int", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "saturation", min: 0, max: 127 },
+    ],
+  },
+  hall("m20-hall-big", "Hall Big", M.hallReverb, "Hall-Vergleich 1 von 4. X = Anteil, Y = Laenge."),
+  hall("m21-hall-smooth", "Smooth Hall", M.smoothHall, "Hall-Vergleich 2 von 4 — gleiche Werte, anderer Algorithmus."),
+  hall("m22-plate-wet", "Plate Wet", M.wetPlate, "Hall-Vergleich 3 von 4 — Plattenhall, nasse Fassung."),
+  hall("m23-plate-dry", "Plate Dry", M.dryPlate, "Hall-Vergleich 4 von 4 — Plattenhall, trockene Fassung."),
+  {
+    datei: "m24-loop-freeze",
+    name: "Loop Freeze",
+    zweck: "Der Looper aus der Hacktribe-Firmware: Beruehren friert ein Stueck ein. X = Laenge, Y = Tonhoehe.",
+    mfx: {
+      device: M.kpqLooper,
+      werte: { loop_length: 40, loop_type: 0, step: 13, fine: 64 },
+    },
+    regler: [
+      { quelle: Q.beruehrt, param: "loopswitch", min: 0, max: 1 },
+      { quelle: Q.reglerX, param: "loop_length", min: 1, max: 127 },
+      { quelle: Q.achseY, param: "step", min: 0, max: 127 },
     ],
   },
 ].map((p) => ({ ...p, art: "mfx" }));
@@ -818,6 +1117,314 @@ const VARIATIONEN = {
       ],
     },
   ],
+
+  // ── Set 2: Farben (Insert) ──────────────────────────────────────────────
+  "13-sr1-squeeze": [
+    {
+      datei: "13a-sr1-squeeze-lo",
+      name: "SR1 Squeeze Lo",
+      zweck: "Hohe Schwelle, kleines Verhaeltnis, kaum Roehre — greift nur bei den Spitzen.",
+      ifx1: { werte: { threshold: 60, ratio: 6, tube_sat: 20 } },
+    },
+    {
+      datei: "13b-sr1-squeeze-hi",
+      name: "SR1 Squeeze Hi",
+      zweck: "Schwelle unten, Verhaeltnis hoch, Roehre voll — der Part wird flach und dick.",
+      ifx1: { werte: { threshold: 10, ratio: 40, release: 6, tube_sat: 127 } },
+    },
+  ],
+  "14-peak-guard": [
+    {
+      datei: "14a-peak-guard-soft",
+      name: "Peak Guard Soft",
+      zweck: "Kaum Eingriff, lange Freigabe — nur als Netz gegen Ausreisser.",
+      ifx1: { werte: { threshold: 60, release: 30, tubesat: 10 } },
+    },
+    {
+      datei: "14b-peak-guard-wall",
+      name: "Peak Guard Wall",
+      zweck: "Schwelle unten, kurze Freigabe, Ausgang hoch — die Wand.",
+      ifx1: { werte: { threshold: 8, release: 2, tubesat: 110, output_gain: 95 } },
+    },
+  ],
+  "15-two-band": [
+    {
+      datei: "15a-two-band-smile",
+      name: "Two Band Smile",
+      zweck: "Beide Baender hoch — das Laecheln. Mitten fallen dadurch zurueck.",
+      ifx1: { werte: { b1_gain: 56, b2_gain: 56 } },
+    },
+    {
+      datei: "15b-two-band-mid",
+      name: "Two Band Mid",
+      zweck: "Beide Baender runter — Mitten nach vorn. Die Gegenprobe zum Laecheln.",
+      ifx1: { werte: { b1_gain: 24, b2_gain: 24 } },
+    },
+  ],
+  "16-air-excite": [
+    {
+      datei: "16a-air-excite-soft",
+      name: "Air Excite Soft",
+      zweck: "Halber Anteil, weniger Hoehenanhebung — nur ein Hauch Luft.",
+      ifx1: { werte: { blend: 40, pre_heq_gain: 44 } },
+    },
+    {
+      datei: "16b-air-excite-max",
+      name: "Air Excite Max",
+      zweck: "Voller Anteil, Hoehen weit auf, tieferer Einsatzpunkt — glaenzt oder zischt.",
+      ifx1: { werte: { blend: 127, pre_heq_gain: 64, emphatic_point: 80 } },
+    },
+  ],
+  "17-wide-chorus": [
+    {
+      datei: "17a-chorus-narrow",
+      name: "Chorus Narrow",
+      zweck: "Schmal und langsam: beide Seiten fast gleich — mehr Dicke als Breite.",
+      ifx1: { werte: { mod_int: 40, lfo_speed: 10, r_delay: 46, spread: 20 } },
+    },
+    {
+      datei: "17b-chorus-deep",
+      name: "Chorus Deep",
+      zweck: "Volle Tiefe, schnell, weit gespreizt — schwimmt.",
+      ifx1: { werte: { mod_int: 127, lfo_speed: 34, r_delay: 90, spread: 127 } },
+    },
+  ],
+  "18-level-pump": [
+    {
+      datei: "18a-level-pump-soft",
+      name: "Level Pump Soft",
+      zweck: "Halbe Tiefe, keine Saettigung — atmet nur.",
+      ifx1: { werte: { level_mod_int: 60, saturation: 10 } },
+    },
+    {
+      datei: "18b-level-pump-hard",
+      name: "Level Pump Hard",
+      zweck: "Volle Tiefe, viel Saettigung, schneller — schneidet Loecher in den Part.",
+      ifx1: { werte: { level_mod_int: 127, saturation: 100, lfo_speed: 70, output_gain: 40 } },
+    },
+  ],
+  "19-cut-fader": [
+    {
+      datei: "19a-cut-fader-half",
+      name: "Cut Fader Half",
+      zweck: "Sonde: fader auf 64 statt auf dem Werkswert 0. Was der Wert bedeutet, sagt der Vergleich.",
+      ifx1: { werte: { fader: 64 } },
+    },
+    {
+      datei: "19b-cut-fader-full",
+      name: "Cut Fader Full",
+      zweck: "Sonde: fader auf 127. Mit der Basis (0) und „Half“ (64) die ganze Reihe.",
+      ifx1: { werte: { fader: 127 } },
+    },
+  ],
+  "20-eq-filter": [
+    {
+      datei: "20a-eq-filter-dark",
+      name: "EQ Filter Dark",
+      zweck: "Hoehen im EQ runter, Filter tief — alles nach hinten.",
+      ifx1: { werte: { b2_gain: 24 } },
+      ifx2: { werte: { frequency: 35 } },
+    },
+    {
+      datei: "20b-eq-filter-brite",
+      name: "EQ Filter Brite",
+      zweck: "Hoehen im EQ hoch, Filter weit offen — die Gegenprobe.",
+      ifx1: { werte: { b2_gain: 50 } },
+      ifx2: { werte: { frequency: 115 } },
+    },
+  ],
+  "21-punch-drive": [
+    {
+      datei: "21a-punch-drive-lo",
+      name: "Punch Drive Lo",
+      zweck: "Wenig Zerre hinter dem Punch — der Anschlag bleibt sauber.",
+      ifx2: { werte: { drive: 40, output_level: 55 } },
+    },
+    {
+      datei: "21b-punch-drive-hi",
+      name: "Punch Drive Hi",
+      zweck: "Zerre am Anschlag: der geschaerfte Anschlag geht direkt in die Saettigung.",
+      ifx2: { werte: { drive: 127, output_level: 36 } },
+    },
+  ],
+  "22-comp-filter": [
+    {
+      datei: "22a-comp-filter-lo",
+      name: "Comp Filter Lo",
+      zweck: "Wenig Kompression, Filter offen — fast durchsichtig.",
+      ifx1: { werte: { sens: 55 } },
+      ifx2: { werte: { frequency: 90, resonance: 40 } },
+    },
+    {
+      datei: "22b-comp-filter-hi",
+      name: "Comp Filter Hi",
+      zweck: "Volle Kompression, Filter tief und resonant — dumpf und dicht.",
+      ifx1: { werte: { sens: 127, output_level: 16 } },
+      ifx2: { werte: { frequency: 40, resonance: 120 } },
+    },
+  ],
+  "23-filter-drive": [
+    {
+      datei: "23a-filter-drive-lo",
+      name: "Filter Drive Lo",
+      zweck: "Wenig Zerre hinter dem Filter, zahmere Resonanz.",
+      ifx1: { werte: { resonance: 60 } },
+      ifx2: { werte: { drive: 45, output_level: 55 } },
+    },
+    {
+      datei: "23b-filter-drive-hi",
+      name: "Filter Drive Hi",
+      zweck: "Resonanz an der Schwingung, Zerre am Anschlag — die Gegenprobe zu „Acid Filter Hot“.",
+      ifx1: { werte: { resonance: 120 } },
+      ifx2: { werte: { drive: 127, output_level: 40 } },
+    },
+  ],
+  "24-eq-drive": [
+    {
+      datei: "24a-eq-drive-clean",
+      name: "EQ Drive Clean",
+      zweck: "Flacherer EQ, wenig Zerre — die zahme Fassung.",
+      ifx1: { werte: { b1_gain: 40 } },
+      ifx2: { werte: { drive: 40, output_level: 55 } },
+    },
+    {
+      datei: "24b-eq-drive-fat",
+      name: "EQ Drive Fat",
+      zweck: "Tiefen weit hoch vor der Zerre, Hoehen weg — die Zerre arbeitet nur am Bass.",
+      ifx1: { werte: { b1_gain: 58, b2_gain: 26 } },
+      ifx2: { werte: { drive: 120, output_level: 38 } },
+    },
+  ],
+
+  // ── Set 2: Raum & Bewegung (Master) ─────────────────────────────────────
+  "m13-sr1-bus": [
+    {
+      datei: "m13a-sr1-bus-gentle",
+      name: "SR1 Bus Gentle",
+      zweck: "Hohe Schwelle, kleines Verhaeltnis — haelt zusammen, ohne zu formen.",
+      mfx: { werte: { threshold: 60, ratio: 6, tube_sat: 20 } },
+    },
+    {
+      datei: "m13b-sr1-bus-crush",
+      name: "SR1 Bus Crush",
+      zweck: "Schwelle unten, Verhaeltnis hoch, kurze Freigabe — der Mix wird eine Wand.",
+      mfx: { werte: { threshold: 10, ratio: 40, release: 6, tube_sat: 100 } },
+    },
+  ],
+  "m14-auto-wah": [
+    {
+      datei: "m14a-wah-manual",
+      name: "Wah Manual",
+      zweck: "Ohne Huellkurve und ohne LFO — nur X faehrt das Wah. Der Vergleich zeigt, was die Automatik beitraegt.",
+      mfx: { werte: { mod_int: 0, env_sens: 0, manual: 64 } },
+    },
+    {
+      datei: "m14b-wah-auto-fast",
+      name: "Wah Auto Fast",
+      zweck: "Schneller LFO, volle Tiefe — laeuft von selbst.",
+      mfx: { werte: { mod_int: 127, lfo_sync: 0, lfo_speed: 90 } },
+    },
+  ],
+  "m15-chorus-wide": [
+    {
+      datei: "m15a-chorus-subtle",
+      name: "Chorus Subtle",
+      zweck: "Wenig Anteil, wenig Tiefe — merkt man erst im Vergleich.",
+      mfx: { werte: { dry_wet: 45, mod_int: 35, spread: 60 } },
+    },
+    {
+      datei: "m15b-chorus-extreme",
+      name: "Chorus Extreme",
+      zweck: "Voll nass, volle Tiefe, schnell — verstimmt hoerbar.",
+      mfx: { werte: { dry_wet: 127, mod_int: 127, lfo_speed: 50, r_delay: 100 } },
+    },
+  ],
+  "m16-flanger-sweep": [
+    {
+      datei: "m16a-flanger-slow",
+      name: "Flanger Slow",
+      zweck: "Langsamste Bewegung, volle Tiefe — ein Durchgang dauert.",
+      mfx: { werte: { mod_int: 127, lfo_speed: 1 } },
+    },
+    {
+      datei: "m16b-flanger-metal",
+      name: "Flanger Metal",
+      zweck: "Rueckkopplung am Anschlag, Hoehen im Pfad gekappt — klingelt metallisch.",
+      mfx: { werte: { lfo_speed: 20, feedback: 127, fb_hicut: 10 } },
+    },
+  ],
+  "m17-phaser-slow": [
+    {
+      datei: "m17a-phaser-fast",
+      name: "Phaser Fast",
+      zweck: "Schnell und tief — mehr Vibrato als Schweben.",
+      mfx: { werte: { mod_int: 127, lfo_speed: 20 } },
+    },
+    {
+      datei: "m17b-phaser-type0",
+      name: "Phaser Type0",
+      zweck: "Anderer Phaser-Typ (0 statt 1), zahmere Resonanz — breiter, weniger stechend.",
+      mfx: { werte: { type: 0, resonance: 60 } },
+    },
+  ],
+  "m18-tremolo-sync": [
+    {
+      datei: "m18a-tremolo-soft",
+      name: "Tremolo Soft",
+      zweck: "Halbe Tiefe, weiche Flanke — wiegt.",
+      mfx: { werte: { mod_int: 55, lfo_shape: 40 } },
+    },
+    {
+      datei: "m18b-tremolo-chop",
+      name: "Tremolo Chop",
+      zweck: "Volle Tiefe, harte Flanke, Rechteck — schneidet.",
+      mfx: { werte: { mod_int: 127, lfo_wave: 2, lfo_shape: 127 } },
+    },
+  ],
+  "m19-pump-master": [
+    {
+      datei: "m19a-pump-soft",
+      name: "Pump Soft",
+      zweck: "Halbe Tiefe, keine Saettigung — der Mix atmet nur.",
+      mfx: { werte: { level_mod_int: 60, saturation: 5 } },
+    },
+    {
+      datei: "m19b-pump-hard",
+      name: "Pump Hard",
+      zweck: "Volle Tiefe, viel Saettigung, schneller — der Mix pumpt hoerbar.",
+      mfx: { werte: { level_mod_int: 127, saturation: 110, lfo_speed: 70 } },
+    },
+  ],
+  "m20-hall-big": [
+    { datei: "m20a-hall-big-short", name: "Hall Big Short", zweck: "Hall-Vergleich, kurze Stufe.", mfx: { werte: HALL_KURZ } },
+    { datei: "m20b-hall-big-long", name: "Hall Big Long", zweck: "Hall-Vergleich, lange Stufe.", mfx: { werte: HALL_LANG } },
+  ],
+  "m21-hall-smooth": [
+    { datei: "m21a-smooth-short", name: "Smooth Short", zweck: "Hall-Vergleich, kurze Stufe.", mfx: { werte: HALL_KURZ } },
+    { datei: "m21b-smooth-long", name: "Smooth Long", zweck: "Hall-Vergleich, lange Stufe.", mfx: { werte: HALL_LANG } },
+  ],
+  "m22-plate-wet": [
+    { datei: "m22a-plate-wet-short", name: "Plate Wet Short", zweck: "Hall-Vergleich, kurze Stufe.", mfx: { werte: HALL_KURZ } },
+    { datei: "m22b-plate-wet-long", name: "Plate Wet Long", zweck: "Hall-Vergleich, lange Stufe.", mfx: { werte: HALL_LANG } },
+  ],
+  "m23-plate-dry": [
+    { datei: "m23a-plate-dry-short", name: "Plate Dry Short", zweck: "Hall-Vergleich, kurze Stufe.", mfx: { werte: HALL_KURZ } },
+    { datei: "m23b-plate-dry-long", name: "Plate Dry Long", zweck: "Hall-Vergleich, lange Stufe.", mfx: { werte: HALL_LANG } },
+  ],
+  "m24-loop-freeze": [
+    {
+      datei: "m24a-loop-short",
+      name: "Loop Short",
+      zweck: "Kurze Schleife — stottert statt zu halten.",
+      mfx: { werte: { loop_length: 12 } },
+    },
+    {
+      datei: "m24b-loop-pitch",
+      name: "Loop Pitch",
+      zweck: "Schleife hoeher gestimmt, laenger — die Tonhoehen-Seite des Loopers.",
+      mfx: { werte: { loop_length: 60, step: 40, fine: 100 } },
+    },
+  ],
 };
 
 // ─── Bauen ───────────────────────────────────────────────────────────────────
@@ -958,3 +1565,7 @@ schreibeGruppe(INSERT_PRESETS, "e2fxp", "TekkForge-IFX-Starter.tfsam", "TekkForg
 schreibeGruppe(MASTER_PRESETS, "mfx", "TekkForge-MFX-Starter.tfsam", "TekkForge MFX Starter");
 schreibeGruppe(variationen(INSERT_PRESETS), "e2fxp", "TekkForge-IFX-Variationen.tfsam", "TekkForge IFX Variationen");
 schreibeGruppe(variationen(MASTER_PRESETS), "mfx", "TekkForge-MFX-Variationen.tfsam", "TekkForge MFX Variationen");
+schreibeGruppe(INSERT_FARBEN, "e2fxp", "TekkForge-IFX-Farben.tfsam", "TekkForge IFX Farben");
+schreibeGruppe(variationen(INSERT_FARBEN), "e2fxp", "TekkForge-IFX-Farben-Variationen.tfsam", "TekkForge IFX Farben Variationen");
+schreibeGruppe(MASTER_RAUM, "mfx", "TekkForge-MFX-Raum.tfsam", "TekkForge MFX Raum");
+schreibeGruppe(variationen(MASTER_RAUM), "mfx", "TekkForge-MFX-Raum-Variationen.tfsam", "TekkForge MFX Raum Variationen");
