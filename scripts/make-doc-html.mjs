@@ -255,6 +255,20 @@ const firmwareSeiten = `
 
 <section class="seite">
   <span class="nr">15</span>
+  <h2>144 fertige Effekt-Presets zum Ausprobieren</h2>
+  <p class="lead">Man muss nicht bei null anfangen: TekkForge bringt vier fertig eingestellte Preset-Sets mit — zwei für die Effekte einzelner Parts, zwei für den Gesamtklang. Zusammen decken sie fast jeden Effekt-Algorithmus ab, den die Hacktribe-Firmware kennt.</p>
+  <ul>
+    <li><b>„Starter“</b> liefert das Tekk-Werkzeug — Zerre, Bitcrusher, Ringmodulator, Delay — und für die Summe Kompressor, EQ und Filter. <b>„Farben“</b> formt statt zu zerlegen, <b>„Raum &amp; Bewegung“</b> stellt den Mix in einen Raum.</li>
+    <li>Zu jedem der 48 Grund-Presets gehören <b>zwei Abwandlungen</b>: derselbe Effekt, in genau eine Richtung verschoben. Nacheinander in denselben Platz geschrieben, hört man den Unterschied — und sonst nichts.</li>
+    <li>Einige Paare sind zugleich <b>Messfühler</b>: Sie unterscheiden sich bewusst in einem einzigen Wert und beantworten am Ohr Fragen, die in keiner Unterlage stehen — etwa was ein Schalter tut, dessen Bedeutung niemand aufgeschrieben hat.</li>
+    <li>Geladen wird einzeln oder als <b>Sammlung</b>; jede Datei trägt ihren Namen fürs Gerätemenü schon in sich.</li>
+  </ul>
+  ${img("fx-sammlung", "Das Starter-Set als Sammlung geladen: zwölf Presets in der Liste, „Tekk Drive“ im Editor — eine Zerre mit allen Parametern unter ihren echten Namen.")}
+  <div class="hinweis"><b>Nebenbei repariert:</b> Der Weg von der Datei aufs Gerät war bisher versperrt — die Pflicht-Lesung des Ziel-Platzes warf das geladene Preset wieder aus dem Editor. Jetzt bleibt es stehen, und die Lesung holt nur noch das, wofür sie da ist: den Vorher-Stand für den Rückweg. Jede der 144 Dateien wird zudem automatisch geprüft — Größe, Algorithmus, und dass jede Regler-Zuordnung auf einen Parameter zeigt, den es wirklich gibt.</div>
+</section>
+
+<section class="seite">
+  <span class="nr">16</span>
   <h2>Groove-Vorlagen — eigener Swing</h2>
   <p class="lead">Eine Groove-Vorlage legt für jeden Step drei Dinge fest: den Zeitversatz, die Anschlagstärke und die Tonlänge. Genau daraus entsteht das Timing-Gefühl.</p>
   <ul>
@@ -271,7 +285,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">16</span>
+  <span class="nr">17</span>
   <h2>Geräte-Spiegel und Werkbank</h2>
   <p class="lead">Hacktribe meldet jeden Griff am Gerät zurück: welcher Modus aktiv ist, welches Bedienelement bewegt wurde, wohin. TekkForge zeigt diesen Strom in Klartext.</p>
   <ul>
@@ -285,7 +299,7 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">17</span>
+  <span class="nr">18</span>
   <h2>Zugriff auf den Arbeitsspeicher</h2>
   <p class="lead">Hacktribe erlaubt, direkt in den Speicher des laufenden Geräts zu schauen und zu schreiben. Das ist mächtig und heikel zugleich — deshalb ist der Weg dorthin bewusst umständlich gebaut.</p>
   <h3 class="unter-h">Was heute erreichbar ist</h3>
@@ -313,14 +327,14 @@ const firmwareSeiten = `
 </section>
 
 <section class="seite">
-  <span class="nr">18</span>
+  <span class="nr">19</span>
   <h2>Was über den Speicherzugriff noch möglich wird</h2>
   <p class="lead">Effekt-Presets und Groove-Vorlagen sind inzwischen gebaut. Was bleibt, ist nicht der Zugang, sondern das Wissen, welches Byte welche Bedeutung hat.</p>
   <div class="karten">
     <div class="karte"><h3>Die versteckten Schalter finden</h3><p>Drei Einstellungen gibt es nur über MIDI. Der Schalter, der das Gerät überhaupt erst zurückmelden lässt, ist gefunden und am Gerät belegt; mit Werkbank und Spiegel lassen sich die übrigen mit demselben Verfahren suchen.</p></div>
     <div class="karte"><h3>Regler-Bewegungen schreiben</h3><p>Aufgezeichnete Bewegungen werden heute nur gelesen. Sie auch setzen zu können, würde Arrangements in Bewegung bringen.</p></div>
     <div class="karte"><h3>Sequenz-Steps von außen</h3><p>Das Gerät nimmt inzwischen auch Befehle für einzelne Schritte entgegen. Was die Kennziffern bedeuten, steht nirgends — genau dafür ist die Werkbank da.</p></div>
-    <div class="karte"><h3>Preset-Sammlungen</h3><p>Ein Preset ist eine kleine Datei. Als Sammlung veröffentlicht, wird daraus etwas, das andere Electribe-Besitzer nutzen können.</p></div>
+    <div class="karte"><h3>Preset-Sammlungen</h3><p>Gebaut: 144 fertige Presets liegen als vier Sammlungen bei. Offen ist der Hörtest am Gerät — die Messfühler-Paare darin beantworten dann, was heute keine Tabelle weiß.</p></div>
     <div class="karte"><h3>Vergleichen statt raten</h3><p>Zwei Auslesungen gegeneinanderhalten und die Unterschiede benennen — so lassen sich unbekannte Bytes Stück für Stück entschlüsseln.</p></div>
   </div>
   <div class="hinweis"><b>Bewusst nicht geplant:</b> Presets so anzulegen, dass sie im Gerätemenü als neue Einträge auftauchen. Dafür müssten dreizehn verstreute Zähler gleichzeitig stimmen; ein halb hochgezählter Satz hinterlässt eine Firmware in sich widersprüchlich. Diesen Weg soll weiterhin Hacktribes eigenes Werkzeug gehen.</div>
@@ -330,7 +344,7 @@ const roadmap = [
   {
     titel: "Abnahme am Gerät",
     wann: "als Nächstes",
-    text: "Die neuen Funktionen sind am Bildschirm belegt, aber das Ohr entscheidet: kickt der Drop hörbar härter als der Aufbau, ergibt die Vocal-Reihenfolge das ganze Lied, klingen Akkorde vollständig, belegt jedes Sample genau einen Part?",
+    text: "Die neuen Funktionen sind am Bildschirm belegt, aber das Ohr entscheidet: kickt der Drop hörbar härter als der Aufbau, ergibt die Vocal-Reihenfolge das ganze Lied — und halten die mitgelieferten Effekt-Sammlungen, was ihre Namen versprechen?",
   },
   {
     titel: "Die versteckten Schalter aufspüren",
@@ -456,7 +470,7 @@ const html = `<!doctype html>
     <div><b>9</b><span>Module in einer App</span></div>
     <div><b>250</b><span>Pattern-Slots je Bank</span></div>
     <div><b>~24 MB</b><span>Sample-RAM im Blick</span></div>
-    <div><b>883</b><span>automatische Tests</span></div>
+    <div><b>2565</b><span>automatische Tests</span></div>
   </div>
   <div class="fuss"><span>Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
@@ -491,7 +505,7 @@ ${abschnitte
 ${firmwareSeiten}
 
 <section class="seite">
-  <span class="nr">19 · AUSBLICK</span>
+  <span class="nr">20 · AUSBLICK</span>
   <h2>Was als Nächstes kommt</h2>
   <p class="lead">Der Stand von heute ist benutzbar und getestet. Diese Punkte stehen als Nächstes an — geordnet nach Dringlichkeit, nicht nach Aufwand.</p>
   <div class="rm">
@@ -507,7 +521,7 @@ ${firmwareSeiten}
 </section>
 
 <section class="seite">
-  <span class="nr">20 · TECHNIK</span>
+  <span class="nr">21 · TECHNIK</span>
   <h2>Grundlagen in Kürze</h2>
   <p class="lead">Was unter der Oberfläche gilt — die Regeln, an denen sich alles ausrichtet.</p>
   <div class="karten">
@@ -516,7 +530,7 @@ ${firmwareSeiten}
     <div class="karte"><h3>Zwei Firmware-Welten</h3><p>Serien-Firmware und die erweiterte Hacktribe-Fassung werden erkannt; heikle Zusatzfunktionen bleiben gesperrt, solange sie nicht sicher verfügbar sind.</p></div>
     <div class="karte"><h3>Nichts verlässt den Rechner</h3><p>Analyse, Trennung und Erzeugung laufen lokal. Nur zwei Wege gehen nach außen — und nur, wenn man sie nutzt: der Link-Import und die optionale KI-Anfrage.</p></div>
     <div class="karte"><h3>Sicherheitsnetz</h3><p>Vor jedem Überschreiben wird der alte Stand gesichert; zwanzig Stände je Datei lassen sich zurückholen.</p></div>
-    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>883 automatische Tests laufen bei jeder Änderung, dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
+    <div class="karte"><h3>Geprüft statt geglaubt</h3><p>2565 automatische Tests laufen bei jeder Änderung — darunter eine Einzelprüfung für jedes mitgelieferte Effekt-Preset — dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
   <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>

@@ -386,6 +386,9 @@ async function schreiben(): Promise<void> {
     const bytes = encodeGroove(groove, basis ?? undefined);
     setStatus(`Schreibe Groove „${groove.name}“ auf Platz ${ziel.slot} …`);
     await hooks.schreiben(ziel.addr, bytes, `Groove „${groove.name}“`);
+    // Editor und Geraet stehen jetzt gleich — die naechste Lesung darf den
+    // Editor wieder fuellen
+    ausDatei_imEditor = false;
     document.getElementById("fxpUndo")?.classList.remove("hidden");
     return;
   }
@@ -393,6 +396,7 @@ async function schreiben(): Promise<void> {
   const bytes = encodeFxPreset(preset, basis ?? undefined);
   setStatus(`Schreibe „${preset.name}“ auf Platz ${ziel.slot} …`);
   await hooks.schreiben(ziel.addr, bytes, `Preset „${preset.name}“`);
+  ausDatei_imEditor = false;
   document.getElementById("fxpUndo")?.classList.remove("hidden");
 }
 
