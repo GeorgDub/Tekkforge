@@ -11,6 +11,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+const VERSION = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
 const BILDER = "docs/praesentation/bilder";
 const img = (name, caption) => {
   const datei = path.join(BILDER, `${name}.png`);
@@ -387,7 +388,7 @@ const html = `<!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8" />
-<title>TekkForge 0.6.0 — Funktionen und Ausblick</title>
+<title>TekkForge ${VERSION} — Funktionen und Ausblick</title>
 <style>
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
@@ -464,7 +465,7 @@ const html = `<!doctype html>
 
 <section class="seite titel">
   <div class="logo">TF</div>
-  <h1>Tekk<span>Forge</span> 0.6.0</h1>
+  <h1>Tekk<span>Forge</span> ${VERSION}</h1>
   <p class="unter">Ein Werkzeugkasten für den KORG Electribe 2 Sampler: aus einem Lied wird ein spielbares Pattern-Set — Sample-Bank, Arrangement und Gerätesteuerung in einer Anwendung. Alles läuft lokal, keine Datei verlässt den Rechner.</p>
   <div class="kennz">
     <div><b>9</b><span>Module in einer App</span></div>
@@ -533,8 +534,8 @@ ${firmwareSeiten}
     <div class="karte"><h3>Geprüft statt geglaubt</h3><p>2565 automatische Tests laufen bei jeder Änderung — darunter eine Einzelprüfung für jedes mitgelieferte Effekt-Preset — dazu Durchläufe in der echten Anwendung mit Bildnachweis.</p></div>
     <div class="karte"><h3>Herkunft offengelegt</h3><p>Ein Teil des Geräte-Wissens stammt aus dem freien Hacktribe-Projekt. Woher genau und unter welchen Bedingungen, steht im Projekt dokumentiert — samt einer Korrektur, als sich zeigte, dass die Lizenz eine strengere war als angenommen.</p></div>
   </div>
-  <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung 0.6.0 auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
-  <div class="fuss"><span>TekkForge 0.6.0 — Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
+  <div class="hinweis"><b>Bezug:</b> Windows-Installer und tragbare Fassung liegen als Veröffentlichung ${VERSION} auf GitHub bereit. Für Stem-Trennung und Link-Import wird zusätzlich Python benötigt.</div>
+  <div class="fuss"><span>TekkForge ${VERSION} — Funktionsübersicht und Ausblick</span><span>${heute}</span></div>
 </section>
 
 </body>
