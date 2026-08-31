@@ -447,13 +447,24 @@ korrekt „identisch, ein Write aendert nichts"). Der **Schreibvorgang selbst is
 nicht erprobt** — er wurde bewusst nicht ausgeloest. Die Rueckleseprobe ist das,
 was ihn beim ersten echten Versuch belegt oder widerlegt.
 
-### Beispiel-IFX-Presets zum Ausprobieren
+### Beispiel-Presets zum Ausprobieren
 
-`examples/fx-presets/` enthaelt zwoelf fertig eingestellte Insert-Presets als
-`.e2fxp` (roher 524-B-Block) plus eine `.tfsam`-Sammlung, die alle auf einmal
-laedt — mit Namen fuers Geraetemenue und je einer Zuordnung auf den IFX-Regler.
+`examples/fx-presets/` enthaelt vierundzwanzig fertig eingestellte FX-Presets
+als rohe 524-B-Bloecke, plus zwei `.tfsam`-Sammlungen, die sie auf einmal
+laden:
+
+- **12 Insert-Presets** (`.e2fxp`, Ziel `0xC00A80F0`) — je eine Zuordnung auf
+  den IFX-Regler des Parts.
+- **12 Master-Presets** (`.mfx`, Ziel `0xC00B4F30`) — X- und Y-Achse der
+  Flaeche belegt, bei „Vinyl Stop" zusaetzlich das Beruehren.
+
+Alle mit Namen fuers Geraetemenue; die jeweils nicht genutzte Haelfte der Kette
+steht auf Thru, damit ein Schreiben die andere nicht mit umstellt. Die
+Master-Dateien heissen `.mfx`, weil `ausDatei()` auf diese Endung die Art —
+und damit die Zieladresse — selbst umstellt.
+
 Damit laesst sich der Schreibpfad pruefen, ohne vorher etwas vom Geraet gelesen
-zu haben. Erzeugt von `scripts/make-fx-presets.mjs`; Liste, Bedienung und die
+zu haben. Erzeugt von `scripts/make-fx-presets.mjs`; Listen, Bedienung und die
 Frage, welcher Platz ueberhaupt im Menue auftaucht, stehen in
 [`examples/fx-presets/README.md`](examples/fx-presets/README.md).
 
