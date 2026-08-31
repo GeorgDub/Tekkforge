@@ -40,6 +40,8 @@ Keine Datei verlässt den Rechner.
 | `<name>-samples.all` | Sample-Bank (`e2sSample.all`-Format), User-Samples ab Nr. 501 |
 | `<name>-mapping.md` | (Converter) Report: Geräte-Nr. ↔ Name ↔ ESX-Index + Anleitung |
 | `*.tekkforge` | Projekt-Datei des Editors (Patterns + eingebettete Samples, JSON) |
+| `*.e2fxp` / `*.e2gv` | Einzelnes FX-Preset (524 B) bzw. Groove-Vorlage (320 B), roher RAM-Block |
+| `*.tfsam` | Sammlung mehrerer Presets/Grooves in einer Datei (JSON + Base64) |
 
 ## Schnellstart
 
@@ -444,6 +446,22 @@ Vergleich laeuft durch (die Vorbereitung meldet bei unveraenderter Eingabe
 korrekt „identisch, ein Write aendert nichts"). Der **Schreibvorgang selbst ist
 nicht erprobt** — er wurde bewusst nicht ausgeloest. Die Rueckleseprobe ist das,
 was ihn beim ersten echten Versuch belegt oder widerlegt.
+
+### Beispiel-IFX-Presets zum Ausprobieren
+
+`examples/fx-presets/` enthaelt zwoelf fertig eingestellte Insert-Presets als
+`.e2fxp` (roher 524-B-Block) plus eine `.tfsam`-Sammlung, die alle auf einmal
+laedt — mit Namen fuers Geraetemenue und je einer Zuordnung auf den IFX-Regler.
+Damit laesst sich der Schreibpfad pruefen, ohne vorher etwas vom Geraet gelesen
+zu haben. Erzeugt von `scripts/make-fx-presets.mjs`; Liste, Bedienung und die
+Frage, welcher Platz ueberhaupt im Menue auftaucht, stehen in
+[`examples/fx-presets/README.md`](examples/fx-presets/README.md).
+
+Der Weg Datei → Geraet war bis dahin zu: Laden loescht den Vorher-Stand (der
+Schreib-Knopf bleibt verborgen), und die Lesung, die ihn herstellt, holte auch
+gleich das Preset des Platzes in den Editor — die Datei war damit wieder weg.
+Die Lesung laesst einen geladenen Stand jetzt stehen und liefert nur noch
+Adresse, Vorher-Stand und die unbekannten Bytes des Platzes als Unterlage.
 
 ## Step-Record-Layout (verifiziert)
 

@@ -51,6 +51,18 @@ let preset: FxPreset | null = null;
 let groove: Groove | null = null;
 let basis: Uint8Array | null = null;
 let quelleAdresse: number | null = null;
+/**
+ * Kam der Editorinhalt aus einer Datei (oder aus der Sammlung) statt vom Geraet?
+ *
+ * Dann darf die Pflicht-Lesung des Ziel-Platzes ihn nicht ueberschreiben. Ohne
+ * dieses Flag war ein geladenes Preset nicht aufs Geraet zu bekommen: Laden
+ * loescht den Vorher-Stand (der Schreib-Knopf bleibt verborgen), und die
+ * Lesung, die ihn herstellt, holte bisher auch gleich das Preset des Platzes
+ * in den Editor — die Datei war damit wieder weg. Jetzt liefert die Lesung nur
+ * noch, wofuer sie da ist: Adresse, Vorher-Stand fuers Rueckschreiben, und die
+ * unbekannten Bytes des Platzes als Unterlage.
+ */
+let ausDatei_imEditor = false;
 
 const setStatus = (t: string): void => {
   const el = document.getElementById("fxpStatus");
@@ -323,8 +335,14 @@ async function lesen(): Promise<void> {
   }
   basis = r.bytes;
   quelleAdresse = ziel.addr;
+  // Der Editor wird nur ueberschrieben, wenn sein Inhalt vom Geraet stammt.
+  // Steht dort etwas aus einer Datei, bleibt es stehen — die Lesung liefert
+  // dann nur Adresse, Vorher-Stand und Unterlage (siehe `ausDatei_imEditor`).
+  const behalten = ausDatei_imEditor;
+  const nachsatz = behalten ? " — der geladene Stand bleibt im Editor, „Schreiben“ ist jetzt frei." : "";
   if (istGroove()) {
-    groove = decodeGroove(r.bytes);
+    const gelesen = decodeGroove(r.bytes);
+    if (!behalten) groove = gelesen;
     render();
     // Zwei Quellen nennen verschiedene Step-Adressen — am 0xFF-Muster
     // nachsehen, statt blind an unsere Stelle zu schreiben
@@ -337,14 +355,18 @@ async function lesen(): Promise<void> {
           ? ` ⚠ Steps liegen bei 0x${erkannt.toString(16)}, erwartet 0x${GROOVE_STEP_BASIS.toString(16)} — nicht schreiben.`
           : "";
     setStatus(
-      `Groove-Platz ${ziel.slot} gelesen: „${groove.name || "(ohne Namen)"}“, ${groove.laenge} Steps` +
-        `${rahmen ? "" : " (kein GVST-Kennzeichen — evtl. leerer Platz)"}${warnung}`,
+      `Groove-Platz ${ziel.slot} gelesen: „${gelesen.name || "(ohne Namen)"}“, ${gelesen.laenge} Steps` +
+        `${rahmen ? "" : " (kein GVST-Kennzeichen — evtl. leerer Platz)"}${warnung}${nachsatz}`,
     );
     return;
   }
-  preset = decodeFxPreset(r.bytes, istMfx());
+  const gelesen = decodeFxPreset(r.bytes, istMfx());
+  if (!behalten) preset = gelesen;
   render();
-  setStatus(`Platz ${ziel.slot} gelesen: „${preset.name || "(ohne Namen)"}“ — ${preset.ifx1.algorithmus || "?"}${preset.mfx.algorithmus && preset.mfx.device ? ` + ${preset.mfx.algorithmus}` : ""}`);
+  setStatus(
+    `Platz ${ziel.slot} gelesen: „${gelesen.name || "(ohne Namen)"}“ — ${gelesen.ifx1.algorithmus || "?"}` +
+      `${gelesen.mfx.algorithmus && gelesen.mfx.device ? ` + ${gelesen.mfx.algorithmus}` : ""}${nachsatz}`,
+  );
 }
 
 async function schreiben(): Promise<void> {
@@ -437,6 +459,7 @@ function sammlungsEintragOeffnen(i: number): void {
   ($("fxpArt") as HTMLSelectElement).value = e.art;
   basis = e.bytes.slice();
   quelleAdresse = null;
+  ausDatei_imEditor = true;
   if (e.art === "groove") {
     groove = decodeGroove(e.bytes);
     preset = null;
@@ -593,6 +616,9 @@ async function grooveAusLied(f: File): Promise<void> {
     groove = r.groove;
     basis = basis && basis.length === GROOVE_SIZE ? basis : initGrooveBytes();
     quelleAdresse = null;
+    // Aus Audio gemessen, nicht vom Geraet — die Pflicht-Lesung darf ihn
+    // ebenso wenig ueberschreiben wie einen aus einer Datei geladenen Stand.
+    ausDatei_imEditor = true;
     render();
     const versetzt = r.groove.steps.filter((s) => Math.abs(s.trigger) >= 4).length;
     setStatus(
@@ -625,8 +651,10 @@ async function ausDatei(f: File): Promise<void> {
   }
   basis = bytes;
   // Aus einer Datei geladen: es gibt noch keinen Vorher-Stand vom Gerät, also
-  // erst lesen lassen, bevor geschrieben werden darf.
+  // erst lesen lassen, bevor geschrieben werden darf. Die Lesung laesst den
+  // geladenen Stand jetzt stehen (siehe `ausDatei_imEditor`).
   quelleAdresse = null;
+  ausDatei_imEditor = true;
   if (istGroove()) {
     groove = decodeGroove(bytes);
     render();
@@ -655,6 +683,7 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
     groove = null;
     basis = null;
     quelleAdresse = null;
+    ausDatei_imEditor = false;
     // Leerer Startpunkt je Art, damit die Oberflaeche nicht leer wirkt
     if (istGroove()) {
       basis = initGrooveBytes();
