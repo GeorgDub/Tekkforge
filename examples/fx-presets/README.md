@@ -131,7 +131,8 @@ Zweier-Kombinationen aus der Leicht-Whitelist.
 **`23-filter-drive` ist Absicht:** dieselben Werte und dieselben Zuordnungen
 wie `10-acid-filter`, nur die beiden Inserts vertauscht — erst Filter, dann
 Zerre statt umgekehrt. Zwei Presets, die sich in nichts als der Kettenfolge
-unterscheiden. Was das ausmacht, hört man.
+unterscheiden. Was das ausmacht, hört man: am Gerät (2026-09-01) war
+Filter→Zerre deutlich aggressiver.
 
 ### Variationen
 
@@ -228,8 +229,19 @@ Dazu die zwei Vergleiche, die keine Byte-Sonden sind, aber dieselbe Rolle
 spielen: `10-acid-filter` ↔ `23-filter-drive` (macht die Kettenfolge einen
 Unterschied?) und der Hall-Vergleich `m20`–`m23`.
 
-Was dabei herauskommt, gehört zurück in die Tabellen (`e2FxParams.ts`) — und
-in dieses README.
+### Die Antworten (am Gerät gehört, 2026-09-01)
+
+| Sonde | Befund |
+|---|---|
+| EQ-Neutralwert | **36 ist neutral, höher = lauter** — bei allen drei EQs (4-Band-Insert, 2-Band-Insert, Master): Boost lauter/voller, Scoop hohl, Smile fett an den Rändern, die Master-Kippe dumpf bzw. spitz. |
+| `output_select` (Filter) | Wirkt hörbar: 0/1/2 klingen klar verschieden. **Welcher Wert welcher Ausgang ist, ist noch unbenannt** — der Hörer konnte die Charaktere nicht zuordnen; ein Sweep-Mitschnitt steht aus. |
+| `fader` (Mute) | **Weder Pegel noch Dämpfung**: alle drei Fassungen (0/64/127) sind still, auch der Regler bringt an keiner Stellung Ton — erst Part-IFX Off gibt das Signal frei. Mute macht schlicht zu; Verdacht Blendzeit, ungeklärt. Damit ist ein gespeichertes „Cut Fader“-Preset so nutzlos wie der Master-Mute — ob es aus dem Set fliegt, ist offen. |
+| `off_duration` (Grain Shifter) | Wörtlich die Länge der **Aus-Phase** zwischen den Schnipseln: hoch = löchriger, mehr Stottern — nicht gröbere Schnipsel. |
+| Decimator-Achsen | `bit_depth` runter = rauschig-kratziger. ⚠ Am unteren Anschlag wird das Signal zum **Vollpegel-Rechteck** — Dynamik weg, mit Level ist nichts mehr zu regeln. Die Rate-Seite ist noch nicht getrennt beschrieben. |
+| Kettenfolge (`10` ↔ `23`) | **Ja, deutlich**: Filter→Zerre ist klar aggressiver als Zerre→Filter. |
+| Hall-Vergleich (`m20`–`m23`) | Hall Reverb klingt am größten; **Wet und Dry Plate sind auf identischen Werten kaum auseinanderzuhalten**. |
+
+Die Parameter-Befunde stehen auch als Kommentare in `e2FxParams.ts`.
 
 ---
 
@@ -253,6 +265,10 @@ deshalb im Gerätemenü nicht auf. Also über einen **belegten** Platz schreiben
 `Max-IFX-Index` (`0xC0048F80`) sagt, bis wohin belegt ist; auf dem Testgerät
 war das 48, also Plätze 0–48. Der abgenommene Schreiblauf im Haupt-README lief
 auf Platz 40.
+
+⚠ **Das Gerätemenü zählt ab 1**, TekkForge ab 0: Platz *N* im Tool erscheint
+am Gerät als *N+1* — bei Insert- wie Master-Presets (am Gerät gesehen,
+2026-09-01). Dieselbe Verschiebung wie beim Program Change.
 
 **Zurück kommt man immer.** Die Presets liegen im RAM: **Undo** schreibt den
 gelesenen Vorher-Stand zurück, und ein Aus-und-Wieder-Ein stellt ohnehin alles

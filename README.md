@@ -466,11 +466,14 @@ Vergleichen am Geraet. Zusammen decken die vier Sets **alle 20 Insert- und 24
 der 25 Master-Algorithmen** ab.
 
 Sieben Paare sind zugleich **Sonden**: zwei Dateien, die sich in einem Byte
-unterscheiden, klaeren am Ohr, was in den Format-Unterlagen offen ist (ist 36
-beim EQ wirklich neutral? was macht `output_select`?). Dazu zwei Vergleiche
-derselben Art: `10-acid-filter` gegen `23-filter-drive` (dieselben Werte, nur
-die Kettenfolge vertauscht) und der Hall-Vergleich `m20`–`m23` (vier
-Algorithmen auf identischen Werten).
+unterscheiden, klaeren am Ohr, was in den Format-Unterlagen offen ist. Die
+Hoerabnahme lief am 2026-09-01 am Geraet; die Ergebnisse — 36 ist bei allen
+EQs neutral, `off_duration` ist woertlich die Aus-Phase, Mute laesst sich per
+`fader` nicht oeffnen, die Kettenfolge ist deutlich hoerbar, und das
+Geraetemenue zaehlt Plaetze ab 1 (Tool-Platz N = Geraet N+1) — stehen in
+[`examples/fx-presets/README.md`](examples/fx-presets/README.md) und als
+Kommentare in `e2FxParams.ts`. Offen blieb nur die Benennung der drei
+`output_select`-Stellungen (hoerbar verschieden, aber unbenannt).
 
 Alle mit Namen fuers Geraetemenue; die jeweils nicht genutzte Haelfte der Kette
 steht auf Thru, damit ein Schreiben die andere nicht mit umstellt. Die

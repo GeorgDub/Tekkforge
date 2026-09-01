@@ -9,7 +9,9 @@
  * Die Param-Index-Position (0-basiert) == NRPN DATA-MSB (siehe
  * `hacktribeNrpn.buildSetFxParam`). Werte sind 0..127. **Semantische
  * Min/Max/Einheiten sind im hacktribe-editor NICHT hinterlegt** (dort als TODO
- * markiert) — daher hier nur Namen; Ranges = 0..127. Der FX-**Typ** wird NICHT
+ * markiert) — daher hier nur Namen; Ranges = 0..127. Was davon am Ohr vermessen
+ * ist (2026-09-01, Beispiel-Presets + Sonden aus `examples/fx-presets/`), steht
+ * als Kommentar direkt an der jeweiligen Definition. Der FX-**Typ** wird NICHT
  * per NRPN gesetzt, sondern im Preset/RAM-Edit-Buffer; NRPN editiert nur Params
  * des bereits geladenen FX.
  *
@@ -105,6 +107,8 @@ export const IFX_TYPES: Record<number, FxTypeDef> = {
       "output_gain",
     ],
   },
+  // Gains: 36 = neutral, hoeher = lauter — am Ohr bestaetigt (Sonde Two Band
+  // Smile/Mid, 2026-09-01). Gilt genauso fuer EQ 4-Band (IFX und MFX).
   0x06: {
     name: "EQ 2-Band",
     params: [
@@ -163,6 +167,8 @@ export const IFX_TYPES: Record<number, FxTypeDef> = {
       "pre_lpf",
       "hi_damp",
       "sample_freq",
+      // runter = rauschig-kratziger; am unteren Anschlag wird das Signal zum
+      // Vollpegel-Rechteck — Dynamik weg, Level regelt nichts mehr (Ohr, 2026-09-01)
       "bit_depth",
       "output_level",
       "mask_type",
@@ -170,6 +176,8 @@ export const IFX_TYPES: Record<number, FxTypeDef> = {
   },
   0x0a: {
     name: "Filter",
+    // output_select 0/1/2 klingen klar verschieden (Ohr, 2026-09-01) — welcher
+    // Wert welcher Ausgang ist (LP/HP/BP?), ist noch unbenannt.
     params: ["dry_wet", "output_select", "frequency", "resonance"],
   },
   0x0f: {
@@ -327,6 +335,10 @@ export const IFX_TYPES: Record<number, FxTypeDef> = {
       "delay_lag",
     ],
   },
+  // `fader` ist hoerbar weder Pegel noch Daempfung: Mute macht zu, sobald er im
+  // Insert haengt — fader 0/64/127 gespeichert wie live gedreht, immer still;
+  // erst Part-IFX Off gibt den Ton frei (Ohr, 2026-09-01). Verdacht Blendzeit,
+  // ungeklaert. Ein gespeichertes Mute-Preset ist damit praktisch nutzlos.
   0x27: { name: "Mute", params: ["fader"] },
 };
 
@@ -584,6 +596,9 @@ export const MFX_TYPES: Record<number, FxTypeDef> = {
       "lfo_reset_phase",
     ],
   },
+  // Die vier Reverbs auf identischen Werten verglichen (Ohr, 2026-09-01,
+  // m20–m23): Hall Reverb klingt am groessten; Wet und Dry Plate sind so kaum
+  // auseinanderzuhalten.
   0x36: {
     name: "Hall Reverb",
     params: [
@@ -719,6 +734,8 @@ export const MFX_TYPES: Record<number, FxTypeDef> = {
       "dry_wet",
       "duration_bpm_sync",
       "off_time_ratio",
+      // woertlich die Laenge der Aus-Phase zwischen den Schnipseln: hoch =
+      // loechriger/stotternder, nicht groebere Schnipsel (Ohr, 2026-09-01)
       "off_duration",
       "on_time_ratio",
       "on_duration",
