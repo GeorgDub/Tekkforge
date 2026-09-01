@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { baueSammlung, leseSammlung, SAMMLUNG_VERSION, type SammlungsEintrag } from "../src/core/sammlung";
+import {
+  baueSammlung,
+  leseSammlung,
+  planeVerteilung,
+  SAMMLUNG_VERSION,
+  type SammlungsEintrag,
+} from "../src/core/sammlung";
 import { FX_PRESET_SIZE, initFxPresetBytes } from "../src/core/e2FxPreset";
 import { GROOVE_SIZE, initGrooveBytes } from "../src/core/e2Groove";
 
@@ -52,5 +58,51 @@ describe("sammlung", () => {
   it("Preset-Größe stimmt mit dem Bankformat überein", () => {
     expect(initFxPresetBytes().length).toBe(FX_PRESET_SIZE);
     expect(initGrooveBytes().length).toBe(GROOVE_SIZE);
+  });
+
+  it("der Ziel-Platz (wie am Gerät, ab 1) überlebt den Round-Trip — und fehlt, wo keiner gesetzt war", () => {
+    const mitPlatz: SammlungsEintrag[] = [
+      { art: "ifx", name: "A", bytes: initFxPresetBytes(), platz: 41 },
+      { art: "mfx", name: "B", bytes: initFxPresetBytes() },
+    ];
+    const s = leseSammlung(baueSammlung(mitPlatz, {}));
+    expect(s.eintraege[0].platz).toBe(41);
+    expect(s.eintraege[1].platz).toBeUndefined();
+  });
+
+  it("lehnt unmögliche Plätze ab — 0, über der Art-Grenze, krumm", () => {
+    const mit = (art: SammlungsEintrag["art"], platz: number): string => {
+      const roh = JSON.parse(baueSammlung([{ art, name: "X", bytes: art === "groove" ? initGrooveBytes() : initFxPresetBytes() }], {}));
+      roh.eintraege[0].platz = platz;
+      return JSON.stringify(roh);
+    };
+    expect(() => leseSammlung(mit("ifx", 0))).toThrow(/Platz/);
+    expect(() => leseSammlung(mit("ifx", 97))).toThrow(/Platz/);
+    expect(() => leseSammlung(mit("mfx", 33))).toThrow(/Platz/);
+    expect(() => leseSammlung(mit("groove", 97))).toThrow(/Platz/);
+    expect(() => leseSammlung(mit("ifx", 1.5))).toThrow(/Platz/);
+    expect(leseSammlung(mit("mfx", 32)).eintraege[0].platz).toBe(32);
+  });
+
+  it("planeVerteilung: nimmt Einträge mit Platz in Reihenfolge, überspringt die ohne", () => {
+    const e: SammlungsEintrag[] = [
+      { art: "ifx", name: "A", bytes: initFxPresetBytes(), platz: 41 },
+      { art: "ifx", name: "B", bytes: initFxPresetBytes() },
+      { art: "mfx", name: "C", bytes: initFxPresetBytes(), platz: 21 },
+    ];
+    const plan = planeVerteilung(e);
+    expect(plan.schritte.map((s) => s.eintrag.name)).toEqual(["A", "C"]);
+    expect(plan.uebersprungen).toEqual([1]);
+    expect(plan.doppelt).toEqual([]);
+  });
+
+  it("planeVerteilung: meldet doppelte Plätze derselben Art — dieselbe Nummer bei IFX und MFX ist dagegen erlaubt", () => {
+    const e: SammlungsEintrag[] = [
+      { art: "ifx", name: "A", bytes: initFxPresetBytes(), platz: 41 },
+      { art: "ifx", name: "B", bytes: initFxPresetBytes(), platz: 41 },
+      { art: "mfx", name: "C", bytes: initFxPresetBytes(), platz: 41 },
+    ];
+    const plan = planeVerteilung(e);
+    expect(plan.doppelt).toEqual([{ art: "ifx", platz: 41 }]);
   });
 });

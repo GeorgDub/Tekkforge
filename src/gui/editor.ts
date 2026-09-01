@@ -1463,11 +1463,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Das ACK ist damit kein Luxus: es ist das einzige Signal, dass das Gerät das
  * Häppchen überhaupt angenommen hat.
  */
-async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): Promise<void> {
+/** Liefert true nur, wenn die Rückleseprobe die geschriebenen Bytes bestätigt hat. */
+async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): Promise<boolean> {
   const range = validateRamRange(addr, bytes.length);
   if (!range.ok) {
     setRamStatus(`${what} abgebrochen: ${range.reason}`);
-    return;
+    return false;
   }
   const chunks = splitRamWrite(addr, bytes);
   let written = 0;
@@ -1503,14 +1504,14 @@ async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): 
         setRamStatus(
           `${what} abgebrochen: Gerät hat Häppchen ${nr} nicht bestätigt (${written} B bereits geschrieben).`,
         );
-        return;
+        return false;
       }
     } catch (e) {
       setRamStatus(
         `${what} abgebrochen bei Häppchen ${nr}: ${String(e)} — ${written} von ${bytes.length} B geschrieben, ` +
           `Zustand im Gerät UNVOLLSTÄNDIG. Zeigt das Gerät „Midi error"? Dann mit Exit quittieren.`,
       );
-      return;
+      return false;
     }
     written += chunk.bytes.length;
     await sleep(RAM_CHUNK_DELAY_MS);
@@ -1528,7 +1529,7 @@ async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): 
     setRamStatus(
       `${what}: gesendet, aber die Rückleseprobe schlug fehl (${back.reason}). Zustand im Gerät UNBEKANNT.`,
     );
-    return;
+    return false;
   }
   const v = verifyRamWrite(bytes, back.bytes);
   $("ramDump").textContent = formatHexDump(back.bytes, addr);
@@ -1537,6 +1538,7 @@ async function ramWriteVerified(addr: number, bytes: Uint8Array, what: string): 
       ? `✓ ${what}: ${bytes.length} Bytes geschrieben und zurückgelesen — identisch.`
       : `✗ ${what}: ${v.diffCount < 0 ? "Länge weicht ab" : `${v.diffCount} Byte(s) abweichend, erstes bei +${v.firstDiff}`}.`,
   );
+  return v.ok;
 }
 
 function setupRamPanel(): void {
@@ -1662,7 +1664,7 @@ function setupRamPanel(): void {
     lesen: ramReadBytes,
     schreiben: async (addr, bytes, was) => {
       ramSnapshot = ramSnapshot ?? null;
-      await ramWriteVerified(addr, bytes, was);
+      return await ramWriteVerified(addr, bytes, was);
     },
     midi: (bytes) => void panelBridge.midi.send(Uint8Array.from(bytes)),
   });

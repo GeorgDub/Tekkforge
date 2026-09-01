@@ -506,8 +506,8 @@
                     </select>
                   </div>
                   <div>
-                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px" title="Das Gerätemenü zählt ab 1: Platz N erscheint dort als N+1">Platz (Gerät: +1)</label>
-                    <input id="fxpSlot" type="number" min="0" max="95" value="0" style="width:70px" title="Das Gerätemenü zählt ab 1: Platz N erscheint dort als N+1" />
+                    <label style="display:block;color:var(--muted);font-size:10px;margin-bottom:2px" title="Zählt wie das Gerätemenü, ab 1">Platz (wie am Gerät)</label>
+                    <input id="fxpSlot" type="number" min="1" max="96" value="1" style="width:70px" title="Zählt wie das Gerätemenü, ab 1" />
                   </div>
                   <button id="fxpRead" class="ghost">Vom Gerät lesen</button>
                   <button id="fxpFile" class="ghost">Aus Datei…</button>
@@ -542,6 +542,11 @@
                   <span class="sub" id="fxpSamInfo" style="margin:0">noch leer</span>
                 </div>
                 <div id="fxpSamListe" style="margin-top:6px"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <button id="fxpSamSchreiben" class="primary" title="Jeden Eintrag mit Ziel-Platz nacheinander aufs Gerät schreiben — je Platz erst lesen, dann schreiben mit Rückleseprobe. Das Gerät darf dabei nicht spielen.">⚠ Alle auf das Gerät schreiben</button>
+                  <button id="fxpSamZurueck" class="ghost hidden" title="Die beim Verteilen gelesenen Vorher-Stände zurückschreiben, letzter zuerst">↶ Alle zurückschreiben</button>
+                  <span class="sub" style="margin:0">Platz-Feld je Eintrag: zählt wie das Gerätemenü (ab 1), leer = wird übersprungen.</span>
+                </div>
                 <div id="fxpEditor" style="margin-top:10px"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
                   <button id="fxpWrite" class="primary hidden">⚠ Auf das Gerät schreiben</button>

@@ -41,7 +41,7 @@ Keine Datei verlässt den Rechner.
 | `<name>-mapping.md` | (Converter) Report: Geräte-Nr. ↔ Name ↔ ESX-Index + Anleitung |
 | `*.tekkforge` | Projekt-Datei des Editors (Patterns + eingebettete Samples, JSON) |
 | `*.e2fxp` / `*.e2gv` | Einzelnes FX-Preset (524 B) bzw. Groove-Vorlage (320 B), roher RAM-Block |
-| `*.tfsam` | Sammlung mehrerer Presets/Grooves in einer Datei (JSON + Base64) |
+| `*.tfsam` | Sammlung mehrerer Presets/Grooves in einer Datei (JSON + Base64), optional mit Ziel-Platz je Eintrag |
 
 ## Schnellstart
 
@@ -470,7 +470,8 @@ unterscheiden, klaeren am Ohr, was in den Format-Unterlagen offen ist. Die
 Hoerabnahme lief am 2026-09-01 am Geraet; die Ergebnisse — 36 ist bei allen
 EQs neutral, `off_duration` ist woertlich die Aus-Phase, Mute laesst sich per
 `fader` nicht oeffnen, die Kettenfolge ist deutlich hoerbar, und das
-Geraetemenue zaehlt Plaetze ab 1 (Tool-Platz N = Geraet N+1) — stehen in
+Geraetemenue zaehlt Plaetze ab 1 (das Platz-Feld im Panel zaehlt seitdem
+genauso) — stehen in
 [`examples/fx-presets/README.md`](examples/fx-presets/README.md) und als
 Kommentare in `e2FxParams.ts`. Offen blieb nur die Benennung der drei
 `output_select`-Stellungen (hoerbar verschieden, aber unbenannt).
@@ -490,6 +491,13 @@ Schreib-Knopf bleibt verborgen), und die Lesung, die ihn herstellt, holte auch
 gleich das Preset des Platzes in den Editor — die Datei war damit wieder weg.
 Die Lesung laesst einen geladenen Stand jetzt stehen und liefert nur noch
 Adresse, Vorher-Stand und die unbekannten Bytes des Platzes als Unterlage.
+
+Eine ganze Sammlung laesst sich am Stueck **verteilen**: je Eintrag ein
+Ziel-Platz (zaehlt wie das Geraetemenue ab 1, leer = uebersprungen), ein
+Klick schreibt alle nacheinander — pro Platz erst lesen, dann schreiben mit
+Rueckleseprobe, der erste Fehler stoppt die Reihe, doppelte Plaetze derselben
+Art starten gar nicht. Die Vorher-Staende lassen sich am Stueck
+zurueckschreiben, und die Zuweisung wird in der `.tfsam` mitgespeichert.
 
 ## Step-Record-Layout (verifiziert)
 

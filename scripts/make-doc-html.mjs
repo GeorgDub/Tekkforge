@@ -261,10 +261,10 @@ const firmwareSeiten = `
   <ul>
     <li><b>„Starter“</b> liefert das Tekk-Werkzeug — Zerre, Bitcrusher, Ringmodulator, Delay — und für die Summe Kompressor, EQ und Filter. <b>„Farben“</b> formt statt zu zerlegen, <b>„Raum &amp; Bewegung“</b> stellt den Mix in einen Raum.</li>
     <li>Zu jedem der 48 Grund-Presets gehören <b>zwei Abwandlungen</b>: derselbe Effekt, in genau eine Richtung verschoben. Nacheinander in denselben Platz geschrieben, hört man den Unterschied — und sonst nichts.</li>
-    <li>Einige Paare sind zugleich <b>Messfühler</b>: Sie unterscheiden sich bewusst in einem einzigen Wert und beantworten am Ohr Fragen, die in keiner Unterlage stehen — etwa was ein Schalter tut, dessen Bedeutung niemand aufgeschrieben hat.</li>
-    <li>Geladen wird einzeln oder als <b>Sammlung</b>; jede Datei trägt ihren Namen fürs Gerätemenü schon in sich.</li>
+    <li>Einige Paare sind zugleich <b>Messfühler</b>: Sie unterscheiden sich bewusst in einem einzigen Wert und beantworten am Ohr Fragen, die in keiner Unterlage stehen. Inzwischen sind sie gehört — bestätigt ist etwa der Neutralwert der Klangregler, und dass die Reihenfolge zweier Effekte deutlich hörbar ist.</li>
+    <li>Geladen wird einzeln oder als <b>Sammlung</b> — und die lässt sich am Stück <b>verteilen</b>: je Eintrag ein Ziel-Platz (gezählt wie am Gerät, ab 1), ein Klick schreibt alle nacheinander, mit Prüfung nach jedem Schritt und einem Knopf, der alles wieder zurücknimmt. Die Platz-Zuweisung wird in der Sammlungs-Datei mitgespeichert.</li>
   </ul>
-  ${img("fx-sammlung", "Das Starter-Set als Sammlung geladen: zwölf Presets in der Liste, „Tekk Drive“ im Editor — eine Zerre mit allen Parametern unter ihren echten Namen.")}
+  ${img("fx-sammlung", "Das Starter-Set als Sammlung geladen: zwölf Presets, je Eintrag ein Platz-Feld, darunter der Knopf, der alle nacheinander aufs Gerät schreibt.")}
   <div class="hinweis"><b>Nebenbei repariert:</b> Der Weg von der Datei aufs Gerät war bisher versperrt — die Pflicht-Lesung des Ziel-Platzes warf das geladene Preset wieder aus dem Editor. Jetzt bleibt es stehen, und die Lesung holt nur noch das, wofür sie da ist: den Vorher-Stand für den Rückweg. Jede der 144 Dateien wird zudem automatisch geprüft — Größe, Algorithmus, und dass jede Regler-Zuordnung auf einen Parameter zeigt, den es wirklich gibt.</div>
 </section>
 

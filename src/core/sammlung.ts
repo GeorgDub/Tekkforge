@@ -18,10 +18,19 @@ const NAME_MAX = 15;
 
 export type SammlungsArt = "ifx" | "mfx" | "groove";
 
+/**
+ * Hoechster Ziel-Platz je Art — GERAETE-Zaehlung, ab 1 (das Menue am Geraet
+ * zaehlt ab 1, TekkForge intern ab 0; siehe examples/fx-presets/README.md).
+ * Entspricht den Schreibgrenzen: IFX 0..95, MFX 0..31, Groove 0..95.
+ */
+export const PLATZ_MAX: Record<SammlungsArt, number> = { ifx: 96, mfx: 32, groove: 96 };
+
 export interface SammlungsEintrag {
   art: SammlungsArt;
   name: string;
   bytes: Uint8Array;
+  /** Ziel-Platz am Geraet, 1-basiert wie das Geraetemenue; ohne = nicht zugewiesen. */
+  platz?: number;
 }
 
 export interface Sammlung {
@@ -50,6 +59,7 @@ export function baueSammlung(
       eintraege: eintraege.map((e) => ({
         art: e.art,
         name: e.name.slice(0, NAME_MAX),
+        ...(e.platz !== undefined ? { platz: e.platz } : {}),
         daten: bytesToBase64(e.bytes),
       })),
     },
@@ -81,7 +91,15 @@ export function leseSammlung(text: string): Sammlung {
     if (bytes.length !== soll) {
       throw new Error(`Eintrag ${i + 1} ("${String(o.name)}"): ${bytes.length} Bytes, für ${art} sind ${soll} nötig.`);
     }
-    return { art, name: String(o.name ?? `Eintrag ${i + 1}`).slice(0, NAME_MAX), bytes };
+    let platz: number | undefined;
+    if (o.platz !== undefined) {
+      const p = o.platz;
+      if (typeof p !== "number" || !Number.isInteger(p) || p < 1 || p > PLATZ_MAX[art]) {
+        throw new Error(`Eintrag ${i + 1} ("${String(o.name)}"): Platz ${String(p)} gibt es nicht — für ${art} zählt das Gerät 1..${PLATZ_MAX[art]}.`);
+      }
+      platz = p;
+    }
+    return { art, name: String(o.name ?? `Eintrag ${i + 1}`).slice(0, NAME_MAX), bytes, ...(platz !== undefined ? { platz } : {}) };
   });
   return {
     version: SAMMLUNG_VERSION,
@@ -90,4 +108,38 @@ export function leseSammlung(text: string): Sammlung {
     wann: String(x.wann ?? ""),
     eintraege,
   };
+}
+
+export interface Verteilung {
+  /** Zu schreibende Eintraege in Listen-Reihenfolge, mit ihrem Index in der Sammlung. */
+  schritte: { index: number; eintrag: SammlungsEintrag }[];
+  /** Indizes der Eintraege ohne Ziel-Platz. */
+  uebersprungen: number[];
+  /** Mehrfach vergebene Plaetze derselben Art — dann darf nichts geschrieben werden. */
+  doppelt: { art: SammlungsArt; platz: number }[];
+}
+
+/**
+ * Plant das Verteilen einer Sammlung aufs Geraet: wer einen Platz hat, wird
+ * geschrieben, wer keinen hat, uebersprungen. Doppelte Plaetze derselben Art
+ * werden gemeldet statt stillschweigend nacheinander in denselben Platz zu
+ * schreiben — dieselbe Nummer bei IFX und MFX ist dagegen kein Konflikt,
+ * das sind getrennte Bereiche.
+ */
+export function planeVerteilung(eintraege: readonly SammlungsEintrag[]): Verteilung {
+  const schritte: Verteilung["schritte"] = [];
+  const uebersprungen: number[] = [];
+  const gesehen = new Map<string, number>();
+  const doppelt: Verteilung["doppelt"] = [];
+  eintraege.forEach((eintrag, index) => {
+    if (eintrag.platz === undefined) {
+      uebersprungen.push(index);
+      return;
+    }
+    const key = `${eintrag.art}:${eintrag.platz}`;
+    gesehen.set(key, (gesehen.get(key) ?? 0) + 1);
+    if (gesehen.get(key) === 2) doppelt.push({ art: eintrag.art, platz: eintrag.platz });
+    schritte.push({ index, eintrag });
+  });
+  return { schritte, uebersprungen, doppelt };
 }

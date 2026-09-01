@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initFxPresetPanel } from "../src/gui/fxPreset";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
+import { baueSammlung, type SammlungsEintrag } from "../src/core/sammlung";
+import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam";
+
+const adresseVon = (key: "ifxPreset" | "mfxPreset", slot0: number): number =>
+  addressForSlot(E2_RAM_MAP.find((e) => e.key === key)!, slot0);
 
 /**
  * Das FX-Preset-Panel, ueber einen kleinen DOM-Stub getrieben. Es geht um den
@@ -77,6 +82,17 @@ function fakeDatei(name: string, bytes: Uint8Array): File {
   } as unknown as File;
 }
 
+function fakeTextDatei(name: string, text: string): File {
+  return { name, text: async () => text } as unknown as File;
+}
+
+/** Eine Sammlung ueber den Datei-Weg in das Panel laden. */
+async function sammlungLaden(eintraege: SammlungsEintrag[]): Promise<void> {
+  el("fxpSamIn").files = [fakeTextDatei("set.tfsam", baueSammlung(eintraege, { titel: "Test" }))];
+  el("fxpSamIn").feuere("change");
+  await new Promise((r) => setTimeout(r, 0));
+}
+
 let geschrieben: { addr: number; bytes: Uint8Array }[] = [];
 
 beforeEach(() => {
@@ -90,6 +106,7 @@ beforeEach(() => {
     lesen: async () => ({ ok: true, bytes: presetBytes("GERAETPRESET") }),
     schreiben: async (addr, bytes) => {
       geschrieben.push({ addr, bytes });
+      return true;
     },
   });
 });
@@ -119,5 +136,54 @@ describe("FX-Preset-Panel: Weg Datei → Geraet", () => {
     // will ihn auch sehen
     await klickUndWarte("fxpRead");
     expect(el("fxpEditor").innerHTML).toContain("GERAETPRESET");
+  });
+
+  it("das Platz-Feld zaehlt wie das Geraet ab 1 — Platz 41 schreibt auf Slot 40", async () => {
+    el("fxpArt").value = "ifx";
+    el("fxpSlot").value = "41";
+    el("fxpFileIn").files = [fakeDatei("datei.e2fxp", presetBytes("DATEIPRESET"))];
+    el("fxpFileIn").feuere("change");
+    await new Promise((r) => setTimeout(r, 0));
+    await klickUndWarte("fxpRead");
+    await klickUndWarte("fxpWrite");
+    expect(geschrieben).toHaveLength(1);
+    expect(geschrieben[0].addr).toBe(adresseVon("ifxPreset", 40));
+  });
+});
+
+describe("FX-Preset-Panel: Sammlung verteilen", () => {
+  const eintraege = (): SammlungsEintrag[] => [
+    { art: "ifx", name: "A", bytes: presetBytes("EINS"), platz: 41 },
+    { art: "ifx", name: "B", bytes: presetBytes("OHNE") },
+    { art: "mfx", name: "C", bytes: presetBytes("ZWEI"), platz: 21 },
+  ];
+
+  it("schreibt Eintraege mit Platz der Reihe nach an ihre Adressen und ueberspringt die ohne", async () => {
+    await sammlungLaden(eintraege());
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben.map((g) => g.addr)).toEqual([adresseVon("ifxPreset", 40), adresseVon("mfxPreset", 20)]);
+    expect(decodeFxPreset(geschrieben[0].bytes).name).toBe("EINS");
+    expect(decodeFxPreset(geschrieben[1].bytes, true).name).toBe("ZWEI");
+    expect(el("fxpStatus").textContent).toContain("1 ohne Platz");
+  });
+
+  it("bei doppeltem Platz derselben Art wird gar nichts geschrieben", async () => {
+    await sammlungLaden([
+      { art: "ifx", name: "A", bytes: presetBytes("EINS"), platz: 41 },
+      { art: "ifx", name: "B", bytes: presetBytes("ZWEI"), platz: 41 },
+    ]);
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben).toHaveLength(0);
+    expect(el("fxpStatus").textContent).toMatch(/doppelt/i);
+  });
+
+  it("das Zuruecknehmen schreibt die Vorher-Staende in umgekehrter Reihenfolge zurueck", async () => {
+    await sammlungLaden(eintraege());
+    await klickUndWarte("fxpSamSchreiben");
+    await klickUndWarte("fxpSamZurueck");
+    expect(geschrieben).toHaveLength(4);
+    expect(geschrieben[2].addr).toBe(adresseVon("mfxPreset", 20));
+    expect(geschrieben[3].addr).toBe(adresseVon("ifxPreset", 40));
+    expect(decodeFxPreset(geschrieben[3].bytes).name).toBe("GERAETPRESET");
   });
 });

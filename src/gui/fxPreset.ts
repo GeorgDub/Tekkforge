@@ -34,14 +34,15 @@ import {
 import { baueMidiThru } from "../core/fxLive";
 import { grooveAusAudio } from "../core/grooveAusLied";
 import { sicherungsPlan, baueSicherung, leseSicherung, vergleicheSicherung, type SicherungsBlock } from "../core/geraetSicherung";
-import { baueSammlung, leseSammlung, type SammlungsEintrag } from "../core/sammlung";
+import { baueSammlung, leseSammlung, planeVerteilung, PLATZ_MAX, type SammlungsEintrag } from "../core/sammlung";
 import { dekodiere } from "./audioDecode";
 import { legeAb, zeigeAblage } from "./ablage";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
 
 export interface FxPresetHooks {
   lesen(addr: number, len: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
-  schreiben(addr: number, bytes: Uint8Array, was: string): Promise<void>;
+  /** true nur, wenn die Rückleseprobe den Write bestätigt hat — die Sammlungs-Reihe bricht sonst ab. */
+  schreiben(addr: number, bytes: Uint8Array, was: string): Promise<boolean>;
   /** Rohe MIDI-Nachricht senden (fuer die versteckten Global-Einstellungen). */
   midi?(bytes: number[]): void;
 }
@@ -77,13 +78,17 @@ const istGroove = (): boolean => art() === "groove";
 /** Groove-Vorlagen: 96 Plaetze (beide Quellen einig). */
 const GROOVE_WRITE_MAX = 95;
 
-/** Adresse des gewaehlten Platzes aus der RAM-Karte. */
+/**
+ * Adresse des gewaehlten Platzes aus der RAM-Karte. Das Eingabefeld zaehlt wie
+ * das GERAETEMENUE ab 1 (Nutzerbefund 2026-09-01) — intern ist `slot` 0-basiert;
+ * fuer alles Sichtbare gilt `slot + 1`.
+ */
 function adresse(): { addr: number; slot: number; max: number; len: number } | null {
   const key = istGroove() ? "groove" : istMfx() ? "mfxPreset" : "ifxPreset";
   const eintrag = E2_RAM_MAP.find((e) => e.key === key);
   if (!eintrag) return null;
   const max = istGroove() ? GROOVE_WRITE_MAX : istMfx() ? MFX_PRESET_WRITE_MAX : IFX_PRESET_WRITE_MAX;
-  const slot = Math.max(0, Math.min(max, Number(($("fxpSlot") as HTMLInputElement).value) || 0));
+  const slot = Math.max(0, Math.min(max, (Number(($("fxpSlot") as HTMLInputElement).value) || 1) - 1));
   return { addr: addressForSlot(eintrag, slot), slot, max, len: istGroove() ? GROOVE_SIZE : FX_PRESET_SIZE };
 }
 
@@ -327,7 +332,7 @@ function render(): void {
 async function lesen(): Promise<void> {
   const ziel = adresse();
   if (!hooks || !ziel) return;
-  setStatus(`Lese Platz ${ziel.slot} …`);
+  setStatus(`Lese Platz ${ziel.slot + 1} …`);
   const r = await hooks.lesen(ziel.addr, ziel.len);
   if (!r.ok) {
     setStatus(`Lesen fehlgeschlagen: ${r.reason}`);
@@ -355,7 +360,7 @@ async function lesen(): Promise<void> {
           ? ` ⚠ Steps liegen bei 0x${erkannt.toString(16)}, erwartet 0x${GROOVE_STEP_BASIS.toString(16)} — nicht schreiben.`
           : "";
     setStatus(
-      `Groove-Platz ${ziel.slot} gelesen: „${gelesen.name || "(ohne Namen)"}“, ${gelesen.laenge} Steps` +
+      `Groove-Platz ${ziel.slot + 1} gelesen: „${gelesen.name || "(ohne Namen)"}“, ${gelesen.laenge} Steps` +
         `${rahmen ? "" : " (kein GVST-Kennzeichen — evtl. leerer Platz)"}${warnung}${nachsatz}`,
     );
     return;
@@ -364,7 +369,7 @@ async function lesen(): Promise<void> {
   if (!behalten) preset = gelesen;
   render();
   setStatus(
-    `Platz ${ziel.slot} gelesen: „${gelesen.name || "(ohne Namen)"}“ — ${gelesen.ifx1.algorithmus || "?"}` +
+    `Platz ${ziel.slot + 1} gelesen: „${gelesen.name || "(ohne Namen)"}“ — ${gelesen.ifx1.algorithmus || "?"}` +
       `${gelesen.mfx.algorithmus && gelesen.mfx.device ? ` + ${gelesen.mfx.algorithmus}` : ""}${nachsatz}`,
   );
 }
@@ -384,7 +389,7 @@ async function schreiben(): Promise<void> {
       return;
     }
     const bytes = encodeGroove(groove, basis ?? undefined);
-    setStatus(`Schreibe Groove „${groove.name}“ auf Platz ${ziel.slot} …`);
+    setStatus(`Schreibe Groove „${groove.name}“ auf Platz ${ziel.slot + 1} …`);
     await hooks.schreiben(ziel.addr, bytes, `Groove „${groove.name}“`);
     // Editor und Geraet stehen jetzt gleich — die naechste Lesung darf den
     // Editor wieder fuellen
@@ -394,7 +399,7 @@ async function schreiben(): Promise<void> {
   }
   if (!preset) return;
   const bytes = encodeFxPreset(preset, basis ?? undefined);
-  setStatus(`Schreibe „${preset.name}“ auf Platz ${ziel.slot} …`);
+  setStatus(`Schreibe „${preset.name}“ auf Platz ${ziel.slot + 1} …`);
   await hooks.schreiben(ziel.addr, bytes, `Preset „${preset.name}“`);
   ausDatei_imEditor = false;
   document.getElementById("fxpUndo")?.classList.remove("hidden");
@@ -440,6 +445,8 @@ function renderSammlung(): void {
         .map(
           (e, i) =>
             `<div><span class="rolle">${e.art.toUpperCase()}</span><span style="flex:1">${escapeHtml(e.name)}</span>` +
+            `<input class="fxpSamPlatz" data-i="${i}" type="number" min="1" max="${PLATZ_MAX[e.art]}" value="${e.platz ?? ""}" placeholder="—" ` +
+            `title="Ziel-Platz fürs Verteilen — zählt wie das Gerätemenü, ab 1. Leer = wird nicht geschrieben." style="width:52px;padding:2px 4px;font-size:11px" />` +
             `<button class="ghost fxpSamNutz" data-i="${i}" style="padding:2px 8px;font-size:11px">bearbeiten</button>` +
             `<button class="ghost fxpSamWeg" data-i="${i}" style="padding:2px 8px;font-size:11px">✕</button></div>`,
         )
@@ -452,6 +459,15 @@ function renderSammlung(): void {
     b.addEventListener("click", () => {
       sammlung.splice(Number(b.dataset.i), 1);
       renderSammlung();
+    });
+  }
+  for (const inp of liste.querySelectorAll<HTMLInputElement>(".fxpSamPlatz")) {
+    inp.addEventListener("change", () => {
+      const e = sammlung[Number(inp.dataset.i)];
+      if (!e) return;
+      const n = Math.round(Number(inp.value));
+      e.platz = inp.value.trim() === "" || !Number.isFinite(n) ? undefined : Math.max(1, Math.min(PLATZ_MAX[e.art], n));
+      if (e.platz !== undefined) inp.value = String(e.platz);
     });
   }
 }
@@ -481,7 +497,10 @@ function sammlungAufnehmen(): void {
   if (gv ? !groove : !preset) return;
   const bytes = gv ? encodeGroove(groove!, basis ?? undefined) : encodeFxPreset(preset!, basis ?? undefined);
   const name = (gv ? groove!.name : preset!.name) || (gv ? "Groove" : "Preset");
-  sammlung.push({ art: gv ? "groove" : istMfx() ? "mfx" : "ifx", name, bytes });
+  // Kam der Inhalt von einem Geraete-Platz, ist der auch der naheliegende
+  // Ziel-Platz fuers Verteilen — Geraete-Zaehlung, daher +1.
+  const platz = quelleAdresse !== null ? (adresse()?.slot ?? 0) + 1 : undefined;
+  sammlung.push({ art: gv ? "groove" : istMfx() ? "mfx" : "ifx", name, bytes, ...(platz !== undefined ? { platz } : {}) });
   renderSammlung();
   setStatus(`„${name}" in die Sammlung gelegt (${sammlung.length} insgesamt). Zum Behalten die Sammlung sichern.`);
 }
@@ -511,6 +530,100 @@ async function sammlungLaden(f: File): Promise<void> {
   } catch (e) {
     setStatus("Sammlung nicht lesbar: " + (e instanceof Error ? e.message : String(e)));
   }
+}
+
+// ─── Sammlung verteilen ──────────────────────────────────────────────────────
+
+/** Vorher-Staende des letzten Verteilungslaufs — fuers Zuruecknehmen am Stueck. */
+let verteilungsVorher: { addr: number; bytes: Uint8Array }[] = [];
+
+const artKey = (a: SammlungsEintrag["art"]): string => (a === "groove" ? "groove" : a === "mfx" ? "mfxPreset" : "ifxPreset");
+
+/**
+ * Alle Eintraege mit Ziel-Platz nacheinander aufs Geraet schreiben — je Eintrag
+ * derselbe Weg wie beim Einzel-Schreiben: Platz lesen (Vorher-Stand + Unterlage
+ * fuer unbekannte Bytes), dann Schreiben mit Rueckleseprobe. Der erste Fehler
+ * stoppt die Reihe; was schon geschrieben ist, steht in der Meldung.
+ */
+async function sammlungVerteilen(): Promise<void> {
+  if (!hooks) return;
+  if (!sammlung.length) {
+    setStatus("Die Sammlung ist leer — erst etwas aufnehmen oder laden.");
+    return;
+  }
+  const plan = planeVerteilung(sammlung);
+  if (plan.doppelt.length) {
+    setStatus(
+      `Nicht geschrieben — doppelt vergeben: ${plan.doppelt.map((d) => `Platz ${d.platz} (${d.art.toUpperCase()})`).join(", ")}.`,
+    );
+    return;
+  }
+  if (!plan.schritte.length) {
+    setStatus("Kein Eintrag hat einen Ziel-Platz — erst Plätze vergeben (Zahlenfeld je Eintrag).");
+    return;
+  }
+  verteilungsVorher = [];
+  document.getElementById("fxpSamZurueck")?.classList.add("hidden");
+  let nr = 0;
+  for (const { eintrag } of plan.schritte) {
+    nr++;
+    const map = E2_RAM_MAP.find((e) => e.key === artKey(eintrag.art));
+    if (!map) return;
+    const addr = addressForSlot(map, eintrag.platz! - 1);
+    const len = eintrag.art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
+    const wohin = `„${eintrag.name}“ → Platz ${eintrag.platz} (${eintrag.art.toUpperCase()})`;
+    const geschafft = (): string => (nr > 1 ? ` ${nr - 1} von ${plan.schritte.length} sind schon geschrieben.` : " Nichts wurde geschrieben.");
+    setStatus(`${nr}/${plan.schritte.length} · ${wohin}: lese Vorher-Stand …`);
+    const r = await hooks.lesen(addr, len);
+    if (!r.ok) {
+      setStatus(`Abbruch bei ${wohin}: Lesen fehlgeschlagen — ${r.reason}.${geschafft()}`);
+      return;
+    }
+    let bytes: Uint8Array;
+    if (eintrag.art === "groove") {
+      // Nicht an eine Stelle schreiben, deren Aufbau die Lesung nicht bestaetigt hat
+      if (erkenneStepBasis(r.bytes) !== GROOVE_STEP_BASIS) {
+        setStatus(`Abbruch bei ${wohin}: Der gelesene Block passt nicht zum erwarteten Groove-Aufbau.${geschafft()}`);
+        return;
+      }
+      bytes = encodeGroove(decodeGroove(eintrag.bytes), r.bytes);
+    } else {
+      bytes = encodeFxPreset(decodeFxPreset(eintrag.bytes, eintrag.art === "mfx"), r.bytes);
+    }
+    setStatus(`${nr}/${plan.schritte.length} · schreibe ${wohin} …`);
+    const ok = await hooks.schreiben(addr, bytes, `Sammlung: „${eintrag.name}“`);
+    if (ok === false) {
+      // Der gelesene Vorher-Stand dieses Platzes bleibt in der Liste — wer
+      // zuruecknimmt, stellt auch einen halb beschriebenen Platz wieder her.
+      verteilungsVorher.push({ addr, bytes: r.bytes });
+      document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
+      setStatus(`Abbruch bei ${wohin}: Schreiben nicht bestätigt (Details im RAM-Status).${geschafft()}`);
+      return;
+    }
+    verteilungsVorher.push({ addr, bytes: r.bytes });
+  }
+  const rest = plan.uebersprungen.length ? ` — ${plan.uebersprungen.length} ohne Platz übersprungen` : "";
+  setStatus(`${plan.schritte.length} auf das Gerät verteilt${rest}. „Alle zurückschreiben“ stellt die Vorher-Stände wieder her.`);
+  document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
+}
+
+/** Die Vorher-Staende des letzten Laufs zurueckschreiben, letzter zuerst. */
+async function sammlungZuruecknehmen(): Promise<void> {
+  if (!hooks || !verteilungsVorher.length) {
+    setStatus("Kein Vorher-Stand vorhanden — es wurde noch nichts verteilt.");
+    return;
+  }
+  const gesamt = verteilungsVorher.length;
+  for (let i = gesamt - 1; i >= 0; i--) {
+    const v = verteilungsVorher[i];
+    setStatus(`Schreibe Vorher-Stand ${gesamt - i}/${gesamt} zurück …`);
+    const ok = await hooks.schreiben(v.addr, v.bytes, "Sammlung zurückschreiben");
+    if (ok === false) {
+      setStatus(`Zurückschreiben abgebrochen bei ${gesamt - i}/${gesamt} (Details im RAM-Status).`);
+      return;
+    }
+  }
+  setStatus(`${gesamt} Vorher-Stand/Stände zurückgeschrieben — das Gerät steht wieder wie vor dem Verteilen.`);
 }
 
 // ─── Komplettsicherung ───────────────────────────────────────────────────────
@@ -720,6 +833,8 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   $("fxpUndo").addEventListener("click", () => void zurueck());
   $("fxpSave").addEventListener("click", sichern);
   $("fxpSamAdd").addEventListener("click", sammlungAufnehmen);
+  $("fxpSamSchreiben").addEventListener("click", () => void sammlungVerteilen());
+  $("fxpSamZurueck").addEventListener("click", () => void sammlungZuruecknehmen());
   $("fxpSamSpeichern").addEventListener("click", () => void sammlungSpeichern());
   $("fxpSamLaden").addEventListener("click", () => ($("fxpSamIn") as HTMLInputElement).click());
   $("fxpSamIn").addEventListener("change", () => {

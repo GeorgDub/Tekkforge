@@ -266,9 +266,12 @@ deshalb im Gerätemenü nicht auf. Also über einen **belegten** Platz schreiben
 war das 48, also Plätze 0–48. Der abgenommene Schreiblauf im Haupt-README lief
 auf Platz 40.
 
-⚠ **Das Gerätemenü zählt ab 1**, TekkForge ab 0: Platz *N* im Tool erscheint
-am Gerät als *N+1* — bei Insert- wie Master-Presets (am Gerät gesehen,
-2026-09-01). Dieselbe Verschiebung wie beim Program Change.
+⚠ **Das Gerätemenü zählt ab 1** — bei Insert- wie Master-Presets (am Gerät
+gesehen, 2026-09-01; dieselbe Verschiebung wie beim Program Change). Das
+Platz-Feld im Effekt-Preset-Panel zählt seitdem genauso: dort steht die
+Nummer, die auch das Gerät zeigt. Nur RAM-nahe Angaben (Max-IFX-Index,
+RAM-Panel-Slots) bleiben 0-basiert — „belegt bis Index 48“ heißt im Menü
+also Platz 1–49.
 
 **Zurück kommt man immer.** Die Presets liegen im RAM: **Undo** schreibt den
 gelesenen Vorher-Stand zurück, und ein Aus-und-Wieder-Ein stellt ohnehin alles
@@ -279,6 +282,16 @@ Fassungen nacheinander in **denselben** Platz schreiben und den Part nicht
 umstellen. So ist der Unterschied wirklich das Preset und nicht der Kontext.
 Auf getrennte Plätze geschrieben geht es schneller, aber dann wechselt beim
 Umschalten mehr als nur die Werte.
+
+**Eine ganze Sammlung verteilen.** Statt Datei für Datei: **Sammlung laden**
+(`.tfsam`), in der Liste je Eintrag den Ziel-Platz eintragen (zählt wie das
+Gerätemenü, ab 1; leer = wird übersprungen) und **„⚠ Alle auf das Gerät
+schreiben“**. Je Eintrag läuft derselbe Weg wie beim Einzel-Schreiben — erst
+lesen, dann schreiben mit Rückleseprobe; der erste Fehler stoppt die Reihe,
+und doppelt vergebene Plätze derselben Art werden gar nicht erst angefangen.
+**„↶ Alle zurückschreiben“** stellt die gelesenen Vorher-Stände wieder her,
+letzter zuerst. Die Zuweisung wird mit **„Sammlung sichern…“** in der `.tfsam`
+mitgespeichert (Feld `platz`, 1-basiert) und ist beim nächsten Laden wieder da.
 
 Dieselben Dateien lassen sich auch in Synthstudio laden (E2s-Preset-Panel,
 „.bin importieren“ — die Art wird an der Größe erkannt) und mit
