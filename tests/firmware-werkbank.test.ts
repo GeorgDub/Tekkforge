@@ -15,6 +15,8 @@ import {
   INIT_PATTERN_GROESSE,
   SPLASH_OFFSET,
   liesSplash,
+  INIT_GLOBAL_OFFSET,
+  INIT_GLOBAL_GROESSE,
 } from "../src/core/firmwareBau";
 import { leererBlock, nameVon } from "../src/core/presetManager";
 import { initGrooveBytes, decodeGroove, encodeGroove, GROOVE_SIZE } from "../src/core/e2Groove";
@@ -118,6 +120,10 @@ function fakeFirmware(): Uint8Array {
   const init = new Uint8Array(buildE2PatternFile({ name: "WERK INIT", parts: [] } as never));
   fw.set(init.subarray(0x100, 0x100 + INIT_PATTERN_GROESSE), INIT_PATTERN_OFFSET);
   fw.fill(0xff, SPLASH_OFFSET, SPLASH_OFFSET + 1024);
+  const gl = new Uint8Array(INIT_GLOBAL_GROESSE);
+  gl.set(new TextEncoder().encode("GLST"), 0);
+  gl.set(new TextEncoder().encode("GLED"), 0xfc);
+  fw.set(gl, INIT_GLOBAL_OFFSET);
   return fw;
 }
 
@@ -331,5 +337,27 @@ describe("Firmware-Werkbank", () => {
     if (!r.ok) return;
     expect(fwInitPatternName(r.bytes)).toBe("AUS DATEI");
     expect(r.bytes[SPLASH_OFFSET]).toBe(0x7f);
+  });
+
+  it("Init-Global aus einer Datei landet im Abbild; eine falsche Datei wird abgelehnt", async () => {
+    await basisLaden(fakeFirmware());
+    el("fwPresets").checked = false;
+    const gl = new Uint8Array(INIT_GLOBAL_GROESSE);
+    gl.set(new TextEncoder().encode("GLST"), 0);
+    gl[0x28] = 2;
+    gl.set(new TextEncoder().encode("GLED"), 0xfc);
+    el("fwGlobalIn").files = [fakeDatei("global.bin", gl)];
+    el("fwGlobalIn").feuere("change");
+    await warte();
+    expect(el("fwGlobal").checked).toBe(true);
+    expect(el("fwGlobalInfo").textContent).toMatch(/global\.bin \(Chain 0, Clock 2\)/);
+    const r = fwBaueAbbild();
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bytes[INIT_GLOBAL_OFFSET + 0x28]).toBe(2);
+    el("fwGlobalIn").files = [fakeDatei("kaputt.bin", new Uint8Array(256))];
+    el("fwGlobalIn").feuere("change");
+    await warte();
+    expect(el("fwStatus").textContent).toMatch(/kein Global-Block/);
   });
 });

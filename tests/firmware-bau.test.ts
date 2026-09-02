@@ -18,6 +18,10 @@ import {
   setzeSplash,
   istGroovePlatzLeer,
   firmwareAusSicherung,
+  INIT_GLOBAL_OFFSET,
+  INIT_GLOBAL_GROESSE,
+  liesInitGlobal,
+  setzeInitGlobal,
 } from "../src/core/firmwareBau";
 import { initGrooveBytes, decodeGroove, encodeGroove, GROOVE_SIZE } from "../src/core/e2Groove";
 import { leererSplash, pixelZuSplash, SPLASH_BREITE, SPLASH_HOEHE } from "../src/core/splash";
@@ -68,7 +72,18 @@ function fakeFirmware(maxIndex = 48): Uint8Array {
   fw.set(new TextEncoder().encode("PTST"), INIT_PATTERN_OFFSET);
   fw.set(new TextEncoder().encode("PTED"), INIT_PATTERN_OFFSET + INIT_PATTERN_GROESSE - 4);
   fw.set(leererSplash(), SPLASH_OFFSET);
+  fw.set(globalBlock(0), INIT_GLOBAL_OFFSET);
   return fw;
+}
+
+/** Ein Global-Block wie der Dump des Geraets: GLST, Nutzbytes, GLED bei +0xFC. */
+function globalBlock(clock: number): Uint8Array {
+  const g = new Uint8Array(INIT_GLOBAL_GROESSE);
+  g.set(new TextEncoder().encode("GLST"), 0);
+  g[0x13] = 1;
+  g[0x28] = clock;
+  g.set(new TextEncoder().encode("GLED"), 0xfc);
+  return g;
 }
 
 function grooveBytes(name: string): Uint8Array {
@@ -295,7 +310,7 @@ describe("firmwareBau — den ganzen Geraetestand einbrennen", () => {
     expect(r.bytes[SPLASH_OFFSET]).toBe(0x7f);
     expect(r.bericht.ifxMaxIndex).toBe(59);
     expect(r.bericht.grooveMaxIndex).toBe(69);
-    expect(r.bericht.fehlend).toEqual([]);
+    expect(r.bericht.fehlend).toEqual(["initGlobal"]); // die Test-Sicherung hat keinen Global-Block
     expect(r.bericht.bereiche.map((b) => b.key)).toEqual(["ifxPreset", "mfxPreset", "groove", "ifxZaehler", "grooveZaehler", "initPattern", "splash"]);
   });
 
@@ -305,7 +320,7 @@ describe("firmwareBau — den ganzen Geraetestand einbrennen", () => {
     const r = firmwareAusSicherung(basis, alt);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.bericht.fehlend).toEqual(["grooveMaxIndex", "initPattern", "splash"]);
+    expect(r.bericht.fehlend).toEqual(["grooveMaxIndex", "initPattern", "splash", "initGlobal"]);
     expect(r.bytes[SPLASH_OFFSET]).toBe(basis[SPLASH_OFFSET]);
     for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(basis[dateiOffset(z.addr)]);
     expect(namensByte(r.bytes, addressForSlot(ifxMapL, 0))).toBe("RAM 1");
@@ -314,5 +329,35 @@ describe("firmwareBau — den ganzen Geraetestand einbrennen", () => {
   it("lehnt eine Sicherung ohne passende Bereiche ab", () => {
     const r = firmwareAusSicherung(fakeFirmware(), [{ key: "fxEditBuffer", bytes: new Uint8Array(10) }]);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("firmwareBau — Init-Global", () => {
+  it("liegt direkt vor dem Init-Pattern, 256 Bytes GLST … GLED", () => {
+    expect(INIT_GLOBAL_OFFSET + INIT_GLOBAL_GROESSE).toBe(INIT_PATTERN_OFFSET);
+    const fw = fakeFirmware();
+    const g = liesInitGlobal(fw);
+    expect(String.fromCharCode(...g.subarray(0, 4))).toBe("GLST");
+    expect(String.fromCharCode(...g.subarray(0xfc, 0x100))).toBe("GLED");
+  });
+
+  it("setzen brennt einen Global-Block ein und lehnt alles andere ab", () => {
+    const fw = fakeFirmware();
+    const fw2 = setzeInitGlobal(fw, globalBlock(2));
+    expect(fw2[INIT_GLOBAL_OFFSET + 0x28]).toBe(2);
+    expect(fw[INIT_GLOBAL_OFFSET + 0x28]).toBe(0);
+    expect(() => setzeInitGlobal(fw, new Uint8Array(256))).toThrow(/GLST/);
+    expect(() => setzeInitGlobal(fw, new Uint8Array(10))).toThrow(/Bytes/);
+  });
+
+  it("firmwareAusSicherung uebernimmt den Block, wenn die Sicherung ihn hat", () => {
+    const r = firmwareAusSicherung(fakeFirmware(), [
+      { key: "ifxPreset", bytes: new Uint8Array(100 * FX_PRESET_SIZE) },
+      { key: "initGlobal", bytes: globalBlock(3) },
+    ]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bytes[INIT_GLOBAL_OFFSET + 0x28]).toBe(3);
+    expect(r.bericht.bereiche.map((b) => b.key)).toContain("initGlobal");
   });
 });

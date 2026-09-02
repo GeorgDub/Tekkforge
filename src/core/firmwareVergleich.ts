@@ -23,6 +23,8 @@ import {
   INIT_PATTERN_GROESSE,
   SPLASH_OFFSET,
   SPLASH_GROESSE,
+  INIT_GLOBAL_OFFSET,
+  INIT_GLOBAL_GROESSE,
 } from "./firmwareBau";
 import { decodeGroove } from "./e2Groove";
 
@@ -126,6 +128,8 @@ export function vergleicheFirmware(a: Uint8Array, b: Uint8Array): FirmwareVergle
     return t.trim() || "(ohne Namen)";
   };
   block(INIT_PATTERN_OFFSET, INIT_PATTERN_GROESSE, "initPattern", initName);
+  // Nur die zwei belegten Offsets, die am Geraet zugeordnet sind (e2sysex): Chain Mode +0x13, Clock-Quelle +0x28.
+  block(INIT_GLOBAL_OFFSET, INIT_GLOBAL_GROESSE, "initGlobal", (u) => `Chain ${u[0x13]}, Clock ${u[0x28]}`);
   block(SPLASH_OFFSET, SPLASH_GROESSE, "splash", (u) => {
     let dunkel = 0;
     for (const v of u) for (let k = 0; k < 8; k++) if (((v >> k) & 1) === 0) dunkel++;
@@ -169,6 +173,7 @@ export function vergleicheFirmware(a: Uint8Array, b: Uint8Array): FirmwareVergle
   }
   for (const u of je("initPattern")) zeilen.push(`Init-Pattern: „${u.links}“ ↔ „${u.rechts}“ (${u.bytes} Bytes)`);
   for (const u of je("splash")) zeilen.push(`Startbild: ${u.links} ↔ ${u.rechts} (${u.bytes} Bytes)`);
+  for (const u of je("initGlobal")) zeilen.push(`Init-Global: ${u.links} ↔ ${u.rechts} (${u.bytes} Bytes)`);
   for (const u of je("header")) zeilen.push(`Header: ${u.links} ↔ ${u.rechts} (${u.bytes} Bytes)`);
   if (sonstige.length) {
     zeilen.push(

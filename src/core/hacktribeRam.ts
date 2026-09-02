@@ -226,6 +226,18 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     note: "0x3C00 Bytes, beginnt mit „PTST“ — eine .e2spat ist dieser Block hinter 0x100 Header",
   },
   {
+    key: "initGlobal",
+    label: "Init-Global (Werksstand)",
+    // Datei-Offset 0xCFF58 → RAM 0xC00CFE58, 256 Bytes "GLST" … "GLED",
+    // dasselbe Format wie der Global-Dump. Ob es der Werksstand fuers Reset
+    // oder der laufende Global-Stand ist, ist am Geraet noch nicht geprueft.
+    base: 0xc00cfe58,
+    stride: 0x100,
+    count: 1,
+    size: 0x100,
+    note: "256 Bytes, GLST … GLED — wie der Global-Dump (0x0E → 0x51)",
+  },
+  {
     key: "splash",
     label: "Startbildschirm",
     // Datei-Offset 0xF9954 → RAM 0xC00F9854; 128 × 64 Pixel, 1 Bit, siehe core/splash.ts.

@@ -611,6 +611,7 @@ angehakt ist:
 | Groove-Vorlagen | `.tfsam` mit Plaetzen | `0x143C00`, Stride 0x140, 4 Groove-Zaehler (`0xC0049DA4`, `0xC007BB90`, `0xC007BB88`+1, `0xC007BB94`+1) |
 | Init-Pattern | aktuelles Pattern des Editors oder eine `.e2spat` | `0xD0058`, 0x3C00 Bytes („PTST" … „PTED"; die Datei ist dieser Block hinter 0x100 Header plus 0x400 Nullen) |
 | Startbild | Pixel-Editor 128 × 64 | `0xF9954`, 1024 Bytes 1-Bit |
+| Init-Global | Global-Block vom Geraet (RAM `0xC00CFE58`) oder 256-Byte-Datei | `0xCFF58`, 256 Bytes „GLST" … „GLED", direkt vor dem Init-Pattern — dasselbe Format wie der Global-Dump (MIDI-Kanal, Clock-Quelle, Chain Mode, Filter, Kontrast). ⚠ Ob das Geraet ihn beim Werksreset nimmt oder als laufenden Stand, ist noch offen. |
 
 Alle Stellen stammen aus hacktribes Skripten (`e2-init-pat.py`,
 `ht_splash_screen.py`, `add_groove`) und sind am Abbild gegengeprueft: das

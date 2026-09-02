@@ -76,6 +76,17 @@ export const E2SPAT_GROESSE = 0x4100;
 export const SPLASH_OFFSET = 0xf9954;
 export const SPLASH_GROESSE = 1024;
 
+/**
+ * Der Init-Global-Block: 256 Bytes „GLST" … „GLED", direkt vor dem
+ * Init-Pattern (am Abbild gefunden, 2026-09-03: GLST bei 0xCFF58, GLED bei
+ * 0xD0054). Dasselbe Format wie der Global-Dump (`e2sysex.decodeGlobalDump`) —
+ * MIDI-Kanal, Clock-Quelle, Chain Mode, Filter, Kontrast … als Werksstand.
+ * ⚠ Ob das Geraet diesen Block beim Werksreset nimmt oder als laufenden
+ * Global-Stand, ist am Geraet noch nicht geprueft.
+ */
+export const INIT_GLOBAL_OFFSET = 0xcff58;
+export const INIT_GLOBAL_GROESSE = 0x100;
+
 export type FirmwarePruefung = { ok: true } | { ok: false; reason: string };
 
 /** Groesse, Magic, Geraetekennung — der Hash wird davon getrennt geprueft (siehe Aufrufer). */
@@ -296,6 +307,27 @@ export function setzeSplash(fw: Uint8Array, splash: Uint8Array): Uint8Array {
   return out;
 }
 
+const istGlobalBlock = (b: Uint8Array): boolean =>
+  b.length === INIT_GLOBAL_GROESSE &&
+  String.fromCharCode(...b.subarray(0, 4)) === "GLST" &&
+  String.fromCharCode(...b.subarray(0xfc, 0x100)) === "GLED";
+
+export function liesInitGlobal(fw: Uint8Array): Uint8Array {
+  const pr = pruefeFirmware(fw);
+  if (!pr.ok) throw new Error(pr.reason);
+  return fw.slice(INIT_GLOBAL_OFFSET, INIT_GLOBAL_OFFSET + INIT_GLOBAL_GROESSE);
+}
+
+/** Einen Global-Block (256 B, GLST … GLED — wie der Global-Dump des Geraets) als Werksstand einbrennen. */
+export function setzeInitGlobal(fw: Uint8Array, block: Uint8Array): Uint8Array {
+  const pr = pruefeFirmware(fw);
+  if (!pr.ok) throw new Error(pr.reason);
+  if (!istGlobalBlock(block)) throw new Error(`Kein Global-Block (${block.length} Bytes, erwartet ${INIT_GLOBAL_GROESSE} mit „GLST“ … „GLED“)`);
+  const out = fw.slice();
+  out.set(block, INIT_GLOBAL_OFFSET);
+  return out;
+}
+
 // ─── Den ganzen Geraetestand einbrennen ──────────────────────────────────────
 
 export interface SicherungsBauBericht {
@@ -376,6 +408,12 @@ export function firmwareAusSicherung(
     out.set(splash.subarray(0, SPLASH_GROESSE), SPLASH_OFFSET);
     bericht.bereiche.push({ key: "splash", bytes: SPLASH_GROESSE });
   } else bericht.fehlend.push("splash");
+
+  const global = block("initGlobal");
+  if (global && istGlobalBlock(global.subarray(0, INIT_GLOBAL_GROESSE))) {
+    out.set(global.subarray(0, INIT_GLOBAL_GROESSE), INIT_GLOBAL_OFFSET);
+    bericht.bereiche.push({ key: "initGlobal", bytes: INIT_GLOBAL_GROESSE });
+  } else bericht.fehlend.push("initGlobal");
 
   if (!bericht.bereiche.length) return { ok: false, reason: "Die Sicherung enthält keinen der Bereiche, die in die Firmware gehören" };
   return { ok: true, bytes: out, bericht };

@@ -20,6 +20,8 @@ import { pmZustand, pmGeladen } from "./presetManager";
 export interface WerkbankHooks {
   /** Das aktuelle Pattern des Editors als .e2spat — kommt von editor.ts, damit hier kein Import-Kreis entsteht. */
   aktuellesPattern(): { name: string; bytes: Uint8Array };
+  /** RAM lesen (fuer den Init-Global-Block vom Geraet); fehlt ohne MIDI. */
+  lesen?(addr: number, len: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
 }
 let hooks: WerkbankHooks | null = null;
 const aktuellesPatternDatei = (): { name: string; bytes: Uint8Array } => {
@@ -33,11 +35,15 @@ import {
   setzeSplash,
   liesSplash,
   liesInitPattern,
+  liesInitGlobal,
+  setzeInitGlobal,
+  INIT_GLOBAL_GROESSE,
   firmwareAusSicherung,
   HACKTRIBE_SHA256,
   E2SPAT_GROESSE,
   type BasisBefund,
 } from "../core/firmwareBau";
+import { E2_RAM_MAP } from "../core/hacktribeRam";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -75,6 +81,8 @@ let basisBefund: BasisBefund | null = null;
 let basisHash: string | null = null;
 let grooves: SammlungsEintrag[] = [];
 let initDatei: { name: string; bytes: Uint8Array } | null = null;
+/** Der Init-Global-Block (256 B) — vom Geraet gelesen oder aus einer Datei. */
+let globalBlock: { name: string; bytes: Uint8Array } | null = null;
 /** Das Startbild, wie es gemalt ist: 128 × 64, 1 = dunkel. */
 let pixel: Uint8Array = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
 /** Das zuletzt geladene Bild (RGBA) — die Schwelle wirkt darauf, nicht auf das Gemalte. */
@@ -212,12 +220,45 @@ async function initLaden(f: File): Promise<void> {
   vorschau();
 }
 
+function globalUebernehmen(bytes: Uint8Array, name: string): void {
+  if (bytes.length !== INIT_GLOBAL_GROESSE || String.fromCharCode(...bytes.subarray(0, 4)) !== "GLST") {
+    setStatus(`${name}: kein Global-Block (${bytes.length} Bytes, erwartet ${INIT_GLOBAL_GROESSE} mit „GLST“).`);
+    return;
+  }
+  globalBlock = { name, bytes: bytes.slice() };
+  ($("fwGlobal") as HTMLInputElement).checked = true;
+  ($("fwGlobalInfo") as HTMLElement).textContent = `${name} (Chain ${bytes[0x13]}, Clock ${bytes[0x28]})`;
+  vorschau();
+}
+
+async function globalAusDatei(f: File): Promise<void> {
+  globalUebernehmen(new Uint8Array(await f.arrayBuffer()), f.name);
+}
+
+/** Den Global-Block aus dem Geraete-RAM holen — dieselbe Stelle, die im Abbild der Werksstand ist. */
+async function globalVomGeraet(): Promise<void> {
+  if (!hooks?.lesen) {
+    setStatus("Ohne MIDI-Verbindung nicht möglich.");
+    return;
+  }
+  const map = E2_RAM_MAP.find((e) => e.key === "initGlobal")!;
+  setStatus("Lese Global-Block aus dem Gerät …");
+  const r = await hooks.lesen(map.base, map.size);
+  if (!r.ok) {
+    setStatus(`Global-Block nicht lesbar: ${r.reason}`);
+    return;
+  }
+  globalUebernehmen(r.bytes, "Gerät (RAM)");
+  setStatus("Global-Block vom Gerät übernommen — ob er den Werksstand oder den laufenden Stand zeigt, ist am Gerät noch offen.");
+}
+
 // ─── Bauen ───────────────────────────────────────────────────────────────────
 
 interface Bauplan {
   presets: SammlungsEintrag[];
   grooves: SammlungsEintrag[];
   init: { name: string; bytes: Uint8Array } | null;
+  global: { name: string; bytes: Uint8Array } | null;
   splash: boolean;
   zeilen: string[];
 }
@@ -261,7 +302,12 @@ function bauplan(): Bauplan | null {
   }
   const splash = an("fwSplash");
   if (splash) zeilen.push(`Startbild: ${pixel.reduce((a, b) => a + b, 0)} dunkle Pixel aus dem Pixel-Editor`);
-  return { presets, grooves: gv, init, splash, zeilen };
+  let global: Bauplan["global"] = null;
+  if (an("fwGlobal")) {
+    global = globalBlock;
+    zeilen.push(global ? `Init-Global: ${global.name} (Chain ${global.bytes[0x13]}, Clock ${global.bytes[0x28]})` : "Init-Global: kein Block geladen");
+  }
+  return { presets, grooves: gv, init, global, splash, zeilen };
 }
 
 function vorschau(): void {
@@ -286,11 +332,12 @@ export function fwBaueAbbild(): { ok: true; bytes: Uint8Array; zeilen: string[] 
   }
   try {
     if (plan.init) bytes = setzeInitPattern(bytes, plan.init.bytes);
+    if (plan.global) bytes = setzeInitGlobal(bytes, plan.global.bytes);
     if (plan.splash) bytes = setzeSplash(bytes, pixelZuSplash(pixel));
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
-  if (!eintraege.length && !plan.init && !plan.splash) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
+  if (!eintraege.length && !plan.init && !plan.global && !plan.splash) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
   return { ok: true, bytes, zeilen };
 }
 
@@ -369,6 +416,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   basisBefund = null;
   grooves = [];
   initDatei = null;
+  globalBlock = null;
   bildRoh = null;
   invertiert = false;
   pixel = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
@@ -388,7 +436,13 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
     const f = ($("fwInitIn") as HTMLInputElement).files?.[0];
     if (f) void initLaden(f);
   });
-  for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);
+  for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwGlobal", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);
+  $("fwGlobalLaden").addEventListener("click", () => ($("fwGlobalIn") as HTMLInputElement).click());
+  $("fwGlobalIn").addEventListener("change", () => {
+    const f = ($("fwGlobalIn") as HTMLInputElement).files?.[0];
+    if (f) void globalAusDatei(f);
+  });
+  $("fwGlobalGeraet").addEventListener("click", () => void globalVomGeraet());
   $("fwSichtbar").addEventListener("click", vorschau);
   $("fwBauen").addEventListener("click", () => void bauen());
   $("fwVergleichen").addEventListener("click", () => ($("fwVergleichIn") as HTMLInputElement).click());
