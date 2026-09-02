@@ -41,6 +41,7 @@ import {
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
+import { vergleicheFirmware } from "../core/firmwareVergleich";
 import {
   SPLASH_BREITE,
   SPLASH_HOEHE,
@@ -316,6 +317,23 @@ export function fwBaueAusSicherung(text: string): { ok: true; bytes: Uint8Array;
   return { ok: true, bytes: r.bytes, zeilen };
 }
 
+/** Die Basis gegen eine zweite Datei halten — der Bericht landet im Bauplan-Feld. */
+async function vergleichen(f: File): Promise<void> {
+  if (!basis) {
+    setStatus("Erst eine Basis laden.");
+    return;
+  }
+  try {
+    const andere = new Uint8Array(await f.arrayBuffer());
+    const v = vergleicheFirmware(basis, andere);
+    const el = document.getElementById("fwBericht");
+    if (el) el.textContent = [`Vergleich: ${basisName} (links) ↔ ${f.name} (rechts)`, ...v.zeilen].join("\n");
+    setStatus(v.gleich ? "Die beiden Dateien sind identisch." : `${v.unterschiede.length} Unterschied(e) in bekannten Bereichen, ${v.sonstigeBytes} Bytes außerhalb.`);
+  } catch (e) {
+    setStatus(`Vergleich nicht möglich: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 async function sicherungEinbrennen(f: File): Promise<void> {
   const r = fwBaueAusSicherung(await f.text());
   if (!r.ok) {
@@ -360,6 +378,11 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);
   $("fwSichtbar").addEventListener("click", vorschau);
   $("fwBauen").addEventListener("click", () => void bauen());
+  $("fwVergleichen").addEventListener("click", () => ($("fwVergleichIn") as HTMLInputElement).click());
+  $("fwVergleichIn").addEventListener("change", () => {
+    const f = ($("fwVergleichIn") as HTMLInputElement).files?.[0];
+    if (f) void vergleichen(f);
+  });
   $("fwSicherungBrennen").addEventListener("click", () => ($("fwSicherungIn") as HTMLInputElement).click());
   $("fwSicherungIn").addEventListener("change", () => {
     const f = ($("fwSicherungIn") as HTMLInputElement).files?.[0];

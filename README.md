@@ -635,6 +635,19 @@ sich am Geraet im RAM zusammengebaut und gehoert hat, wird damit in einem
 Schritt dauerhaft. Aeltere Sicherungen ohne die neuen Bereiche lassen diese
 Teile in der Basis stehen; der Bericht nennt sie.
 
+**Zwei Firmwares vergleichen.** „Mit Datei vergleichen…" haelt die Basis
+gegen eine zweite `SYSTEM.VSB` (`core/firmwareVergleich.ts`): je Bereich, mit
+Platznummern und Namen — IFX/MFX/Groove-Plaetze links ↔ rechts, Zaehler
+zusammengefasst („IFX-Anzahl 49 → 96, 7 Zellen"), Init-Pattern-Name,
+Startbild als Pixelzahl, und alles ausserhalb der bekannten Bereiche als
+Byte-Laeufe mit Offsets. So sieht man, was ein Bau veraendert hat (Hacktribe
+gegen den 96er-Bau: genau 47 Plaetze und die Zaehler, sonst nichts), und was
+eine fremde Firmware anders macht (Stock gegen Hacktribe: 33 066 Bytes in 185
+Laeufen ausserhalb — der eigentliche Patch). Stock-Presets erscheinen dabei
+als „leer", weil die Serien-Firmware die Namen an anderer Stelle im Block
+haelt (+0x7D statt +0x01, Omnitribes Befund); das ist eine bekannte Grenze,
+kein Fehler.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über
