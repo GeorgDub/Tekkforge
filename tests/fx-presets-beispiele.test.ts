@@ -259,6 +259,21 @@ describe("Sammlungen der Beispiel-Presets", () => {
     },
   );
 
+  it("die Gesamtsammlung IFX-Alle enthaelt jede Insert-Datei genau einmal, die ersten 96 mit Platz 1..96", () => {
+    const eintraege = eintraegeVon("TekkForge-IFX-Alle.tfsam");
+    expect(eintraege.every((e) => e.art === "ifx")).toBe(true);
+    const inSammlung = eintraege.map((e) => Buffer.from(e.bytes).toString("base64")).sort();
+    const aufPlatte = insertDateien.map((f) => Buffer.from(lies(f)).toString("base64")).sort();
+    expect(inSammlung).toEqual(aufPlatte);
+    // Platz 1..96 in Listen-Reihenfolge, eindeutig; der Rest ohne Platz.
+    const plaetze = eintraege.map((e) => e.platz);
+    expect(plaetze.slice(0, 96)).toEqual(Array.from({ length: 96 }, (_, i) => i + 1));
+    expect(plaetze.slice(96).every((p) => p === undefined)).toBe(true);
+    // Basis-Presets zuerst: die ersten 36 Namen sind die der Basis-Dateien.
+    const basisNamen = insertDateien.filter((f) => /^\d+-/.test(f)).map((f) => dekodiere(f).name).sort();
+    expect(eintraege.slice(0, basisNamen.length).map((e) => e.name).sort()).toEqual(basisNamen);
+  });
+
   it.each(gruppen)("$art: die Sammlungen decken jede Einzeldatei genau einmal ab", ({ dateien, sammlungen }) => {
     // Die Bytes in der Sammlung sind dieselben wie in den Einzeldateien —
     // sonst laedt man ueber den bequemen Weg etwas anderes als ueber den

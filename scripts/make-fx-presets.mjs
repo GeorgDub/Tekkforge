@@ -2227,6 +2227,26 @@ function schreibeGruppe(presets, endung, sammlungsDatei, titel) {
   console.log(`${ziel.padEnd(48)} ${eintraege.length} Presets in einer Datei.\n`);
 }
 
+/**
+ * Die Gesamtsammlung einer Art: alle Presets in einer Datei, Basis-Presets
+ * zuerst, dann die Variationen, und die ersten `plaetze` mit Ziel-Platz 1..n
+ * vorbelegt — damit sich die ganze Bank in einem Lauf beschreiben laesst. Wer
+ * die Werks-Presets behalten will, nummeriert im Panel mit ▲ ab Platz 50 neu.
+ */
+function schreibeGesamt(basisListen, endung, sammlungsDatei, titel, plaetze) {
+  const defs = [...basisListen.flat(), ...basisListen.flatMap((l) => variationen(l))];
+  const eintraege = defs.map((def, i) => ({
+    art: def.art,
+    name: def.name,
+    bytes: baue(def),
+    ...(i < plaetze ? { platz: i + 1 } : {}),
+  }));
+  const ziel = path.join(ZIEL, sammlungsDatei);
+  fs.writeFileSync(ziel, baueSammlung(eintraege, { titel, autor: "TekkForge", wann: "2026-08-31T00:00:00.000Z" }));
+  console.log(`${ziel.padEnd(48)} ${eintraege.length} Presets, ${Math.min(plaetze, eintraege.length)} davon mit Platz 1..${Math.min(plaetze, eintraege.length)}.
+`);
+}
+
 fs.mkdirSync(ZIEL, { recursive: true });
 schreibeGruppe(INSERT_PRESETS, "e2fxp", "TekkForge-IFX-Starter.tfsam", "TekkForge IFX Starter");
 schreibeGruppe(MASTER_PRESETS, "mfx", "TekkForge-MFX-Starter.tfsam", "TekkForge MFX Starter");
@@ -2240,3 +2260,4 @@ schreibeGruppe(INSERT_BEWEGUNG, "e2fxp", "TekkForge-IFX-Bewegung.tfsam", "TekkFo
 schreibeGruppe(variationen(INSERT_BEWEGUNG), "e2fxp", "TekkForge-IFX-Bewegung-Variationen.tfsam", "TekkForge IFX Bewegung Variationen");
 schreibeGruppe(MASTER_TEKK, "mfx", "TekkForge-MFX-Tekk.tfsam", "TekkForge MFX Tekk-Modulation");
 schreibeGruppe(variationen(MASTER_TEKK), "mfx", "TekkForge-MFX-Tekk-Variationen.tfsam", "TekkForge MFX Tekk-Modulation Variationen");
+schreibeGesamt([INSERT_PRESETS, INSERT_FARBEN, INSERT_BEWEGUNG], "e2fxp", "TekkForge-IFX-Alle.tfsam", "TekkForge IFX Alle", 96);

@@ -405,6 +405,15 @@ mitgespeichert (Feld `platz`, 1-basiert) und ist beim nächsten Laden wieder da.
 Am Gerät abgenommen (2026-09-02): das Starter-Set in einem Lauf verteilt,
 alle zwölf Presets unter ihren Namen im Gerätemenü.
 
+**Die ganze Bank auf einmal.** `TekkForge-IFX-Alle.tfsam` enthält alle 108
+Insert-Presets in einer Datei — die 36 Basis-Presets zuerst, dann die
+Variationen — und die ersten 96 tragen schon Platz 1–96. Laden, Haken
+„IFX-Menü danach … erweitern“ setzen, „Alle auf das Gerät schreiben“: danach
+ist jeder Insert-Platz belegt und das Menü reicht bis 96 (bis zum
+Ausschalten). Das überschreibt die 49 Werks-Presets im RAM; wer sie behalten
+will, nummeriert vorher mit ▲ ab Platz 50 neu — dann passen 47 hinein, der
+Rest bleibt ohne Platz und wird übersprungen.
+
 **Plätze durchnummerieren.** Statt zwölf Zahlen zu tippen: Startplatz ins
 Feld **„ab Platz“** (oder leer lassen, dann zählt die Reihe vom Platz des
 ersten Eintrags der Art aus) und **▲ aufsteigend** bzw. **▼ absteigend**
