@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initFxPresetPanel } from "../src/gui/fxPreset";
 import { initPresetManager, pmAktion } from "../src/gui/presetManager";
-import { initFirmwareWerkbank, fwBaueAbbild, fwBaueAusSicherung, fwSetzePixel, fwPixel, fwInitPatternName } from "../src/gui/firmwareWerkbank";
+import { initFirmwareWerkbank, fwBaueAbbild, fwBaueAusSicherung, fwSetzePixel, fwPixel, fwInitPatternName, fwTextSchreiben } from "../src/gui/firmwareWerkbank";
+import { textBreite } from "../src/core/pixelSchrift";
 import { baueSicherung } from "../src/core/geraetSicherung";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam";
@@ -121,10 +122,11 @@ function fakeFirmware(): Uint8Array {
 }
 
 async function basisLaden(fw: Uint8Array): Promise<void> {
+  el("fwBasisInfo").textContent = "";
   el("fwBasisIn").files = [fakeDatei("SYSTEM.VSB", fw)];
   el("fwBasisIn").feuere("change");
-  await warte();
-  await warte();
+  // Die Anzeige entsteht erst nach dem asynchronen Hash — darauf warten, nicht Ticks zaehlen.
+  for (let i = 0; i < 100 && !el("fwBasisInfo").textContent; i++) await new Promise((r) => setTimeout(r, 2));
 }
 
 beforeEach(() => {
@@ -284,6 +286,30 @@ describe("Firmware-Werkbank", () => {
     expect(fwInitPatternName(r.bytes)).toBe("WERK INIT"); // nicht in der Sicherung → aus der Basis
     expect(r.zeilen.join("\n")).toMatch(/bleibt aus der Basis: initPattern/);
     expect(fwBaueAusSicherung("kein json").ok).toBe(false);
+  });
+
+  it("Text schreiben: die Pixelschrift landet zentriert im Startbild und damit im Abbild", async () => {
+    await basisLaden(fakeFirmware());
+    el("fwPresets").checked = false;
+    el("fwSplash").checked = true;
+    fwSetzePixel(new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE));
+    fwTextSchreiben("TEKK", 2, "mitte");
+    const px = fwPixel();
+    const dunkel = px.reduce((a, b) => a + b, 0);
+    expect(dunkel).toBeGreaterThan(40);
+    // zentriert: links und rechts vom Text gleich viel Luft (±1), Zeile 25..38
+    const b = textBreite("TEKK", 2);
+    const x0 = Math.floor((SPLASH_BREITE - b) / 2);
+    expect(px[25 * SPLASH_BREITE + x0]).toBe(1); // T-Balken beginnt hier
+    expect(px[25 * SPLASH_BREITE + x0 - 1]).toBe(0);
+    expect(px[10 * SPLASH_BREITE + 64]).toBe(0); // darueber leer
+    const r = fwBaueAbbild();
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(Array.from(splashZuPixel(liesSplash(r.bytes)))).toEqual(Array.from(px));
+    expect(el("fwStatus").textContent).toMatch(/„TEKK“ geschrieben/);
+    fwTextSchreiben("   ", 2, "mitte");
+    expect(el("fwStatus").textContent).toMatch(/Erst einen Text/);
   });
 
   it("Init-Pattern aus einer Datei; „aus Firmware“ holt das Startbild der Basis", async () => {

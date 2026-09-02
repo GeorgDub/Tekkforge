@@ -646,6 +646,12 @@
                       <button id="fwSplashLeer" class="ghost" style="padding:2px 8px;font-size:11px" title="Alles hell">Leeren</button>
                       <button id="fwSplashPbm" class="ghost" style="padding:2px 8px;font-size:11px" title="Als PBM-Datei sichern (1-Bit, jedes Grafikprogramm liest es)">⬇ PBM</button>
                     </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px">
+                      <input id="fwSplashText" type="text" maxlength="40" placeholder="Text (Großbuchstaben, Ziffern, - . : !)" style="width:200px;font-size:11px;padding:2px 4px" />
+                      <select id="fwSplashSkala" style="font-size:11px;padding:2px 4px" title="Punktgröße: 1 = 7 Pixel hoch, 2 = 14, 3 = 21"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option></select>
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Zeile <input id="fwSplashTextY" type="text" value="mitte" style="width:48px;font-size:11px;padding:2px 4px" title="obere Pixelzeile (0–63) oder „mitte“" /></label>
+                      <button id="fwSplashTextSetzen" class="ghost" style="padding:2px 8px;font-size:11px" title="Den Text zentriert in die gewählte Zeile schreiben — über das, was schon da ist">Text schreiben</button>
+                    </div>
                   </div>
                 </div>
                 <div id="fwStatus" class="sub" style="margin-top:4px">bereit</div>

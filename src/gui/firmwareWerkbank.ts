@@ -42,6 +42,19 @@ import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/pre
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
 import { vergleicheFirmware } from "../core/firmwareVergleich";
+import { schreibeText, textBreite } from "../core/pixelSchrift";
+
+/** Text ins Startbild schreiben — fuer Tests direkt aufrufbar. */
+export function fwTextSchreiben(text: string, skala: number, zeile: number | "mitte"): void {
+  if (!text.trim()) {
+    setStatus("Erst einen Text eingeben.");
+    return;
+  }
+  schreibeText(pixel, text, "mitte", zeile, skala);
+  zeichne();
+  const breite = textBreite(text, skala);
+  setStatus(`„${text}“ geschrieben (${breite} Pixel breit${breite > SPLASH_BREITE ? " — ragt über den Rand, kleinere Punktgröße wählen" : ""}).`);
+}
 import {
   SPLASH_BREITE,
   SPLASH_HOEHE,
@@ -434,6 +447,13 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   $("fwSplashLeer").addEventListener("click", () => {
     bildRoh = null;
     fwSetzePixel(new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE));
+  });
+  $("fwSplashTextSetzen").addEventListener("click", () => {
+    const text = ($("fwSplashText") as HTMLInputElement).value;
+    const skala = Math.max(1, Math.min(3, Number(($("fwSplashSkala") as HTMLSelectElement).value) || 2));
+    const rohY = (($("fwSplashTextY") as HTMLInputElement).value ?? "mitte").trim().toLowerCase();
+    const zeile: number | "mitte" = rohY === "" || rohY === "mitte" ? "mitte" : Math.max(0, Math.min(SPLASH_HOEHE - 1, Math.round(Number(rohY)) || 0));
+    fwTextSchreiben(text, skala, zeile);
   });
   $("fwSplashPbm").addEventListener("click", () => {
     const a = document.createElement("a");

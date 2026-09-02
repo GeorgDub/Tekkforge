@@ -612,7 +612,12 @@ und zurueck (Fixture `tests/fixtures/splash-hacktribe.json`).
 Der **Pixel-Editor**: linke Maustaste malt, rechte radiert; „Bild laden…"
 passt ein beliebiges Bild seitenverhaeltnis-treu ein und schwellt es nach
 Helligkeit (Regler, Invertieren), „aus Firmware" holt das Bild der Basis als
-Ausgang, „⬇ PBM" sichert es als 1-Bit-Datei. Das Skript kann dasselbe:
+Ausgang, „⬇ PBM" sichert es als 1-Bit-Datei. Dazu **Text schreiben**: eine
+eingebaute 5 × 7-Pixelschrift (`core/pixelSchrift.ts` — Grossbuchstaben,
+Ziffern, Satzzeichen; Umlaute werden zu AE/OE/UE) setzt ein Wort zentriert
+in eine waehlbare Zeile, in Punktgroesse 1×, 2× oder 3× (7, 14 oder 21 Pixel
+hoch), ueber das, was schon da ist. Unbekannte Zeichen werden zum Kaestchen,
+damit nichts still verschwindet. Das Skript kann dasselbe:
 
 ```
 npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam> --ab 50] [--init-pattern <.e2spat>] [--splash <128x64.pbm>]
