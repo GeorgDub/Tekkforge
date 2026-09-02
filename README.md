@@ -562,9 +562,20 @@ ruecken auf, hinten wird ein Platz frei — Listen-Semantik wie das Menue). Dazu
 ihre Plaetze) und „Als Sammlung sichern…" (alle belegten Plaetze mit
 Platznummer als `.tfsam`).
 
-Links daneben die **Bibliothek**: Presets und Sammlungen laden (mehrere auf
-einmal, Filter IFX/MFX), aus dem Editor uebernehmen — und dann **ziehen und
-auf einen Platz fallen lassen**. Leerer Platz: das Preset kommt einfach
+Die dritte Spalte sind die **Groove-Vorlagen** (96 Plaetze, `.e2gv`): dieselben
+Wege wie bei den Presets — laden vom Geraet (96 Lesungen a 320 B plus die
+Groove-Anzahl), aus Sicherung oder Firmware, verschieben, tauschen,
+umbenennen, loeschen, in den Groove-Editor oeffnen und zurueck, als Datei
+sichern. Fluechtig geschrieben werden auch hier nur die Unterschiede, danach
+die vier Groove-Zaehler bis zum hoechsten belegten Platz
+(`grooveMenueErweitern`, nach demselben Muster wie beim IFX-Menue: lesen,
+Stimmigkeit, Lueckenpruefung ueber den „GVST"-Rahmen, schreiben, bei Abbruch
+zurueck). Ein leerer Groove-Platz ist lauter 0xFF; der Schreibweg legt dort
+den ganzen Block ab statt ueber eine Unterlage, die es nicht gibt.
+
+Links daneben die **Bibliothek**: Presets, Grooves und Sammlungen laden
+(mehrere auf einmal, Filter IFX/MFX/Grooves), aus dem Editor uebernehmen —
+und dann **ziehen und auf einen Platz fallen lassen**. Leerer Platz: das Preset kommt einfach
 hinein. Belegter Platz: TekkForge fragt **Ersetzen, davor einfuegen oder
 danach einfuegen**; Einfuegen rueckt den Rest nach hinten und faellt durch,
 wenn hinten ein belegter Platz herausfiele. Ein IFX-Preset laesst sich nur auf

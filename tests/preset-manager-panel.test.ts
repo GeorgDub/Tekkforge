@@ -6,7 +6,8 @@ import { baueSicherung, type SicherungsBlock } from "../src/core/geraetSicherung
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam";
 import { IFX_ZAEHLER } from "../src/core/ifxErweiterung";
 import { nameVon, istLeer, leererBlock } from "../src/core/presetManager";
-import { VSB_GROESSE } from "../src/core/firmwareBau";
+import { VSB_GROESSE, GROOVE_ZAEHLER } from "../src/core/firmwareBau";
+import { initGrooveBytes, decodeGroove, encodeGroove, GROOVE_SIZE } from "../src/core/e2Groove";
 
 /**
  * Der Preset-Manager ueber den DOM-Stub: laden aus einer Sicherung, umbauen,
@@ -90,10 +91,14 @@ function sicherungText(): string {
   for (let i = 0; i < 100; i++) ifx.set(i < 49 ? presetBytes(`Werk ${i + 1}`) : leererBlock("ifx"), i * FX_PRESET_SIZE);
   const mfx = new Uint8Array(32 * FX_PRESET_SIZE);
   for (let i = 0; i < 32; i++) mfx.set(presetBytes(`Master ${i + 1}`, true), i * FX_PRESET_SIZE);
+  const gv = new Uint8Array(96 * GROOVE_SIZE).fill(0xff);
+  for (let i = 0; i < 62; i++) gv.set(grooveBytes(`G${i + 1}`), i * GROOVE_SIZE);
   const bloecke: SicherungsBlock[] = [
     { key: "ifxPreset", label: "IFX", adresse: ifxMap.base, laenge: ifx.length, bytes: ifx },
     { key: "mfxPreset", label: "MFX", adresse: mfxMap.base, laenge: mfx.length, bytes: mfx },
     { key: "maxIfxIndex", label: "Max", adresse: 0xc0048f80, laenge: 1, bytes: new Uint8Array([48]) },
+    { key: "groove", label: "Groove", adresse: grooveMap.base, laenge: gv.length, bytes: gv },
+    { key: "grooveMaxIndex", label: "GMax", adresse: 0xc007bb88, laenge: 1, bytes: new Uint8Array([62]) },
   ];
   return baueSicherung(bloecke, { geraet: "E2S", firmware: "hacktribe" });
 }
@@ -107,9 +112,24 @@ async function sicherungLaden(): Promise<void> {
 let geschrieben: { addr: number; bytes: Uint8Array }[] = [];
 
 /** Ein Geraet mit Max-Index 48; Lesungen liefern, was dieser Lauf schon geschrieben hat. */
+const grooveMap = E2_RAM_MAP.find((e) => e.key === "groove")!;
+const grooveAdresse = (slot: number): number => addressForSlot(grooveMap, slot);
+function grooveBytes(name: string): Uint8Array {
+  const g = decodeGroove(initGrooveBytes());
+  g.name = name;
+  return encodeGroove(g);
+}
 function geraetLesung(addr: number, len: number): { ok: true; bytes: Uint8Array } {
   const z = IFX_ZAEHLER.find((x) => x.addr === addr);
   if (z && len === 1) return { ok: true, bytes: new Uint8Array([z.plusEins ? 49 : 48]) };
+  const gz = GROOVE_ZAEHLER.find((x) => x.addr === addr);
+  if (gz && len === 1) return { ok: true, bytes: new Uint8Array([gz.plusEins ? 62 : 61]) };
+  const gslot = (addr - grooveAdresse(0)) / GROOVE_SIZE;
+  if (len === GROOVE_SIZE && Number.isInteger(gslot) && gslot >= 0 && gslot < 96) {
+    const zuletztG = [...geschrieben].reverse().find((g) => g.addr === addr);
+    if (zuletztG) return { ok: true, bytes: zuletztG.bytes };
+    return { ok: true, bytes: gslot < 62 ? grooveBytes(`G${gslot + 1}`) : new Uint8Array(GROOVE_SIZE).fill(0xff) };
+  }
   const zuletzt = [...geschrieben].reverse().find((g) => g.addr === addr);
   if (zuletzt) return { ok: true, bytes: zuletzt.bytes };
   const slot = (addr - ifxAdresse(0)) / FX_PRESET_SIZE;
@@ -293,8 +313,52 @@ describe("Preset-Manager: Bibliothek und Ablegen", () => {
     ];
     el("pmBibIn").feuere("change");
     await new Promise((r) => setTimeout(r, 0));
-    expect(el("pmBibInfo").textContent).toContain("2 Preset");
+    expect(el("pmBibInfo").textContent).toContain("2 Eintrag");
     await pmBibAblegen(1, "ifx", 1);
     expect(nameVon(pmZustand()!.ifx[0])).toBe("Phase Sync");
+  });
+});
+
+describe("Preset-Manager: Groove-Vorlagen", () => {
+  it("laedt die Groove-Bank aus der Sicherung: 62 belegt, Zaehler 61", async () => {
+    await sicherungLaden();
+    const z = pmZustand()!;
+    expect(z.groove).toHaveLength(96);
+    expect(nameVon(z.groove[0], "groove")).toBe("G1");
+    expect(istLeer(z.groove[62], "groove")).toBe(true);
+    expect(z.grooveMaxIndex).toBe(61);
+    expect(el("pmGrooveInfo").textContent).toContain("62 von 96 belegt, Menü laut Zähler bis 62");
+  });
+
+  it("ein Groove aus der Bibliothek auf Platz 63, fluechtig geschrieben: Block plus die 4 Zaehler auf 62/63", async () => {
+    await sicherungLaden();
+    bibAufnehmen({ art: "groove", name: "Mein Swing", bytes: grooveBytes("Mein Swing"), woher: "Test" });
+    await pmBibAblegen(0, "groove", 63);
+    expect(nameVon(pmZustand()!.groove[62], "groove")).toBe("Mein Swing");
+    await pmBibAblegen(0, "ifx", 50);
+    expect(el("pmStatus").textContent).toMatch(/GROOVE-Liste/);
+    await klickUndWarte("pmSchreiben");
+    const bloecke = geschrieben.filter((w) => w.bytes.length === GROOVE_SIZE);
+    expect(bloecke).toHaveLength(1);
+    expect(bloecke[0].addr).toBe(grooveAdresse(62));
+    expect(decodeGroove(bloecke[0].bytes).name).toBe("Mein Swing");
+    const zaehler = geschrieben.filter((w) => w.bytes.length === 1);
+    expect(zaehler.map((w) => w.addr)).toEqual(GROOVE_ZAEHLER.map((z) => z.addr));
+    for (const w of zaehler) {
+      const gz = GROOVE_ZAEHLER.find((x) => x.addr === w.addr)!;
+      expect(w.bytes[0]).toBe(gz.plusEins ? 63 : 62);
+    }
+    expect(el("pmStatus").textContent).toMatch(/Groove-Menü erweitert: bis Platz 62 → bis Platz 63/);
+  });
+
+  it("umbenennen und loeschen wirken auch auf Grooves; ein leerer Platz laesst sich nicht umbenennen", async () => {
+    await sicherungLaden();
+    await pmAktion("name", "groove", 1, "Conga Neu");
+    expect(nameVon(pmZustand()!.groove[0], "groove")).toBe("Conga Neu");
+    await pmAktion("weg", "groove", 1);
+    expect(nameVon(pmZustand()!.groove[0], "groove")).toBe("G2");
+    expect(istLeer(pmZustand()!.groove[61], "groove")).toBe(true);
+    await pmAktion("name", "groove", 90, "X");
+    expect(el("pmStatus").textContent).toMatch(/leer/);
   });
 });

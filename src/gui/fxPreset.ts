@@ -44,6 +44,7 @@ import {
   type SammlungsEintrag,
 } from "../core/sammlung";
 import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, type ZaehlerWert } from "../core/ifxErweiterung";
+import { GROOVE_ZAEHLER, istGroovePlatzLeer } from "../core/firmwareBau";
 import { dekodiere } from "./audioDecode";
 import { legeAb, zeigeAblage } from "./ablage";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
@@ -502,21 +503,28 @@ function sammlungsEintragOeffnen(i: number): void {
 }
 
 /** Einen Block von aussen (Preset-Manager) in den Editor holen — wie ein Sammlungs-Eintrag. */
-export function oeffneImEditor(art: "ifx" | "mfx", bytes: Uint8Array, woher: string): void {
+export function oeffneImEditor(art: "ifx" | "mfx" | "groove", bytes: Uint8Array, woher: string): void {
   ($("fxpArt") as HTMLSelectElement).value = art;
   basis = bytes.slice();
   quelleAdresse = null;
   ausDatei_imEditor = true;
-  preset = decodeFxPreset(bytes, art === "mfx");
-  groove = null;
+  if (art === "groove") {
+    groove = decodeGroove(bytes);
+    preset = null;
+  } else {
+    preset = decodeFxPreset(bytes, art === "mfx");
+    groove = null;
+  }
   zeigeGrooveKnopf();
   render();
-  setStatus(`„${preset.name}" aus ${woher} geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen — oder im Manager „Aus Editor übernehmen“.`);
+  const name = art === "groove" ? groove!.name : preset!.name;
+  setStatus(`„${name}" aus ${woher} geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen — oder im Manager „Aus Editor übernehmen“.`);
 }
 
-/** Was gerade im Editor steht, als Block — null bei Groove oder leerem Editor. */
-export function aktuellesPreset(): { art: "ifx" | "mfx"; bytes: Uint8Array } | null {
-  if (!preset || istGroove()) return null;
+/** Was gerade im Editor steht, als Block — Preset oder Groove-Vorlage; null bei leerem Editor. */
+export function aktuellesPreset(): { art: "ifx" | "mfx" | "groove"; bytes: Uint8Array } | null {
+  if (istGroove()) return groove ? { art: "groove", bytes: encodeGroove(groove, basis ?? undefined) } : null;
+  if (!preset) return null;
   return { art: istMfx() ? "mfx" : "ifx", bytes: encodeFxPreset(preset, basis ?? undefined) };
 }
 
@@ -648,12 +656,16 @@ export async function verteileEintraege(eintraege: readonly SammlungsEintrag[], 
     }
     let bytes: Uint8Array;
     if (eintrag.art === "groove") {
-      // Nicht an eine Stelle schreiben, deren Aufbau die Lesung nicht bestaetigt hat
-      if (erkenneStepBasis(r.bytes) !== GROOVE_STEP_BASIS) {
+      // Ein leerer Groove-Platz ist lauter 0xFF — ohne Rahmen, ohne Step-Tabelle.
+      // Dort wird der Block ganz geschrieben (Platz 90 am Geraet: FF → GVST).
+      // Ein belegter Platz muss dagegen den erwarteten Aufbau zeigen, sonst
+      // schreiben wir nicht an eine Stelle, die die Lesung nicht bestaetigt hat.
+      const leer = istGroovePlatzLeer(r.bytes);
+      if (!leer && erkenneStepBasis(r.bytes) !== GROOVE_STEP_BASIS) {
         setStatus(`${vorspann}Abbruch bei ${wohin}: Der gelesene Block passt nicht zum erwarteten Groove-Aufbau.${geschafft()}`);
         return false;
       }
-      bytes = encodeGroove(decodeGroove(eintrag.bytes), r.bytes);
+      bytes = encodeGroove(decodeGroove(eintrag.bytes), leer ? undefined : r.bytes);
     } else {
       bytes = encodeFxPreset(decodeFxPreset(eintrag.bytes, eintrag.art === "mfx"), r.bytes);
     }
@@ -768,6 +780,81 @@ async function ifxMenueErweitern(bisPlatz: number, vorspann = ""): Promise<boole
     `${vorspann}IFX-Menü erweitert: bis Platz ${stand.maxIndex + 1} → bis Platz ${bisPlatz} (${plan.neuePlaetze.length} neu). ` +
       "Gilt bis zum Ausschalten; „Alle zurückschreiben“ nimmt auch die Zähler zurück.",
   );
+  return true;
+}
+
+/**
+ * Das Groove-Menue bis `bisPlatz` (Geraete-Zaehlung) erweitern — die vier
+ * Zaehler von hacktribe `add_groove`, nach demselben Muster wie beim IFX-Menue:
+ * lesen und auf Stimmigkeit pruefen, den neuen Bereich auf Luecken pruefen
+ * (leer = kein "GVST"), dann alle vier schreiben, bei Abbruch sofort zurueck.
+ * Vorher-Werte landen in `verteilungsVorher`.
+ */
+export async function grooveMenueErweitern(bisPlatz: number, vorspann = ""): Promise<boolean> {
+  if (!hooks) return false;
+  const map = E2_RAM_MAP.find((e) => e.key === "groove");
+  if (!map) return false;
+  const hex = (a: number): string => `0x${a.toString(16).toUpperCase()}`;
+  setStatus(`${vorspann}lese die 4 Groove-Zähler …`);
+  const gelesen: ZaehlerWert[] = [];
+  for (const z of GROOVE_ZAEHLER) {
+    const r = await hooks.lesen(z.addr, 1);
+    if (!r.ok) {
+      setStatus(`${vorspann}Groove-Menü nicht erweitert: Zähler ${hex(z.addr)} nicht lesbar — ${r.reason}.`);
+      return false;
+    }
+    gelesen.push({ addr: z.addr, wert: r.bytes[0] });
+  }
+  const max = gelesen[0].wert;
+  for (const [i, z] of GROOVE_ZAEHLER.entries()) {
+    const soll = z.plusEins ? max + 1 : max;
+    if (gelesen[i].wert !== soll) {
+      setStatus(`${vorspann}Groove-Menü nicht erweitert: Zähler widersprechen sich (${hex(z.addr)} = ${gelesen[i].wert}, erwartet ${soll}). Aus- und Einschalten stellt sie wieder her.`);
+      return false;
+    }
+  }
+  const zielMax = bisPlatz - 1;
+  if (zielMax <= max) {
+    setStatus(`${vorspann}Groove-Platz ${bisPlatz} ist schon im Menü — es reicht bis Platz ${max + 1}.`);
+    return false;
+  }
+  if (zielMax >= map.count) {
+    setStatus(`${vorspann}Groove-Platz ${bisPlatz} liegt über der Grenze (${map.count}).`);
+    return false;
+  }
+  const luecken: number[] = [];
+  for (let slot = max + 1; slot <= zielMax; slot++) {
+    setStatus(`${vorspann}prüfe Groove-Platz ${slot + 1} …`);
+    const r = await hooks.lesen(addressForSlot(map, slot), GROOVE_SIZE);
+    if (!r.ok) {
+      setStatus(`${vorspann}Groove-Menü nicht erweitert: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
+      return false;
+    }
+    if (istGroovePlatzLeer(r.bytes)) luecken.push(slot + 1);
+  }
+  if (luecken.length) {
+    setStatus(`${vorspann}Groove-Menü nicht erweitert — leer dazwischen: Platz ${luecken.join(", ")}.`);
+    return false;
+  }
+  const gesetzt: ZaehlerWert[] = [];
+  for (const [i, z] of GROOVE_ZAEHLER.entries()) {
+    const wert = z.plusEins ? zielMax + 1 : zielMax;
+    setStatus(`${vorspann}erweitere Groove-Menü: Zähler ${i + 1}/4 …`);
+    const ok = await hooks.schreiben(z.addr, new Uint8Array([wert]), `Groove-Zähler ${i + 1}/4`);
+    if (ok === false) {
+      let zurueck = 0;
+      for (const g of gesetzt.reverse()) {
+        const alt = gelesen.find((x) => x.addr === g.addr)!;
+        if (await hooks.schreiben(alt.addr, new Uint8Array([alt.wert]), "Groove-Zähler zurück")) zurueck++;
+      }
+      setStatus(`${vorspann}Abbruch beim Groove-Zähler ${i + 1}/4 — ${zurueck} von ${gesetzt.length} zurückgeschrieben${zurueck < gesetzt.length ? ", Satz UNSTIMMIG: Gerät aus- und einschalten" : ""}.`);
+      return false;
+    }
+    gesetzt.push({ addr: z.addr, wert });
+    verteilungsVorher.push({ addr: z.addr, bytes: new Uint8Array([gelesen[i].wert]) });
+  }
+  document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
+  setStatus(`${vorspann}Groove-Menü erweitert: bis Platz ${max + 1} → bis Platz ${bisPlatz}. Gilt bis zum Ausschalten.`);
   return true;
 }
 
