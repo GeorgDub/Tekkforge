@@ -143,3 +143,55 @@ export function planeVerteilung(eintraege: readonly SammlungsEintrag[]): Verteil
   });
   return { schritte, uebersprungen, doppelt };
 }
+
+// ─── Plaetze durchnummerieren ────────────────────────────────────────────────
+
+export type NummerierRichtung = "auf" | "ab";
+
+export interface Nummerierung {
+  /** Kopien der Eintraege mit neu vergebenen Plaetzen — die Eingabe bleibt unangetastet. */
+  eintraege: SammlungsEintrag[];
+  vergeben: number;
+  /** Eintraege, fuer die hinter der Art-Grenze kein Platz mehr uebrig war. */
+  ohnePlatz: number;
+}
+
+/**
+ * Vergibt die Ziel-Plaetze einer Sammlung in Listen-Reihenfolge, je Art als
+ * eigene Reihe (IFX und MFX sind getrennte Bereiche, dieselbe Nummer ist dort
+ * kein Konflikt). `start` ist der eingetippte Startplatz; fehlt er, zaehlt die
+ * Reihe vom Platz des ersten Eintrags der Art aus — und gibt es auch den
+ * nicht, beginnt ▲ bei 1 und ▼ am oberen Ende der Art.
+ *
+ * ▲ (`auf`) heisst groessere Nummern, ▼ (`ab`) kleinere — dieselbe Lesart wie
+ * bei den Pfeilen im Pattern-Editor. Hinter der Art-Grenze bricht die Reihe
+ * nicht um, sondern laesst den Platz leer; wer das uebersieht, bekaeme sonst
+ * still einen zweiten Eintrag auf Platz 1.
+ */
+export function nummerierePlaetze(
+  eintraege: readonly SammlungsEintrag[],
+  start: number | undefined,
+  richtung: NummerierRichtung,
+): Nummerierung {
+  const naechster = new Map<SammlungsArt, number>();
+  const schritt = richtung === "auf" ? 1 : -1;
+  let vergeben = 0;
+  let ohnePlatz = 0;
+  const out = eintraege.map((e) => {
+    let n = naechster.get(e.art);
+    if (n === undefined) {
+      const ersterMitPlatz = eintraege.find((x) => x.art === e.art && x.platz !== undefined)?.platz;
+      n = start ?? ersterMitPlatz ?? (richtung === "auf" ? 1 : PLATZ_MAX[e.art]);
+    }
+    naechster.set(e.art, n + schritt);
+    const kopie: SammlungsEintrag = { art: e.art, name: e.name, bytes: e.bytes };
+    if (n >= 1 && n <= PLATZ_MAX[e.art]) {
+      kopie.platz = n;
+      vergeben++;
+    } else {
+      ohnePlatz++;
+    }
+    return kopie;
+  });
+  return { eintraege: out, vergeben, ohnePlatz };
+}

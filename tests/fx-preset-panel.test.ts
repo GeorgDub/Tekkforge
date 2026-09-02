@@ -3,6 +3,7 @@ import { initFxPresetPanel } from "../src/gui/fxPreset";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
 import { baueSammlung, type SammlungsEintrag } from "../src/core/sammlung";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam";
+import { IFX_ZAEHLER, IFX_ANZAHL_ADDR } from "../src/core/ifxErweiterung";
 
 const adresseVon = (key: "ifxPreset" | "mfxPreset", slot0: number): number =>
   addressForSlot(E2_RAM_MAP.find((e) => e.key === key)!, slot0);
@@ -18,6 +19,7 @@ type Listener = () => void;
 
 class StubElement {
   value = "";
+  checked = false;
   textContent = "";
   innerHTML = "";
   files: unknown[] = [];
@@ -94,16 +96,20 @@ async function sammlungLaden(eintraege: SammlungsEintrag[]): Promise<void> {
 }
 
 let geschrieben: { addr: number; bytes: Uint8Array }[] = [];
+type Lesung = { ok: true; bytes: Uint8Array } | { ok: false; reason: string };
+/** Was das Geraet auf eine Lesung antwortet — je Test austauschbar. */
+let leseStub: (addr: number, len: number) => Lesung = () => ({ ok: true, bytes: presetBytes("GERAETPRESET") });
 
 beforeEach(() => {
   elemente.clear();
   geschrieben = [];
+  leseStub = () => ({ ok: true, bytes: presetBytes("GERAETPRESET") });
   g.document = {
     getElementById: (id: string) => el(id),
     createElement: () => new StubElement(),
   };
   initFxPresetPanel({
-    lesen: async () => ({ ok: true, bytes: presetBytes("GERAETPRESET") }),
+    lesen: async (addr, len) => leseStub(addr, len),
     schreiben: async (addr, bytes) => {
       geschrieben.push({ addr, bytes });
       return true;
@@ -185,5 +191,114 @@ describe("FX-Preset-Panel: Sammlung verteilen", () => {
     expect(geschrieben[2].addr).toBe(adresseVon("mfxPreset", 20));
     expect(geschrieben[3].addr).toBe(adresseVon("ifxPreset", 40));
     expect(decodeFxPreset(geschrieben[3].bytes).name).toBe("GERAETPRESET");
+  });
+});
+
+describe("FX-Preset-Panel: Plaetze durchnummerieren", () => {
+  const ohnePlatz = (): SammlungsEintrag[] => [
+    { art: "ifx", name: "A", bytes: presetBytes("EINS") },
+    { art: "ifx", name: "B", bytes: presetBytes("ZWEI") },
+    { art: "ifx", name: "C", bytes: presetBytes("DREI") },
+  ];
+
+  it("▲ ab dem Startplatz: 50, 51, 52 — und das Verteilen schreibt genau dorthin", async () => {
+    await sammlungLaden(ohnePlatz());
+    el("fxpSamStart").value = "50";
+    await klickUndWarte("fxpSamNumAuf");
+    expect(el("fxpStatus").textContent).toContain("3 Plätze aufsteigend");
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben.map((g) => g.addr)).toEqual([49, 50, 51].map((s) => adresseVon("ifxPreset", s)));
+  });
+
+  it("▼ ohne Startplatz zaehlt vom Platz des ersten Eintrags herunter", async () => {
+    const e = ohnePlatz();
+    e[0].platz = 20;
+    await sammlungLaden(e);
+    await klickUndWarte("fxpSamNumAb");
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben.map((g) => g.addr)).toEqual([19, 18, 17].map((s) => adresseVon("ifxPreset", s)));
+  });
+});
+
+describe("FX-Preset-Panel: IFX-Menue erweitern", () => {
+  const ifxAdresse = (slot: number): number => adresseVon("ifxPreset", slot);
+
+  /**
+   * Ein Geraet mit Max-Index 48 (wie das Testgeraet): Zaehler stimmig,
+   * Plaetze bis Slot 48 belegt, dahinter Nullen — es sei denn, dieser Lauf
+   * hat schon dorthin geschrieben (dann liefert die Lesung das Geschriebene).
+   */
+  const geraetMitMax = (max: number) => (addr: number, len: number): Lesung => {
+    const z = IFX_ZAEHLER.find((x) => x.addr === addr);
+    if (z && len === 1) return { ok: true, bytes: new Uint8Array([z.plusEins ? max + 1 : max]) };
+    const zuletzt = [...geschrieben].reverse().find((g) => g.addr === addr);
+    if (zuletzt) return { ok: true, bytes: zuletzt.bytes };
+    const slot = (addr - ifxAdresse(0)) / 0x20c;
+    if (Number.isInteger(slot) && slot > max) return { ok: true, bytes: new Uint8Array(FX_PRESET_SIZE) };
+    return { ok: true, bytes: presetBytes("GERAETPRESET") };
+  };
+
+  it("mit Haken: nach dem Verteilen auf 50 und 51 werden die 13 Zaehler auf 50/51 gesetzt", async () => {
+    leseStub = geraetMitMax(48);
+    await sammlungLaden([
+      { art: "ifx", name: "A", bytes: presetBytes("EINS"), platz: 50 },
+      { art: "ifx", name: "B", bytes: presetBytes("ZWEI"), platz: 51 },
+    ]);
+    el("fxpSamErweitern").checked = true;
+    await klickUndWarte("fxpSamSchreiben");
+    const zaehler = geschrieben.slice(2);
+    expect(geschrieben.slice(0, 2).map((g) => g.addr)).toEqual([ifxAdresse(49), ifxAdresse(50)]);
+    expect(zaehler).toHaveLength(13);
+    expect(zaehler.map((g) => g.addr)).toEqual(IFX_ZAEHLER.map((z) => z.addr));
+    for (const g of zaehler) {
+      const z = IFX_ZAEHLER.find((x) => x.addr === g.addr)!;
+      expect(Array.from(g.bytes)).toEqual([z.plusEins ? 51 : 50]);
+    }
+    expect(geschrieben.find((g) => g.addr === IFX_ANZAHL_ADDR)!.bytes[0]).toBe(51);
+    expect(el("fxpStatus").textContent).toContain("bis Platz 49 → bis Platz 51");
+  });
+
+  it("eine Luecke im neuen Bereich stoppt die Erweiterung — die Presets bleiben, die Zaehler nicht angefasst", async () => {
+    leseStub = geraetMitMax(48);
+    await sammlungLaden([{ art: "ifx", name: "B", bytes: presetBytes("ZWEI"), platz: 51 }]);
+    el("fxpSamErweitern").checked = true;
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben).toHaveLength(1);
+    expect(el("fxpStatus").textContent).toMatch(/Platz 50 leer/);
+  });
+
+  it("ohne Haken bleibt alles wie bisher", async () => {
+    leseStub = geraetMitMax(48);
+    await sammlungLaden([{ art: "ifx", name: "A", bytes: presetBytes("EINS"), platz: 50 }]);
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben).toHaveLength(1);
+  });
+
+  it("das Zuruecknehmen stellt zuerst die alten Zaehler (48/49) und dann die Plaetze wieder her", async () => {
+    leseStub = geraetMitMax(48);
+    await sammlungLaden([{ art: "ifx", name: "A", bytes: presetBytes("EINS"), platz: 50 }]);
+    el("fxpSamErweitern").checked = true;
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben).toHaveLength(14);
+    await klickUndWarte("fxpSamZurueck");
+    expect(geschrieben).toHaveLength(28);
+    const zurueck = geschrieben.slice(14);
+    expect(zurueck.slice(0, 13).map((g) => g.addr)).toEqual([...IFX_ZAEHLER].reverse().map((z) => z.addr));
+    for (const g of zurueck.slice(0, 13)) {
+      const z = IFX_ZAEHLER.find((x) => x.addr === g.addr)!;
+      expect(Array.from(g.bytes)).toEqual([z.plusEins ? 49 : 48]);
+    }
+    expect(zurueck[13].addr).toBe(ifxAdresse(49));
+    expect(Array.from(zurueck[13].bytes)).toEqual(Array.from(new Uint8Array(FX_PRESET_SIZE)));
+  });
+
+  it("ein widerspruechlicher Zaehlersatz wird gemeldet und nicht angefasst", async () => {
+    const basis = geraetMitMax(48);
+    leseStub = (addr, len) => (addr === 0xc004a1f8 && len === 1 ? { ok: true, bytes: new Uint8Array([49]) } : basis(addr, len));
+    await sammlungLaden([{ art: "ifx", name: "A", bytes: presetBytes("EINS"), platz: 50 }]);
+    el("fxpSamErweitern").checked = true;
+    await klickUndWarte("fxpSamSchreiben");
+    expect(geschrieben).toHaveLength(1);
+    expect(el("fxpStatus").textContent).toMatch(/widersprechen/);
   });
 });

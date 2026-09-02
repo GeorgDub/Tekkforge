@@ -256,16 +256,18 @@ const firmwareSeiten = `
 
 <section class="seite">
   <span class="nr">15</span>
-  <h2>144 fertige Effekt-Presets zum Ausprobieren</h2>
-  <p class="lead">Man muss nicht bei null anfangen: TekkForge bringt vier fertig eingestellte Preset-Sets mit — zwei für die Effekte einzelner Parts, zwei für den Gesamtklang. Zusammen decken sie fast jeden Effekt-Algorithmus ab, den die Hacktribe-Firmware kennt.</p>
+  <h2>216 fertige Effekt-Presets zum Ausprobieren</h2>
+  <p class="lead">Man muss nicht bei null anfangen: TekkForge bringt sechs fertig eingestellte Preset-Sets mit — drei für die Effekte einzelner Parts, drei für den Gesamtklang. Zusammen decken sie fast jeden Effekt-Algorithmus ab, den die Hacktribe-Firmware kennt. Die beiden neuesten Sets („Bewegung“ und „Tekk-Modulation“) bringen alles in den Takt — Ringmodulator, Tremolo, Slicer, Wobble-Filter, LFO-Bitcrusher — und stützen sich dabei auf die dekodierten Werks-Presets des Geräts statt auf Vermutungen.</p>
   <ul>
     <li><b>„Starter“</b> liefert das Tekk-Werkzeug — Zerre, Bitcrusher, Ringmodulator, Delay — und für die Summe Kompressor, EQ und Filter. <b>„Farben“</b> formt statt zu zerlegen, <b>„Raum &amp; Bewegung“</b> stellt den Mix in einen Raum.</li>
-    <li>Zu jedem der 48 Grund-Presets gehören <b>zwei Abwandlungen</b>: derselbe Effekt, in genau eine Richtung verschoben. Nacheinander in denselben Platz geschrieben, hört man den Unterschied — und sonst nichts.</li>
+    <li>Zu jedem der 72 Grund-Presets gehören <b>zwei Abwandlungen</b>: derselbe Effekt, in genau eine Richtung verschoben. Nacheinander in denselben Platz geschrieben, hört man den Unterschied — und sonst nichts.</li>
     <li>Einige Paare sind zugleich <b>Messfühler</b>: Sie unterscheiden sich bewusst in einem einzigen Wert und beantworten am Ohr Fragen, die in keiner Unterlage stehen. Inzwischen sind sie gehört — bestätigt ist etwa der Neutralwert der Klangregler, und dass die Reihenfolge zweier Effekte deutlich hörbar ist.</li>
     <li>Geladen wird einzeln oder als <b>Sammlung</b> — und die lässt sich am Stück <b>verteilen</b>: je Eintrag ein Ziel-Platz (gezählt wie am Gerät, ab 1), ein Klick schreibt alle nacheinander, mit Prüfung nach jedem Schritt und einem Knopf, der alles wieder zurücknimmt. Die Platz-Zuweisung wird in der Sammlungs-Datei mitgespeichert.</li>
+    <li>Die Plätze muss niemand einzeln tippen: Startplatz eintragen, <b>▲ aufsteigend</b> oder <b>▼ absteigend</b> drücken — die Reihe wird in Listenfolge vergeben, je Effektart getrennt, ohne hinter der Grenze wieder bei 1 anzufangen.</li>
+    <li><b>Leere Plätze werden sichtbar.</b> Das Gerätemenü zeigt nur so viele Insert-Presets, wie 13 Zähler der Firmware erlauben (auf dem Testgerät 49; die Plätze 50–100 sind da, aber leer und unsichtbar). Ein Haken zieht die Zähler nach dem Verteilen bis zum höchsten Platz nach — derselbe Weg, den der Hacktribe-Editor geht, nur mit Netz: alle 13 werden vorher gelesen und auf Stimmigkeit geprüft, der neue Bereich auf Lücken, und bricht ein Schreibvorgang ab, werden die schon gesetzten sofort zurückgenommen. Gilt bis zum Ausschalten; Master-Presets lassen sich so nicht erweitern, dort sind alle 32 Plätze belegt.</li>
   </ul>
-  ${img("fx-sammlung", "Das Starter-Set als Sammlung geladen: zwölf Presets, je Eintrag ein Platz-Feld, darunter der Knopf, der alle nacheinander aufs Gerät schreibt.")}
-  <div class="hinweis"><b>Nebenbei repariert:</b> Der Weg von der Datei aufs Gerät war bisher versperrt — die Pflicht-Lesung des Ziel-Platzes warf das geladene Preset wieder aus dem Editor. Jetzt bleibt es stehen, und die Lesung holt nur noch das, wofür sie da ist: den Vorher-Stand für den Rückweg. Jede der 144 Dateien wird zudem automatisch geprüft — Größe, Algorithmus, und dass jede Regler-Zuordnung auf einen Parameter zeigt, den es wirklich gibt.</div>
+  ${img("fx-sammlung", "Das Set „Bewegung“ als Sammlung geladen und mit einem Klick ab Platz 50 durchnummeriert — Plätze, die das Gerätemenü bisher gar nicht zeigt. Der Haken darunter zieht nach dem Schreiben die Zähler nach, damit es sie zeigt.")}
+  <div class="hinweis"><b>Nebenbei repariert:</b> Der Weg von der Datei aufs Gerät war bisher versperrt — die Pflicht-Lesung des Ziel-Platzes warf das geladene Preset wieder aus dem Editor. Jetzt bleibt es stehen, und die Lesung holt nur noch das, wofür sie da ist: den Vorher-Stand für den Rückweg. Jede der 216 Dateien wird zudem automatisch geprüft — Größe, Algorithmus, und dass jede Regler-Zuordnung auf einen Parameter zeigt, den es wirklich gibt.</div>
 </section>
 
 <section class="seite">
@@ -311,7 +313,7 @@ const firmwareSeiten = `
       <tr><td>Master-Effekt-Presets</td><td>32 Plätze à 524 Byte</td><td class="ja">lesen und schreiben</td></tr>
       <tr><td>Groove-Vorlagen</td><td>96 Vorlagen à 320 Byte</td><td class="ja">lesen und schreiben</td></tr>
       <tr><td>Effekt-Zwischenspeicher</td><td>Stand beim Pattern-Laden</td><td class="halb">nur lesen, nicht live</td></tr>
-      <tr><td>Belegungszähler der Presets</td><td>ein Byte</td><td class="halb">nur lesen</td></tr>
+      <tr><td>Belegungszähler der Insert-Presets</td><td>13 Bytes (Menü + gespeicherte Parameter)</td><td class="ja">lesen und geschlossen nachziehen — am Gerät noch nicht abgenommen</td></tr>
     </tbody>
   </table>
   <h3 class="unter-h">Komplettsicherung</h3>
@@ -335,7 +337,7 @@ const firmwareSeiten = `
     <div class="karte"><h3>Die versteckten Schalter finden</h3><p>Drei Einstellungen gibt es nur über MIDI. Der Schalter, der das Gerät überhaupt erst zurückmelden lässt, ist gefunden und am Gerät belegt; mit Werkbank und Spiegel lassen sich die übrigen mit demselben Verfahren suchen.</p></div>
     <div class="karte"><h3>Regler-Bewegungen schreiben</h3><p>Aufgezeichnete Bewegungen werden heute nur gelesen. Sie auch setzen zu können, würde Arrangements in Bewegung bringen.</p></div>
     <div class="karte"><h3>Sequenz-Steps von außen</h3><p>Das Gerät nimmt inzwischen auch Befehle für einzelne Schritte entgegen. Was die Kennziffern bedeuten, steht nirgends — genau dafür ist die Werkbank da.</p></div>
-    <div class="karte"><h3>Preset-Sammlungen</h3><p>Gebaut: 144 fertige Presets liegen als vier Sammlungen bei. Offen ist der Hörtest am Gerät — die Messfühler-Paare darin beantworten dann, was heute keine Tabelle weiß.</p></div>
+    <div class="karte"><h3>Preset-Sammlungen</h3><p>Gebaut: 216 fertige Presets in sechs Sets. Die ersten vier sind am Gerät gehört; offen sind die beiden Takt-Sets und die Menü-Erweiterung für leere Plätze — die Messfühler-Paare darin beantworten dann, welche Zahl welche LFO-Wellenform ist.</p></div>
     <div class="karte"><h3>Vergleichen statt raten</h3><p>Zwei Auslesungen gegeneinanderhalten und die Unterschiede benennen — so lassen sich unbekannte Bytes Stück für Stück entschlüsseln.</p></div>
   </div>
   <div class="hinweis"><b>Bewusst nicht geplant:</b> Presets so anzulegen, dass sie im Gerätemenü als neue Einträge auftauchen. Dafür müssten dreizehn verstreute Zähler gleichzeitig stimmen; ein halb hochgezählter Satz hinterlässt eine Firmware in sich widersprüchlich. Diesen Weg soll weiterhin Hacktribes eigenes Werkzeug gehen.</div>

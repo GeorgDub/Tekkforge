@@ -540,12 +540,20 @@
                   <button id="fxpSamLaden" class="ghost">Sammlung laden…</button>
                   <input id="fxpSamIn" type="file" accept=".tfsam,.json" class="hidden" />
                   <span class="sub" id="fxpSamInfo" style="margin:0">noch leer</span>
+                  <span class="sub" style="margin:0 0 0 8px">Plätze:</span>
+                  <input id="fxpSamStart" type="number" min="1" max="96" placeholder="ab Platz" title="Startplatz fürs Durchnummerieren — zählt wie das Gerätemenü, ab 1. Leer = der Platz des ersten Eintrags der Art; gibt es auch den nicht: ▲ ab 1, ▼ ab dem oberen Ende." style="width:76px;padding:2px 4px;font-size:11px" />
+                  <button id="fxpSamNumAuf" class="ghost" title="Alle Einträge in Listen-Reihenfolge durchnummerieren, aufsteigend ab dem Startplatz — IFX, MFX und Groove je als eigene Reihe" style="padding:2px 8px;font-size:11px">▲ aufsteigend</button>
+                  <button id="fxpSamNumAb" class="ghost" title="Alle Einträge in Listen-Reihenfolge durchnummerieren, absteigend ab dem Startplatz — IFX, MFX und Groove je als eigene Reihe" style="padding:2px 8px;font-size:11px">▼ absteigend</button>
                 </div>
                 <div id="fxpSamListe" style="margin-top:6px"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
                   <button id="fxpSamSchreiben" class="primary" title="Jeden Eintrag mit Ziel-Platz nacheinander aufs Gerät schreiben — je Platz erst lesen, dann schreiben mit Rückleseprobe. Das Gerät darf dabei nicht spielen.">⚠ Alle auf das Gerät schreiben</button>
-                  <button id="fxpSamZurueck" class="ghost hidden" title="Die beim Verteilen gelesenen Vorher-Stände zurückschreiben, letzter zuerst">↶ Alle zurückschreiben</button>
+                  <button id="fxpSamZurueck" class="ghost hidden" title="Die beim Verteilen gelesenen Vorher-Stände zurückschreiben, letzter zuerst — auch die Zähler, falls das Menü erweitert wurde">↶ Alle zurückschreiben</button>
                   <span class="sub" style="margin:0">Platz-Feld je Eintrag: zählt wie das Gerätemenü (ab 1), leer = wird übersprungen.</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px" title="Presets in Plätzen hinter dem Belegungszähler (auf dem Testgerät: ab Platz 50) tauchen im Gerätemenü nicht auf. Mit dem Haken zieht TekkForge nach dem Verteilen die 13 Zähler der Hacktribe-Firmware bis zum höchsten geschriebenen IFX-Platz nach — derselbe Weg wie hacktribes add_ifx. Alle 13 oder keiner; der neue Bereich muss lückenlos belegt sein. Gilt bis zum Ausschalten."><input id="fxpSamErweitern" type="checkbox" /> IFX-Menü danach bis zum höchsten Platz erweitern</label>
+                  <button id="fxpSamErweiternJetzt" class="ghost" title="Das IFX-Menü sofort bis zu einem Platz erweitern — für Presets, die schon in leeren Plätzen liegen. Liest erst die 13 Zähler und die neuen Plätze, schreibt nur bei stimmigem Stand und lückenloser Belegung." style="padding:2px 8px;font-size:11px">IFX-Menü erweitern…</button>
                 </div>
                 <div id="fxpEditor" style="margin-top:10px"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">

@@ -122,7 +122,7 @@ const M = {
  * Dasselbe Byte heisst je nach Stufe etwas anderes: beim Insert-Effekt ist
  * 0x42 der IFX-Regler, beim Master-Effekt die X-Achse der Flaeche.
  */
-const Q = { reglerX: 0x42, achseY: 0x43, beruehrt: 0x41 };
+const Q = { reglerX: 0x42, achseY: 0x43, beruehrt: 0x41, play: 0x4a };
 /** Kettenplatz einer Zuordnung. */
 const KETTE = { ifx1: 0x00, ifx2: 0x01, mfx: 0x02 };
 
@@ -748,7 +748,674 @@ const MASTER_RAUM = [
  * `Punch Filt Alt2` setzen `output_select` auf 1 bzw. 2, dessen Bedeutung
  * nirgends steht. Was dabei herauskommt, gehoert zurueck in die Tabellen.
  */
+/**
+ * Set „Bewegung" — Insert. Alles, was sich im Takt bewegt: LFO-gekoppelte
+ * Ringmodulation, Tremolo, die drei Level-Mod-Spielarten der Werks-Presets,
+ * synchrone Flanger und Phaser, Vibrato, Roller.
+ *
+ * Woher die Zahlen: aus den **Werks-Presets des Geraets** (Sicherung vom
+ * 2026-09-01, dekodiert). Die Firmware belegt `level_mod_source` mit 3 („Off
+ * Beater"), 4 („Pumper") und 0 + `level_mod_type` 1 („Repeater"); die
+ * Sync-Noten laufen dort von 6 („Off Beater") ueber 7 („Repeater") bis 8
+ * („Slicer"); `lfo_wave` 2 ist beim Werks-„Tremolo" die Rechteckform mit
+ * `lfo_squ_dur`; „Roller 1/32" hat `on_syncnote` 15, „Delay 1/4" 20. Und die
+ * Werks-Presets legen **Play/Start** (Quelle 0x4A) auf `lfo_reset` — der LFO
+ * startet dann mit dem Pattern in Phase. Das ist hier uebernommen.
+ *
+ * Was Sonde bleibt: `Trem Welle 0/1/2` — drei Fassungen, die sich nur in
+ * `lfo_wave` unterscheiden, klaeren am Ohr, welche Zahl welche Wellenform ist.
+ */
+const PLAY_RESET_IFX = { quelle: Q.play, kette: KETTE.ifx1, param: "lfo_reset", min: 0, max: 1 };
+
+const INSERT_BEWEGUNG = [
+  {
+    datei: "25-ring-lfo",
+    name: "Ring LFO",
+    zweck: "Ringmodulator, dessen Traegerfrequenz ein tempo-gekoppelter LFO faehrt. Regler = Tiefe.",
+    ifx1: {
+      device: A.ringMod,
+      werte: { dry_wet: 100, osc_freq: 40, mod_int: 100, lfo_sync: 1, lfo_syncnote: 6, input_level: 127, hi_damp: 110, feedback: 30 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "mod_int", min: 0, max: 127 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "26-trem-square",
+    name: "Trem Square",
+    zweck: "Rechteck-Tremolo im Takt (Wellenform 2 wie das Werks-Tremolo). Regler = Pulsbreite.",
+    ifx1: {
+      device: A.tremolo,
+      werte: { dry_wet: 127, mod_int: 127, lfo_wave: 2, lfo_squ_dur: 50, lfo_sync: 1, lfo_sync_note: 7 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "lfo_squ_dur", min: 5, max: 120 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "27-off-beat-duck",
+    name: "Off Beat Duck",
+    zweck: "Level Mod mit Quelle 3 — die Werksbelegung von „Off Beater“: der Part duckt auf dem Off-Beat.",
+    ifx1: {
+      device: A.levelMod,
+      werte: { level_mod_source: 3, level_mod_int: 111, lfo_sync: 1, lfo_sync_note: 6, saturation: 1, output_gain: 36 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "level_mod_int", min: 63, max: 126 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "28-sidechain-pump",
+    name: "Sidechain Pump",
+    zweck: "Level Mod mit Quelle 4 — die Werksbelegung von „Pumper“: das Sidechain-Gefuehl ohne Sidechain.",
+    ifx1: {
+      device: A.levelMod,
+      werte: { level_mod_source: 4, level_mod_int: 126, lfo_sync: 1, lfo_sync_note: 6, saturation: 1, output_gain: 36 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "level_mod_int", min: 63, max: 126 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "29-repeat-stutter",
+    name: "Repeat Stutter",
+    zweck: "Level Mod mit Quelle 0 und Typ 1 — die Werksbelegung von „Repeater“. Regler = Sync-Note wie im Werks-Preset.",
+    ifx1: {
+      device: A.levelMod,
+      werte: { level_mod_source: 0, level_mod_type: 1, level_mod_int: 15, lfo_sync: 1, lfo_sync_note: 7, saturation: 1, output_gain: 36 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "lfo_sync_note", min: 5, max: 10 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "30-flange-sync",
+    name: "Flange Sync",
+    zweck: "Flanger mit tempo-gekoppeltem LFO und viel Rueckkopplung. Regler = Rueckkopplung.",
+    ifx1: {
+      device: A.flanger,
+      werte: { dry_wet: 90, mod_int: 127, lfo_wave: 1, lfo_sync: 1, lfo_sync_note: 5, feedback: 105, delay: 2, fb_hicut: 0 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "feedback", min: 0, max: 127 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "31-phase-sync",
+    name: "Phase Sync",
+    zweck: "Phaser im Takt, resonant. Regler = Resonanz.",
+    ifx1: {
+      device: A.phaser,
+      werte: { dry_wet: 80, type: 1, manual: 90, modint: 100, resonance: 95, phase: 1, lfo_sync: 1, lfo_sync_note: 5 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "resonance", min: 0, max: 127 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "32-chorus-vibrato",
+    name: "Chorus Vibrato",
+    zweck: "Chorus ganz nass, kurze Verzoegerung, keine Spreizung — das ist ein Vibrato. Regler = Rate.",
+    ifx1: {
+      device: A.chorus,
+      werte: { dry_wet: 127, mod_int: 127, lfo_wave: 1, lfo_speed: 40, l_delay: 10, r_delay: 10, spread: 0 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "lfo_speed", min: 5, max: 90 }],
+  },
+  {
+    datei: "33-roll-32-tekk",
+    name: "Roll 32 Tekk",
+    zweck: "Die Werte des Werks-„Roller 1/32“ (Sync-Note 15, Lag 127), ganz nass. Regler = Anteil.",
+    ifx1: {
+      device: A.shortDelay,
+      werte: { dry_level: 127, wet_level: 127, input_trim: 127, tempo_sync: 1, off_time_ratio: 65, off_delay_time: 19, on_time_ratio: 17, on_syncnote: 15, fb_depth: 0, high_damp: 0, low_damp: 0, delay_lag: 127 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "wet_level", min: 0, max: 127 }],
+  },
+  {
+    datei: "34-ring-delay-tekk",
+    name: "Ring Delay Tekk",
+    zweck: "Ringmodulator mit eigener Verzoegerung und Rueckkopplung (Werte von „Ring Delay 1“). Regler = Verzoegerung.",
+    ifx1: {
+      device: A.ringMod,
+      werte: { dry_wet: 80, osc_freq: 31, lfo_speed: 2, lfo_syncnote: 7, input_level: 127, delay: 42, hi_damp: 126, feedback: 89, delay_lag: 5 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "delay", min: 10, max: 90 }],
+  },
+  {
+    datei: "35-trem-welle-0",
+    name: "Trem Welle 0",
+    zweck: "Sonde: Tremolo im Takt mit Wellenform 0 — a/b sind Wellenform 1 und 2, sonst gleich.",
+    ifx1: {
+      device: A.tremolo,
+      werte: { dry_wet: 127, mod_int: 127, lfo_wave: 0, lfo_sync: 1, lfo_sync_note: 6 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "mod_int", min: 0, max: 127 }, PLAY_RESET_IFX],
+  },
+  {
+    datei: "36-flange-play-rst",
+    name: "Flange Play Rst",
+    zweck: "Sehr langsamer freier Flanger, dessen LFO bei Play/Start neu ansetzt — der Sweep beginnt mit dem Pattern. Regler = Rate.",
+    ifx1: {
+      device: A.flanger,
+      werte: { dry_wet: 90, mod_int: 127, lfo_wave: 1, lfo_sync: 0, lfo_speed: 3, feedback: 90, delay: 2 },
+    },
+    regler: [PLAY_RESET_IFX, { kette: KETTE.ifx1, param: "lfo_speed", min: 1, max: 40 }],
+  },
+].map((p) => ({ ...p, art: "ifx" }));
+
+/**
+ * Set „Tekk-Modulation" — Master. Kein Hall: die Summe wackelt, hackt, pumpt.
+ * LFO-Filter (der Wobble), LFO auf der Zerre, Rechteck-Tremolo, Slicer,
+ * synchrone Flanger/Phaser, Vibrato, LFO-Wah, LFO-Bitcrusher, wobbelnde
+ * Delays, Grain im Takt.
+ *
+ * Die Werte stuetzen sich wie beim Insert-Set auf die Werks-Presets: das
+ * Multimode-Filter steht dort auf `mod_source` 1 mit `freq_mod_int` 63 (der
+ * Mittelwert, also keine Modulation — hier wird er ausgelenkt), der
+ * Werks-„Step Shifter" liefert die Grain-Werte, und Play/Start setzt den LFO
+ * zurueck. Zwei Sonden: `Wah Src 0/1/2` und `Crush LFO` klaeren `mod_src`,
+ * dessen Zahlen in keiner Tabelle stehen.
+ */
+const PLAY_RESET_MFX = { quelle: Q.play, param: "lfo_reset", min: 0, max: 1 };
+
+const MASTER_TEKK = [
+  {
+    datei: "m25-wobble-filter",
+    name: "Wobble Filter",
+    zweck: "Das Multimode-Filter mit voll ausgelenktem LFO — der Wobble. X = LFO-Rate, Y = Modulationstiefe.",
+    mfx: {
+      device: M.multiFilter,
+      werte: { dry_wet: 127, frequency: 50, resonance: 100, mod_source: 1, lfo_sync: 0, lfo_speed: 60, freq_mod_int: 120, drive: 60 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "lfo_speed", min: 5, max: 127 },
+      { quelle: Q.achseY, param: "freq_mod_int", min: 0, max: 127 },
+      PLAY_RESET_MFX,
+    ],
+  },
+  {
+    datei: "m26-drive-mod-filt",
+    name: "Drive Mod Filt",
+    zweck: "Dasselbe Filter, aber der LFO faehrt die Zerre statt der Frequenz. X = Zerr-Modulation, Y = Zerre.",
+    mfx: {
+      device: M.multiFilter,
+      werte: { dry_wet: 127, frequency: 100, resonance: 40, mod_source: 1, lfo_speed: 30, freq_mod_int: 63, drive: 100, drive_mod_int: 127, drive_tone: 100 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "drive_mod_int", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "drive", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m27-trem-chop",
+    name: "Trem Chop",
+    zweck: "Rechteck-Tremolo ueber die Summe, im Takt. X = Pulsbreite, Y = Tiefe.",
+    mfx: {
+      device: M.tremolo,
+      werte: { dry_wet: 127, mod_int: 127, lfo_wave: 2, lfo_squdur: 50, lfo_sync: 1, lfo_sync_note: 7 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "lfo_squdur", min: 5, max: 120 },
+      { quelle: Q.achseY, param: "mod_int", min: 0, max: 127 },
+      PLAY_RESET_MFX,
+    ],
+  },
+  {
+    datei: "m28-slicer-master",
+    name: "Slicer Master",
+    zweck: "Level Mod mit Quelle 3 auf Sync-Note 8 — die Werksbelegung von „Slicer“, auf der Summe. X = Tiefe, Y = Sync-Note.",
+    mfx: {
+      device: M.levelMod,
+      werte: { amp_level: 127, output_gain_adjust: 32, level_mod_source: 3, level_mod_int: 120, saturation: 1, lfo_sync: 1, lfo_sync_note: 8 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "level_mod_int", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "lfo_sync_note", min: 5, max: 10 },
+      PLAY_RESET_MFX,
+    ],
+  },
+  {
+    datei: "m29-flanger-sync",
+    name: "Flanger Sync",
+    zweck: "Flanger im Takt mit viel Rueckkopplung. X = Rueckkopplung, Y = Lage.",
+    mfx: {
+      device: M.flanger,
+      werte: { dry_wet: 90, mod_int: 127, lfo_wave: 1, lfo_sync: 1, lfo_syncnote: 3, feedback: 100, delay: 2, hi_damp: 125, fb_hicut: 126 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "feedback", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "manual", min: 0, max: 127 },
+      PLAY_RESET_MFX,
+    ],
+  },
+  {
+    datei: "m30-phaser-sync",
+    name: "Phaser Sync",
+    zweck: "Phaser im Takt, resonant. X = Resonanz, Y = Tiefe.",
+    mfx: {
+      device: M.phaser,
+      werte: { dry_wet: 80, type: 1, manual: 90, mod_int: 110, resonance: 100, phase: 1, lfo_sync: 1, lfo_syncnote: 3 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "resonance", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "mod_int", min: 0, max: 127 },
+      PLAY_RESET_MFX,
+    ],
+  },
+  {
+    datei: "m31-vibrato-master",
+    name: "Vibrato Master",
+    zweck: "Chorus ganz nass ohne Spreizung — ein Vibrato ueber alles. X = Rate, Y = Tiefe.",
+    mfx: {
+      device: M.chorus,
+      werte: { dry_wet: 127, mod_int: 127, lfo_wave: 1, lfo_speed: 40, l_delay: 10, r_delay: 10, spread: 0 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "lfo_speed", min: 5, max: 90 },
+      { quelle: Q.achseY, param: "mod_int", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m32-wah-lfo",
+    name: "Wah LFO",
+    zweck: "Sonde: Wah mit `mod_src` 1 und LFO im Takt — a/b stellen 0 und 2. Welche Zahl der LFO ist, sagt das Ohr. X = Tiefe, Y = Lage.",
+    mfx: {
+      device: M.wah,
+      werte: { dry_wet: 127, mod_src: 1, mod_int: 127, lfo_sync: 1, lfo_syncnote: 6, manual: 56 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "mod_int", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "manual", min: 0, max: 127 },
+      PLAY_RESET_MFX,
+    ],
+  },
+  {
+    datei: "m33-crush-lfo",
+    name: "Crush LFO",
+    zweck: "Sonde: Decimator mit Modulationstiefe 110 und Sync an, `mod_src` auf Werkswert 0 — a stellt 1, b laesst frei laufen. X = Tiefe, Y = Rate.",
+    mfx: {
+      device: M.decimator,
+      werte: { dry_wet: 127, sample_freq: 60, bit_depth: 12, mod_int: 110, wave: 1, sync_on: 1, on_sync_note: 6 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "mod_int", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "sample_freq", min: 6, max: 90 },
+      PLAY_RESET_MFX,
+    ],
+  },
+  {
+    datei: "m34-wobble-delay",
+    name: "Wobble Delay",
+    zweck: "Mod Delay mit tiefer, schneller Modulation und langer Rueckkopplung. X = Tiefe, Y = Rate.",
+    mfx: { device: M.modDelay, werte: { mod_depth: 110, mod_freq: 60, fb_depth: 85 } },
+    regler: [
+      { quelle: Q.reglerX, param: "mod_depth", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "mod_freq", min: 5, max: 127 },
+    ],
+  },
+  {
+    datei: "m35-tape-wobble",
+    name: "Tape Wobble",
+    zweck: "Tape Echo mit eierndem Band: LFO-Tiefe hoch, Saettigung mit. X = Tiefe, Y = Rate.",
+    mfx: { device: M.tapeEcho, werte: { lfo_depth: 100, lfo_speed: 30, saturation: 90, feedback: 80 } },
+    regler: [
+      { quelle: Q.reglerX, param: "lfo_depth", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "lfo_speed", min: 2, max: 127 },
+    ],
+  },
+  {
+    datei: "m36-grain-sync",
+    name: "Grain Sync",
+    zweck: "Grain Shifter im Takt mit den Werten des Werks-„Step Shifter“, ganz nass. X = Schnipsellaenge, Y = Sync-Note.",
+    mfx: {
+      device: M.grainShifter,
+      werte: { dry_wet: 127, duration_bpm_sync: 1, off_time_ratio: 61, off_duration: 36, on_time_ratio: 11, on_duration: 21, lfo_bpm_sync: 1, off_lfo_freq: 53, on_sync_note: 8, duration_lag: 15 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "on_duration", min: 4, max: 40 },
+      { quelle: Q.achseY, param: "on_sync_note", min: 5, max: 10 },
+      PLAY_RESET_MFX,
+    ],
+  },
+].map((p) => ({ ...p, art: "mfx" }));
+
 const VARIATIONEN = {
+  // ── Set „Bewegung" (Insert) ──────────────────────────────────────────────
+  "25-ring-lfo": [
+    {
+      datei: "25a-ring-lfo-free",
+      name: "Ring LFO Free",
+      zweck: "Ohne Tempo-Kopplung, langsam frei laufend.",
+      ifx1: { werte: { lfo_sync: 0, lfo_speed: 8 } },
+    },
+    {
+      datei: "25b-ring-lfo-fast",
+      name: "Ring LFO Fast",
+      zweck: "Sync-Note 8 statt 6 — die Stufe des Werks-„Slicer“.",
+      ifx1: { werte: { lfo_syncnote: 8 } },
+    },
+  ],
+  "26-trem-square": [
+    {
+      datei: "26a-trem-square-slw",
+      name: "Trem Square Slw",
+      zweck: "Sync-Note 6 statt 7 — langsamer.",
+      ifx1: { werte: { lfo_sync_note: 6 } },
+    },
+    {
+      datei: "26b-trem-square-fst",
+      name: "Trem Square Fst",
+      zweck: "Sync-Note 8 — schneller.",
+      ifx1: { werte: { lfo_sync_note: 8 } },
+    },
+  ],
+  "27-off-beat-duck": [
+    {
+      datei: "27a-off-beat-soft",
+      name: "Off Beat Soft",
+      zweck: "Halbe Tiefe — das Ducken bleibt spuerbar, aber nicht als Loch.",
+      ifx1: { werte: { level_mod_int: 70 } },
+    },
+    {
+      datei: "27b-off-beat-sat",
+      name: "Off Beat Sat",
+      zweck: "Saettigung hoch — das Ducken zerrt beim Wiederkommen.",
+      ifx1: { werte: { saturation: 80 } },
+    },
+  ],
+  "28-sidechain-pump": [
+    {
+      datei: "28a-pump-soft",
+      name: "Pump Soft",
+      zweck: "Tiefe 80 statt 126.",
+      ifx1: { werte: { level_mod_int: 80 } },
+    },
+    {
+      datei: "28b-pump-note-8",
+      name: "Pump Note 8",
+      zweck: "Sync-Note 8 statt 6 — die Werksbelegung von „Slicer“.",
+      ifx1: { werte: { lfo_sync_note: 8 } },
+    },
+  ],
+  "29-repeat-stutter": [
+    {
+      datei: "29a-repeat-deep",
+      name: "Repeat Deep",
+      zweck: "Tiefe 100 statt 15 — das Werks-„Repeater“ mit voller Wirkung.",
+      ifx1: { werte: { level_mod_int: 100 } },
+    },
+    {
+      datei: "29b-repeat-note-9",
+      name: "Repeat Note 9",
+      zweck: "Sync-Note 9 — ueber der Werksreihe 6/7/8. Regler wie die Basis.",
+      ifx1: { werte: { lfo_sync_note: 9 } },
+    },
+  ],
+  "30-flange-sync": [
+    {
+      datei: "30a-flange-sync-squ",
+      name: "Flange Sync Squ",
+      zweck: "Wellenform 2 — springt statt zu gleiten.",
+      ifx1: { werte: { lfo_wave: 2 } },
+    },
+    {
+      datei: "30b-flange-sync-dp",
+      name: "Flange Sync Dp",
+      zweck: "Laengere Verzoegerung und Hand-Anteil wie das Werks-„Flanger +“.",
+      ifx1: { werte: { delay: 26, manual: 5 } },
+    },
+  ],
+  "31-phase-sync": [
+    {
+      datei: "31a-phase-sync-tri",
+      name: "Phase Sync Tri",
+      zweck: "Modulations-Wellenform 1 statt 0.",
+      ifx1: { werte: { mod_wave: 1 } },
+    },
+    {
+      datei: "31b-phase-sync-res",
+      name: "Phase Sync Res",
+      zweck: "Resonanz am Anschlag, Hoehen gedaempft.",
+      ifx1: { werte: { resonance: 125, high_damp: 40 } },
+    },
+  ],
+  "32-chorus-vibrato": [
+    {
+      datei: "32a-vibrato-slow",
+      name: "Vibrato Slow",
+      zweck: "Rate 12 statt 40.",
+      ifx1: { werte: { lfo_speed: 12 } },
+    },
+    {
+      datei: "32b-vibrato-sync",
+      name: "Vibrato Sync",
+      zweck: "Tempo-gekoppelt (Note 6), LFO-Reset bei Play. Regler = Tiefe.",
+      ifx1: { werte: { lfo_sync: 1, lfo_sync_note: 6 } },
+      regler: [{ kette: KETTE.ifx1, param: "mod_int", min: 0, max: 127 }, PLAY_RESET_IFX],
+    },
+  ],
+  "33-roll-32-tekk": [
+    {
+      datei: "33a-roll-32-fb",
+      name: "Roll 32 Fb",
+      zweck: "Rueckkopplung 90 — der Roller laeuft nach.",
+      ifx1: { werte: { fb_depth: 90 } },
+    },
+    {
+      datei: "33b-roll-32-dark",
+      name: "Roll 32 Dark",
+      zweck: "Hoehen und Tiefen im Roller gedaempft.",
+      ifx1: { werte: { high_damp: 100, low_damp: 30 } },
+    },
+  ],
+  "34-ring-delay-tekk": [
+    {
+      datei: "34a-ring-delay-lo",
+      name: "Ring Delay Lo",
+      zweck: "Traeger tiefer (14 statt 31).",
+      ifx1: { werte: { osc_freq: 14 } },
+    },
+    {
+      datei: "34b-ring-delay-fb",
+      name: "Ring Delay Fb",
+      zweck: "Rueckkopplung 120 — kurz vor dem Kippen.",
+      ifx1: { werte: { feedback: 120 } },
+    },
+  ],
+  "35-trem-welle-0": [
+    {
+      datei: "35a-trem-welle-1",
+      name: "Trem Welle 1",
+      zweck: "Sonde: Wellenform 1, sonst gleich.",
+      ifx1: { werte: { lfo_wave: 1 } },
+    },
+    {
+      datei: "35b-trem-welle-2",
+      name: "Trem Welle 2",
+      zweck: "Sonde: Wellenform 2 (beim Werks-Tremolo das Rechteck), sonst gleich.",
+      ifx1: { werte: { lfo_wave: 2 } },
+    },
+  ],
+  "36-flange-play-rst": [
+    {
+      datei: "36a-flange-play-squ",
+      name: "Flange Play Squ",
+      zweck: "Wellenform 2 — der Reset ist dann als Sprung zu hoeren.",
+      ifx1: { werte: { lfo_wave: 2 } },
+    },
+    {
+      datei: "36b-flange-play-fst",
+      name: "Flange Play Fst",
+      zweck: "Rate 20 statt 3.",
+      ifx1: { werte: { lfo_speed: 20 } },
+    },
+  ],
+  // ── Set „Tekk-Modulation" (Master) ────────────────────────────────────────
+  "m25-wobble-filter": [
+    {
+      datei: "m25a-wobble-sync",
+      name: "Wobble Sync",
+      zweck: "LFO tempo-gekoppelt (Note 6) statt frei. X = Resonanz.",
+      mfx: { werte: { lfo_sync: 1, lfo_syncnote: 6 } },
+      regler: [
+        { quelle: Q.reglerX, param: "resonance", min: 0, max: 127 },
+        { quelle: Q.achseY, param: "freq_mod_int", min: 0, max: 127 },
+        PLAY_RESET_MFX,
+      ],
+    },
+    {
+      datei: "m25b-wobble-hp",
+      name: "Wobble HP",
+      zweck: "Hochpass statt 24-dB-Tiefpass.",
+      mfx: { werte: { hpf_level: 127, lpf24_level: 0 } },
+    },
+  ],
+  "m26-drive-mod-filt": [
+    {
+      datei: "m26a-drive-mod-slow",
+      name: "Drive Mod Slow",
+      zweck: "LFO-Rate 8 statt 30.",
+      mfx: { werte: { lfo_speed: 8 } },
+    },
+    {
+      datei: "m26b-drive-mod-bp",
+      name: "Drive Mod BP",
+      zweck: "Bandpass statt Tiefpass.",
+      mfx: { werte: { bpf_level: 127, lpf24_level: 0 } },
+    },
+  ],
+  "m27-trem-chop": [
+    {
+      datei: "m27a-trem-chop-slow",
+      name: "Trem Chop Slow",
+      zweck: "Sync-Note 6 statt 7.",
+      mfx: { werte: { lfo_sync_note: 6 } },
+    },
+    {
+      datei: "m27b-trem-chop-fast",
+      name: "Trem Chop Fast",
+      zweck: "Sync-Note 8.",
+      mfx: { werte: { lfo_sync_note: 8 } },
+    },
+  ],
+  "m28-slicer-master": [
+    {
+      datei: "m28a-slicer-repeat",
+      name: "Slicer Repeat",
+      zweck: "Quelle 0 mit Typ 1 — die Werksbelegung von „Repeater“.",
+      mfx: { werte: { level_mod_source: 0, level_mod_type: 1, level_mod_int: 15 } },
+    },
+    {
+      datei: "m28b-slicer-pump",
+      name: "Slicer Pump",
+      zweck: "Quelle 4 auf Note 6 — die Werksbelegung von „Pumper“.",
+      mfx: { werte: { level_mod_source: 4, lfo_sync_note: 6 } },
+    },
+  ],
+  "m29-flanger-sync": [
+    {
+      datei: "m29a-flanger-sync-sq",
+      name: "Flanger Sync Sq",
+      zweck: "Wellenform 2.",
+      mfx: { werte: { lfo_wave: 2 } },
+    },
+    {
+      datei: "m29b-flanger-sync-dp",
+      name: "Flanger Sync Dp",
+      zweck: "Laengere Verzoegerung, Rueckkopplung 120.",
+      mfx: { werte: { delay: 26, feedback: 120 } },
+    },
+  ],
+  "m30-phaser-sync": [
+    {
+      datei: "m30a-phaser-sync-fst",
+      name: "Phaser Sync Fst",
+      zweck: "Frei laufend mit Rate 60 statt tempo-gekoppelt.",
+      mfx: { werte: { lfo_sync: 0, lfo_speed: 60 } },
+    },
+    {
+      datei: "m30b-phaser-sync-dp",
+      name: "Phaser Sync Dp",
+      zweck: "Resonanz am Anschlag, Hoehen gedaempft.",
+      mfx: { werte: { resonance: 127, high_damp: 30 } },
+    },
+  ],
+  "m31-vibrato-master": [
+    {
+      datei: "m31a-vibrato-sync",
+      name: "Vibrato Sync",
+      zweck: "Tempo-gekoppelt (Note 5), LFO-Reset bei Play.",
+      mfx: { werte: { lfo_sync: 1, lfo_sync_note: 5 } },
+      regler: [
+        { quelle: Q.reglerX, param: "mod_int", min: 0, max: 127 },
+        { quelle: Q.achseY, param: "l_delay", min: 2, max: 40 },
+        PLAY_RESET_MFX,
+      ],
+    },
+    {
+      datei: "m31b-vibrato-wide",
+      name: "Vibrato Wide",
+      zweck: "Volle Spreizung, rechts laenger verzoegert — vom Vibrato zurueck zum Chorus.",
+      mfx: { werte: { spread: 127, r_delay: 40 } },
+    },
+  ],
+  "m32-wah-lfo": [
+    {
+      datei: "m32a-wah-src-0",
+      name: "Wah Src 0",
+      zweck: "Sonde: `mod_src` 0 (Werkswert), sonst gleich.",
+      mfx: { werte: { mod_src: 0 } },
+    },
+    {
+      datei: "m32b-wah-src-2",
+      name: "Wah Src 2",
+      zweck: "Sonde: `mod_src` 2, sonst gleich.",
+      mfx: { werte: { mod_src: 2 } },
+    },
+  ],
+  "m33-crush-lfo": [
+    {
+      datei: "m33a-crush-lfo-src1",
+      name: "Crush LFO Src1",
+      zweck: "Sonde: `mod_src` 1 statt 0, sonst gleich.",
+      mfx: { werte: { mod_src: 1 } },
+    },
+    {
+      datei: "m33b-crush-lfo-free",
+      name: "Crush LFO Free",
+      zweck: "Sync aus, freie Rate 60.",
+      mfx: { werte: { sync_on: 0, off_freq: 60 } },
+    },
+  ],
+  "m34-wobble-delay": [
+    {
+      datei: "m34a-wobble-dly-slow",
+      name: "Wobble Dly Slow",
+      zweck: "Modulationsrate 15 statt 60.",
+      mfx: { werte: { mod_freq: 15 } },
+    },
+    {
+      datei: "m34b-wobble-dly-sq",
+      name: "Wobble Dly Sq",
+      zweck: "Modulations-Wellenform 2 statt 1.",
+      mfx: { werte: { mod_wave: 2 } },
+    },
+  ],
+  "m35-tape-wobble": [
+    {
+      datei: "m35a-tape-wobble-slw",
+      name: "Tape Wobble Slw",
+      zweck: "LFO-Rate 8 statt 30.",
+      mfx: { werte: { lfo_speed: 8 } },
+    },
+    {
+      datei: "m35b-tape-wobble-sat",
+      name: "Tape Wobble Sat",
+      zweck: "Saettigung und Gain am Anschlag.",
+      mfx: { werte: { saturation: 127, gain: 90 } },
+    },
+  ],
+  "m36-grain-sync": [
+    {
+      datei: "m36a-grain-sync-slow",
+      name: "Grain Sync Slow",
+      zweck: "Sync-Note 6 und laengere Schnipsel — die Werte des Werks-„Step Shifter“.",
+      mfx: { werte: { on_sync_note: 6, on_duration: 30 } },
+    },
+    {
+      datei: "m36b-grain-sync-lag",
+      name: "Grain Sync Lag",
+      zweck: "Laenge-Lag 90 statt 15 — Uebergaenge verschliffen.",
+      mfx: { werte: { duration_lag: 90 } },
+    },
+  ],
   "01-tekk-drive": [
     {
       datei: "01a-tekk-drive-warm",
@@ -1569,3 +2236,7 @@ schreibeGruppe(INSERT_FARBEN, "e2fxp", "TekkForge-IFX-Farben.tfsam", "TekkForge 
 schreibeGruppe(variationen(INSERT_FARBEN), "e2fxp", "TekkForge-IFX-Farben-Variationen.tfsam", "TekkForge IFX Farben Variationen");
 schreibeGruppe(MASTER_RAUM, "mfx", "TekkForge-MFX-Raum.tfsam", "TekkForge MFX Raum");
 schreibeGruppe(variationen(MASTER_RAUM), "mfx", "TekkForge-MFX-Raum-Variationen.tfsam", "TekkForge MFX Raum Variationen");
+schreibeGruppe(INSERT_BEWEGUNG, "e2fxp", "TekkForge-IFX-Bewegung.tfsam", "TekkForge IFX Bewegung");
+schreibeGruppe(variationen(INSERT_BEWEGUNG), "e2fxp", "TekkForge-IFX-Bewegung-Variationen.tfsam", "TekkForge IFX Bewegung Variationen");
+schreibeGruppe(MASTER_TEKK, "mfx", "TekkForge-MFX-Tekk.tfsam", "TekkForge MFX Tekk-Modulation");
+schreibeGruppe(variationen(MASTER_TEKK), "mfx", "TekkForge-MFX-Tekk-Variationen.tfsam", "TekkForge MFX Tekk-Modulation Variationen");

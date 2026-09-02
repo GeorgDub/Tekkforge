@@ -1,7 +1,7 @@
 # Beispiel-Presets für Insert- und Master-Effekte
 
-144 fertig eingestellte FX-Presets für die Electribe 2 mit Hacktribe-Firmware
-— je eine Datei mit dem rohen 524-Byte-Block, dazu acht Sammlungen, die sie
+216 fertig eingestellte FX-Presets für die Electribe 2 mit Hacktribe-Firmware
+— je eine Datei mit dem rohen 524-Byte-Block, dazu zwölf Sammlungen, die sie
 gruppenweise auf einmal laden.
 
 | Set | Art | Endung | Ziel im RAM | Plätze | Sammlungen |
@@ -10,19 +10,21 @@ gruppenweise auf einmal laden.
 | **Starter** — Summe | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Starter` (12) · `MFX-Variationen` (24) |
 | **Farben** — Formen statt Zerlegen | Insert | `.e2fxp` | `0xC00A80F0` | 0–95 | `IFX-Farben` (12) · `IFX-Farben-Variationen` (24) |
 | **Raum & Bewegung** | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Raum` (12) · `MFX-Raum-Variationen` (24) |
+| **Bewegung** — alles im Takt | Insert | `.e2fxp` | `0xC00A80F0` | 0–95 | `IFX-Bewegung` (12) · `IFX-Bewegung-Variationen` (24) |
+| **Tekk-Modulation** — kein Hall | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Tekk` (12) · `MFX-Tekk-Variationen` (24) |
 
-Zusammen decken die vier Sets **alle 20 Insert-Algorithmen und 24 der 25
+Zusammen decken die sechs Sets **alle 20 Insert-Algorithmen und 24 der 25
 Master-Algorithmen** der Hacktribe-Firmware ab. Übrig bleibt nur der
 Master-`Mute` — ein gespeichertes Preset, das nichts tut, ist keins.
 
-Zu jedem der 48 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
+Zu jedem der 72 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
 zu `01-…`): derselbe Algorithmus, in genau eine Richtung verschoben. Nur so
 ist der Vergleich einer — wer drei Dateien nacheinander in denselben Platz
 schreibt und dieselbe Sequenz laufen lässt, hört den Unterschied und sonst
 nichts.
 
-Mehr Presets als Plätze: 72 Insert-Presets auf 96 Plätze (davon im Menü nur
-die belegten, siehe unten), 72 Master-Presets auf 32. Das ist Absicht — es
+Mehr Presets als Plätze: 108 Insert-Presets auf 96 Plätze (davon im Menü nur
+die belegten, siehe unten), 108 Master-Presets auf 32. Das ist Absicht — es
 soll ausgewählt werden, nicht alles gleichzeitig draufpassen.
 
 ---
@@ -209,6 +211,94 @@ beantwortet — welcher der vier Hall-Algorithmen wofür taugt.
 
 ---
 
+## Set „Bewegung“ — Insert
+
+Alles, was sich im Takt bewegt. Die Zahlen stammen aus den **Werks-Presets
+des Geräts** (Sicherung vom 2026-09-01, dekodiert): die Firmware belegt
+`level_mod_source` mit 3 („Off Beater“), 4 („Pumper“) und 0 + Typ 1
+(„Repeater“); die Sync-Noten laufen dort von 6 über 7 bis 8 („Slicer“);
+`lfo_wave` 2 ist beim Werks-„Tremolo“ das Rechteck; „Roller 1/32“ hat
+`on_syncnote` 15. Und die Werks-Presets legen **Play/Start** (Quelle `0x4A`)
+auf `lfo_reset` — der LFO startet dann mit dem Pattern in Phase. Das ist bei
+allen tempo-gekoppelten Presets hier übernommen (zweite Zuordnung).
+
+| Datei | Name im Menü | IFX 1 | IFX-Regler zieht | Play/Start |
+|---|---|---|---|---|
+| `25-ring-lfo` | Ring LFO | Ring Mod (Sync, Note 6) | `mod_int` 0 → 127 | LFO-Reset |
+| `26-trem-square` | Trem Square | Tremolo (Rechteck, Sync, Note 7) | `lfo_squ_dur` 5 → 120 | LFO-Reset |
+| `27-off-beat-duck` | Off Beat Duck | Level Mod (Quelle 3) | `level_mod_int` 63 → 126 | LFO-Reset |
+| `28-sidechain-pump` | Sidechain Pump | Level Mod (Quelle 4) | `level_mod_int` 63 → 126 | LFO-Reset |
+| `29-repeat-stutter` | Repeat Stutter | Level Mod (Quelle 0, Typ 1) | `lfo_sync_note` 5 → 10 | LFO-Reset |
+| `30-flange-sync` | Flange Sync | Flanger (Sync, Note 5) | `feedback` 0 → 127 | LFO-Reset |
+| `31-phase-sync` | Phase Sync | Phaser (Sync, Note 5) | `resonance` 0 → 127 | LFO-Reset |
+| `32-chorus-vibrato` | Chorus Vibrato | Chorus (nass, 10 ms, keine Spreizung) | `lfo_speed` 5 → 90 | — |
+| `33-roll-32-tekk` | Roll 32 Tekk | Short Delay (Werte von „Roller 1/32“) | `wet_level` 0 → 127 | — |
+| `34-ring-delay-tekk` | Ring Delay Tekk | Ring Mod (Werte von „Ring Delay 1“) | `delay` 10 → 90 | — |
+| `35-trem-welle-0` | Trem Welle 0 | Tremolo (Sync, `lfo_wave` 0) | `mod_int` 0 → 127 | LFO-Reset |
+| `36-flange-play-rst` | Flange Play Rst | Flanger (frei, Rate 3) | `lfo_speed` 1 → 40 | LFO-Reset |
+
+### Variationen
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| Ring LFO | Ring LFO Free | Ring LFO Fast | frei laufend (Rate 8) · Sync-Note 8 |
+| Trem Square | Trem Square Slw | Trem Square Fst | Sync-Note 6 / 7 / 8 |
+| Off Beat Duck | Off Beat Soft | Off Beat Sat | Tiefe 70 · Sättigung 80 |
+| Sidechain Pump | Pump Soft | Pump Note 8 | Tiefe 80 · Sync-Note 8 |
+| Repeat Stutter | Repeat Deep | Repeat Note 9 | Tiefe 100 · Sync-Note 9 |
+| Flange Sync | Flange Sync Squ | Flange Sync Dp | Wellenform 2 · Verzögerung 26 + Hand 5 (wie „Flanger +“) |
+| Phase Sync | Phase Sync Tri | Phase Sync Res | `mod_wave` 1 · Resonanz 125, Höhen gedämpft |
+| Chorus Vibrato | Vibrato Slow | Vibrato Sync | Rate 12 · tempo-gekoppelt mit Play-Reset (Regler zieht `mod_int`) |
+| Roll 32 Tekk | Roll 32 Fb | Roll 32 Dark | Rückkopplung 90 · Dämpfung oben und unten |
+| Ring Delay Tekk | Ring Delay Lo | Ring Delay Fb | Träger 14 · Rückkopplung 120 |
+| Trem Welle 0 | Trem Welle 1 | Trem Welle 2 | **Sonde:** nur `lfo_wave` 0 / 1 / 2 |
+| Flange Play Rst | Flange Play Squ | Flange Play Fst | Wellenform 2 · Rate 20 |
+
+---
+
+## Set „Tekk-Modulation“ — Master
+
+Kein Hall. Die Summe wackelt, hackt, pumpt: LFO-Filter (der Wobble), LFO auf
+der Zerre, Rechteck-Tremolo, Slicer, synchrone Flanger und Phaser, Vibrato,
+LFO-Wah, LFO-Bitcrusher, wobbelnde Delays, Grain im Takt. Das
+Multimode-Filter steht in den Werks-Presets auf `mod_source` 1 mit
+`freq_mod_int` 63 — das ist der Mittelwert, also keine Modulation; hier wird
+er ausgelenkt. Die Grain-Werte kommen vom Werks-„Step Shifter“.
+
+| Datei | Name im Menü | Algorithmus | X-Achse | Y-Achse | Berühren / Play |
+|---|---|---|---|---|---|
+| `m25-wobble-filter` | Wobble Filter | Multimode Filter (`freq_mod_int` 120) | `lfo_speed` 5 → 127 | `freq_mod_int` 0 → 127 | Play: LFO-Reset |
+| `m26-drive-mod-filt` | Drive Mod Filt | Multimode Filter (`drive_mod_int` 127) | `drive_mod_int` 0 → 127 | `drive` 0 → 127 | — |
+| `m27-trem-chop` | Trem Chop | Tremolo (Rechteck, Sync, Note 7) | `lfo_squdur` 5 → 120 | `mod_int` 0 → 127 | Play: LFO-Reset |
+| `m28-slicer-master` | Slicer Master | Level Mod (Quelle 3, Note 8) | `level_mod_int` 0 → 127 | `lfo_sync_note` 5 → 10 | Play: LFO-Reset |
+| `m29-flanger-sync` | Flanger Sync | Flanger (Sync, Note 3) | `feedback` 0 → 127 | `manual` 0 → 127 | Play: LFO-Reset |
+| `m30-phaser-sync` | Phaser Sync | Phaser (Sync, Note 3) | `resonance` 0 → 127 | `mod_int` 0 → 127 | Play: LFO-Reset |
+| `m31-vibrato-master` | Vibrato Master | Chorus (nass, 10 ms, keine Spreizung) | `lfo_speed` 5 → 90 | `mod_int` 0 → 127 | — |
+| `m32-wah-lfo` | Wah LFO | Wah (`mod_src` 1, Sync, Note 6) | `mod_int` 0 → 127 | `manual` 0 → 127 | Play: LFO-Reset |
+| `m33-crush-lfo` | Crush LFO | Decimator (`mod_int` 110, Sync, Note 6) | `mod_int` 0 → 127 | `sample_freq` 6 → 90 | Play: LFO-Reset |
+| `m34-wobble-delay` | Wobble Delay | Mod Delay (`mod_depth` 110) | `mod_depth` 0 → 127 | `mod_freq` 5 → 127 | — |
+| `m35-tape-wobble` | Tape Wobble | Tape Echo (`lfo_depth` 100) | `lfo_depth` 0 → 127 | `lfo_speed` 2 → 127 | — |
+| `m36-grain-sync` | Grain Sync | Grain Shifter (Werte von „Step Shifter“) | `on_duration` 4 → 40 | `on_sync_note` 5 → 10 | Play: LFO-Reset |
+
+### Variationen
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| Wobble Filter | Wobble Sync | Wobble HP | tempo-gekoppelt (X = Resonanz) · Hochpass statt Tiefpass |
+| Drive Mod Filt | Drive Mod Slow | Drive Mod BP | LFO-Rate 8 · Bandpass |
+| Trem Chop | Trem Chop Slow | Trem Chop Fast | Sync-Note 6 / 7 / 8 |
+| Slicer Master | Slicer Repeat | Slicer Pump | Quelle 0 + Typ 1 („Repeater“) · Quelle 4 („Pumper“) |
+| Flanger Sync | Flanger Sync Sq | Flanger Sync Dp | Wellenform 2 · Verzögerung 26, Rückkopplung 120 |
+| Phaser Sync | Phaser Sync Fst | Phaser Sync Dp | frei laufend (Rate 60) · Resonanz 127 |
+| Vibrato Master | Vibrato Sync | Vibrato Wide | tempo-gekoppelt mit Play-Reset · Spreizung 127 |
+| Wah LFO | Wah Src 0 | Wah Src 2 | **Sonde:** nur `mod_src` 1 / 0 / 2 |
+| Crush LFO | Crush LFO Src1 | Crush LFO Free | **Sonde:** `mod_src` 1 · Sync aus, Rate 60 |
+| Wobble Delay | Wobble Dly Slow | Wobble Dly Sq | Rate 15 · Wellenform 2 |
+| Tape Wobble | Tape Wobble Slw | Tape Wobble Sat | Rate 8 · Sättigung 127, Gain 90 |
+| Grain Sync | Grain Sync Slow | Grain Sync Lag | Sync-Note 6, Schnipsel 30 · Lag 90 |
+
+---
+
 ## Sieben Paare sind zugleich Sonden
 
 Manche Paare beantworten nebenbei eine Frage, die in den Format-Unterlagen
@@ -224,6 +314,9 @@ Ohr, was keine Tabelle hergibt:
 | `Cut Fader` (0), `Half` (64), `Full` (127) | Ist `fader` beim Mute ein Pegel oder eine Dämpfung? |
 | `Grain Fine` ↔ `Grain Rough` | Was tut `off_duration`? |
 | `Bit Tekk Rate` ↔ `Bit Tekk Bits` | Welche der beiden Achsen macht den Crush-Klang aus? |
+| `Trem Welle 0` / `1` / `2` | Welche Zahl ist welche LFO-Wellenform? (2 ist beim Werks-Tremolo das Rechteck) |
+| `Wah LFO` (1), `Wah Src 0`, `Wah Src 2` | Welcher `mod_src`-Wert ist beim Wah der LFO, welcher die Hüllkurve? |
+| `Crush LFO` (0) ↔ `Crush LFO Src1` | dasselbe für den Master-Decimator — und tut `mod_int` dort überhaupt etwas? |
 
 Dazu die zwei Vergleiche, die keine Byte-Sonden sind, aber dieselbe Rolle
 spielen: `10-acid-filter` ↔ `23-filter-drive` (macht die Kettenfolge einen
@@ -258,13 +351,30 @@ Im FX-Preset-Bereich, mit verbundenem Gerät:
 3. **Schreiben**. Am Gerät den Part auf den Platz stellen und drehen (Insert)
    bzw. über die X/Y-Fläche wischen (Master).
 
-**Welcher Platz.** TekkForge zählt die `add_ifx`-Limitzähler bewusst *nicht*
-hoch (13 verstreute Bytes; ein halb hochgezählter Satz hinterlässt eine
-inkonsistente Firmware). Ein Preset in einem bisher **leeren** Platz taucht
-deshalb im Gerätemenü nicht auf. Also über einen **belegten** Platz schreiben —
-`Max-IFX-Index` (`0xC0048F80`) sagt, bis wohin belegt ist; auf dem Testgerät
-war das 48, also Plätze 0–48. Der abgenommene Schreiblauf im Haupt-README lief
-auf Platz 40.
+**Welcher Platz.** Das Gerätemenü zeigt nur so viele Insert-Plätze, wie ein
+Satz von 13 Zählern der Firmware erlaubt — auf dem Testgerät 49 (Plätze 1–49
+im Menü, Max-Index `0xC0048F80` = 48). Die Plätze 50–100 sind im RAM da, aber
+leer und unsichtbar (Sicherung vom 2026-09-01: lauter Nullen). Ein Preset in
+einen **leeren** Platz zu schreiben ist harmlos, taucht aber im Menü erst auf,
+wenn die Zähler nachgezogen sind — genau das macht der Haken
+**„IFX-Menü danach bis zum höchsten Platz erweitern“** beim Verteilen (oder
+der Knopf **„IFX-Menü erweitern…“** für Presets, die schon dort liegen). Es
+ist der Weg von hacktribes `add_ifx`: alle 13 Zähler lesen und auf
+Stimmigkeit prüfen, die neuen Plätze lesen (eine Lücke stoppt alles, das
+Menü zeigte sonst namenlose Einträge), dann alle 13 schreiben, jeder mit
+Rückleseprobe — und bricht einer ab, werden die schon gesetzten sofort
+zurückgeschrieben. **Alles davon lebt nur im RAM**: nach dem Ausschalten zählt
+das Menü wieder bis 49, und die Presets in den neuen Plätzen sind weg. Wer
+nur vergleichen will, schreibt weiter über **belegte** Plätze (der abgenommene
+Schreiblauf im Haupt-README lief auf Platz 41).
+
+**Master-Presets lassen sich so nicht erweitern.** Alle 32 Plätze sind
+belegt, und ihr Zähler (`0xC003EFE4`, fest 32) ist in Stock- wie
+Hacktribe-Firmware gleich — es gibt keinen freien Platz, den ein Zähler
+sichtbar machen könnte. Bei MFX heißt es also immer: einen belegten Platz
+überschreiben. ⚠ Die Menü-Erweiterung ist **am Gerät noch nicht abgenommen**
+(Stand 2026-09-02); der erste Test ist ein Preset auf Platz 50 mit Haken,
+danach am Gerät Platz 50 wählen.
 
 ⚠ **Das Gerätemenü zählt ab 1** — bei Insert- wie Master-Presets (am Gerät
 gesehen, 2026-09-01; dieselbe Verschiebung wie beim Program Change). Das
@@ -294,6 +404,15 @@ letzter zuerst. Die Zuweisung wird mit **„Sammlung sichern…“** in der `.tf
 mitgespeichert (Feld `platz`, 1-basiert) und ist beim nächsten Laden wieder da.
 Am Gerät abgenommen (2026-09-02): das Starter-Set in einem Lauf verteilt,
 alle zwölf Presets unter ihren Namen im Gerätemenü.
+
+**Plätze durchnummerieren.** Statt zwölf Zahlen zu tippen: Startplatz ins
+Feld **„ab Platz“** (oder leer lassen, dann zählt die Reihe vom Platz des
+ersten Eintrags der Art aus) und **▲ aufsteigend** bzw. **▼ absteigend**
+drücken — ▲ heißt größere Nummern, ▼ kleinere, wie bei den Pfeilen im
+Pattern-Editor. Jede Art bekommt ihre eigene Reihe (IFX 1, 2, 3 … und MFX
+1, 2, 3 … sind kein Konflikt), und hinter der Art-Grenze bleibt der Platz
+leer statt bei 1 wieder anzufangen. Ist auch das Startfeld leer und kein
+Platz vergeben, beginnt ▲ bei 1 und ▼ am oberen Ende der Art.
 
 Dieselben Dateien lassen sich auch in Synthstudio laden (E2s-Preset-Panel,
 „.bin importieren“ — die Art wird an der Größe erkannt) und mit

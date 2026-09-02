@@ -34,7 +34,16 @@ import {
 import { baueMidiThru } from "../core/fxLive";
 import { grooveAusAudio } from "../core/grooveAusLied";
 import { sicherungsPlan, baueSicherung, leseSicherung, vergleicheSicherung, type SicherungsBlock } from "../core/geraetSicherung";
-import { baueSammlung, leseSammlung, planeVerteilung, PLATZ_MAX, type SammlungsEintrag } from "../core/sammlung";
+import {
+  baueSammlung,
+  leseSammlung,
+  planeVerteilung,
+  nummerierePlaetze,
+  PLATZ_MAX,
+  type NummerierRichtung,
+  type SammlungsEintrag,
+} from "../core/sammlung";
+import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, type ZaehlerWert } from "../core/ifxErweiterung";
 import { dekodiere } from "./audioDecode";
 import { legeAb, zeigeAblage } from "./ablage";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
@@ -505,6 +514,33 @@ function sammlungAufnehmen(): void {
   setStatus(`„${name}" in die Sammlung gelegt (${sammlung.length} insgesamt). Zum Behalten die Sammlung sichern.`);
 }
 
+/**
+ * Die Ziel-Plaetze aller Eintraege in Listen-Reihenfolge vergeben — ab dem
+ * Startplatz im Feld, sonst ab dem Platz des ersten Eintrags der Art. ▲ zaehlt
+ * hoch, ▼ runter; die Grenzen je Art haelt `nummerierePlaetze` ein.
+ */
+function sammlungNummerieren(richtung: NummerierRichtung): void {
+  if (!sammlung.length) {
+    setStatus("Die Sammlung ist leer — erst etwas aufnehmen oder laden.");
+    return;
+  }
+  const feld = $("fxpSamStart") as HTMLInputElement;
+  const roh = (feld.value ?? "").trim();
+  const start = roh === "" ? undefined : Math.round(Number(roh));
+  if (start !== undefined && (!Number.isFinite(start) || start < 1)) {
+    setStatus("Der Startplatz muss eine Zahl ab 1 sein — oder leer, dann zählt die Reihe vom ersten Eintrag aus.");
+    return;
+  }
+  const r = nummerierePlaetze(sammlung, start, richtung);
+  sammlung = r.eintraege;
+  renderSammlung();
+  const ersterPlatz = sammlung.find((e) => e.platz !== undefined)?.platz;
+  const rest = r.ohnePlatz ? ` — ${r.ohnePlatz} hinter der Art-Grenze ohne Platz geblieben` : "";
+  setStatus(
+    `${r.vergeben} Plätze ${richtung === "auf" ? "aufsteigend" : "absteigend"} vergeben, beginnend bei Platz ${ersterPlatz ?? "—"}${rest}.`,
+  );
+}
+
 async function sammlungSpeichern(): Promise<void> {
   if (!sammlung.length) {
     setStatus("Die Sammlung ist leer — erst etwas aufnehmen.");
@@ -605,6 +641,114 @@ async function sammlungVerteilen(): Promise<void> {
   const rest = plan.uebersprungen.length ? ` — ${plan.uebersprungen.length} ohne Platz übersprungen` : "";
   setStatus(`${plan.schritte.length} auf das Gerät verteilt${rest}. „Alle zurückschreiben“ stellt die Vorher-Stände wieder her.`);
   document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
+
+  // Auf Wunsch das Menue nachziehen: Presets hinter dem Belegungszaehler
+  // sind sonst zwar im RAM, aber am Geraet unsichtbar.
+  const erweitern = (document.getElementById("fxpSamErweitern") as HTMLInputElement | null)?.checked === true;
+  const ifxPlaetze = plan.schritte.filter((s) => s.eintrag.art === "ifx").map((s) => s.eintrag.platz!);
+  if (erweitern && ifxPlaetze.length) {
+    await ifxMenueErweitern(Math.max(...ifxPlaetze), `${plan.schritte.length} verteilt · `);
+  }
+}
+
+/**
+ * Das IFX-Menue bis `bisPlatz` (Geraete-Zaehlung, ab 1) erweitern — der Weg
+ * von hacktribe `add_ifx`, nur nachtraeglich: erst die dreizehn Zaehler lesen
+ * und auf Stimmigkeit pruefen, dann die neuen Plaetze lesen (keine Luecke
+ * erlaubt), dann alle dreizehn schreiben, jeder mit Rueckleseprobe. Die
+ * Vorher-Werte wandern in `verteilungsVorher`, damit „Alle zurückschreiben"
+ * auch die Zaehler zuruecknimmt. Bricht ein Zaehler-Write ab, werden die schon
+ * gesetzten sofort zurueckgeschrieben — ein halb hochgezaehlter Satz ist der
+ * Zustand, den es nie geben darf.
+ *
+ * Alles davon lebt nur im RAM: nach dem Ausschalten zaehlt das Menue wieder
+ * wie die Firmware es vorsieht. Siehe Kopf von `core/ifxErweiterung.ts`.
+ */
+async function ifxMenueErweitern(bisPlatz: number, vorspann = ""): Promise<boolean> {
+  if (!hooks) return false;
+  const map = E2_RAM_MAP.find((e) => e.key === "ifxPreset");
+  if (!map) return false;
+  const hex = (a: number): string => `0x${a.toString(16).toUpperCase()}`;
+
+  setStatus(`${vorspann}lese die 13 IFX-Zähler …`);
+  const gelesen: ZaehlerWert[] = [];
+  for (const z of IFX_ZAEHLER) {
+    const r = await hooks.lesen(z.addr, 1);
+    if (!r.ok) {
+      setStatus(`${vorspann}Menü nicht erweitert: Zähler ${hex(z.addr)} nicht lesbar — ${r.reason}.`);
+      return false;
+    }
+    gelesen.push({ addr: z.addr, wert: r.bytes[0] });
+  }
+  const stand = leseZaehlerStand(gelesen);
+  if (!stand.ok) {
+    setStatus(`${vorspann}Menü nicht erweitert: ${stand.reason}. Aus- und Einschalten stellt die Zähler der Firmware wieder her.`);
+    return false;
+  }
+  const zielMax = bisPlatz - 1;
+  if (zielMax <= stand.maxIndex) {
+    setStatus(`${vorspann}Platz ${bisPlatz} ist schon im Menü — es reicht bis Platz ${stand.maxIndex + 1}.`);
+    return false;
+  }
+
+  // Die neuen Plaetze muessen belegt sein — sonst zeigte das Menue Leerplaetze.
+  const inhalte = new Map<number, Uint8Array>();
+  for (let slot = stand.maxIndex + 1; slot <= zielMax && slot <= IFX_PRESET_WRITE_MAX; slot++) {
+    setStatus(`${vorspann}prüfe Platz ${slot + 1} …`);
+    const r = await hooks.lesen(addressForSlot(map, slot), FX_PRESET_SIZE);
+    if (!r.ok) {
+      setStatus(`${vorspann}Menü nicht erweitert: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
+      return false;
+    }
+    inhalte.set(slot, r.bytes);
+  }
+  const plan = planeIfxErweiterung(stand.maxIndex, zielMax, (slot) => istPresetPlatzLeer(inhalte.get(slot) ?? new Uint8Array(0)));
+  if (!plan.ok) {
+    setStatus(`${vorspann}Menü nicht erweitert: ${plan.reason}.`);
+    return false;
+  }
+
+  const gesetzt: ZaehlerWert[] = [];
+  for (const [i, w] of plan.schreiben.entries()) {
+    setStatus(`${vorspann}erweitere IFX-Menü: Zähler ${i + 1}/${plan.schreiben.length} …`);
+    const ok = await hooks.schreiben(w.addr, new Uint8Array([w.wert]), `IFX-Zähler ${i + 1}/${plan.schreiben.length}`);
+    if (ok === false) {
+      // Sofort zurueck, was schon steht — bevor irgendjemand das Menue oeffnet.
+      let zurueck = 0;
+      for (const g of gesetzt.reverse()) {
+        const alt = gelesen.find((x) => x.addr === g.addr)!;
+        if (await hooks.schreiben(alt.addr, new Uint8Array([alt.wert]), "IFX-Zähler zurück")) zurueck++;
+      }
+      setStatus(
+        `${vorspann}Abbruch beim Zähler ${i + 1}/${plan.schreiben.length}` +
+          (gesetzt.length
+            ? ` — ${zurueck} von ${gesetzt.length} schon gesetzten wieder zurückgeschrieben${zurueck < gesetzt.length ? ", der Satz ist UNSTIMMIG: Gerät aus- und einschalten" : ""}.`
+            : ", nichts verändert."),
+      );
+      return false;
+    }
+    gesetzt.push(w);
+    verteilungsVorher.push({ addr: w.addr, bytes: new Uint8Array([gelesen.find((x) => x.addr === w.addr)!.wert]) });
+  }
+  document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
+  setStatus(
+    `${vorspann}IFX-Menü erweitert: bis Platz ${stand.maxIndex + 1} → bis Platz ${bisPlatz} (${plan.neuePlaetze.length} neu). ` +
+      "Gilt bis zum Ausschalten; „Alle zurückschreiben“ nimmt auch die Zähler zurück.",
+  );
+  return true;
+}
+
+/** Der Knopf: bis zu welchem Platz? Vorschlag ist der höchste IFX-Platz der Sammlung. */
+async function ifxMenueErweiternGefragt(): Promise<void> {
+  const hoechster = Math.max(0, ...sammlung.filter((e) => e.art === "ifx" && e.platz !== undefined).map((e) => e.platz!));
+  const antwort = await frageText("IFX-Menü erweitern bis Platz (zählt wie das Gerät, ab 1):", hoechster ? String(hoechster) : "");
+  if (antwort === null || antwort.trim() === "") return;
+  const bis = Math.round(Number(antwort));
+  if (!Number.isFinite(bis) || bis < 1 || bis > IFX_PRESET_WRITE_MAX + 1) {
+    setStatus(`Bitte einen Platz zwischen 1 und ${IFX_PRESET_WRITE_MAX + 1} angeben.`);
+    return;
+  }
+  await ifxMenueErweitern(bis);
 }
 
 /** Die Vorher-Staende des letzten Laufs zurueckschreiben, letzter zuerst. */
@@ -835,6 +979,9 @@ export function initFxPresetPanel(h: FxPresetHooks): void {
   $("fxpSamAdd").addEventListener("click", sammlungAufnehmen);
   $("fxpSamSchreiben").addEventListener("click", () => void sammlungVerteilen());
   $("fxpSamZurueck").addEventListener("click", () => void sammlungZuruecknehmen());
+  $("fxpSamNumAuf").addEventListener("click", () => sammlungNummerieren("auf"));
+  $("fxpSamNumAb").addEventListener("click", () => sammlungNummerieren("ab"));
+  $("fxpSamErweiternJetzt").addEventListener("click", () => void ifxMenueErweiternGefragt());
   $("fxpSamSpeichern").addEventListener("click", () => void sammlungSpeichern());
   $("fxpSamLaden").addEventListener("click", () => ($("fxpSamIn") as HTMLInputElement).click());
   $("fxpSamIn").addEventListener("change", () => {

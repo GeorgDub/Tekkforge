@@ -229,6 +229,8 @@ describe("Sammlungen der Beispiel-Presets", () => {
         "TekkForge-IFX-Variationen.tfsam",
         "TekkForge-IFX-Farben.tfsam",
         "TekkForge-IFX-Farben-Variationen.tfsam",
+        "TekkForge-IFX-Bewegung.tfsam",
+        "TekkForge-IFX-Bewegung-Variationen.tfsam",
       ],
     },
     {
@@ -239,6 +241,8 @@ describe("Sammlungen der Beispiel-Presets", () => {
         "TekkForge-MFX-Variationen.tfsam",
         "TekkForge-MFX-Raum.tfsam",
         "TekkForge-MFX-Raum-Variationen.tfsam",
+        "TekkForge-MFX-Tekk.tfsam",
+        "TekkForge-MFX-Tekk-Variationen.tfsam",
       ],
     },
   ];

@@ -3,6 +3,8 @@ import {
   baueSammlung,
   leseSammlung,
   planeVerteilung,
+  nummerierePlaetze,
+  PLATZ_MAX,
   SAMMLUNG_VERSION,
   type SammlungsEintrag,
 } from "../src/core/sammlung";
@@ -104,5 +106,67 @@ describe("sammlung", () => {
     ];
     const plan = planeVerteilung(e);
     expect(plan.doppelt).toEqual([{ art: "ifx", platz: 41 }]);
+  });
+
+  describe("nummerierePlaetze", () => {
+    const drei = (): SammlungsEintrag[] => [
+      { art: "ifx", name: "A", bytes: initFxPresetBytes() },
+      { art: "ifx", name: "B", bytes: initFxPresetBytes() },
+      { art: "ifx", name: "C", bytes: initFxPresetBytes() },
+    ];
+
+    it("aufsteigend ab dem eingetippten Startplatz, in Listen-Reihenfolge", () => {
+      const r = nummerierePlaetze(drei(), 40, "auf");
+      expect(r.eintraege.map((e) => e.platz)).toEqual([40, 41, 42]);
+      expect(r.vergeben).toBe(3);
+      expect(r.ohnePlatz).toBe(0);
+    });
+
+    it("absteigend ab dem Startplatz — ▼ heißt kleinere Nummer", () => {
+      expect(nummerierePlaetze(drei(), 40, "ab").eintraege.map((e) => e.platz)).toEqual([40, 39, 38]);
+    });
+
+    it("ohne Startplatz gilt der Platz des ersten Eintrags der Art", () => {
+      const e = drei();
+      e[0].platz = 10;
+      e[2].platz = 99; // wird überschrieben — die Reihe zählt vom ersten aus
+      expect(nummerierePlaetze(e, undefined, "auf").eintraege.map((x) => x.platz)).toEqual([10, 11, 12]);
+    });
+
+    it("ohne Startplatz und ohne ersten Platz: ▲ beginnt bei 1, ▼ am oberen Ende der Art", () => {
+      expect(nummerierePlaetze(drei(), undefined, "auf").eintraege.map((x) => x.platz)).toEqual([1, 2, 3]);
+      expect(nummerierePlaetze(drei(), undefined, "ab").eintraege.map((x) => x.platz)).toEqual([96, 95, 94]);
+    });
+
+    it("jede Art zählt für sich — IFX und MFX bekommen je ihre eigene Reihe", () => {
+      const e: SammlungsEintrag[] = [
+        { art: "ifx", name: "A", bytes: initFxPresetBytes() },
+        { art: "mfx", name: "B", bytes: initFxPresetBytes() },
+        { art: "ifx", name: "C", bytes: initFxPresetBytes() },
+        { art: "groove", name: "D", bytes: initGrooveBytes() },
+      ];
+      const r = nummerierePlaetze(e, 5, "auf");
+      expect(r.eintraege.map((x) => `${x.art}:${x.platz}`)).toEqual(["ifx:5", "mfx:5", "ifx:6", "groove:5"]);
+    });
+
+    it("hinter der Art-Grenze bleibt der Platz leer statt umzubrechen", () => {
+      const e: SammlungsEintrag[] = [
+        { art: "mfx", name: "A", bytes: initFxPresetBytes() },
+        { art: "mfx", name: "B", bytes: initFxPresetBytes() },
+        { art: "mfx", name: "C", bytes: initFxPresetBytes() },
+      ];
+      const r = nummerierePlaetze(e, PLATZ_MAX.mfx - 1, "auf");
+      expect(r.eintraege.map((x) => x.platz)).toEqual([31, 32, undefined]);
+      expect(r.vergeben).toBe(2);
+      expect(r.ohnePlatz).toBe(1);
+      const runter = nummerierePlaetze(e, 2, "ab");
+      expect(runter.eintraege.map((x) => x.platz)).toEqual([2, 1, undefined]);
+    });
+
+    it("verändert die übergebene Liste nicht", () => {
+      const e = drei();
+      nummerierePlaetze(e, 1, "auf");
+      expect(e.map((x) => x.platz)).toEqual([undefined, undefined, undefined]);
+    });
   });
 });

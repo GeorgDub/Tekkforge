@@ -449,9 +449,9 @@ was ihn beim ersten echten Versuch belegt oder widerlegt.
 
 ### Beispiel-Presets zum Ausprobieren
 
-`examples/fx-presets/` enthaelt 144 fertig eingestellte FX-Presets als rohe
-524-B-Bloecke, plus acht `.tfsam`-Sammlungen, die sie gruppenweise laden — in
-vier Sets:
+`examples/fx-presets/` enthaelt 216 fertig eingestellte FX-Presets als rohe
+524-B-Bloecke, plus zwoelf `.tfsam`-Sammlungen, die sie gruppenweise laden — in
+sechs Sets:
 
 | Set | Art | Inhalt |
 |---|---|---|
@@ -459,11 +459,16 @@ vier Sets:
 | **Starter** | Master (`.mfx`) | die Summe: Kompressor, EQ, Zerre, Filter, Delays |
 | **Farben** | Insert (`.e2fxp`) | formen statt zerlegen: Kompression, EQ, Exciter, Chorus |
 | **Raum & Bewegung** | Master (`.mfx`) | Hall, Wah, Modulation, Looper |
+| **Bewegung** | Insert (`.e2fxp`) | alles im Takt: LFO-Ringmod, Rechteck-Tremolo, die drei Level-Mod-Spielarten der Werks-Presets, synchrone Flanger/Phaser, Roller |
+| **Tekk-Modulation** | Master (`.mfx`) | kein Hall: Wobble-Filter, LFO auf der Zerre, Slicer, LFO-Wah, LFO-Bitcrusher, wobbelnde Delays, Grain im Takt |
 
 Je zwoelf Basis-Presets, dazu **zwei Variationen pro Basis** (`01a-…`/`01b-…`
 zu `01-…`): derselbe Algorithmus, in eine Richtung verschoben — zum
-Vergleichen am Geraet. Zusammen decken die vier Sets **alle 20 Insert- und 24
-der 25 Master-Algorithmen** ab.
+Vergleichen am Geraet. Zusammen decken die sechs Sets **alle 20 Insert- und 24
+der 25 Master-Algorithmen** ab. Die beiden Bewegungs-Sets stuetzen sich auf die
+dekodierten **Werks-Presets des Geraets** (Level-Mod-Quellen 3/4/0, Sync-Noten
+6–8, Play/Start als LFO-Reset) statt auf Vermutungen; drei neue Sonden darin
+fragen nach der LFO-Wellenform-Tabelle und dem `mod_src` von Wah und Decimator.
 
 Sieben Paare sind zugleich **Sonden**: zwei Dateien, die sich in einem Byte
 unterscheiden, klaeren am Ohr, was in den Format-Unterlagen offen ist. Die
@@ -498,6 +503,23 @@ Klick schreibt alle nacheinander — pro Platz erst lesen, dann schreiben mit
 Rueckleseprobe, der erste Fehler stoppt die Reihe, doppelte Plaetze derselben
 Art starten gar nicht. Die Vorher-Staende lassen sich am Stueck
 zurueckschreiben, und die Zuweisung wird in der `.tfsam` mitgespeichert.
+Die Plaetze muss niemand einzeln tippen: Startplatz eintragen (oder den
+ersten Eintrag setzen) und **▲ aufsteigend** / **▼ absteigend** vergibt sie
+in Listen-Reihenfolge, je Art als eigene Reihe, ohne hinter der Art-Grenze
+umzubrechen (`nummerierePlaetze` in `core/sammlung.ts`).
+
+**Leere Plaetze und das Menue.** Das Geraetemenue zeigt nur so viele
+Insert-Presets, wie 13 Zaehler der Hacktribe-Firmware erlauben (Testgeraet:
+49; die Plaetze 50–100 sind im RAM da, aber leer und unsichtbar). Der Haken
+**„IFX-Menue danach bis zum hoechsten Platz erweitern“** zieht sie nach dem
+Verteilen nach — derselbe Weg wie hacktribes `add_ifx`, nur mit Netz: alle 13
+lesen und auf Stimmigkeit pruefen, den neuen Bereich auf Luecken pruefen,
+dann alle 13 schreiben mit Rueckleseprobe, und bei einem Abbruch die schon
+gesetzten sofort zurueck. „Alle zurueckschreiben“ nimmt auch die Zaehler
+zurueck. Das gilt bis zum Ausschalten — dauerhaft ginge nur ueber ein
+gepatchtes Firmware-Abbild. Master-Presets lassen sich so nicht erweitern:
+alle 32 Plaetze sind belegt, ihr Zaehler ist fest. Modul `core/ifxErweiterung.ts`;
+⚠ am Geraet noch nicht abgenommen (Stand 2026-09-02).
 
 ## Step-Record-Layout (verifiziert)
 
