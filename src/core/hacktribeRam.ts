@@ -203,6 +203,38 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     // dieselbe Zahl; die Adresse ist damit bestätigt.
     note: "1 Byte — zum Schreiben gehören 12 weitere Zähler, siehe Modul-Doku",
   },
+  {
+    key: "grooveMaxIndex",
+    label: "Groove-Anzahl (nur lesen)",
+    // Die Read-Quelle von hacktribe `add_groove` (traegt Max-Index + 1). In
+    // der gepatchten Firmware 62 bei 62 Werksvorlagen (2026-09-02).
+    base: 0xc007bb88,
+    stride: 1,
+    count: 1,
+    size: 1,
+    note: "1 Byte = Anzahl der Vorlagen; zum Schreiben gehören 3 weitere Zähler (firmwareBau)",
+  },
+  {
+    key: "initPattern",
+    label: "Init-Pattern (Block)",
+    // Datei-Offset 0xD0058 in der SYSTEM.VSB, also RAM 0xC00CFF58 — der
+    // 0x3C00-Block, den das Geraet fuer ein neues Pattern nimmt ("PTST" … "PTED").
+    base: 0xc00cff58,
+    stride: 0x3c00,
+    count: 1,
+    size: 0x3c00,
+    note: "0x3C00 Bytes, beginnt mit „PTST“ — eine .e2spat ist dieser Block hinter 0x100 Header",
+  },
+  {
+    key: "splash",
+    label: "Startbildschirm",
+    // Datei-Offset 0xF9954 → RAM 0xC00F9854; 128 × 64 Pixel, 1 Bit, siehe core/splash.ts.
+    base: 0xc00f9854,
+    stride: 1024,
+    count: 1,
+    size: 1024,
+    note: "1024 Bytes, 128 × 64 Pixel, 1 = hell",
+  },
 ] as const;
 
 /**

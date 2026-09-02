@@ -295,3 +295,88 @@ export function setzeSplash(fw: Uint8Array, splash: Uint8Array): Uint8Array {
   out.set(splash, SPLASH_OFFSET);
   return out;
 }
+
+// ─── Den ganzen Geraetestand einbrennen ──────────────────────────────────────
+
+export interface SicherungsBauBericht {
+  /** Welche Bereiche der Sicherung uebernommen wurden, mit Byte-Zahl. */
+  bereiche: { key: string; bytes: number }[];
+  /** Was der Sicherung fehlte und deshalb aus der Basis bleibt. */
+  fehlend: string[];
+  ifxMaxIndex: number;
+  grooveMaxIndex: number;
+}
+
+/**
+ * Alles, was eine Geraetesicherung an Dateninhalt traegt, in die Basis legen:
+ * die IFX- und MFX-Baenke (schreibbare Plaetze), die Groove-Bank, das
+ * Init-Pattern, der Startbildschirm — und die Zaehler so, wie sie das Geraet
+ * hatte (IFX: alle dreizehn aus dem einen Max-Index abgeleitet; Groove: alle
+ * vier aus der Anzahl). Das ist der Weg, den Stand, den man sich im RAM
+ * zusammengebaut und gehoert hat, als Ganzes dauerhaft zu machen.
+ *
+ * Keine Lueckenpruefung: die Sicherung ist der Stand, den das Geraet gezeigt
+ * hat, und genau der soll wiederkommen. Aeltere Sicherungen ohne Groove-
+ * Zaehler, Init-Pattern oder Startbild lassen diese Teile in der Basis stehen
+ * und melden es im Bericht.
+ */
+export function firmwareAusSicherung(
+  basis: Uint8Array,
+  bloecke: readonly { key: string; bytes: Uint8Array }[],
+): { ok: true; bytes: Uint8Array; bericht: SicherungsBauBericht } | { ok: false; reason: string } {
+  const pr = pruefeFirmware(basis);
+  if (!pr.ok) return pr;
+  const block = (key: string): Uint8Array | undefined => bloecke.find((b) => b.key === key)?.bytes;
+  const out = basis.slice();
+  const bericht: SicherungsBauBericht = { bereiche: [], fehlend: [], ifxMaxIndex: -1, grooveMaxIndex: -1 };
+
+  const bank = (key: string, mapKey: string, plaetze: number, groesse: number): boolean => {
+    const b = block(key);
+    const map = E2_RAM_MAP.find((e) => e.key === mapKey)!;
+    if (!b || b.length < plaetze * groesse) {
+      bericht.fehlend.push(key);
+      return false;
+    }
+    for (let i = 0; i < plaetze; i++) out.set(b.subarray(i * groesse, (i + 1) * groesse), dateiOffset(addressForSlot(map, i)));
+    bericht.bereiche.push({ key, bytes: plaetze * groesse });
+    return true;
+  };
+  const ifxDa = bank("ifxPreset", "ifxPreset", IFX_PRESET_WRITE_MAX + 1, FX_PRESET_SIZE);
+  bank("mfxPreset", "mfxPreset", MFX_PRESET_WRITE_MAX + 1, FX_PRESET_SIZE);
+  const grooveDa = bank("groove", "groove", mapFuer("groove").count, GROOVE_SIZE);
+
+  // IFX-Zaehler: aus dem einen gesicherten Max-Index alle dreizehn ableiten.
+  const max = block("maxIfxIndex");
+  if (ifxDa && max && max.length >= 1) {
+    const m = max[0];
+    if (m > IFX_PRESET_WRITE_MAX) return { ok: false, reason: `Max-IFX-Index ${m} in der Sicherung liegt über der Schreibgrenze` };
+    for (const z of IFX_ZAEHLER) out[dateiOffset(z.addr)] = z.plusEins ? m + 1 : m;
+    bericht.ifxMaxIndex = m;
+    bericht.bereiche.push({ key: "ifxZaehler", bytes: IFX_ZAEHLER.length });
+  } else if (ifxDa) bericht.fehlend.push("maxIfxIndex");
+
+  // Groove-Zaehler: aus der gesicherten Anzahl (Read-Quelle traegt Max + 1).
+  const gAnzahl = block("grooveMaxIndex");
+  if (grooveDa && gAnzahl && gAnzahl.length >= 1) {
+    const m = gAnzahl[0] - 1;
+    if (m < 0 || m >= mapFuer("groove").count) return { ok: false, reason: `Groove-Anzahl ${gAnzahl[0]} in der Sicherung ist unbrauchbar` };
+    for (const z of GROOVE_ZAEHLER) out[dateiOffset(z.addr)] = z.plusEins ? m + 1 : m;
+    bericht.grooveMaxIndex = m;
+    bericht.bereiche.push({ key: "grooveZaehler", bytes: GROOVE_ZAEHLER.length });
+  } else if (grooveDa) bericht.fehlend.push("grooveMaxIndex");
+
+  const init = block("initPattern");
+  if (init && init.length >= INIT_PATTERN_GROESSE && String.fromCharCode(...init.subarray(0, 4)) === "PTST") {
+    out.set(init.subarray(0, INIT_PATTERN_GROESSE), INIT_PATTERN_OFFSET);
+    bericht.bereiche.push({ key: "initPattern", bytes: INIT_PATTERN_GROESSE });
+  } else bericht.fehlend.push("initPattern");
+
+  const splash = block("splash");
+  if (splash && splash.length >= SPLASH_GROESSE) {
+    out.set(splash.subarray(0, SPLASH_GROESSE), SPLASH_OFFSET);
+    bericht.bereiche.push({ key: "splash", bytes: SPLASH_GROESSE });
+  } else bericht.fehlend.push("splash");
+
+  if (!bericht.bereiche.length) return { ok: false, reason: "Die Sicherung enthält keinen der Bereiche, die in die Firmware gehören" };
+  return { ok: true, bytes: out, bericht };
+}

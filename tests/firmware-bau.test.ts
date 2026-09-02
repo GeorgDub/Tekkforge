@@ -17,6 +17,7 @@ import {
   liesSplash,
   setzeSplash,
   istGroovePlatzLeer,
+  firmwareAusSicherung,
 } from "../src/core/firmwareBau";
 import { initGrooveBytes, decodeGroove, encodeGroove, GROOVE_SIZE } from "../src/core/e2Groove";
 import { leererSplash, pixelZuSplash, SPLASH_BREITE, SPLASH_HOEHE } from "../src/core/splash";
@@ -247,5 +248,71 @@ describe("firmwareBau — Grooves, Init-Pattern, Startbild", () => {
     expect(fw[SPLASH_OFFSET]).toBe(0xff);
     expect(() => setzeSplash(fw, new Uint8Array(10))).toThrow(/Bytes/);
     expect(SPLASH_GROESSE).toBe(1024);
+  });
+});
+
+describe("firmwareBau — den ganzen Geraetestand einbrennen", () => {
+  const ifxMapL = E2_RAM_MAP.find((e) => e.key === "ifxPreset")!;
+  const grooveMapL = E2_RAM_MAP.find((e) => e.key === "groove")!;
+
+  /** Eine Sicherung wie vom Geraet, aber mit eigenem Stand: 60 IFX, andere MFX, 70 Grooves, eigenes Init-Pattern und Startbild. */
+  function sicherung() {
+    const ifx = new Uint8Array(100 * FX_PRESET_SIZE);
+    for (let i = 0; i < 100; i++) ifx.set(i < 60 ? presetBytes(`RAM ${i + 1}`) : presetBytes(""), i * FX_PRESET_SIZE);
+    const mfx = new Uint8Array(32 * FX_PRESET_SIZE);
+    for (let i = 0; i < 32; i++) mfx.set(presetBytes(`RAM M${i + 1}`, true), i * FX_PRESET_SIZE);
+    const gv = new Uint8Array(96 * GROOVE_SIZE).fill(0xff);
+    for (let i = 0; i < 70; i++) gv.set(grooveBytes(`RAM G${i + 1}`), i * GROOVE_SIZE);
+    const init = new Uint8Array(INIT_PATTERN_GROESSE);
+    init.set(new TextEncoder().encode("PTST"), 0);
+    init.set(new TextEncoder().encode("RAM INIT"), 0x10);
+    const splash = leererSplash();
+    splash[0] = 0x7f;
+    return [
+      { key: "ifxPreset", bytes: ifx },
+      { key: "mfxPreset", bytes: mfx },
+      { key: "groove", bytes: gv },
+      { key: "maxIfxIndex", bytes: new Uint8Array([59]) },
+      { key: "grooveMaxIndex", bytes: new Uint8Array([70]) },
+      { key: "initPattern", bytes: init },
+      { key: "splash", bytes: splash },
+    ];
+  }
+
+  it("uebernimmt Baenke, Zaehler, Init-Pattern und Startbild aus der Sicherung", () => {
+    const r = firmwareAusSicherung(fakeFirmware(), sicherung());
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(namensByte(r.bytes, addressForSlot(ifxMapL, 0))).toBe("RAM 1");
+    expect(namensByte(r.bytes, addressForSlot(ifxMapL, 59))).toBe("RAM 60");
+    expect(namensByte(r.bytes, addressForSlot(ifxMapL, 60))).toBe("");
+    expect(namensByte(r.bytes, addressForSlot(mfxMap, 31))).toBe("RAM M32");
+    for (const z of IFX_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 60 : 59);
+    for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 70 : 69);
+    const g = dateiOffset(addressForSlot(grooveMapL, 69));
+    expect(decodeGroove(r.bytes.subarray(g, g + GROOVE_SIZE)).name).toBe("RAM G70");
+    expect(String.fromCharCode(...r.bytes.subarray(INIT_PATTERN_OFFSET + 0x10, INIT_PATTERN_OFFSET + 0x18))).toBe("RAM INIT");
+    expect(r.bytes[SPLASH_OFFSET]).toBe(0x7f);
+    expect(r.bericht.ifxMaxIndex).toBe(59);
+    expect(r.bericht.grooveMaxIndex).toBe(69);
+    expect(r.bericht.fehlend).toEqual([]);
+    expect(r.bericht.bereiche.map((b) => b.key)).toEqual(["ifxPreset", "mfxPreset", "groove", "ifxZaehler", "grooveZaehler", "initPattern", "splash"]);
+  });
+
+  it("eine aeltere Sicherung ohne Init-Pattern, Startbild und Groove-Zaehler laesst diese Teile in der Basis", () => {
+    const alt = sicherung().filter((b) => ["ifxPreset", "mfxPreset", "groove", "maxIfxIndex"].includes(b.key));
+    const basis = fakeFirmware();
+    const r = firmwareAusSicherung(basis, alt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bericht.fehlend).toEqual(["grooveMaxIndex", "initPattern", "splash"]);
+    expect(r.bytes[SPLASH_OFFSET]).toBe(basis[SPLASH_OFFSET]);
+    for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(basis[dateiOffset(z.addr)]);
+    expect(namensByte(r.bytes, addressForSlot(ifxMapL, 0))).toBe("RAM 1");
+  });
+
+  it("lehnt eine Sicherung ohne passende Bereiche ab", () => {
+    const r = firmwareAusSicherung(fakeFirmware(), [{ key: "fxEditBuffer", bytes: new Uint8Array(10) }]);
+    expect(r.ok).toBe(false);
   });
 });

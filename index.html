@@ -625,6 +625,11 @@
                       <button id="fwBauen" class="primary" title="Alle angehakten Bausteine in die Basis einbrennen und als SYSTEM.VSB ablegen (Ordner Firmware/)">🔥 Firmware bauen</button>
                       <button id="fwSichtbar" class="ghost" title="Den Bauplan anzeigen, ohne zu bauen">Vorschau</button>
                     </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                      <span class="sub" style="margin:0"><b>Oder den ganzen Gerätestand:</b></span>
+                      <button id="fwSicherungBrennen" class="ghost" title="Eine Komplettsicherung (.tfbak, „Gerät sichern…“ im FX-Preset-Bereich) als Ganzes in die Basis legen — IFX- und MFX-Bank, Grooves, alle Zähler, Init-Pattern und Startbild, genau wie das Gerät sie im RAM hatte. So wird dauerhaft, was man sich am Gerät zusammengebaut und gehört hat.">Sicherung einbrennen…</button>
+                      <input id="fwSicherungIn" type="file" accept=".tfbak,.json" class="hidden" />
+                    </div>
                     <pre id="fwBericht" class="sub" style="margin:6px 0 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
                   </div>
                   <div style="flex:0 0 auto">

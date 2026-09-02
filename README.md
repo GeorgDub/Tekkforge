@@ -624,6 +624,17 @@ Original-Startbild als PBM wieder eingebrannt — byte-identisch. ⚠ Am Geraet
 sind Init-Pattern, Startbild und Groove-Zaehler noch nicht abgenommen; der
 Preset-Weg ist es.
 
+**Den ganzen Geraetestand einbrennen.** Die Komplettsicherung („Geraet
+sichern…" im FX-Preset-Bereich) erfasst seit dem 2026-09-03 auch
+Groove-Zaehler, Init-Pattern und Startbild — die RAM-Karte ist die einzige
+Quelle der Sicherung, und diese drei Bereiche stehen jetzt darin. Die
+Werkbank kann so eine `.tfbak` als Ganzes in die Basis legen
+(`firmwareAusSicherung`): beide Preset-Baenke, die Groove-Bank, alle Zaehler
+aus den gesicherten Werten abgeleitet, Init-Pattern und Startbild. Was man
+sich am Geraet im RAM zusammengebaut und gehoert hat, wird damit in einem
+Schritt dauerhaft. Aeltere Sicherungen ohne die neuen Bereiche lassen diese
+Teile in der Basis stehen; der Bericht nennt sie.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über

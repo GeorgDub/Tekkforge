@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initFxPresetPanel } from "../src/gui/fxPreset";
 import { initPresetManager, pmAktion } from "../src/gui/presetManager";
-import { initFirmwareWerkbank, fwBaueAbbild, fwSetzePixel, fwPixel, fwInitPatternName } from "../src/gui/firmwareWerkbank";
+import { initFirmwareWerkbank, fwBaueAbbild, fwBaueAusSicherung, fwSetzePixel, fwPixel, fwInitPatternName } from "../src/gui/firmwareWerkbank";
+import { baueSicherung } from "../src/core/geraetSicherung";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam";
 import { IFX_ZAEHLER } from "../src/core/ifxErweiterung";
@@ -249,6 +250,40 @@ describe("Firmware-Werkbank", () => {
     expect(Array.from(splashZuPixel(liesSplash(r.bytes)))).toEqual(Array.from(px));
     expect(r.zeilen.join("\n")).toMatch(/Init-Pattern: „TEKK INIT“ aus dem Editor/);
     expect(r.zeilen.join("\n")).toMatch(/2 dunkle Pixel/);
+  });
+
+  it("Sicherung einbrennen: der ganze Geraetestand kommt in die Basis, Zaehler wie am Geraet", async () => {
+    await basisLaden(fakeFirmware());
+    const ifx = new Uint8Array(100 * FX_PRESET_SIZE);
+    for (let i = 0; i < 100; i++) ifx.set(i < 55 ? presetBytes(`RAM ${i + 1}`) : leererBlock("ifx"), i * FX_PRESET_SIZE);
+    const mfx = new Uint8Array(32 * FX_PRESET_SIZE);
+    for (let i = 0; i < 32; i++) mfx.set(presetBytes(`RAM M${i + 1}`, true), i * FX_PRESET_SIZE);
+    const gv = new Uint8Array(96 * GROOVE_SIZE).fill(0xff);
+    for (let i = 0; i < 62; i++) gv.set(grooveBytes(`G${i + 1}`), i * GROOVE_SIZE);
+    const splash = new Uint8Array(1024).fill(0xff);
+    splash[5] = 0x00;
+    const text = baueSicherung(
+      [
+        { key: "ifxPreset", label: "IFX", adresse: ifxMap.base, laenge: ifx.length, bytes: ifx },
+        { key: "mfxPreset", label: "MFX", adresse: mfxMap.base, laenge: mfx.length, bytes: mfx },
+        { key: "groove", label: "Groove", adresse: grooveMap.base, laenge: gv.length, bytes: gv },
+        { key: "maxIfxIndex", label: "Max", adresse: 0xc0048f80, laenge: 1, bytes: new Uint8Array([54]) },
+        { key: "grooveMaxIndex", label: "GMax", adresse: 0xc007bb88, laenge: 1, bytes: new Uint8Array([62]) },
+        { key: "splash", label: "Splash", adresse: 0xc00f9854, laenge: 1024, bytes: splash },
+      ],
+      { geraet: "E2S", firmware: "hacktribe", wann: "2026-09-03T00:00:00.000Z" },
+    );
+    const r = fwBaueAusSicherung(text);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const off = dateiOffset(addressForSlot(ifxMap, 54));
+    expect(nameVon(r.bytes.subarray(off, off + FX_PRESET_SIZE))).toBe("RAM 55");
+    for (const z of IFX_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 55 : 54);
+    for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 62 : 61);
+    expect(r.bytes[SPLASH_OFFSET + 5]).toBe(0x00);
+    expect(fwInitPatternName(r.bytes)).toBe("WERK INIT"); // nicht in der Sicherung → aus der Basis
+    expect(r.zeilen.join("\n")).toMatch(/bleibt aus der Basis: initPattern/);
+    expect(fwBaueAusSicherung("kein json").ok).toBe(false);
   });
 
   it("Init-Pattern aus einer Datei; „aus Firmware“ holt das Startbild der Basis", async () => {

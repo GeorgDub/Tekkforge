@@ -33,12 +33,14 @@ import {
   setzeSplash,
   liesSplash,
   liesInitPattern,
+  firmwareAusSicherung,
   HACKTRIBE_SHA256,
   E2SPAT_GROESSE,
   type BasisBefund,
 } from "../core/firmwareBau";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
+import { leseSicherung } from "../core/geraetSicherung";
 import {
   SPLASH_BREITE,
   SPLASH_HOEHE,
@@ -294,6 +296,40 @@ async function bauen(): Promise<void> {
   );
 }
 
+/** Fuer Tests: den ganzen Geraetestand einer Sicherung in die Basis legen, ohne abzulegen. */
+export function fwBaueAusSicherung(text: string): { ok: true; bytes: Uint8Array; zeilen: string[] } | { ok: false; reason: string } {
+  if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
+  let s;
+  try {
+    s = leseSicherung(text);
+  } catch (e) {
+    return { ok: false, reason: `Sicherung nicht lesbar: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  const r = firmwareAusSicherung(basis, s.bloecke);
+  if (!r.ok) return r;
+  const zeilen = [
+    `Basis: ${basisName}`,
+    `Sicherung vom ${s.wann || "?"}: ${r.bericht.bereiche.map((b) => `${b.key} (${b.bytes} B)`).join(", ")}`,
+    `IFX-Menü bis Platz ${r.bericht.ifxMaxIndex + 1}${r.bericht.grooveMaxIndex >= 0 ? `, Grooves bis ${r.bericht.grooveMaxIndex + 1}` : ""}`,
+  ];
+  if (r.bericht.fehlend.length) zeilen.push(`Nicht in der Sicherung, bleibt aus der Basis: ${r.bericht.fehlend.join(", ")}`);
+  return { ok: true, bytes: r.bytes, zeilen };
+}
+
+async function sicherungEinbrennen(f: File): Promise<void> {
+  const r = fwBaueAusSicherung(await f.text());
+  if (!r.ok) {
+    setStatus(`Nicht gebaut: ${r.reason}`);
+    return;
+  }
+  const hash = await sha256Hex(r.bytes);
+  const name = (await frageText("Dateiname (im Ordner Firmware/):", "SYSTEM.VSB")) ?? "SYSTEM.VSB";
+  const ab = await legeAb(name.trim() || "SYSTEM.VSB", r.bytes, FIRMWARE_ORDNER);
+  const el = document.getElementById("fwBericht");
+  if (el) el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download"].filter(Boolean).join("\n");
+  setStatus(`Gerätestand aus ${f.name} eingebrannt${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Installieren wie gehabt über die SD-Karte.`);
+}
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 export function initFirmwareWerkbank(h: WerkbankHooks): void {
@@ -324,6 +360,11 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);
   $("fwSichtbar").addEventListener("click", vorschau);
   $("fwBauen").addEventListener("click", () => void bauen());
+  $("fwSicherungBrennen").addEventListener("click", () => ($("fwSicherungIn") as HTMLInputElement).click());
+  $("fwSicherungIn").addEventListener("change", () => {
+    const f = ($("fwSicherungIn") as HTMLInputElement).files?.[0];
+    if (f) void sicherungEinbrennen(f);
+  });
 
   // Pixel-Editor
   const canvas = document.getElementById("fwSplashCanvas") as HTMLCanvasElement | null;
