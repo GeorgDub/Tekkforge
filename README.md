@@ -521,6 +521,27 @@ gepatchtes Firmware-Abbild. Master-Presets lassen sich so nicht erweitern:
 alle 32 Plaetze sind belegt, ihr Zaehler ist fest. Modul `core/ifxErweiterung.ts`;
 ⚠ am Geraet noch nicht abgenommen (Stand 2026-09-02).
 
+**Dauerhaft: in die Firmware einbrennen.** Die Hacktribe-`SYSTEM.VSB` ist ein
+0x100-Byte-Header plus ein 1:1-Abbild des RAM (Datei-Offset = RAM-Adresse −
+0xC0000000 + 0x100; an der gepatchten Datei gegen die Geraetesicherung
+byteweise belegt, keine Pruefsumme ueber den Payload). `core/firmwareBau.ts`
+legt eine Sammlung genauso in die Datei wie der RAM-Weg ins Geraet — Presets
+byte-treu ueber die Unterlage des Platzes, dann die 13 IFX-Zaehler bis zum
+hoechsten belegten Platz, mit Luecken- und Stimmigkeitspruefung; der Test
+zaehlt, dass ausserhalb dieser Stellen kein Byte kippt. Das Skript dazu:
+
+```
+npx tsx scripts/make-firmware.mjs --basis <Hacktribe-SYSTEM.VSB> --sammlung <.tfsam> --ziel <out.VSB> [--ab 50]
+```
+
+Die Basis muss die unveraenderte Hacktribe-Firmware sein (SHA-256 aus
+`hacktribe/hash`). Installieren: als `SYSTEM.VSB` nach
+`KORG/electribe sampler/System/` auf die SD-Karte, dann die Update-Funktion
+des Geraets; zurueck geht es mit der unveraenderten Datei auf demselben Weg.
+Erster Bau am 2026-09-02: `IFX-Alle` ab Platz 50 → Platz 50–96 belegt, Menue
+bis 96. ⚠ Am Geraet noch nicht abgenommen; der Einbau in die App folgt, wenn
+das Geraet die Datei annimmt.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über
