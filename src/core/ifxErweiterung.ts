@@ -5,8 +5,10 @@
  * Die Firmware haelt 100 Preset-Bloecke im RAM vor, zeigt im Menue aber nur
  * so viele, wie ein Satz von Zaehlern erlaubt. Auf dem Testgeraet stehen sie
  * auf 48 (Max-Index, 0-basiert) bzw. 49 (Anzahl): Plaetze 1–49 im Menue,
- * 50–100 leer und unsichtbar (Sicherung vom 2026-09-01: Slot 49–99 lauter
- * Nullen). Ein Preset in einen leeren Platz zu schreiben ist harmlos, aber
+ * 50–100 leer und unsichtbar (Sicherung vom 2026-09-01: Slot 49–99 sind
+ * Init-Bloecke ohne Namen, nur die Pegel-Bytes ab +0x12B stehen — byteweise
+ * identisch mit der gepatchten SYSTEM.VSB an Datei-Offset RAM − 0xC0000000
+ * + 0x100; Hacktribe hat die Stock-Zeigertabellen dort weggeraeumt). Ein Preset in einen leeren Platz zu schreiben ist harmlos, aber
  * wirkungslos — bis die Zaehler nachgezogen sind.
  *
  * Woher die Zaehler kommen: hacktribe `e2sysex.py`, `add_ifx` (Zeile 337 ff.).

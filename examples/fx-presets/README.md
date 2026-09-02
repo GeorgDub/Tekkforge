@@ -354,7 +354,7 @@ Im FX-Preset-Bereich, mit verbundenem Gerät:
 **Welcher Platz.** Das Gerätemenü zeigt nur so viele Insert-Plätze, wie ein
 Satz von 13 Zählern der Firmware erlaubt — auf dem Testgerät 49 (Plätze 1–49
 im Menü, Max-Index `0xC0048F80` = 48). Die Plätze 50–100 sind im RAM da, aber
-leer und unsichtbar (Sicherung vom 2026-09-01: lauter Nullen). Ein Preset in
+leer und unsichtbar (Sicherung vom 2026-09-01: Init-Blöcke ohne Namen). Ein Preset in
 einen **leeren** Platz zu schreiben ist harmlos, taucht aber im Menü erst auf,
 wenn die Zähler nachgezogen sind — genau das macht der Haken
 **„IFX-Menü danach bis zum höchsten Platz erweitern“** beim Verteilen (oder
