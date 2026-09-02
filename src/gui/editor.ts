@@ -68,6 +68,7 @@ import {
   type ProbeOutcome,
 } from "../core/firmwareMode";
 import { initFxPresetPanel } from "./fxPreset";
+import { initPresetManager } from "./presetManager";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
@@ -1660,14 +1661,17 @@ function setupRamPanel(): void {
 
   // Der Preset-Editor benutzt denselben Lese- und Schreibpfad — ein Schreibweg,
   // eine Stelle mit Schnappschuss und Rückleseprobe.
-  initFxPresetPanel({
+  const fxHooks = {
     lesen: ramReadBytes,
-    schreiben: async (addr, bytes, was) => {
+    schreiben: async (addr: number, bytes: Uint8Array, was: string) => {
       ramSnapshot = ramSnapshot ?? null;
       return await ramWriteVerified(addr, bytes, was);
     },
-    midi: (bytes) => void panelBridge.midi.send(Uint8Array.from(bytes)),
-  });
+    midi: (bytes: number[]) => void panelBridge.midi.send(Uint8Array.from(bytes)),
+  };
+  initFxPresetPanel(fxHooks);
+  // Der Preset-Manager teilt sich Lese- und Schreibweg mit dem Editor.
+  initPresetManager(fxHooks);
 }
 
 /**

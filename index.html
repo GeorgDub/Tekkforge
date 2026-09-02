@@ -562,6 +562,37 @@
                 </div>
                 <div id="fxpStatus" class="sub" style="margin-top:4px">bereit</div>
               </details>
+              <details id="pmPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
+                <summary style="cursor:pointer;font-weight:600">🗂 Preset-Manager — die ganze Bank (96 IFX · 32 MFX)</summary>
+                <p class="sub" style="margin:6px 0">Alle Plätze als Liste, gezählt wie das Gerätemenü ab 1. Erst laden (Gerät, Sicherung oder Firmware), dann umbauen; geschrieben wird nur, was sich gegen den geladenen Stand unterscheidet — flüchtig ins RAM zum Hören oder dauerhaft in die Hacktribe-Firmware.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <span class="sub" style="margin:0"><b>Laden:</b></span>
+                  <button id="pmGeraet" class="ghost" title="96 IFX- und 32 MFX-Plätze plus die 13 Zähler vom Gerät lesen — der Sequencer muss stehen">Vom Gerät lesen</button>
+                  <button id="pmSicherungLaden" class="ghost" title="Eine Komplettsicherung (.tfbak) als Stand laden">Sicherung laden…</button>
+                  <input id="pmSicherungIn" type="file" accept=".tfbak,.json" class="hidden" />
+                  <button id="pmFirmwareLaden" class="ghost" title="Die Bank aus einer Hacktribe-SYSTEM.VSB laden">Firmware laden…</button>
+                  <input id="pmFirmwareIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                  <span class="sub" id="pmInfo" style="margin:0">nichts geladen</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <span class="sub" style="margin:0"><b>Hinzufügen:</b></span>
+                  <button id="pmDateiEinfuegen" class="ghost" title="Eine .e2fxp/.mfx auf den ersten leeren Platz ihrer Art, eine .tfsam mit Plätzen an ihre Plätze (ohne Plätze: ab dem ersten leeren)">+ Datei einfügen…</button>
+                  <input id="pmDateiIn" type="file" accept=".e2fxp,.mfx,.ifx,.tfsam,.json" class="hidden" />
+                  <button id="pmAusEditor" class="ghost" title="Das Preset aus dem Editor oben in einen Platz legen (fragt nach dem Platz)">Aus Editor übernehmen…</button>
+                  <button id="pmExport" class="ghost" title="Alle belegten Plätze mit Platznummer als .tfsam sichern">Als Sammlung sichern…</button>
+                </div>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:8px">
+                  <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>IFX</b> <span id="pmIfxInfo"></span></div><div id="pmIfxListe"></div></div>
+                  <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>MFX</b> <span id="pmMfxInfo"></span></div><div id="pmMfxListe"></div></div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+                  <button id="pmSchreiben" class="primary" title="Nur die geänderten Plätze aufs Gerät schreiben (RAM, bis zum Ausschalten) — je Platz erst lesen, dann schreiben mit Rückleseprobe; danach die IFX-Zähler bis zum höchsten belegten Platz. „Alle zurückschreiben“ im FX-Preset-Bereich nimmt alles zurück.">⚠ Flüchtig schreiben (RAM)</button>
+                  <button id="pmPatchen" class="ghost" title="Die Änderungen in eine Hacktribe-SYSTEM.VSB einbrennen: fragt nach der unveränderten Hacktribe-Firmware, prüft den Hash, schreibt die Unterschiede zur Datei und legt das Ergebnis ab. Installieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ + Update am Gerät.">🔥 Firmware patchen…</button>
+                  <input id="pmBasisIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                  <button id="pmVerwerfen" class="ghost" title="Alle Änderungen verwerfen — zurück zum geladenen Stand">Änderungen verwerfen</button>
+                </div>
+                <div id="pmStatus" class="sub" style="margin-top:4px">bereit</div>
+              </details>
             </div>
             <button id="midiEnable" class="primary">MIDI aktivieren</button>
           </div>

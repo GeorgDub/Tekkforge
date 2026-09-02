@@ -539,8 +539,39 @@ Die Basis muss die unveraenderte Hacktribe-Firmware sein (SHA-256 aus
 `KORG/electribe sampler/System/` auf die SD-Karte, dann die Update-Funktion
 des Geraets; zurueck geht es mit der unveraenderten Datei auf demselben Weg.
 Erster Bau am 2026-09-02: `IFX-Alle` ab Platz 50 → Platz 50–96 belegt, Menue
-bis 96. ⚠ Am Geraet noch nicht abgenommen; der Einbau in die App folgt, wenn
-das Geraet die Datei annimmt.
+bis 96. ⚠ Am Geraet noch nicht abgenommen.
+
+### Preset-Manager — die ganze Bank als Liste
+
+Unter dem FX-Preset-Bereich liegt der **Preset-Manager**: alle 96 Insert-
+und 32 Master-Plaetze als zwei Listen, gezaehlt wie das Geraetemenue ab 1,
+mit Name und Algorithmus. Geladen wird ein vollstaendiger Stand aus einer von
+drei gleichwertigen Quellen — **vom Geraet** (96 + 32 Lesungen plus die 13
+Zaehler), aus einer **Sicherung** (`.tfbak`) oder aus einer **Firmware**
+(`.VSB`). Dieser Stand ist die Basis; alles, was man danach umbaut, wird
+gegen sie verglichen und farbig markiert.
+
+Je Zeile: ▲ ▼ verschieben, ⇄ tauschen, ✏ umbenennen, ✎ im Editor oeffnen
+(Parameter und Zuordnungen aendern, dann „Aus Editor uebernehmen…"), ⬇ als
+Datei sichern, ✕ loeschen (die folgenden Plaetze ruecken auf, hinten wird ein
+Platz frei — Listen-Semantik wie das Menue). Dazu „+ Datei einfuegen…"
+(Einzelpreset auf den ersten leeren Platz, Sammlung an ihre Plaetze) und „Als
+Sammlung sichern…" (alle belegten Plaetze mit Platznummer als `.tfsam`).
+
+Geschrieben wird nur, was sich gegen die Basis unterscheidet:
+- **⚠ Fluechtig schreiben (RAM)** — derselbe geprüfte Weg wie beim Verteilen
+  einer Sammlung (`verteileEintraege`: je Platz lesen, schreiben,
+  Rueckleseprobe), danach die IFX-Zaehler bis zum hoechsten belegten Platz,
+  sofern der Bereich lueckenlos ist. Gilt bis zum Ausschalten; „Alle
+  zurueckschreiben" im FX-Preset-Bereich nimmt es zurueck.
+- **🔥 Firmware patchen…** — fragt nach der unveraenderten Hacktribe-
+  `SYSTEM.VSB`, prueft den Hash, brennt die Unterschiede **zur Datei** ein
+  (`baueFirmware`) und legt das Ergebnis unter `Firmware/` ab.
+
+Kern: `core/presetManager.ts` (reine Operationen, jede liefert einen neuen
+Zustand), Panel: `gui/presetManager.ts`. Entwurf in
+`docs/superpowers/specs/2026-09-02-preset-manager-design.md`. ⚠ Beide
+Schreibwege am Geraet noch nicht abgenommen (Stand 2026-09-02).
 
 ## Step-Record-Layout (verifiziert)
 

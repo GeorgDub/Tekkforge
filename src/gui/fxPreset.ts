@@ -501,6 +501,25 @@ function sammlungsEintragOeffnen(i: number): void {
   setStatus(`„${e.name}" aus der Sammlung geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen.`);
 }
 
+/** Einen Block von aussen (Preset-Manager) in den Editor holen — wie ein Sammlungs-Eintrag. */
+export function oeffneImEditor(art: "ifx" | "mfx", bytes: Uint8Array, woher: string): void {
+  ($("fxpArt") as HTMLSelectElement).value = art;
+  basis = bytes.slice();
+  quelleAdresse = null;
+  ausDatei_imEditor = true;
+  preset = decodeFxPreset(bytes, art === "mfx");
+  groove = null;
+  zeigeGrooveKnopf();
+  render();
+  setStatus(`„${preset.name}" aus ${woher} geladen. Zum Schreiben erst den Ziel-Platz vom Gerät lesen — oder im Manager „Aus Editor übernehmen“.`);
+}
+
+/** Was gerade im Editor steht, als Block — null bei Groove oder leerem Editor. */
+export function aktuellesPreset(): { art: "ifx" | "mfx"; bytes: Uint8Array } | null {
+  if (!preset || istGroove()) return null;
+  return { art: istMfx() ? "mfx" : "ifx", bytes: encodeFxPreset(preset, basis ?? undefined) };
+}
+
 function sammlungAufnehmen(): void {
   const gv = istGroove();
   if (gv ? !groove : !preset) return;
@@ -587,16 +606,28 @@ async function sammlungVerteilen(): Promise<void> {
     setStatus("Die Sammlung ist leer — erst etwas aufnehmen oder laden.");
     return;
   }
-  const plan = planeVerteilung(sammlung);
+  const erweitern = (document.getElementById("fxpSamErweitern") as HTMLInputElement | null)?.checked === true;
+  await verteileEintraege(sammlung, erweitern);
+}
+
+/**
+ * Der eine Schreibweg fuer Listen von Eintraegen — die Sammlung und der
+ * Preset-Manager benutzen ihn gemeinsam. Liefert true, wenn alles geschrieben
+ * (und ggf. das Menue erweitert) ist; die Vorher-Staende landen in
+ * `verteilungsVorher`, damit „Alle zurückschreiben" sie zuruecknimmt.
+ */
+export async function verteileEintraege(eintraege: readonly SammlungsEintrag[], erweitern: boolean, vorspann = ""): Promise<boolean> {
+  if (!hooks) return false;
+  const plan = planeVerteilung(eintraege);
   if (plan.doppelt.length) {
     setStatus(
-      `Nicht geschrieben — doppelt vergeben: ${plan.doppelt.map((d) => `Platz ${d.platz} (${d.art.toUpperCase()})`).join(", ")}.`,
+      `${vorspann}Nicht geschrieben — doppelt vergeben: ${plan.doppelt.map((d) => `Platz ${d.platz} (${d.art.toUpperCase()})`).join(", ")}.`,
     );
-    return;
+    return false;
   }
   if (!plan.schritte.length) {
-    setStatus("Kein Eintrag hat einen Ziel-Platz — erst Plätze vergeben (Zahlenfeld je Eintrag).");
-    return;
+    setStatus(`${vorspann}Kein Eintrag hat einen Ziel-Platz — erst Plätze vergeben (Zahlenfeld je Eintrag).`);
+    return false;
   }
   verteilungsVorher = [];
   document.getElementById("fxpSamZurueck")?.classList.add("hidden");
@@ -604,51 +635,53 @@ async function sammlungVerteilen(): Promise<void> {
   for (const { eintrag } of plan.schritte) {
     nr++;
     const map = E2_RAM_MAP.find((e) => e.key === artKey(eintrag.art));
-    if (!map) return;
+    if (!map) return false;
     const addr = addressForSlot(map, eintrag.platz! - 1);
     const len = eintrag.art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
     const wohin = `„${eintrag.name}“ → Platz ${eintrag.platz} (${eintrag.art.toUpperCase()})`;
     const geschafft = (): string => (nr > 1 ? ` ${nr - 1} von ${plan.schritte.length} sind schon geschrieben.` : " Nichts wurde geschrieben.");
-    setStatus(`${nr}/${plan.schritte.length} · ${wohin}: lese Vorher-Stand …`);
+    setStatus(`${vorspann}${nr}/${plan.schritte.length} · ${wohin}: lese Vorher-Stand …`);
     const r = await hooks.lesen(addr, len);
     if (!r.ok) {
-      setStatus(`Abbruch bei ${wohin}: Lesen fehlgeschlagen — ${r.reason}.${geschafft()}`);
-      return;
+      setStatus(`${vorspann}Abbruch bei ${wohin}: Lesen fehlgeschlagen — ${r.reason}.${geschafft()}`);
+      return false;
     }
     let bytes: Uint8Array;
     if (eintrag.art === "groove") {
       // Nicht an eine Stelle schreiben, deren Aufbau die Lesung nicht bestaetigt hat
       if (erkenneStepBasis(r.bytes) !== GROOVE_STEP_BASIS) {
-        setStatus(`Abbruch bei ${wohin}: Der gelesene Block passt nicht zum erwarteten Groove-Aufbau.${geschafft()}`);
-        return;
+        setStatus(`${vorspann}Abbruch bei ${wohin}: Der gelesene Block passt nicht zum erwarteten Groove-Aufbau.${geschafft()}`);
+        return false;
       }
       bytes = encodeGroove(decodeGroove(eintrag.bytes), r.bytes);
     } else {
       bytes = encodeFxPreset(decodeFxPreset(eintrag.bytes, eintrag.art === "mfx"), r.bytes);
     }
-    setStatus(`${nr}/${plan.schritte.length} · schreibe ${wohin} …`);
+    setStatus(`${vorspann}${nr}/${plan.schritte.length} · schreibe ${wohin} …`);
     const ok = await hooks.schreiben(addr, bytes, `Sammlung: „${eintrag.name}“`);
     if (ok === false) {
       // Der gelesene Vorher-Stand dieses Platzes bleibt in der Liste — wer
       // zuruecknimmt, stellt auch einen halb beschriebenen Platz wieder her.
       verteilungsVorher.push({ addr, bytes: r.bytes });
       document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
-      setStatus(`Abbruch bei ${wohin}: Schreiben nicht bestätigt (Details im RAM-Status).${geschafft()}`);
-      return;
+      setStatus(`${vorspann}Abbruch bei ${wohin}: Schreiben nicht bestätigt (Details im RAM-Status).${geschafft()}`);
+      return false;
     }
     verteilungsVorher.push({ addr, bytes: r.bytes });
   }
   const rest = plan.uebersprungen.length ? ` — ${plan.uebersprungen.length} ohne Platz übersprungen` : "";
-  setStatus(`${plan.schritte.length} auf das Gerät verteilt${rest}. „Alle zurückschreiben“ stellt die Vorher-Stände wieder her.`);
+  setStatus(`${vorspann}${plan.schritte.length} auf das Gerät verteilt${rest}. „Alle zurückschreiben“ stellt die Vorher-Stände wieder her.`);
   document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
 
   // Auf Wunsch das Menue nachziehen: Presets hinter dem Belegungszaehler
   // sind sonst zwar im RAM, aber am Geraet unsichtbar.
-  const erweitern = (document.getElementById("fxpSamErweitern") as HTMLInputElement | null)?.checked === true;
   const ifxPlaetze = plan.schritte.filter((s) => s.eintrag.art === "ifx").map((s) => s.eintrag.platz!);
   if (erweitern && ifxPlaetze.length) {
-    await ifxMenueErweitern(Math.max(...ifxPlaetze), `${plan.schritte.length} verteilt · `);
+    // Das Ergebnis der Erweiterung steht in der Statuszeile; die Presets
+    // selbst sind geschrieben — das ist, was der Rueckgabewert sagt.
+    await ifxMenueErweitern(Math.max(...ifxPlaetze), `${vorspann}${plan.schritte.length} verteilt · `);
   }
+  return true;
 }
 
 /**
