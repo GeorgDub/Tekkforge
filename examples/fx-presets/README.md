@@ -292,6 +292,8 @@ und doppelt vergebene Plätze derselben Art werden gar nicht erst angefangen.
 **„↶ Alle zurückschreiben“** stellt die gelesenen Vorher-Stände wieder her,
 letzter zuerst. Die Zuweisung wird mit **„Sammlung sichern…“** in der `.tfsam`
 mitgespeichert (Feld `platz`, 1-basiert) und ist beim nächsten Laden wieder da.
+Am Gerät abgenommen (2026-09-02): das Starter-Set in einem Lauf verteilt,
+alle zwölf Presets unter ihren Namen im Gerätemenü.
 
 Dieselben Dateien lassen sich auch in Synthstudio laden (E2s-Preset-Panel,
 „.bin importieren“ — die Art wird an der Größe erkannt) und mit
