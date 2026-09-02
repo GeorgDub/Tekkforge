@@ -6,7 +6,20 @@ import {
   dateiOffset,
   pruefeFirmware,
   baueFirmware,
+  GROOVE_ZAEHLER,
+  INIT_PATTERN_OFFSET,
+  INIT_PATTERN_GROESSE,
+  E2SPAT_GROESSE,
+  SPLASH_OFFSET,
+  SPLASH_GROESSE,
+  liesInitPattern,
+  setzeInitPattern,
+  liesSplash,
+  setzeSplash,
+  istGroovePlatzLeer,
 } from "../src/core/firmwareBau";
+import { initGrooveBytes, decodeGroove, encodeGroove, GROOVE_SIZE } from "../src/core/e2Groove";
+import { leererSplash, pixelZuSplash, SPLASH_BREITE, SPLASH_HOEHE } from "../src/core/splash";
 import { E2_RAM_MAP, addressForSlot, DDR2_BASE } from "../src/core/hacktribeRam";
 import { IFX_ZAEHLER, IFX_ANZAHL_ADDR } from "../src/core/ifxErweiterung";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
@@ -42,7 +55,25 @@ function fakeFirmware(maxIndex = 48): Uint8Array {
     fw.set(presetBytes(`Master ${slot + 1}`, true), dateiOffset(addressForSlot(mfxMap, slot)));
   }
   for (const z of IFX_ZAEHLER) fw[dateiOffset(z.addr)] = z.plusEins ? maxIndex + 1 : maxIndex;
+  // Groove-Bank: 62 Werksvorlagen, Rest 0xFF; Zaehler 61/62
+  const grooveMap = E2_RAM_MAP.find((e) => e.key === "groove")!;
+  for (let slot = 0; slot < grooveMap.count; slot++) {
+    const off = dateiOffset(addressForSlot(grooveMap, slot));
+    if (slot < 62) fw.set(grooveBytes(`Groove ${slot + 1}`), off);
+    else fw.fill(0xff, off, off + GROOVE_SIZE);
+  }
+  for (const z of GROOVE_ZAEHLER) fw[dateiOffset(z.addr)] = z.plusEins ? 62 : 61;
+  // Init-Pattern: ein PTST-Block; Startbild: leer
+  fw.set(new TextEncoder().encode("PTST"), INIT_PATTERN_OFFSET);
+  fw.set(new TextEncoder().encode("PTED"), INIT_PATTERN_OFFSET + INIT_PATTERN_GROESSE - 4);
+  fw.set(leererSplash(), SPLASH_OFFSET);
   return fw;
+}
+
+function grooveBytes(name: string): Uint8Array {
+  const g = decodeGroove(initGrooveBytes());
+  g.name = name;
+  return encodeGroove(g);
 }
 
 const namensByte = (fw: Uint8Array, addr: number): string => {
@@ -150,5 +181,71 @@ describe("firmwareBau — bauen", () => {
     const r = baueFirmware(basis, [{ art: "ifx", name: "A", bytes: presetBytes("A"), platz: 50 }]);
     if (!r.ok) throw new Error(r.reason);
     expect(r.bytes[off + 0x130]).toBe(0x5a);
+  });
+});
+
+describe("firmwareBau — Grooves, Init-Pattern, Startbild", () => {
+  const grooveMap = E2_RAM_MAP.find((e) => e.key === "groove")!;
+
+  it("Groove-Vorlagen hinter dem Zaehler ziehen die vier Groove-Zaehler nach", () => {
+    const r = baueFirmware(fakeFirmware(), [
+      { art: "groove", name: "Mein Swing", bytes: grooveBytes("Mein Swing"), platz: 63 },
+      { art: "groove", name: "Noch einer", bytes: grooveBytes("Noch einer"), platz: 64 },
+    ]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bericht.grooveMaxVorher).toBe(61);
+    expect(r.bericht.grooveMaxNachher).toBe(63);
+    for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 64 : 63);
+    const off = dateiOffset(addressForSlot(grooveMap, 62));
+    expect(decodeGroove(r.bytes.subarray(off, off + GROOVE_SIZE)).name).toBe("Mein Swing");
+    // IFX-Zaehler unangetastet
+    expect(r.bytes[dateiOffset(IFX_ANZAHL_ADDR)]).toBe(49);
+  });
+
+  it("eine Luecke im Groove-Bereich stoppt den Bau", () => {
+    const r = baueFirmware(fakeFirmware(), [{ art: "groove", name: "X", bytes: grooveBytes("X"), platz: 64 }]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/Groove.*Platz 63/);
+  });
+
+  it("istGroovePlatzLeer: 0xFF-Bloecke sind leer, GVST-Bloecke nicht", () => {
+    expect(istGroovePlatzLeer(new Uint8Array(GROOVE_SIZE).fill(0xff))).toBe(true);
+    expect(istGroovePlatzLeer(grooveBytes("A"))).toBe(false);
+  });
+
+  it("Init-Pattern: lesen liefert eine gueltige .e2spat, setzen brennt den Block ein", () => {
+    const fw = fakeFirmware();
+    const pat = liesInitPattern(fw);
+    expect(pat.length).toBe(E2SPAT_GROESSE);
+    expect(String.fromCharCode(...pat.subarray(0, 4))).toBe("KORG");
+    expect(String.fromCharCode(...pat.subarray(0x10, 0x19))).toBe("e2sampler");
+    expect(String.fromCharCode(...pat.subarray(0x100, 0x104))).toBe("PTST");
+    // eigenes Pattern: Name an PTST+0x10 (aus dem Builder-Layout)
+    const neu = pat.slice();
+    neu.set(new TextEncoder().encode("TEKK INIT"), 0x110);
+    const fw2 = setzeInitPattern(fw, neu);
+    expect(String.fromCharCode(...fw2.subarray(INIT_PATTERN_OFFSET + 0x10, INIT_PATTERN_OFFSET + 0x19))).toBe("TEKK INIT");
+    expect(fw[INIT_PATTERN_OFFSET + 0x10]).toBe(0); // Eingabe unangetastet
+    // der nackte Block geht auch
+    expect(neu.length).toBe(0x4100); // wie eine echte .e2spat: Header, Block, 0x400 Nullen
+    expect(Array.from(setzeInitPattern(fw, neu.subarray(0x100, 0x100 + INIT_PATTERN_GROESSE)))).toEqual(Array.from(fw2));
+    expect(() => setzeInitPattern(fw, new Uint8Array(100))).toThrow(/Bytes/);
+    const kaputt = neu.slice();
+    kaputt.set(new TextEncoder().encode("XXXX"), 0x100);
+    expect(() => setzeInitPattern(fw, kaputt)).toThrow(/PTST/);
+  });
+
+  it("Startbild: lesen und setzen, 1024 Bytes an 0xF9954", () => {
+    const fw = fakeFirmware();
+    expect(liesSplash(fw).every((b) => b === 0xff)).toBe(true);
+    const px = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
+    px[0] = 1;
+    const fw2 = setzeSplash(fw, pixelZuSplash(px));
+    expect(fw2[SPLASH_OFFSET]).toBe(0x7f);
+    expect(liesSplash(fw2)[0]).toBe(0x7f);
+    expect(fw[SPLASH_OFFSET]).toBe(0xff);
+    expect(() => setzeSplash(fw, new Uint8Array(10))).toThrow(/Bytes/);
+    expect(SPLASH_GROESSE).toBe(1024);
   });
 });

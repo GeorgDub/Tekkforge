@@ -69,6 +69,7 @@ import {
 } from "../core/firmwareMode";
 import { initFxPresetPanel } from "./fxPreset";
 import { initPresetManager } from "./presetManager";
+import { initFirmwareWerkbank } from "./firmwareWerkbank";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
@@ -1030,6 +1031,12 @@ export const panelBridge = {
   markDirty,
 };
 
+/** Das aktuelle Pattern als vollstaendige .e2spat-Datei (0x4100 Bytes) — fuer die Firmware-Werkbank. */
+export function aktuellesPatternDatei(): { name: string; bytes: Uint8Array } {
+  const p = project.patterns[cur];
+  return { name: p.name, bytes: new Uint8Array(buildPatternFile(p)) };
+}
+
 /** 0x4000-Body des aktuellen Patterns (ohne 0x100-Dateiheader). */
 function currentPatternBody(): Uint8Array {
   return buildPatternFile(project.patterns[cur]).slice(0x100);
@@ -1672,6 +1679,8 @@ function setupRamPanel(): void {
   initFxPresetPanel(fxHooks);
   // Der Preset-Manager teilt sich Lese- und Schreibweg mit dem Editor.
   initPresetManager(fxHooks);
+  // Die Firmware-Werkbank holt sich das aktuelle Pattern als Init-Pattern.
+  initFirmwareWerkbank({ aktuellesPattern: aktuellesPatternDatei });
 }
 
 /**

@@ -652,3 +652,8 @@ export function initPresetManager(h: FxPresetHooks): void {
 export function pmZustand(): ManagerZustand | null {
   return zustand;
 }
+
+/** Wurde ein echter Stand geladen? Ohne den ist die leere Bank kein Wunsch, sondern nur die Vorschau. */
+export function pmGeladen(): boolean {
+  return geladen;
+}

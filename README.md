@@ -586,6 +586,44 @@ Zustand), Panel: `gui/presetManager.ts`. Entwurf in
 `docs/superpowers/specs/2026-09-02-preset-manager-design.md`. ⚠ Beide
 Schreibwege am Geraet noch nicht abgenommen (Stand 2026-09-02).
 
+### Firmware-Werkbank — Presets, Grooves, Init-Pattern, Startbild
+
+Unter dem Preset-Manager liegt die **Firmware-Werkbank**. Sie laedt eine
+`SYSTEM.VSB` als Basis — Hacktribe oder eine fruehere TekkForge-Fassung, die
+Pruefung verlangt Header, stimmige IFX- und Groove-Zaehler und ein
+Init-Pattern an seiner Stelle (`pruefeBasis`) — und brennt darauf ein, was
+angehakt ist:
+
+| Baustein | Woher | Wo im Abbild |
+|---|---|---|
+| Presets | Preset-Manager, Unterschiede **zur Datei** | IFX `0xA81F0`, MFX `0xB5030`, 13 IFX-Zaehler |
+| Groove-Vorlagen | `.tfsam` mit Plaetzen | `0x143C00`, Stride 0x140, 4 Groove-Zaehler (`0xC0049DA4`, `0xC007BB90`, `0xC007BB88`+1, `0xC007BB94`+1) |
+| Init-Pattern | aktuelles Pattern des Editors oder eine `.e2spat` | `0xD0058`, 0x3C00 Bytes („PTST" … „PTED"; die Datei ist dieser Block hinter 0x100 Header plus 0x400 Nullen) |
+| Startbild | Pixel-Editor 128 × 64 | `0xF9954`, 1024 Bytes 1-Bit |
+
+Alle Stellen stammen aus hacktribes Skripten (`e2-init-pat.py`,
+`ht_splash_screen.py`, `add_groove`) und sind am Abbild gegengeprueft: das
+Init-Pattern beginnt dort mit „PTST", der Startbildschirm dekodiert zum
+Hacktribe-Logo. Die **Bit-Belegung des Startbilds** (`core/splash.ts`) ist mit
+Einzel-Bit-Sonden am Python-Decoder abgeleitet: acht Baender zu acht Zeilen,
+ein Byte je Spalte, Bit 7 oben, 1 = hell. Der echte Splash geht byte-genau hin
+und zurueck (Fixture `tests/fixtures/splash-hacktribe.json`).
+
+Der **Pixel-Editor**: linke Maustaste malt, rechte radiert; „Bild laden…"
+passt ein beliebiges Bild seitenverhaeltnis-treu ein und schwellt es nach
+Helligkeit (Regler, Invertieren), „aus Firmware" holt das Bild der Basis als
+Ausgang, „⬇ PBM" sichert es als 1-Bit-Datei. Das Skript kann dasselbe:
+
+```
+npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam> --ab 50] [--init-pattern <.e2spat>] [--splash <128x64.pbm>]
+```
+
+Geprueft am 2026-09-02 an der echten Hacktribe-Datei: Init-Pattern gegen
+`CHORDTEST.e2spat` getauscht (99 Bytes Unterschied, nur im Pattern-Block), das
+Original-Startbild als PBM wieder eingebrannt — byte-identisch. ⚠ Am Geraet
+sind Init-Pattern, Startbild und Groove-Zaehler noch nicht abgenommen; der
+Preset-Weg ist es.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über

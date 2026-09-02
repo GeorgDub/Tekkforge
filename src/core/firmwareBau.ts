@@ -49,6 +49,33 @@ export function dateiOffset(ramAddr: number): number {
   return ramAddr - DDR2_BASE + VSB_HEADER;
 }
 
+/**
+ * Die vier Groove-Zaehler aus hacktribe `add_groove` — zwei auf den
+ * Max-Index, zwei auf Max-Index + 1 (0xC007BB88 ist die Read-Quelle). In der
+ * gepatchten Firmware stehen sie auf 61/62 bei 62 Werks-Vorlagen.
+ */
+export const GROOVE_ZAEHLER: readonly { addr: number; plusEins: boolean }[] = [
+  { addr: 0xc0049da4, plusEins: false },
+  { addr: 0xc007bb90, plusEins: false },
+  { addr: 0xc007bb88, plusEins: true },
+  { addr: 0xc007bb94, plusEins: true },
+];
+
+/**
+ * Das Init-Pattern: der Pattern-Block (0x3C00 Bytes, "PTST" … "PTED"), den
+ * das Geraet fuer ein neues Pattern nimmt. Datei-Offset aus hacktribe
+ * `e2-init-pat.py` (Payload 0xCFF58 + Header), am Abbild belegt: dort steht
+ * "PTST". Eine `.e2spat` ist genau dieser Block hinter einem 0x100-Header.
+ */
+export const INIT_PATTERN_OFFSET = 0xd0058;
+export const INIT_PATTERN_GROESSE = 0x3c00;
+/** Eine `.e2spat` ist 0x4100 Bytes: 0x100 Header, 0x3C00 Block bis "PTED", 0x400 Nullen. */
+export const E2SPAT_GROESSE = 0x4100;
+
+/** Der Startbildschirm: 1024 Bytes 1-Bit, 128 × 64 (hacktribe `ht_splash_screen.py`, Payload 0xF9854). */
+export const SPLASH_OFFSET = 0xf9954;
+export const SPLASH_GROESSE = 1024;
+
 export type FirmwarePruefung = { ok: true } | { ok: false; reason: string };
 
 /** Groesse, Magic, Geraetekennung — der Hash wird davon getrennt geprueft (siehe Aufrufer). */
@@ -69,6 +96,27 @@ export interface FirmwareBauBericht {
   ifxMaxVorher: number;
   ifxMaxNachher: number;
   zaehler: ZaehlerWert[];
+  grooveMaxVorher: number;
+  grooveMaxNachher: number;
+  grooveZaehler: ZaehlerWert[];
+}
+
+/** Eine Groove-Vorlage ist belegt, wenn ihr Rahmen steht — leere Plaetze sind lauter 0xFF. */
+export function istGroovePlatzLeer(bytes: Uint8Array): boolean {
+  return bytes.length < 4 || !(bytes[0] === 0x47 && bytes[1] === 0x56 && bytes[2] === 0x53 && bytes[3] === 0x54); // "GVST"
+}
+
+/** Groove-Zaehler aus dem Abbild lesen — stimmig nur, wenn beide Paare zusammenpassen. */
+export function leseGrooveStand(fw: Uint8Array): { ok: true; maxIndex: number } | { ok: false; reason: string } {
+  const werte = GROOVE_ZAEHLER.map((z) => ({ ...z, wert: fw[dateiOffset(z.addr)] }));
+  const max = werte[0].wert;
+  for (const w of werte) {
+    const soll = w.plusEins ? max + 1 : max;
+    if (w.wert !== soll) {
+      return { ok: false, reason: `Groove-Zähler widersprechen sich: 0x${w.addr.toString(16).toUpperCase()} steht auf ${w.wert}, nach Max-Index ${max} müsste dort ${soll} stehen` };
+    }
+  }
+  return { ok: true, maxIndex: max };
 }
 
 export type FirmwareBauErgebnis = { ok: true; bytes: Uint8Array; bericht: FirmwareBauBericht } | { ok: false; reason: string };
@@ -95,7 +143,15 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
   if (!plan.schritte.length) return { ok: false, reason: "Die Sammlung ist leer" };
 
   const out = basis.slice();
-  const bericht: FirmwareBauBericht = { geschrieben: [], ifxMaxVorher: -1, ifxMaxNachher: -1, zaehler: [] };
+  const bericht: FirmwareBauBericht = {
+    geschrieben: [],
+    ifxMaxVorher: -1,
+    ifxMaxNachher: -1,
+    zaehler: [],
+    grooveMaxVorher: -1,
+    grooveMaxNachher: -1,
+    grooveZaehler: [],
+  };
 
   for (const { eintrag } of plan.schritte) {
     const platz = eintrag.platz!;
@@ -105,9 +161,12 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
     const offset = dateiOffset(addressForSlot(mapFuer(eintrag.art), platz - 1));
     const len = eintrag.art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
     const unterlage = out.subarray(offset, offset + len);
+    // Unterlage nur, wenn dort schon etwas steht: ein leerer Groove-Platz ist
+    // lauter 0xFF und traegt weder Rahmen noch Step-Tabelle — darueber gelegt
+    // fehlte dem Block das "GVST".
     const bytes =
       eintrag.art === "groove"
-        ? encodeGroove(decodeGroove(eintrag.bytes), unterlage)
+        ? encodeGroove(decodeGroove(eintrag.bytes), istGroovePlatzLeer(unterlage) ? undefined : unterlage)
         : encodeFxPreset(decodeFxPreset(eintrag.bytes, eintrag.art === "mfx"), unterlage);
     if (bytes.length !== len) return { ok: false, reason: `„${eintrag.name}“: ${bytes.length} statt ${len} Bytes` };
     out.set(bytes, offset);
@@ -132,5 +191,107 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
     bericht.zaehler = erweiterung.schreiben;
     bericht.ifxMaxNachher = hoechster;
   }
+
+  // Groove-Zaehler: dieselbe Regel — lueckenlos bis zum hoechsten belegten Platz.
+  const grooveStand = leseGrooveStand(out);
+  if (!grooveStand.ok) return { ok: false, reason: grooveStand.reason };
+  bericht.grooveMaxVorher = grooveStand.maxIndex;
+  bericht.grooveMaxNachher = grooveStand.maxIndex;
+  const grooveMap = mapFuer("groove");
+  const hoechsterGroove = Math.max(-1, ...bericht.geschrieben.filter((g) => g.art === "groove").map((g) => g.platz - 1));
+  if (hoechsterGroove > grooveStand.maxIndex) {
+    const luecken: number[] = [];
+    for (let slot = grooveStand.maxIndex + 1; slot <= hoechsterGroove; slot++) {
+      const off = dateiOffset(addressForSlot(grooveMap, slot));
+      if (istGroovePlatzLeer(out.subarray(off, off + GROOVE_SIZE))) luecken.push(slot + 1);
+    }
+    if (luecken.length) {
+      return { ok: false, reason: `Groove-Bereich hat Lücken hinter dem Zähler: Platz ${luecken.join(", ")} leer — erst dort eine Vorlage ablegen` };
+    }
+    bericht.grooveZaehler = GROOVE_ZAEHLER.map((z) => ({ addr: z.addr, wert: z.plusEins ? hoechsterGroove + 1 : hoechsterGroove }));
+    for (const w of bericht.grooveZaehler) out[dateiOffset(w.addr)] = w.wert;
+    bericht.grooveMaxNachher = hoechsterGroove;
+  }
   return { ok: true, bytes: out, bericht };
+}
+
+// ─── Basis-Pruefung ──────────────────────────────────────────────────────────
+
+export interface BasisBefund {
+  ok: boolean;
+  reason?: string;
+  /** IFX-Max-Index laut Zaehler, Groove-Max-Index, Name des Init-Patterns. */
+  ifxMaxIndex: number;
+  grooveMaxIndex: number;
+  initPatternName: string;
+}
+
+/**
+ * Taugt die Datei als Basis? Header, stimmige IFX- und Groove-Zaehler und ein
+ * "PTST" an der Init-Pattern-Stelle — das haelt auch eine schon von TekkForge
+ * gepatchte Firmware, die naechste Runde baut dann darauf auf. Den
+ * Hacktribe-Hash prueft der Aufrufer getrennt, wenn er ihn verlangen will.
+ */
+export function pruefeBasis(fw: Uint8Array): BasisBefund {
+  const leer = { ifxMaxIndex: -1, grooveMaxIndex: -1, initPatternName: "" };
+  const pr = pruefeFirmware(fw);
+  if (!pr.ok) return { ok: false, reason: pr.reason, ...leer };
+  const ifx = leseZaehlerStand(IFX_ZAEHLER.map((z) => ({ addr: z.addr, wert: fw[dateiOffset(z.addr)] })));
+  if (!ifx.ok) return { ok: false, reason: `IFX-Zähler: ${ifx.reason}`, ...leer };
+  const gv = leseGrooveStand(fw);
+  if (!gv.ok) return { ok: false, reason: gv.reason, ...leer, ifxMaxIndex: ifx.maxIndex };
+  const magic = String.fromCharCode(...fw.subarray(INIT_PATTERN_OFFSET, INIT_PATTERN_OFFSET + 4));
+  if (magic !== "PTST") return { ok: false, reason: `An der Init-Pattern-Stelle steht „${magic}“ statt „PTST“`, ...leer, ifxMaxIndex: ifx.maxIndex, grooveMaxIndex: gv.maxIndex };
+  let name = "";
+  for (let i = 0; i < 16; i++) {
+    const c = fw[INIT_PATTERN_OFFSET + 0x10 + i];
+    if (!c) break;
+    name += String.fromCharCode(c);
+  }
+  return { ok: true, ifxMaxIndex: ifx.maxIndex, grooveMaxIndex: gv.maxIndex, initPatternName: name.trim() };
+}
+
+// ─── Init-Pattern und Startbildschirm ────────────────────────────────────────
+
+/** Das Init-Pattern als vollstaendige `.e2spat` (KORG-Header + Block), ladbar wie jede Pattern-Datei. */
+export function liesInitPattern(fw: Uint8Array): Uint8Array {
+  const pr = pruefeFirmware(fw);
+  if (!pr.ok) throw new Error(pr.reason);
+  const out = new Uint8Array(E2SPAT_GROESSE);
+  out.fill(0xff, 0x24, 0x100);
+  out.set(new TextEncoder().encode("KORG"), 0);
+  out.set(new TextEncoder().encode("e2sampler"), 0x10);
+  out[0x20] = 1; // version u32 LE = 1
+  out.set(fw.subarray(INIT_PATTERN_OFFSET, INIT_PATTERN_OFFSET + INIT_PATTERN_GROESSE), 0x100);
+  return out;
+}
+
+/** Eine `.e2spat` (oder ihr nackter Block) als Init-Pattern einbrennen — liefert ein neues Abbild. */
+export function setzeInitPattern(fw: Uint8Array, pattern: Uint8Array): Uint8Array {
+  const pr = pruefeFirmware(fw);
+  if (!pr.ok) throw new Error(pr.reason);
+  let block: Uint8Array;
+  if (pattern.length === E2SPAT_GROESSE) block = pattern.subarray(0x100, 0x100 + INIT_PATTERN_GROESSE);
+  else if (pattern.length === INIT_PATTERN_GROESSE) block = pattern;
+  else throw new Error(`${pattern.length} Bytes — eine .e2spat hat ${E2SPAT_GROESSE}, der Block ${INIT_PATTERN_GROESSE}`);
+  const magic = String.fromCharCode(...block.subarray(0, 4));
+  if (magic !== "PTST") throw new Error(`Kein Pattern-Block (erwartet „PTST“, gefunden „${magic}“)`);
+  const out = fw.slice();
+  out.set(block, INIT_PATTERN_OFFSET);
+  return out;
+}
+
+export function liesSplash(fw: Uint8Array): Uint8Array {
+  const pr = pruefeFirmware(fw);
+  if (!pr.ok) throw new Error(pr.reason);
+  return fw.slice(SPLASH_OFFSET, SPLASH_OFFSET + SPLASH_GROESSE);
+}
+
+export function setzeSplash(fw: Uint8Array, splash: Uint8Array): Uint8Array {
+  const pr = pruefeFirmware(fw);
+  if (!pr.ok) throw new Error(pr.reason);
+  if (splash.length !== SPLASH_GROESSE) throw new Error(`${splash.length} Bytes — der Startbildschirm hat ${SPLASH_GROESSE}`);
+  const out = fw.slice();
+  out.set(splash, SPLASH_OFFSET);
+  return out;
 }

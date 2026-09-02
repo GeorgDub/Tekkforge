@@ -1,7 +1,8 @@
 /**
  * make-firmware.mjs — eine Sammlung in die Hacktribe-Firmware einbrennen.
  *
- *   npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --sammlung <.tfsam> --ziel <out.VSB> [--ab <platz>] [--richtung auf|ab]
+ *   npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab]
+ *                                     [--init-pattern <.e2spat>] [--splash <128x64.pbm>] [--basis-egal]
  *
  * `--ab` nummeriert die Sammlung vorher wie der ▲/▼-Knopf im Panel neu (je
  * Art eine Reihe ab diesem Platz); Eintraege hinter der Art-Grenze fallen
@@ -18,7 +19,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
-import { baueFirmware, pruefeFirmware, HACKTRIBE_SHA256, dateiOffset } from "../src/core/firmwareBau.ts";
+import { baueFirmware, pruefeFirmware, pruefeBasis, HACKTRIBE_SHA256, dateiOffset, setzeInitPattern, setzeSplash } from "../src/core/firmwareBau.ts";
+import { pixelZuSplash, pbmZuPixel } from "../src/core/splash.ts";
 import { leseSammlung, nummerierePlaetze } from "../src/core/sammlung.ts";
 import { decodeFxPreset } from "../src/core/e2FxPreset.ts";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam.ts";
@@ -34,8 +36,8 @@ const sammlungPfad = arg("sammlung");
 const zielPfad = arg("ziel");
 const ab = arg("ab");
 const richtung = arg("richtung", "auf");
-if (!basisPfad || !sammlungPfad || !zielPfad) {
-  console.error("Aufruf: --basis <SYSTEM.VSB> --sammlung <.tfsam> --ziel <out.VSB> [--ab <platz>] [--richtung auf|ab] [--basis-egal]");
+if (!basisPfad || !zielPfad) {
+  console.error("Aufruf: --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab] [--init-pattern <.e2spat>] [--splash <.pbm>] [--basis-egal]");
   process.exit(1);
 }
 
@@ -47,21 +49,55 @@ if (!pr.ok) {
   process.exit(1);
 }
 const basisSha = sha(basis);
-if (basisSha !== HACKTRIBE_SHA256 && !flag("basis-egal")) {
-  console.error(`Basis ist nicht die unveränderte Hacktribe-Firmware (SHA-256 ${basisSha.slice(0, 16)}…, erwartet ${HACKTRIBE_SHA256.slice(0, 16)}…). Mit --basis-egal trotzdem bauen.`);
-  process.exit(1);
+const struktur = pruefeBasis(basis);
+if (basisSha !== HACKTRIBE_SHA256) {
+  // Eine schon gepatchte TekkForge-Firmware ist als Basis erlaubt, wenn ihre Struktur stimmt.
+  if (!struktur.ok && !flag("basis-egal")) {
+    console.error(`Basis abgelehnt: nicht die Hacktribe-Firmware (SHA-256 ${basisSha.slice(0, 16)}…) und ${struktur.reason}. Mit --basis-egal trotzdem bauen.`);
+    process.exit(1);
+  }
+  console.log(`Basis ist nicht die unveränderte Hacktribe-Firmware (SHA-256 ${basisSha.slice(0, 16)}…), Struktur ${struktur.ok ? "stimmig — vermutlich schon gepatcht, wird fortgeschrieben" : "NICHT stimmig (--basis-egal)"}.`);
 }
+if (struktur.ok) console.log(`Basis: IFX-Menü bis Platz ${struktur.ifxMaxIndex + 1}, Grooves bis ${struktur.grooveMaxIndex + 1}, Init-Pattern „${struktur.initPatternName}“.`);
 
-let eintraege = leseSammlung(fs.readFileSync(sammlungPfad, "utf8")).eintraege;
+let eintraege = sammlungPfad ? leseSammlung(fs.readFileSync(sammlungPfad, "utf8")).eintraege : [];
 if (ab !== undefined) {
   const n = nummerierePlaetze(eintraege, Number(ab), richtung === "ab" ? "ab" : "auf");
   eintraege = n.eintraege.filter((e) => e.platz !== undefined);
   console.log(`Nummeriert ${richtung === "ab" ? "absteigend" : "aufsteigend"} ab Platz ${ab}: ${n.vergeben} mit Platz, ${n.ohnePlatz} fallen weg.`);
 }
 
-const r = baueFirmware(basis, eintraege);
+let r = eintraege.length
+  ? baueFirmware(basis, eintraege)
+  : { ok: true, bytes: basis.slice(), bericht: { geschrieben: [], ifxMaxVorher: -1, ifxMaxNachher: -1, zaehler: [], grooveMaxVorher: -1, grooveMaxNachher: -1, grooveZaehler: [] } };
 if (!r.ok) {
   console.error(`Nicht gebaut: ${r.reason}`);
+  process.exit(1);
+}
+
+// Init-Pattern (.e2spat) und Startbild (PBM P4, 128 × 64) — optional.
+const initPfad = arg("init-pattern");
+if (initPfad) {
+  try {
+    r = { ...r, bytes: setzeInitPattern(r.bytes, new Uint8Array(fs.readFileSync(initPfad))) };
+    console.log(`Init-Pattern: ${initPfad}`);
+  } catch (e) {
+    console.error(`Init-Pattern nicht gesetzt: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+}
+const splashPfad = arg("splash");
+if (splashPfad) {
+  try {
+    r = { ...r, bytes: setzeSplash(r.bytes, pixelZuSplash(pbmZuPixel(new Uint8Array(fs.readFileSync(splashPfad))))) };
+    console.log(`Startbild: ${splashPfad}`);
+  } catch (e) {
+    console.error(`Startbild nicht gesetzt: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+}
+if (!eintraege.length && !initPfad && !splashPfad) {
+  console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern noch --splash angegeben.");
   process.exit(1);
 }
 
@@ -93,7 +129,10 @@ for (const [a, l] of arten) {
 }
 if (r.bericht.zaehler.length) {
   console.log(`  IFX-Menü: bis Platz ${r.bericht.ifxMaxVorher + 1} → bis Platz ${r.bericht.ifxMaxNachher + 1} (13 Zähler gesetzt)`);
-} else {
+} else if (r.bericht.ifxMaxVorher >= 0) {
   console.log(`  IFX-Menü unverändert: bis Platz ${r.bericht.ifxMaxVorher + 1}`);
+}
+if (r.bericht.grooveZaehler.length) {
+  console.log(`  Groove-Menü: bis Platz ${r.bericht.grooveMaxVorher + 1} → bis Platz ${r.bericht.grooveMaxNachher + 1} (4 Zähler gesetzt)`);
 }
 console.log("\nInstallieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ auf die SD-Karte, dann am Gerät die Update-Funktion.");
