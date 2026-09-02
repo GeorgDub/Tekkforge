@@ -11,12 +11,13 @@
  *
  * Entwurf: docs/superpowers/specs/2026-09-02-preset-manager-design.md
  */
-import { $, escapeHtml, frageText } from "./shared";
+import { $, escapeHtml, frageText, frageAuswahl } from "./shared";
 import type { FxPresetHooks } from "./fxPreset";
 import { verteileEintraege, oeffneImEditor, aktuellesPreset } from "./fxPreset";
 import {
   IFX_PLAETZE,
   MFX_PLAETZE,
+  leererBlock,
   istLeer,
   nameVon,
   algorithmusVon,
@@ -48,6 +49,26 @@ let hooks: FxPresetHooks | null = null;
 let basis: ManagerZustand | null = null;
 let zustand: ManagerZustand | null = null;
 let quelle = "";
+/** Wurde ein echter Stand (Geraet, Sicherung, Firmware) geladen? Ohne den gibt es kein fluechtiges Schreiben. */
+let geladen = false;
+
+/** Die Bibliothek: Presets aus Dateien und aus dem Editor, zum Ziehen auf die Plaetze. */
+export interface BibEintrag {
+  art: ManagerArt;
+  name: string;
+  bytes: Uint8Array;
+  woher: string;
+}
+let bibliothek: BibEintrag[] = [];
+
+/** Beide Listen zeigen immer alle Plaetze — auch bevor etwas geladen ist. */
+function leererZustand(): ManagerZustand {
+  return {
+    ifx: Array.from({ length: IFX_PLAETZE }, () => leererBlock("ifx")),
+    mfx: Array.from({ length: MFX_PLAETZE }, () => leererBlock("mfx")),
+    ifxMaxIndex: -1,
+  };
+}
 
 const FIRMWARE_ORDNER = "Firmware";
 
@@ -62,17 +83,17 @@ const gleich = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length 
 // ─── Anzeige ─────────────────────────────────────────────────────────────────
 
 function render(): void {
-  const info = document.getElementById("pmInfo");
   if (!zustand || !basis) {
-    if (info) info.textContent = "nichts geladen";
-    for (const art of ["ifx", "mfx"] as const) {
-      const liste = document.getElementById(art === "ifx" ? "pmIfxListe" : "pmMfxListe");
-      if (liste) liste.innerHTML = "";
-    }
-    return;
+    zustand = leererZustand();
+    basis = leererZustand();
   }
+  const info = document.getElementById("pmInfo");
   const diff = unterschiede(zustand, basis);
-  if (info) info.textContent = `${quelle} — ${diff.length ? `${diff.length} Platz/Plätze geändert` : "unverändert"}`;
+  if (info) {
+    info.textContent = geladen
+      ? `${quelle} — ${diff.length ? `${diff.length} Platz/Plätze geändert` : "unverändert"}`
+      : `nichts geladen — leere Bank${diff.length ? `, ${diff.length} Platz/Plätze belegt` : ""}`;
+  }
   for (const art of ["ifx", "mfx"] as const) {
     const liste = document.getElementById(art === "ifx" ? "pmIfxListe" : "pmMfxListe");
     const kopf = document.getElementById(art === "ifx" ? "pmIfxInfo" : "pmMfxInfo");
@@ -80,7 +101,7 @@ function render(): void {
     const l = luecken(zustand, art);
     if (kopf) {
       kopf.textContent =
-        `belegt bis Platz ${belegt}` +
+        `${belegt} von ${anzahl(art)} belegt` +
         (art === "ifx" && zustand.ifxMaxIndex >= 0 ? `, Menü laut Zähler bis ${zustand.ifxMaxIndex + 1}` : "") +
         (l.length ? ` — ⚠ leer dazwischen: ${l.join(", ")}` : "");
     }
@@ -89,14 +110,15 @@ function render(): void {
       const platz = i + 1;
       const leer = istLeer(bytes);
       const geaendert = !gleich(bytes, basis![art][i]);
-      const name = leer ? "<i style=\"opacity:.5\">leer</i>" : escapeHtml(nameVon(bytes));
+      const name = leer ? `<span style="color:var(--muted)">— leer —</span>` : escapeHtml(nameVon(bytes));
       const algo = leer ? "" : escapeHtml(algorithmusVon(bytes, art));
       const k = (op: string, text: string, title: string) =>
         `<button class="ghost pmOp" data-art="${art}" data-platz="${platz}" data-op="${op}" title="${title}" style="padding:1px 6px;font-size:11px">${text}</button>`;
       return (
-        `<div style="${geaendert ? "background:rgba(255,160,0,.12);" : ""}${leer ? "opacity:.75;" : ""}">` +
-        `<span class="rolle" style="min-width:28px;text-align:right">${platz}</span>` +
-        `<span style="flex:1">${name}</span><span class="sub" style="margin:0;min-width:120px">${algo}</span>` +
+        `<div class="pmZeile" data-art="${art}" data-platz="${platz}" style="${geaendert ? "background:rgba(255,160,0,.12);" : ""}">` +
+        `<span class="rolle" style="min-width:26px;text-align:right">${platz}</span>` +
+        `<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(leer ? "" : nameVon(bytes))}">${name}</span>` +
+        `<span class="sub" style="margin:0;flex:0 0 96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${algo}">${algo}</span>` +
         k("auf", "▲", "einen Platz nach vorn (kleinere Nummer)") +
         k("ab", "▼", "einen Platz nach hinten (größere Nummer)") +
         k("tausch", "⇄", "mit einem anderen Platz tauschen") +
@@ -111,7 +133,156 @@ function render(): void {
     for (const b of liste.querySelectorAll<HTMLButtonElement>(".pmOp")) {
       b.addEventListener("click", () => void pmAktion(b.dataset.op ?? "", b.dataset.art as ManagerArt, Number(b.dataset.platz)));
     }
+    // Ziel fuers Ziehen aus der Bibliothek: jede Zeile nimmt einen Bibliotheks-Eintrag an.
+    for (const z of liste.querySelectorAll<HTMLElement>(".pmZeile")) {
+      z.addEventListener("dragover", (e) => {
+        if (!gezogen || gezogen.art !== z.dataset.art) return;
+        e.preventDefault();
+        z.style.outline = "2px solid var(--accent)";
+      });
+      z.addEventListener("dragleave", () => {
+        z.style.outline = "";
+      });
+      z.addEventListener("drop", (e) => {
+        e.preventDefault();
+        z.style.outline = "";
+        if (gezogen === null) return;
+        const index = gezogen.index;
+        gezogen = null;
+        void pmBibAblegen(index, z.dataset.art as ManagerArt, Number(z.dataset.platz));
+      });
+    }
   }
+  renderBibliothek();
+}
+
+// ─── Bibliothek ──────────────────────────────────────────────────────────────
+
+/** Was gerade gezogen wird — HTML5-Drag traegt nur Text, der Eintrag selbst liegt hier. */
+let gezogen: { index: number; art: ManagerArt } | null = null;
+
+function renderBibliothek(): void {
+  const liste = document.getElementById("pmBibListe");
+  const info = document.getElementById("pmBibInfo");
+  const filter = (document.getElementById("pmBibFilter") as HTMLSelectElement | null)?.value ?? "alle";
+  const sichtbar = bibliothek.map((e, index) => ({ e, index })).filter(({ e }) => filter === "alle" || e.art === filter);
+  if (info) info.textContent = bibliothek.length ? `${bibliothek.length} Preset(s)${filter === "alle" ? "" : `, ${sichtbar.length} gezeigt`}` : "leer";
+  if (!liste) return;
+  liste.innerHTML = sichtbar.length
+    ? `<div class="startListe" style="max-height:420px;overflow:auto">${sichtbar
+        .map(
+          ({ e, index }) =>
+            `<div class="pmBib" draggable="true" data-index="${index}" title="${escapeHtml(e.woher)} — ziehen und auf einen ${e.art.toUpperCase()}-Platz fallen lassen" style="cursor:grab">` +
+            `<span class="rolle" style="min-width:30px">${e.art.toUpperCase()}</span>` +
+            `<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</span>` +
+            `<span class="sub" style="margin:0;flex:0 0 80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(algorithmusVon(e.bytes, e.art))}</span>` +
+            `<button class="ghost pmBibZu" data-index="${index}" title="ohne Ziehen: auf einen Platz legen (fragt nach dem Platz)" style="padding:1px 6px;font-size:11px">→</button>` +
+            `<button class="ghost pmBibWeg" data-index="${index}" title="aus der Bibliothek entfernen" style="padding:1px 6px;font-size:11px">✕</button></div>`,
+        )
+        .join("")}</div>`
+    : `<p class="sub" style="margin:0">Noch leer — Presets oder Sammlungen laden, oder aus dem Editor übernehmen.</p>`;
+  for (const z of liste.querySelectorAll<HTMLElement>(".pmBib")) {
+    z.addEventListener("dragstart", (e) => {
+      const index = Number(z.dataset.index);
+      gezogen = { index, art: bibliothek[index]?.art ?? "ifx" };
+      e.dataTransfer?.setData("text/plain", `tf-bib:${index}`);
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "copy";
+    });
+    z.addEventListener("dragend", () => {
+      gezogen = null;
+    });
+  }
+  for (const b of liste.querySelectorAll<HTMLButtonElement>(".pmBibZu")) {
+    b.addEventListener("click", () => void bibZuPlatzGefragt(Number(b.dataset.index)));
+  }
+  for (const b of liste.querySelectorAll<HTMLButtonElement>(".pmBibWeg")) {
+    b.addEventListener("click", () => {
+      bibliothek.splice(Number(b.dataset.index), 1);
+      renderBibliothek();
+    });
+  }
+}
+
+/** Dateien in die Bibliothek: Einzelpresets nach Endung, Sammlungen mit ihrer Art. */
+async function bibLaden(dateien: readonly File[]): Promise<void> {
+  let n = 0;
+  for (const f of dateien) {
+    try {
+      if (/\.(tfsam|json)$/i.test(f.name)) {
+        const s = leseSammlung(await f.text());
+        for (const e of s.eintraege) {
+          if (e.art === "groove") continue;
+          bibliothek.push({ art: e.art, name: e.name, bytes: e.bytes, woher: `${s.titel} (${f.name})` });
+          n++;
+        }
+      } else {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        if (bytes.length !== FX_PRESET_SIZE) throw new Error(`${f.name}: ${bytes.length} Bytes — ein Preset hat ${FX_PRESET_SIZE}`);
+        const art: ManagerArt = /\.mfx$/i.test(f.name) ? "mfx" : "ifx";
+        bibliothek.push({ art, name: nameVon(bytes) || f.name, bytes, woher: f.name });
+        n++;
+      }
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+      renderBibliothek();
+      return;
+    }
+  }
+  renderBibliothek();
+  setStatus(`${n} Preset(s) in die Bibliothek geladen — jetzt auf einen Platz ziehen.`);
+}
+
+/** Fuer Tests und den „aus Editor"-Knopf: einen Eintrag direkt aufnehmen. */
+export function bibAufnehmen(e: BibEintrag): void {
+  bibliothek.push({ ...e, bytes: e.bytes.slice() });
+  renderBibliothek();
+}
+
+export type AblegeModus = "ersetzen" | "vor" | "nach";
+
+/**
+ * Einen Bibliotheks-Eintrag auf einen Platz legen. Leerer Platz: einfach rein.
+ * Belegter Platz: Ersetzen, davor oder danach einfuegen — gefragt wird nur,
+ * wenn `modus` fehlt. Einfuegen rueckt den Rest nach hinten und faellt durch,
+ * wenn hinten ein belegter Platz herausfiele.
+ */
+export async function pmBibAblegen(index: number, art: ManagerArt, platz: number, modus?: AblegeModus): Promise<void> {
+  const e = bibliothek[index];
+  if (!e || !zustand) return;
+  if (e.art !== art) {
+    setStatus(`„${e.name}“ ist ein ${e.art.toUpperCase()}-Preset — es gehört in die ${e.art.toUpperCase()}-Liste.`);
+    return;
+  }
+  try {
+    const belegt = platz >= 1 && platz <= anzahl(art) && !istLeer(zustand[art][platz - 1]);
+    let wahl: AblegeModus | null = modus ?? (belegt ? null : "ersetzen");
+    if (wahl === null) {
+      const i = await frageAuswahl(
+        `Platz ${platz} ist belegt („${nameVon(zustand[art][platz - 1])}“). Was soll mit „${e.name}“ passieren?`,
+        ["Ersetzen", "Davor einfügen", "Danach einfügen"],
+        0,
+      );
+      if (i === null) return;
+      wahl = (["ersetzen", "vor", "nach"] as const)[i];
+    }
+    if (wahl === "ersetzen") zustand = ersetzen(zustand, art, platz, e.bytes);
+    else if (wahl === "vor") zustand = einfuegen(zustand, art, platz, e.bytes);
+    else zustand = einfuegen(zustand, art, platz + 1, e.bytes);
+    render();
+    const wo = wahl === "ersetzen" ? `auf Platz ${platz}` : wahl === "vor" ? `vor Platz ${platz} (jetzt Platz ${platz})` : `nach Platz ${platz} (jetzt Platz ${platz + 1})`;
+    setStatus(`„${e.name}“ ${wo} gelegt${belegt && wahl !== "ersetzen" ? " — der Rest ist nach hinten gerückt" : ""}.`);
+  } catch (err) {
+    setStatus(err instanceof Error ? err.message : String(err));
+  }
+}
+
+async function bibZuPlatzGefragt(index: number): Promise<void> {
+  const e = bibliothek[index];
+  if (!e || !zustand) return;
+  const vorschlag = ersterLeerer(e.art) || 1;
+  const antwort = Number(await frageText(`„${e.name}“ (${e.art.toUpperCase()}) auf Platz (1..${anzahl(e.art)}):`, String(vorschlag)));
+  if (!Number.isFinite(antwort)) return;
+  await pmBibAblegen(index, e.art, antwort);
 }
 
 // ─── Aktionen je Zeile ───────────────────────────────────────────────────────
@@ -184,6 +355,7 @@ function uebernehmen(z: ManagerZustand, woher: string): void {
   basis = z;
   zustand = { ifx: z.ifx.map((b) => b.slice()), mfx: z.mfx.map((b) => b.slice()), ifxMaxIndex: z.ifxMaxIndex };
   quelle = woher;
+  geladen = true;
   render();
   setStatus(`${woher}: ${hoechsterBelegter(z, "ifx")} IFX und ${hoechsterBelegter(z, "mfx")} MFX belegt.`);
 }
@@ -333,6 +505,10 @@ function aenderungen(): SammlungsEintrag[] | null {
 
 /** Fluechtig: nur die Unterschiede ins RAM, danach die Zaehler bis zum hoechsten belegten IFX-Platz. */
 async function fluechtigSchreiben(): Promise<void> {
+  if (!geladen) {
+    setStatus("Erst einen echten Stand laden (Gerät oder Sicherung) — sonst gibt es keinen Vorher-Stand, gegen den geschrieben wird.");
+    return;
+  }
   const diff = aenderungen();
   if (!diff || !zustand || !basis) return;
   const l = luecken(zustand, "ifx");
@@ -439,8 +615,36 @@ export function initPresetManager(h: FxPresetHooks): void {
     if (f) void firmwarePatchen(f);
   });
   $("pmVerwerfen").addEventListener("click", () => {
-    if (basis) uebernehmen(basis, quelle);
+    if (basis && geladen) uebernehmen(basis, quelle);
+    else {
+      zustand = leererZustand();
+      basis = leererZustand();
+      render();
+    }
   });
+  $("pmBibLaden").addEventListener("click", () => ($("pmBibIn") as HTMLInputElement).click());
+  $("pmBibIn").addEventListener("change", () => {
+    const f = Array.from(($("pmBibIn") as HTMLInputElement).files ?? []);
+    if (f.length) void bibLaden(f);
+  });
+  $("pmBibAusEditor").addEventListener("click", () => {
+    const p = aktuellesPreset();
+    if (!p) {
+      setStatus("Im Editor steht kein Effekt-Preset.");
+      return;
+    }
+    bibAufnehmen({ art: p.art, name: nameVon(p.bytes) || "Preset", bytes: p.bytes, woher: "Editor" });
+    setStatus(`„${nameVon(p.bytes)}“ in die Bibliothek gelegt.`);
+  });
+  $("pmBibFilter").addEventListener("change", renderBibliothek);
+  $("pmBibLeeren").addEventListener("click", () => {
+    bibliothek = [];
+    renderBibliothek();
+  });
+  zustand = leererZustand();
+  basis = leererZustand();
+  geladen = false;
+  bibliothek = [];
   render();
 }
 

@@ -372,9 +372,11 @@ Schreiblauf im Haupt-README lief auf Platz 41).
 belegt, und ihr Zähler (`0xC003EFE4`, fest 32) ist in Stock- wie
 Hacktribe-Firmware gleich — es gibt keinen freien Platz, den ein Zähler
 sichtbar machen könnte. Bei MFX heißt es also immer: einen belegten Platz
-überschreiben. ⚠ Die Menü-Erweiterung ist **am Gerät noch nicht abgenommen**
-(Stand 2026-09-02); der erste Test ist ein Preset auf Platz 50 mit Haken,
-danach am Gerät Platz 50 wählen.
+überschreiben. **Dauerhaft** geht es über die Firmware: `scripts/make-firmware.mjs`
+brennt eine Sammlung in die Hacktribe-`SYSTEM.VSB` ein (Details im
+Haupt-README). ✔ Am Gerät abgenommen (2026-09-02): `IFX-Alle` ab Platz 50
+eingebrannt, per Update installiert, die Plätze 50–96 sind im Menü. Die
+RAM-Erweiterung mit dem Haken folgt demselben Zählersatz.
 
 ⚠ **Das Gerätemenü zählt ab 1** — bei Insert- wie Master-Presets (am Gerät
 gesehen, 2026-09-01; dieselbe Verschiebung wie beim Program Change). Das

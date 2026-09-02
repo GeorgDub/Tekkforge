@@ -539,7 +539,9 @@ Die Basis muss die unveraenderte Hacktribe-Firmware sein (SHA-256 aus
 `KORG/electribe sampler/System/` auf die SD-Karte, dann die Update-Funktion
 des Geraets; zurueck geht es mit der unveraenderten Datei auf demselben Weg.
 Erster Bau am 2026-09-02: `IFX-Alle` ab Platz 50 → Platz 50–96 belegt, Menue
-bis 96. ⚠ Am Geraet noch nicht abgenommen.
+bis 96. ✔ **Am Geraet abgenommen (2026-09-02):** die Datei per Update
+installiert, die neuen Plaetze sind im Menue — damit sind Abbild-Layout,
+Zaehler-Zellen und Schreibweg ins Flash belegt.
 
 ### Preset-Manager — die ganze Bank als Liste
 
@@ -551,12 +553,23 @@ Zaehler), aus einer **Sicherung** (`.tfbak`) oder aus einer **Firmware**
 (`.VSB`). Dieser Stand ist die Basis; alles, was man danach umbaut, wird
 gegen sie verglichen und farbig markiert.
 
-Je Zeile: ▲ ▼ verschieben, ⇄ tauschen, ✏ umbenennen, ✎ im Editor oeffnen
-(Parameter und Zuordnungen aendern, dann „Aus Editor uebernehmen…"), ⬇ als
-Datei sichern, ✕ loeschen (die folgenden Plaetze ruecken auf, hinten wird ein
-Platz frei — Listen-Semantik wie das Menue). Dazu „+ Datei einfuegen…"
-(Einzelpreset auf den ersten leeren Platz, Sammlung an ihre Plaetze) und „Als
-Sammlung sichern…" (alle belegten Plaetze mit Platznummer als `.tfsam`).
+Beide Listen zeigen **immer alle Plaetze**, leere als „— leer —" — auch
+bevor etwas geladen ist. Je Zeile: ▲ ▼ verschieben, ⇄ tauschen, ✏
+umbenennen, ✎ im Editor oeffnen (Parameter und Zuordnungen aendern, dann „Aus
+Editor uebernehmen…"), ⬇ als Datei sichern, ✕ loeschen (die folgenden Plaetze
+ruecken auf, hinten wird ein Platz frei — Listen-Semantik wie das Menue). Dazu
+„+ Datei einfuegen…" (Einzelpreset auf den ersten leeren Platz, Sammlung an
+ihre Plaetze) und „Als Sammlung sichern…" (alle belegten Plaetze mit
+Platznummer als `.tfsam`).
+
+Links daneben die **Bibliothek**: Presets und Sammlungen laden (mehrere auf
+einmal, Filter IFX/MFX), aus dem Editor uebernehmen — und dann **ziehen und
+auf einen Platz fallen lassen**. Leerer Platz: das Preset kommt einfach
+hinein. Belegter Platz: TekkForge fragt **Ersetzen, davor einfuegen oder
+danach einfuegen**; Einfuegen rueckt den Rest nach hinten und faellt durch,
+wenn hinten ein belegter Platz herausfiele. Ein IFX-Preset laesst sich nur auf
+die IFX-Liste ziehen, ein MFX-Preset nur auf die MFX-Liste. Ohne Ziehen geht
+es ueber den →-Knopf am Eintrag (fragt nach dem Platz).
 
 Geschrieben wird nur, was sich gegen die Basis unterscheidet:
 - **⚠ Fluechtig schreiben (RAM)** — derselbe geprüfte Weg wie beim Verteilen

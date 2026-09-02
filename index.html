@@ -582,6 +582,18 @@
                   <button id="pmExport" class="ghost" title="Alle belegten Plätze mit Platznummer als .tfsam sichern">Als Sammlung sichern…</button>
                 </div>
                 <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:8px">
+                  <div style="flex:0 0 280px;min-width:260px">
+                    <div class="sub" style="margin:0 0 4px"><b>Bibliothek</b> <span id="pmBibInfo">leer</span></div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px">
+                      <button id="pmBibLaden" class="ghost" title="Presets und Sammlungen in die Bibliothek laden (.e2fxp, .mfx, .tfsam — mehrere auf einmal)" style="padding:2px 8px;font-size:11px">+ Laden…</button>
+                      <input id="pmBibIn" type="file" accept=".e2fxp,.mfx,.ifx,.tfsam,.json" multiple class="hidden" />
+                      <button id="pmBibAusEditor" class="ghost" title="Das Preset aus dem Editor in die Bibliothek legen" style="padding:2px 8px;font-size:11px">aus Editor</button>
+                      <select id="pmBibFilter" style="font-size:11px;padding:2px 4px"><option value="alle">alle</option><option value="ifx">nur IFX</option><option value="mfx">nur MFX</option></select>
+                      <button id="pmBibLeeren" class="ghost" title="Bibliothek leeren" style="padding:2px 8px;font-size:11px">✕</button>
+                    </div>
+                    <div id="pmBibListe"></div>
+                    <p class="sub" style="margin:4px 0 0">Ziehen und auf einen Platz rechts fallen lassen. Belegter Platz: Ersetzen, davor oder danach einfügen — leerer Platz: einfach rein.</p>
+                  </div>
                   <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>IFX</b> <span id="pmIfxInfo"></span></div><div id="pmIfxListe"></div></div>
                   <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>MFX</b> <span id="pmMfxInfo"></span></div><div id="pmMfxListe"></div></div>
                 </div>

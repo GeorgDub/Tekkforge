@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initFxPresetPanel } from "../src/gui/fxPreset";
-import { initPresetManager, pmAktion, pmZustand } from "../src/gui/presetManager";
+import { initPresetManager, pmAktion, pmZustand, bibAufnehmen, pmBibAblegen } from "../src/gui/presetManager";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
 import { baueSicherung, type SicherungsBlock } from "../src/core/geraetSicherung";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam";
@@ -230,5 +230,71 @@ describe("Preset-Manager: schreiben", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(el("pmStatus").textContent).toMatch(/abgelehnt/);
     expect(geschrieben).toHaveLength(0);
+  });
+});
+
+describe("Preset-Manager: Bibliothek und Ablegen", () => {
+  it("ohne geladenen Stand zeigen beide Listen alle Plaetze leer — und schreiben geht nicht", async () => {
+    const z = pmZustand()!;
+    expect(z.ifx).toHaveLength(96);
+    expect(z.mfx).toHaveLength(32);
+    expect(z.ifx.every((b) => istLeer(b))).toBe(true);
+    expect(el("pmInfo").textContent).toMatch(/nichts geladen/);
+    expect(el("pmIfxInfo").textContent).toContain("0 von 96");
+    await klickUndWarte("pmSchreiben");
+    expect(geschrieben).toHaveLength(0);
+    expect(el("pmStatus").textContent).toMatch(/echten Stand/);
+  });
+
+  it("leerer Platz: der Bibliotheks-Eintrag kommt ohne Nachfrage hinein", async () => {
+    await sicherungLaden();
+    bibAufnehmen({ art: "ifx", name: "Ring LFO", bytes: presetBytes("Ring LFO"), woher: "Test" });
+    await pmBibAblegen(0, "ifx", 50);
+    expect(nameVon(pmZustand()!.ifx[49])).toBe("Ring LFO");
+    expect(el("pmStatus").textContent).toContain("auf Platz 50");
+  });
+
+  it("belegter Platz: ersetzen, davor oder danach einfuegen", async () => {
+    await sicherungLaden();
+    bibAufnehmen({ art: "ifx", name: "Neu", bytes: presetBytes("Neu"), woher: "Test" });
+    await pmBibAblegen(0, "ifx", 2, "ersetzen");
+    expect(nameVon(pmZustand()!.ifx[1])).toBe("Neu");
+    expect(nameVon(pmZustand()!.ifx[2])).toBe("Werk 3");
+    await klickUndWarte("pmVerwerfen");
+    await pmBibAblegen(0, "ifx", 2, "vor");
+    expect(nameVon(pmZustand()!.ifx[1])).toBe("Neu");
+    expect(nameVon(pmZustand()!.ifx[2])).toBe("Werk 2");
+    expect(nameVon(pmZustand()!.ifx[49])).toBe("Werk 49");
+    await klickUndWarte("pmVerwerfen");
+    await pmBibAblegen(0, "ifx", 2, "nach");
+    expect(nameVon(pmZustand()!.ifx[1])).toBe("Werk 2");
+    expect(nameVon(pmZustand()!.ifx[2])).toBe("Neu");
+    expect(nameVon(pmZustand()!.ifx[3])).toBe("Werk 3");
+  });
+
+  it("ein MFX-Eintrag gehoert nicht in die IFX-Liste; eine volle MFX-Bank nimmt kein Einfuegen an", async () => {
+    await sicherungLaden();
+    bibAufnehmen({ art: "mfx", name: "Wobble", bytes: presetBytes("Wobble", true), woher: "Test" });
+    await pmBibAblegen(0, "ifx", 50);
+    expect(istLeer(pmZustand()!.ifx[49])).toBe(true);
+    expect(el("pmStatus").textContent).toMatch(/MFX-Liste/);
+    await pmBibAblegen(0, "mfx", 5, "vor");
+    expect(nameVon(pmZustand()!.mfx[4])).toBe("Master 5");
+    expect(el("pmStatus").textContent).toMatch(/voll/);
+    await pmBibAblegen(0, "mfx", 5, "ersetzen");
+    expect(nameVon(pmZustand()!.mfx[4])).toBe("Wobble");
+  });
+
+  it("die Bibliothek laedt Sammlungen und Einzeldateien ueber den Datei-Weg", async () => {
+    const { baueSammlung } = await import("../src/core/sammlung");
+    el("pmBibIn").files = [
+      fakeTextDatei("set.tfsam", baueSammlung([{ art: "mfx", name: "Trem Chop", bytes: presetBytes("Trem Chop", true) }], { titel: "Tekk" })),
+      fakeDatei("phase-sync.e2fxp", presetBytes("Phase Sync")),
+    ];
+    el("pmBibIn").feuere("change");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(el("pmBibInfo").textContent).toContain("2 Preset");
+    await pmBibAblegen(1, "ifx", 1);
+    expect(nameVon(pmZustand()!.ifx[0])).toBe("Phase Sync");
   });
 });
