@@ -110,7 +110,7 @@ export function leseZaehlerStand(gelesen: readonly ZaehlerWert[]): ZaehlerStand 
 
 /**
  * Ein Platz ohne Namen ist fuers Menue leer — auf dem Geraet sind unbelegte
- * Plaetze lauter Nullen. Geprueft wird das Namensbyte, nicht der Algorithmus:
+ * Plaetze Init-Bloecke ohne Namen. Geprueft wird das Namensbyte, nicht der Algorithmus:
  * ein Thru-Preset mit Namen ist ein (wenn auch langweiliges) Preset.
  */
 export function istPresetPlatzLeer(bytes: Uint8Array): boolean {
