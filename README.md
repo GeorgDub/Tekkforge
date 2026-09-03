@@ -829,7 +829,10 @@ vier Zellen, sonst nichts. Installation wie immer ueber
 Rueckweg ist die unveraenderte Hacktribe-Datei. ✔ **Eingebrannt und
 bestanden (2026-09-03):** Nutzer „firmware ist drauf, 275 bis 362 sind
 da" — der Start legt die Laufzeitkopie aus Tabelle + Beschreibern selbst
-an, genau wie aus dem Disassembly vorhergesagt. Wer weiter baut, nimmt
+an, genau wie aus dem Disassembly vorhergesagt. Auch die geschaetzten
+Zwischenstufen (±3, ±4, ±13…±15, ±17…±19, ±21…±23) hat der Nutzer
+durchgehoert: „klingen sauber" — die lineare Interpolation zwischen
+Hacktribes Stuetzpunkten bleibt. Wer weiter baut, nimmt
 diese Datei als Basis (der Hacktribe-Hash stimmt dann nicht mehr, die
 Struktur schon) oder faengt wieder bei Hacktribe an; „fluechtig ins
 Geraet" verlangt, dass die Basis so viele Plaetze zaehlt wie das Geraet.
