@@ -173,7 +173,12 @@ function kopie(z: ManagerZustand): ManagerZustand {
 /** Einen Block ueber die Unterlage des Platzes legen — byte-treu, unbekannte Bytes bleiben. */
 function ueberlage(art: ManagerArt, bytes: Uint8Array, unterlage: Uint8Array): Uint8Array {
   if (bytes.length !== blockGroesse(art)) throw new Error(`${bytes.length} statt ${blockGroesse(art)} Bytes`);
-  if (art === "groove") return encodeGroove(decodeGroove(bytes), istGroovePlatzLeer(unterlage) ? undefined : unterlage);
+  if (art === "groove") {
+    // Ein leerer Block bleibt leer — durch den Kodierer gedreht wuerde aus
+    // 0xFF ein namenloser Phantom-Groove mit Rahmen.
+    if (istGroovePlatzLeer(bytes)) return leererBlock("groove");
+    return encodeGroove(decodeGroove(bytes), istGroovePlatzLeer(unterlage) ? undefined : unterlage);
+  }
   return encodeFxPreset(decodeFxPreset(bytes, art === "mfx"), unterlage);
 }
 

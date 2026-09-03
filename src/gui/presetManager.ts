@@ -571,8 +571,10 @@ async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
 
 /** Dauerhaft: die Unterschiede zur gewaehlten Firmware-Datei einbrennen. */
 async function firmwarePatchen(f: File): Promise<void> {
-  if (!zustand) {
-    setStatus("Erst einen Stand laden.");
+  // Ohne geladenen Stand ist die leere Bank nur die Vorschau — sie gegen die
+  // Datei zu halten hiesse, alle belegten Plaetze der Firmware zu leeren.
+  if (!zustand || !geladen) {
+    setStatus("Erst einen echten Stand laden (Gerät, Sicherung oder Firmware) — sonst würde die leere Vorschau-Bank jeden belegten Platz der Datei leeren.");
     return;
   }
   const fw = new Uint8Array(await f.arrayBuffer());

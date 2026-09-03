@@ -27,6 +27,7 @@ import {
   INIT_GLOBAL_GROESSE,
 } from "./firmwareBau";
 import { decodeGroove } from "./e2Groove";
+import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "./e2sysex";
 
 export interface Unterschied {
   /** ifx | mfx | groove | initPattern | splash | zaehler | header */
@@ -128,8 +129,8 @@ export function vergleicheFirmware(a: Uint8Array, b: Uint8Array): FirmwareVergle
     return t.trim() || "(ohne Namen)";
   };
   block(INIT_PATTERN_OFFSET, INIT_PATTERN_GROESSE, "initPattern", initName);
-  // Nur die zwei belegten Offsets, die am Geraet zugeordnet sind (e2sysex): Chain Mode +0x13, Clock-Quelle +0x28.
-  block(INIT_GLOBAL_OFFSET, INIT_GLOBAL_GROESSE, "initGlobal", (u) => `Chain ${u[0x13]}, Clock ${u[0x28]}`);
+  // Zwei am Geraet zugeordnete Offsets (e2sysex): Chain Mode und Clock-Quelle — die Konstanten, nicht rohe Zahlen (Befund: 0x13 war die Pattern-Wechselsperre).
+  block(INIT_GLOBAL_OFFSET, INIT_GLOBAL_GROESSE, "initGlobal", (u) => `Chain ${u[E2_GLOBAL_CHAIN_MODE_OFF]}, Clock ${u[E2_GLOBAL_CLOCK_SOURCE_OFF]}`);
   block(SPLASH_OFFSET, SPLASH_GROESSE, "splash", (u) => {
     let dunkel = 0;
     for (const v of u) for (let k = 0; k < 8; k++) if (((v >> k) & 1) === 0) dunkel++;

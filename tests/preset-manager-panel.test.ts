@@ -137,9 +137,13 @@ function geraetLesung(addr: number, len: number): { ok: true; bytes: Uint8Array 
   return { ok: true, bytes: presetBytes("GERAETPRESET") };
 }
 
+/** Was das Geraet auf eine Lesung antwortet — je Test austauschbar. */
+let leseStub: (addr: number, len: number) => { ok: true; bytes: Uint8Array } = geraetLesung;
+
 beforeEach(() => {
   elemente.clear();
   geschrieben = [];
+  leseStub = geraetLesung;
   g.document = {
     getElementById: (id: string) => el(id),
     createElement: () => new StubElement(),
@@ -147,7 +151,7 @@ beforeEach(() => {
   g.URL.createObjectURL = () => "blob:x";
   g.URL.revokeObjectURL = () => undefined;
   const hooks = {
-    lesen: async (addr: number, len: number) => geraetLesung(addr, len),
+    lesen: async (addr: number, len: number) => leseStub(addr, len),
     schreiben: async (addr: number, bytes: Uint8Array) => {
       geschrieben.push({ addr, bytes });
       return true;
@@ -360,5 +364,38 @@ describe("Preset-Manager: Groove-Vorlagen", () => {
     expect(istLeer(pmZustand()!.groove[61], "groove")).toBe(true);
     await pmAktion("name", "groove", 90, "X");
     expect(el("pmStatus").textContent).toMatch(/leer/);
+  });
+
+  it("ein geloeschter Groove wird als 0xFF-Block geschrieben, und die Zaehler bleiben", async () => {
+    await sicherungLaden();
+    await pmAktion("weg", "groove", 62);
+    await klickUndWarte("pmSchreiben");
+    const bloecke = geschrieben.filter((w) => w.bytes.length === GROOVE_SIZE);
+    expect(bloecke).toHaveLength(1);
+    expect(bloecke[0].addr).toBe(grooveAdresse(61));
+    expect(bloecke[0].bytes.every((b) => b === 0xff)).toBe(true);
+    expect(geschrieben.filter((w) => w.bytes.length === 1)).toHaveLength(0);
+  });
+
+  it("ein gelesener Groove-Block, der weder 0xFF noch GVST ist, stoppt den Schreibweg", async () => {
+    await sicherungLaden();
+    const alt = leseStub;
+    leseStub = (addr, len) => (len === GROOVE_SIZE && addr === grooveAdresse(62) ? { ok: true, bytes: new Uint8Array(GROOVE_SIZE) } : alt(addr, len));
+    bibAufnehmen({ art: "groove", name: "X", bytes: grooveBytes("X"), woher: "Test" });
+    await pmBibAblegen(0, "groove", 63);
+    await klickUndWarte("pmSchreiben");
+    expect(geschrieben.filter((w) => w.bytes.length === GROOVE_SIZE)).toHaveLength(0);
+    expect(el("fxpStatus").textContent).toMatch(/Groove-Aufbau/);
+  });
+
+  it("Firmware patchen ohne geladenen Stand wird abgelehnt", async () => {
+    const fw = new Uint8Array(VSB_GROESSE);
+    fw.set(new TextEncoder().encode("KORG SYSTEM FILE"), 0);
+    fw.set(new TextEncoder().encode("E2S"), 0x10);
+    el("pmBasisIn").files = [fakeDatei("SYSTEM.VSB", fw)];
+    el("pmBasisIn").feuere("change");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(el("pmStatus").textContent).toMatch(/echten Stand/);
+    expect(geschrieben).toHaveLength(0);
   });
 });

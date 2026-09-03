@@ -44,7 +44,7 @@ import {
   type SammlungsEintrag,
 } from "../core/sammlung";
 import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, type ZaehlerWert } from "../core/ifxErweiterung";
-import { GROOVE_ZAEHLER, istGroovePlatzLeer } from "../core/firmwareBau";
+import { GROOVE_ZAEHLER, istGroovePlatzLeer, istGrooveBlockUnbeschrieben, leererGrooveBlock } from "../core/firmwareBau";
 import { dekodiere } from "./audioDecode";
 import { legeAb, zeigeAblage } from "./ablage";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "../core/hacktribeRam";
@@ -660,12 +660,19 @@ export async function verteileEintraege(eintraege: readonly SammlungsEintrag[], 
       // Dort wird der Block ganz geschrieben (Platz 90 am Geraet: FF → GVST).
       // Ein belegter Platz muss dagegen den erwarteten Aufbau zeigen, sonst
       // schreiben wir nicht an eine Stelle, die die Lesung nicht bestaetigt hat.
-      const leer = istGroovePlatzLeer(r.bytes);
+      // „Leer" heisst hier streng: lauter 0xFF. Ein Block, der weder das ist
+      // noch den Groove-Aufbau zeigt (Nullen, Preset-Bytes, ein verrutschtes
+      // Lesen), ist ein Grund abzubrechen — nicht ein Freibrief zum Ueberschreiben.
+      const leer = istGrooveBlockUnbeschrieben(r.bytes);
       if (!leer && erkenneStepBasis(r.bytes) !== GROOVE_STEP_BASIS) {
         setStatus(`${vorspann}Abbruch bei ${wohin}: Der gelesene Block passt nicht zum erwarteten Groove-Aufbau.${geschafft()}`);
         return false;
       }
-      bytes = encodeGroove(decodeGroove(eintrag.bytes), leer ? undefined : r.bytes);
+      // Ein leerer Eintrag (geloeschter Platz) wird als 0xFF-Block geschrieben —
+      // der Kodierer machte aus 0xFF sonst einen namenlosen Phantom-Groove.
+      bytes = istGroovePlatzLeer(eintrag.bytes)
+        ? leererGrooveBlock()
+        : encodeGroove(decodeGroove(eintrag.bytes), leer ? undefined : r.bytes);
     } else {
       bytes = encodeFxPreset(decodeFxPreset(eintrag.bytes, eintrag.art === "mfx"), r.bytes);
     }

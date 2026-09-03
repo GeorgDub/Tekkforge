@@ -44,6 +44,7 @@ import {
   type BasisBefund,
 } from "../core/firmwareBau";
 import { E2_RAM_MAP } from "../core/hacktribeRam";
+import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -227,7 +228,7 @@ function globalUebernehmen(bytes: Uint8Array, name: string): void {
   }
   globalBlock = { name, bytes: bytes.slice() };
   ($("fwGlobal") as HTMLInputElement).checked = true;
-  ($("fwGlobalInfo") as HTMLElement).textContent = `${name} (Chain ${bytes[0x13]}, Clock ${bytes[0x28]})`;
+  ($("fwGlobalInfo") as HTMLElement).textContent = `${name} (Chain ${bytes[E2_GLOBAL_CHAIN_MODE_OFF]}, Clock ${bytes[E2_GLOBAL_CLOCK_SOURCE_OFF]})`;
   vorschau();
 }
 
@@ -305,7 +306,7 @@ function bauplan(): Bauplan | null {
   let global: Bauplan["global"] = null;
   if (an("fwGlobal")) {
     global = globalBlock;
-    zeilen.push(global ? `Init-Global: ${global.name} (Chain ${global.bytes[0x13]}, Clock ${global.bytes[0x28]})` : "Init-Global: kein Block geladen");
+    zeilen.push(global ? `Init-Global: ${global.name} (Chain ${global.bytes[E2_GLOBAL_CHAIN_MODE_OFF]}, Clock ${global.bytes[E2_GLOBAL_CLOCK_SOURCE_OFF]})` : "Init-Global: kein Block geladen");
   }
   return { presets, grooves: gv, init, global, splash, zeilen };
 }

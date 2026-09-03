@@ -117,6 +117,16 @@ export function istGroovePlatzLeer(bytes: Uint8Array): boolean {
   return bytes.length < 4 || !(bytes[0] === 0x47 && bytes[1] === 0x56 && bytes[2] === 0x53 && bytes[3] === 0x54); // "GVST"
 }
 
+/** Streng: ein UNBESCHRIEBENER Groove-Platz, wie das Geraet ihn haelt — lauter 0xFF, nichts anderes. */
+export function istGrooveBlockUnbeschrieben(bytes: Uint8Array): boolean {
+  return bytes.length === GROOVE_SIZE && bytes.every((b) => b === 0xff);
+}
+
+/** So sieht ein leerer Groove-Platz auf dem Geraet aus. */
+export function leererGrooveBlock(): Uint8Array {
+  return new Uint8Array(GROOVE_SIZE).fill(0xff);
+}
+
 /** Groove-Zaehler aus dem Abbild lesen — stimmig nur, wenn beide Paare zusammenpassen. */
 export function leseGrooveStand(fw: Uint8Array): { ok: true; maxIndex: number } | { ok: false; reason: string } {
   const werte = GROOVE_ZAEHLER.map((z) => ({ ...z, wert: fw[dateiOffset(z.addr)] }));
@@ -174,11 +184,17 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
     const unterlage = out.subarray(offset, offset + len);
     // Unterlage nur, wenn dort schon etwas steht: ein leerer Groove-Platz ist
     // lauter 0xFF und traegt weder Rahmen noch Step-Tabelle — darueber gelegt
-    // fehlte dem Block das "GVST".
-    const bytes =
-      eintrag.art === "groove"
-        ? encodeGroove(decodeGroove(eintrag.bytes), istGroovePlatzLeer(unterlage) ? undefined : unterlage)
-        : encodeFxPreset(decodeFxPreset(eintrag.bytes, eintrag.art === "mfx"), unterlage);
+    // fehlte dem Block das "GVST". Und ein LEERER Eintrag (geloeschter Platz aus
+    // dem Manager) wird als 0xFF-Block geschrieben, nicht durch den Groove-
+    // Kodierer gedreht — der macht aus 0xFF sonst einen namenlosen Phantom-Groove.
+    let bytes: Uint8Array;
+    if (eintrag.art === "groove") {
+      bytes = istGroovePlatzLeer(eintrag.bytes)
+        ? leererGrooveBlock()
+        : encodeGroove(decodeGroove(eintrag.bytes), istGroovePlatzLeer(unterlage) ? undefined : unterlage);
+    } else {
+      bytes = encodeFxPreset(decodeFxPreset(eintrag.bytes, eintrag.art === "mfx"), unterlage);
+    }
     if (bytes.length !== len) return { ok: false, reason: `„${eintrag.name}“: ${bytes.length} statt ${len} Bytes` };
     out.set(bytes, offset);
     bericht.geschrieben.push({ art: eintrag.art, platz, name: eintrag.name, offset });
@@ -191,7 +207,19 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
   bericht.ifxMaxVorher = stand.maxIndex;
   bericht.ifxMaxNachher = stand.maxIndex;
   const ifxMap = mapFuer("ifx");
-  const hoechster = Math.max(-1, ...bericht.geschrieben.filter((g) => g.art === "ifx").map((g) => g.platz - 1));
+  // Nur BELEGTE Eintraege zaehlen: ein geleerter Platz darf das Menue nicht
+  // verlaengern (er wuerde sonst als Luecke gemeldet oder namenlos gezeigt).
+  const belegtGeschrieben = (art: SammlungsArt): number[] =>
+    bericht.geschrieben
+      .filter((g) => g.art === art)
+      .filter((g) => {
+        const off = g.offset;
+        const len = art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
+        const block = out.subarray(off, off + len);
+        return art === "groove" ? !istGroovePlatzLeer(block) : !istPresetPlatzLeer(block);
+      })
+      .map((g) => g.platz - 1);
+  const hoechster = Math.max(-1, ...belegtGeschrieben("ifx"));
   if (hoechster > stand.maxIndex) {
     const erweiterung = planeIfxErweiterung(stand.maxIndex, hoechster, (slot) => {
       const off = dateiOffset(addressForSlot(ifxMap, slot));
@@ -209,7 +237,7 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
   bericht.grooveMaxVorher = grooveStand.maxIndex;
   bericht.grooveMaxNachher = grooveStand.maxIndex;
   const grooveMap = mapFuer("groove");
-  const hoechsterGroove = Math.max(-1, ...bericht.geschrieben.filter((g) => g.art === "groove").map((g) => g.platz - 1));
+  const hoechsterGroove = Math.max(-1, ...belegtGeschrieben("groove"));
   if (hoechsterGroove > grooveStand.maxIndex) {
     const luecken: number[] = [];
     for (let slot = grooveStand.maxIndex + 1; slot <= hoechsterGroove; slot++) {

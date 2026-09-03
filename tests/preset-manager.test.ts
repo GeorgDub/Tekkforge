@@ -171,4 +171,11 @@ describe("presetManager — Unterschiede und Export", () => {
     expect(s[49]).toMatchObject({ art: "mfx", platz: 1, name: "Master 1" });
     expect(s.every((e) => e.bytes.length === FX_PRESET_SIZE)).toBe(true);
   });
+
+  it("ersetzen mit einem leeren Groove-Block laesst den Platz leer (kein Phantom)", () => {
+    const z = geraet();
+    const n = ersetzen(z, "groove", 5, leererBlock("groove"));
+    expect(istLeer(n.groove[4], "groove")).toBe(true);
+    expect(n.groove[4].every((b) => b === 0xff)).toBe(true);
+  });
 });

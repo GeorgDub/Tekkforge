@@ -361,3 +361,25 @@ describe("firmwareBau — Init-Global", () => {
     expect(r.bericht.bereiche.map((b) => b.key)).toContain("initGlobal");
   });
 });
+
+describe("firmwareBau — geleerte Plaetze (Befunde der Code-Pruefung 2026-09-03)", () => {
+  const grooveMapL = E2_RAM_MAP.find((e) => e.key === "groove")!;
+
+  it("ein geleerter Groove-Platz wird als 0xFF-Block eingebrannt, nicht als Phantom-Groove", () => {
+    const leer = new Uint8Array(GROOVE_SIZE).fill(0xff);
+    const r = baueFirmware(fakeFirmware(), [{ art: "groove", name: "", bytes: leer, platz: 62 }]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const off = dateiOffset(addressForSlot(grooveMapL, 61));
+    expect(r.bytes.subarray(off, off + GROOVE_SIZE).every((b) => b === 0xff)).toBe(true);
+    for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 62 : 61);
+  });
+
+  it("ein geleerter IFX-Platz hinter dem Zaehler zieht das Menue NICHT nach", () => {
+    const r = baueFirmware(fakeFirmware(), [{ art: "ifx", name: "", bytes: presetBytes(""), platz: 60 }]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bytes[dateiOffset(IFX_ANZAHL_ADDR)]).toBe(49);
+    expect(r.bericht.zaehler).toEqual([]);
+  });
+});
