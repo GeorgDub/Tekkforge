@@ -14,7 +14,7 @@
  * rechte radiert, ein Bild laesst sich einpassen (Schwelle, Invertieren), und
  * das Bild aus der Basis laesst sich als Ausgang holen.
  */
-import { $, escapeHtml, frageText } from "./shared";
+import { $, escapeHtml, frageText, download, sha256Hex, dateiKnopf } from "./shared";
 import { pmZustand, pmGeladen } from "./presetManager";
 
 export interface WerkbankHooks {
@@ -93,15 +93,6 @@ let invertiert = false;
 function setStatus(t: string): void {
   const el = document.getElementById("fwStatus");
   if (el) el.textContent = t;
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
-  const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
-  if (!subtle) return null;
-  const d = await subtle.digest("SHA-256", bytes.slice().buffer as ArrayBuffer);
-  return Array.from(new Uint8Array(d))
-    .map((x) => x.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 // ─── Pixel-Editor ────────────────────────────────────────────────────────────
@@ -422,40 +413,16 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   invertiert = false;
   pixel = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
   if (!document.getElementById("fwPanel")) return;
-  $("fwBasisLaden").addEventListener("click", () => ($("fwBasisIn") as HTMLInputElement).click());
-  $("fwBasisIn").addEventListener("change", () => {
-    const f = ($("fwBasisIn") as HTMLInputElement).files?.[0];
-    if (f) void basisLaden(f);
-  });
-  $("fwGrooveLaden").addEventListener("click", () => ($("fwGrooveIn") as HTMLInputElement).click());
-  $("fwGrooveIn").addEventListener("change", () => {
-    const f = ($("fwGrooveIn") as HTMLInputElement).files?.[0];
-    if (f) void groovesLaden(f);
-  });
-  $("fwInitLaden").addEventListener("click", () => ($("fwInitIn") as HTMLInputElement).click());
-  $("fwInitIn").addEventListener("change", () => {
-    const f = ($("fwInitIn") as HTMLInputElement).files?.[0];
-    if (f) void initLaden(f);
-  });
+  dateiKnopf("fwBasisLaden", "fwBasisIn", (f) => void basisLaden(f));
+  dateiKnopf("fwGrooveLaden", "fwGrooveIn", (f) => void groovesLaden(f));
+  dateiKnopf("fwInitLaden", "fwInitIn", (f) => void initLaden(f));
   for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwGlobal", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);
-  $("fwGlobalLaden").addEventListener("click", () => ($("fwGlobalIn") as HTMLInputElement).click());
-  $("fwGlobalIn").addEventListener("change", () => {
-    const f = ($("fwGlobalIn") as HTMLInputElement).files?.[0];
-    if (f) void globalAusDatei(f);
-  });
+  dateiKnopf("fwGlobalLaden", "fwGlobalIn", (f) => void globalAusDatei(f));
   $("fwGlobalGeraet").addEventListener("click", () => void globalVomGeraet());
   $("fwSichtbar").addEventListener("click", vorschau);
   $("fwBauen").addEventListener("click", () => void bauen());
-  $("fwVergleichen").addEventListener("click", () => ($("fwVergleichIn") as HTMLInputElement).click());
-  $("fwVergleichIn").addEventListener("change", () => {
-    const f = ($("fwVergleichIn") as HTMLInputElement).files?.[0];
-    if (f) void vergleichen(f);
-  });
-  $("fwSicherungBrennen").addEventListener("click", () => ($("fwSicherungIn") as HTMLInputElement).click());
-  $("fwSicherungIn").addEventListener("change", () => {
-    const f = ($("fwSicherungIn") as HTMLInputElement).files?.[0];
-    if (f) void sicherungEinbrennen(f);
-  });
+  dateiKnopf("fwVergleichen", "fwVergleichIn", (f) => void vergleichen(f));
+  dateiKnopf("fwSicherungBrennen", "fwSicherungIn", (f) => void sicherungEinbrennen(f));
 
   // Pixel-Editor
   const canvas = document.getElementById("fwSplashCanvas") as HTMLCanvasElement | null;
@@ -476,11 +443,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
     canvas.addEventListener("pointerup", loslassen);
     canvas.addEventListener("pointercancel", loslassen);
   }
-  $("fwSplashBild").addEventListener("click", () => ($("fwSplashBildIn") as HTMLInputElement).click());
-  $("fwSplashBildIn").addEventListener("change", () => {
-    const f = ($("fwSplashBildIn") as HTMLInputElement).files?.[0];
-    if (f) void bildLaden(f);
-  });
+  dateiKnopf("fwSplashBild", "fwSplashBildIn", (f) => void bildLaden(f));
   $("fwSplashSchwelle").addEventListener("input", bildAnwenden);
   $("fwSplashInvert").addEventListener("click", () => {
     invertiert = !invertiert;
@@ -511,11 +474,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
     fwTextSchreiben(text, skala, zeile);
   });
   $("fwSplashPbm").addEventListener("click", () => {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([pixelZuPbm(pixel).buffer as ArrayBuffer], { type: "image/x-portable-bitmap" }));
-    a.download = "startbild.pbm";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    download(pixelZuPbm(pixel), "startbild.pbm", "image/x-portable-bitmap");
     setStatus("Startbild als startbild.pbm gesichert.");
   });
   zeichne();

@@ -43,7 +43,7 @@ import {
   type NummerierRichtung,
   type SammlungsEintrag,
 } from "../core/sammlung";
-import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, type ZaehlerWert } from "../core/ifxErweiterung";
+import { IFX_ZAEHLER, istPresetPlatzLeer, type ZaehlerWert } from "../core/ifxErweiterung";
 import { GROOVE_ZAEHLER, istGroovePlatzLeer, istGrooveBlockUnbeschrieben, leererGrooveBlock } from "../core/firmwareBau";
 import { dekodiere } from "./audioDecode";
 import { legeAb, zeigeAblage } from "./ablage";
@@ -704,166 +704,134 @@ export async function verteileEintraege(eintraege: readonly SammlungsEintrag[], 
 }
 
 /**
- * Das IFX-Menue bis `bisPlatz` (Geraete-Zaehlung, ab 1) erweitern — der Weg
- * von hacktribe `add_ifx`, nur nachtraeglich: erst die dreizehn Zaehler lesen
- * und auf Stimmigkeit pruefen, dann die neuen Plaetze lesen (keine Luecke
- * erlaubt), dann alle dreizehn schreiben, jeder mit Rueckleseprobe. Die
- * Vorher-Werte wandern in `verteilungsVorher`, damit „Alle zurückschreiben"
- * auch die Zaehler zuruecknimmt. Bricht ein Zaehler-Write ab, werden die schon
- * gesetzten sofort zurueckgeschrieben — ein halb hochgezaehlter Satz ist der
- * Zustand, den es nie geben darf.
+ * Ein Menue der Firmware bis `bisPlatz` (Geraete-Zaehlung, ab 1) erweitern —
+ * der Weg von hacktribe `add_ifx` / `add_groove`, nur nachtraeglich und mit
+ * Netz: erst alle Zaehler lesen und auf Stimmigkeit pruefen, dann die neuen
+ * Plaetze lesen (keine Luecke erlaubt), dann alle Zaehler schreiben, jeder mit
+ * Rueckleseprobe. Die Vorher-Werte wandern in `verteilungsVorher`, damit
+ * „Alle zurückschreiben" auch die Zaehler zuruecknimmt. Bricht ein Write ab,
+ * werden die schon gesetzten sofort zurueckgeschrieben — ein halb
+ * hochgezaehlter Satz ist der Zustand, den es nie geben darf.
  *
  * Alles davon lebt nur im RAM: nach dem Ausschalten zaehlt das Menue wieder
  * wie die Firmware es vorsieht. Siehe Kopf von `core/ifxErweiterung.ts`.
  */
-async function ifxMenueErweitern(bisPlatz: number, vorspann = ""): Promise<boolean> {
+interface MenueSpec {
+  label: string;
+  mapKey: string;
+  zaehler: readonly { addr: number; plusEins: boolean }[];
+  /** Hoechster schreibbarer Slot (0-basiert). */
+  maxSlot: number;
+  blockGroesse: number;
+  istLeer: (bytes: Uint8Array) => boolean;
+}
+
+const IFX_MENUE: MenueSpec = {
+  label: "IFX-Menü",
+  mapKey: "ifxPreset",
+  zaehler: IFX_ZAEHLER,
+  maxSlot: IFX_PRESET_WRITE_MAX,
+  blockGroesse: FX_PRESET_SIZE,
+  istLeer: istPresetPlatzLeer,
+};
+const GROOVE_MENUE: MenueSpec = {
+  label: "Groove-Menü",
+  mapKey: "groove",
+  zaehler: GROOVE_ZAEHLER,
+  maxSlot: (E2_RAM_MAP.find((e) => e.key === "groove")?.count ?? 96) - 1,
+  blockGroesse: GROOVE_SIZE,
+  istLeer: istGroovePlatzLeer,
+};
+
+async function menueErweitern(spec: MenueSpec, bisPlatz: number, vorspann = ""): Promise<boolean> {
   if (!hooks) return false;
-  const map = E2_RAM_MAP.find((e) => e.key === "ifxPreset");
+  const map = E2_RAM_MAP.find((e) => e.key === spec.mapKey);
   if (!map) return false;
   const hex = (a: number): string => `0x${a.toString(16).toUpperCase()}`;
+  const n = spec.zaehler.length;
 
-  setStatus(`${vorspann}lese die 13 IFX-Zähler …`);
+  setStatus(`${vorspann}lese die ${n} ${spec.label.replace("-Menü", "")}-Zähler …`);
   const gelesen: ZaehlerWert[] = [];
-  for (const z of IFX_ZAEHLER) {
+  for (const z of spec.zaehler) {
     const r = await hooks.lesen(z.addr, 1);
     if (!r.ok) {
-      setStatus(`${vorspann}Menü nicht erweitert: Zähler ${hex(z.addr)} nicht lesbar — ${r.reason}.`);
+      setStatus(`${vorspann}${spec.label} nicht erweitert: Zähler ${hex(z.addr)} nicht lesbar — ${r.reason}.`);
       return false;
     }
     gelesen.push({ addr: z.addr, wert: r.bytes[0] });
   }
-  const stand = leseZaehlerStand(gelesen);
-  if (!stand.ok) {
-    setStatus(`${vorspann}Menü nicht erweitert: ${stand.reason}. Aus- und Einschalten stellt die Zähler der Firmware wieder her.`);
-    return false;
+  // Stimmigkeit: der erste idx-Zaehler gibt den Max-Index vor, alle anderen muessen passen.
+  const ersterIdx = spec.zaehler.findIndex((z) => !z.plusEins);
+  const max = gelesen[ersterIdx].wert;
+  for (const [i, z] of spec.zaehler.entries()) {
+    const soll = z.plusEins ? max + 1 : max;
+    if (gelesen[i].wert !== soll) {
+      setStatus(`${vorspann}${spec.label} nicht erweitert: Zähler widersprechen sich (${hex(z.addr)} = ${gelesen[i].wert}, nach Max-Index ${max} müsste dort ${soll} stehen). Aus- und Einschalten stellt die Zähler der Firmware wieder her.`);
+      return false;
+    }
   }
   const zielMax = bisPlatz - 1;
-  if (zielMax <= stand.maxIndex) {
-    setStatus(`${vorspann}Platz ${bisPlatz} ist schon im Menü — es reicht bis Platz ${stand.maxIndex + 1}.`);
+  if (zielMax <= max) {
+    setStatus(`${vorspann}Platz ${bisPlatz} ist schon im ${spec.label} — es reicht bis Platz ${max + 1}.`);
+    return false;
+  }
+  if (zielMax > spec.maxSlot) {
+    setStatus(`${vorspann}Platz ${bisPlatz} liegt über der Schreibgrenze (Platz ${spec.maxSlot + 1}).`);
     return false;
   }
 
   // Die neuen Plaetze muessen belegt sein — sonst zeigte das Menue Leerplaetze.
-  const inhalte = new Map<number, Uint8Array>();
-  for (let slot = stand.maxIndex + 1; slot <= zielMax && slot <= IFX_PRESET_WRITE_MAX; slot++) {
+  const luecken: number[] = [];
+  for (let slot = max + 1; slot <= zielMax; slot++) {
     setStatus(`${vorspann}prüfe Platz ${slot + 1} …`);
-    const r = await hooks.lesen(addressForSlot(map, slot), FX_PRESET_SIZE);
+    const r = await hooks.lesen(addressForSlot(map, slot), spec.blockGroesse);
     if (!r.ok) {
-      setStatus(`${vorspann}Menü nicht erweitert: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
+      setStatus(`${vorspann}${spec.label} nicht erweitert: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
       return false;
     }
-    inhalte.set(slot, r.bytes);
+    if (spec.istLeer(r.bytes)) luecken.push(slot + 1);
   }
-  const plan = planeIfxErweiterung(stand.maxIndex, zielMax, (slot) => istPresetPlatzLeer(inhalte.get(slot) ?? new Uint8Array(0)));
-  if (!plan.ok) {
-    setStatus(`${vorspann}Menü nicht erweitert: ${plan.reason}.`);
+  if (luecken.length) {
+    setStatus(`${vorspann}${spec.label} nicht erweitert — im neuen Bereich ${luecken.length === 1 ? "ist" : "sind"} Platz ${luecken.join(", ")} leer; erst dort etwas ablegen.`);
     return false;
   }
 
   const gesetzt: ZaehlerWert[] = [];
-  for (const [i, w] of plan.schreiben.entries()) {
-    setStatus(`${vorspann}erweitere IFX-Menü: Zähler ${i + 1}/${plan.schreiben.length} …`);
-    const ok = await hooks.schreiben(w.addr, new Uint8Array([w.wert]), `IFX-Zähler ${i + 1}/${plan.schreiben.length}`);
+  for (const [i, z] of spec.zaehler.entries()) {
+    const wert = z.plusEins ? zielMax + 1 : zielMax;
+    setStatus(`${vorspann}erweitere ${spec.label}: Zähler ${i + 1}/${n} …`);
+    const ok = await hooks.schreiben(z.addr, new Uint8Array([wert]), `${spec.label}-Zähler ${i + 1}/${n}`);
     if (ok === false) {
       // Sofort zurueck, was schon steht — bevor irgendjemand das Menue oeffnet.
       let zurueck = 0;
       for (const g of gesetzt.reverse()) {
         const alt = gelesen.find((x) => x.addr === g.addr)!;
-        if (await hooks.schreiben(alt.addr, new Uint8Array([alt.wert]), "IFX-Zähler zurück")) zurueck++;
+        if (await hooks.schreiben(alt.addr, new Uint8Array([alt.wert]), `${spec.label}-Zähler zurück`)) zurueck++;
       }
       setStatus(
-        `${vorspann}Abbruch beim Zähler ${i + 1}/${plan.schreiben.length}` +
+        `${vorspann}Abbruch beim Zähler ${i + 1}/${n}` +
           (gesetzt.length
             ? ` — ${zurueck} von ${gesetzt.length} schon gesetzten wieder zurückgeschrieben${zurueck < gesetzt.length ? ", der Satz ist UNSTIMMIG: Gerät aus- und einschalten" : ""}.`
             : ", nichts verändert."),
       );
       return false;
     }
-    gesetzt.push(w);
-    verteilungsVorher.push({ addr: w.addr, bytes: new Uint8Array([gelesen.find((x) => x.addr === w.addr)!.wert]) });
+    gesetzt.push({ addr: z.addr, wert });
+    verteilungsVorher.push({ addr: z.addr, bytes: new Uint8Array([gelesen[i].wert]) });
   }
   document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
   setStatus(
-    `${vorspann}IFX-Menü erweitert: bis Platz ${stand.maxIndex + 1} → bis Platz ${bisPlatz} (${plan.neuePlaetze.length} neu). ` +
+    `${vorspann}${spec.label} erweitert: bis Platz ${max + 1} → bis Platz ${bisPlatz} (${zielMax - max} neu). ` +
       "Gilt bis zum Ausschalten; „Alle zurückschreiben“ nimmt auch die Zähler zurück.",
   );
   return true;
 }
 
-/**
- * Das Groove-Menue bis `bisPlatz` (Geraete-Zaehlung) erweitern — die vier
- * Zaehler von hacktribe `add_groove`, nach demselben Muster wie beim IFX-Menue:
- * lesen und auf Stimmigkeit pruefen, den neuen Bereich auf Luecken pruefen
- * (leer = kein "GVST"), dann alle vier schreiben, bei Abbruch sofort zurueck.
- * Vorher-Werte landen in `verteilungsVorher`.
- */
-export async function grooveMenueErweitern(bisPlatz: number, vorspann = ""): Promise<boolean> {
-  if (!hooks) return false;
-  const map = E2_RAM_MAP.find((e) => e.key === "groove");
-  if (!map) return false;
-  const hex = (a: number): string => `0x${a.toString(16).toUpperCase()}`;
-  setStatus(`${vorspann}lese die 4 Groove-Zähler …`);
-  const gelesen: ZaehlerWert[] = [];
-  for (const z of GROOVE_ZAEHLER) {
-    const r = await hooks.lesen(z.addr, 1);
-    if (!r.ok) {
-      setStatus(`${vorspann}Groove-Menü nicht erweitert: Zähler ${hex(z.addr)} nicht lesbar — ${r.reason}.`);
-      return false;
-    }
-    gelesen.push({ addr: z.addr, wert: r.bytes[0] });
-  }
-  const max = gelesen[0].wert;
-  for (const [i, z] of GROOVE_ZAEHLER.entries()) {
-    const soll = z.plusEins ? max + 1 : max;
-    if (gelesen[i].wert !== soll) {
-      setStatus(`${vorspann}Groove-Menü nicht erweitert: Zähler widersprechen sich (${hex(z.addr)} = ${gelesen[i].wert}, erwartet ${soll}). Aus- und Einschalten stellt sie wieder her.`);
-      return false;
-    }
-  }
-  const zielMax = bisPlatz - 1;
-  if (zielMax <= max) {
-    setStatus(`${vorspann}Groove-Platz ${bisPlatz} ist schon im Menü — es reicht bis Platz ${max + 1}.`);
-    return false;
-  }
-  if (zielMax >= map.count) {
-    setStatus(`${vorspann}Groove-Platz ${bisPlatz} liegt über der Grenze (${map.count}).`);
-    return false;
-  }
-  const luecken: number[] = [];
-  for (let slot = max + 1; slot <= zielMax; slot++) {
-    setStatus(`${vorspann}prüfe Groove-Platz ${slot + 1} …`);
-    const r = await hooks.lesen(addressForSlot(map, slot), GROOVE_SIZE);
-    if (!r.ok) {
-      setStatus(`${vorspann}Groove-Menü nicht erweitert: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
-      return false;
-    }
-    if (istGroovePlatzLeer(r.bytes)) luecken.push(slot + 1);
-  }
-  if (luecken.length) {
-    setStatus(`${vorspann}Groove-Menü nicht erweitert — leer dazwischen: Platz ${luecken.join(", ")}.`);
-    return false;
-  }
-  const gesetzt: ZaehlerWert[] = [];
-  for (const [i, z] of GROOVE_ZAEHLER.entries()) {
-    const wert = z.plusEins ? zielMax + 1 : zielMax;
-    setStatus(`${vorspann}erweitere Groove-Menü: Zähler ${i + 1}/4 …`);
-    const ok = await hooks.schreiben(z.addr, new Uint8Array([wert]), `Groove-Zähler ${i + 1}/4`);
-    if (ok === false) {
-      let zurueck = 0;
-      for (const g of gesetzt.reverse()) {
-        const alt = gelesen.find((x) => x.addr === g.addr)!;
-        if (await hooks.schreiben(alt.addr, new Uint8Array([alt.wert]), "Groove-Zähler zurück")) zurueck++;
-      }
-      setStatus(`${vorspann}Abbruch beim Groove-Zähler ${i + 1}/4 — ${zurueck} von ${gesetzt.length} zurückgeschrieben${zurueck < gesetzt.length ? ", Satz UNSTIMMIG: Gerät aus- und einschalten" : ""}.`);
-      return false;
-    }
-    gesetzt.push({ addr: z.addr, wert });
-    verteilungsVorher.push({ addr: z.addr, bytes: new Uint8Array([gelesen[i].wert]) });
-  }
-  document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
-  setStatus(`${vorspann}Groove-Menü erweitert: bis Platz ${max + 1} → bis Platz ${bisPlatz}. Gilt bis zum Ausschalten.`);
-  return true;
-}
+/** Das IFX-Menue bis `bisPlatz` erweitern (13 Zaehler von hacktribe `add_ifx`). */
+export const ifxMenueErweitern = (bisPlatz: number, vorspann = ""): Promise<boolean> => menueErweitern(IFX_MENUE, bisPlatz, vorspann);
+/** Das Groove-Menue bis `bisPlatz` erweitern (4 Zaehler von hacktribe `add_groove`). */
+export const grooveMenueErweitern = (bisPlatz: number, vorspann = ""): Promise<boolean> => menueErweitern(GROOVE_MENUE, bisPlatz, vorspann);
+
 
 /** Der Knopf: bis zu welchem Platz? Vorschlag ist der höchste IFX-Platz der Sammlung. */
 async function ifxMenueErweiternGefragt(): Promise<void> {

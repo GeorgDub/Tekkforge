@@ -21,14 +21,17 @@
  * Luecken- und Stimmigkeitspruefung wie `ifxErweiterung`. Alles ausserhalb
  * dieser Stellen bleibt unangetastet; der Test zaehlt fremde Bytes.
  *
- * Nicht dabei: die vier Groove-Zaehler (`add_groove`). Groove-Vorlagen werden
- * geschrieben, aber hinter dem Werkszaehler bleiben sie unsichtbar.
+ * Dazu, nach demselben Muster: die vier Groove-Zaehler (`add_groove`), das
+ * Init-Pattern, der Startbildschirm und der Init-Global-Block — alle Stellen
+ * aus der RAM-Karte abgeleitet, damit es nur eine Quelle gibt. Und
+ * `firmwareAusSicherung`, das eine ganze Geraetesicherung in die Basis legt.
  *
  * Installation: als `SYSTEM.VSB` nach `KORG/electribe sampler/System/` auf
  * die SD-Karte, dann die Update-Funktion des Geraets. Zurueck geht es mit der
  * unveraenderten Hacktribe-Datei auf demselben Weg.
  *
- * ⚠ Am Geraet noch nicht abgenommen (Stand 2026-09-02).
+ * ✔ Preset-Weg am Geraet abgenommen (2026-09-02, Plaetze 50–96). Grooves,
+ * Init-Pattern, Startbild und Init-Global sind am Geraet noch offen.
  */
 import { DDR2_BASE, E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "./hacktribeRam";
 import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, type ZaehlerWert } from "./ifxErweiterung";
@@ -67,13 +70,13 @@ export const GROOVE_ZAEHLER: readonly { addr: number; plusEins: boolean }[] = [
  * `e2-init-pat.py` (Payload 0xCFF58 + Header), am Abbild belegt: dort steht
  * "PTST". Eine `.e2spat` ist genau dieser Block hinter einem 0x100-Header.
  */
-export const INIT_PATTERN_OFFSET = 0xd0058;
+export const INIT_PATTERN_OFFSET = dateiOffset(E2_RAM_MAP.find((e) => e.key === "initPattern")!.base); // 0xD0058
 export const INIT_PATTERN_GROESSE = 0x3c00;
 /** Eine `.e2spat` ist 0x4100 Bytes: 0x100 Header, 0x3C00 Block bis "PTED", 0x400 Nullen. */
 export const E2SPAT_GROESSE = 0x4100;
 
 /** Der Startbildschirm: 1024 Bytes 1-Bit, 128 × 64 (hacktribe `ht_splash_screen.py`, Payload 0xF9854). */
-export const SPLASH_OFFSET = 0xf9954;
+export const SPLASH_OFFSET = dateiOffset(E2_RAM_MAP.find((e) => e.key === "splash")!.base); // 0xF9954
 export const SPLASH_GROESSE = 1024;
 
 /**
@@ -84,7 +87,7 @@ export const SPLASH_GROESSE = 1024;
  * ⚠ Ob das Geraet diesen Block beim Werksreset nimmt oder als laufenden
  * Global-Stand, ist am Geraet noch nicht geprueft.
  */
-export const INIT_GLOBAL_OFFSET = 0xcff58;
+export const INIT_GLOBAL_OFFSET = dateiOffset(E2_RAM_MAP.find((e) => e.key === "initGlobal")!.base); // 0xCFF58
 export const INIT_GLOBAL_GROESSE = 0x100;
 
 export type FirmwarePruefung = { ok: true } | { ok: false; reason: string };

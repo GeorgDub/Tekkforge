@@ -118,3 +118,39 @@ export function frageAuswahl(titel: string, optionen: readonly string[], vorgabe
     );
   });
 }
+
+/** SHA-256 als Hex — null, wo es kein WebCrypto gibt (dann prueft der Aufrufer eben nicht). */
+export async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
+  const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
+  if (!subtle) return null;
+  const d = await subtle.digest("SHA-256", bytes as BufferSource);
+  return Array.from(new Uint8Array(d))
+    .map((x) => x.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Ein Knopf, der ein verstecktes Datei-Feld oeffnet, und der Handler fuer die
+ * gewaehlte Datei — die uebliche Verkabelung, einmal statt zwoelfmal. Das Feld
+ * wird nach der Wahl geleert, damit dieselbe Datei noch einmal gewaehlt werden kann.
+ */
+export function dateiKnopf(knopfId: string, feldId: string, handler: (f: File) => void): void {
+  dateiKnopfMehrere(knopfId, feldId, (dateien) => {
+    if (dateien[0]) handler(dateien[0]);
+  });
+}
+
+export function dateiKnopfMehrere(knopfId: string, feldId: string, handler: (dateien: File[]) => void): void {
+  const feld = $(feldId) as HTMLInputElement;
+  $(knopfId).addEventListener("click", () => feld.click());
+  feld.addEventListener("change", () => {
+    const dateien = Array.from(feld.files ?? []);
+    if (dateien.length) handler(dateien);
+    try {
+      feld.value = "";
+    } catch {
+      /* Stub ohne value-Setter */
+    }
+  });
+}
+

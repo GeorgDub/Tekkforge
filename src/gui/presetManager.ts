@@ -15,7 +15,7 @@
  *
  * Entwurf: docs/superpowers/specs/2026-09-02-preset-manager-design.md
  */
-import { $, escapeHtml, frageText, frageAuswahl } from "./shared";
+import { $, escapeHtml, frageText, frageAuswahl, download, sha256Hex, dateiKnopf, dateiKnopfMehrere } from "./shared";
 import type { FxPresetHooks } from "./fxPreset";
 import { verteileEintraege, oeffneImEditor, aktuellesPreset, grooveMenueErweitern } from "./fxPreset";
 import {
@@ -355,11 +355,7 @@ export async function pmAktion(op: string, art: ManagerArt, platz: number, wert?
         const bytes = zustand[art][platz - 1];
         const name = (nameVon(bytes, art) || `${art}-${platz}`).replace(/[^A-Za-z0-9 _-]/g, "").trim() || `${art}-${platz}`;
         const endung = art === "mfx" ? "mfx" : art === "groove" ? "e2gv" : "e2fxp";
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type: "application/octet-stream" }));
-        a.download = `${name}.${endung}`;
-        a.click();
-        URL.revokeObjectURL(a.href);
+        download(bytes, `${name}.${endung}`, "application/octet-stream");
         setStatus(`Platz ${platz} als ${name}.${endung} gesichert.`);
         return;
       }
@@ -511,11 +507,7 @@ async function exportieren(): Promise<void> {
   const eintraege = alsSammlung(zustand);
   const titel = (await frageText("Titel der Sammlung:", "Meine Bank")) ?? "Bank";
   const datei = `${titel.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "bank"}.tfsam`;
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([baueSammlung(eintraege, { titel })], { type: "application/json" }));
-  a.download = datei;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  download(baueSammlung(eintraege, { titel }), datei, "application/json");
   setStatus(`${eintraege.length} Einträge mit Platz als ${datei} gesichert.`);
 }
 
@@ -558,15 +550,6 @@ async function fluechtigSchreiben(): Promise<void> {
       (lGv.length ? ` ⚠ Groove-Zähler nicht nachgezogen — leer dazwischen: Platz ${lGv.join(", ")}.` : "") +
       " Gilt bis zum Ausschalten; „Alle zurückschreiben“ im FX-Preset-Bereich nimmt es zurück.",
   );
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
-  const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
-  if (!subtle) return null;
-  const d = await subtle.digest("SHA-256", bytes.slice().buffer as ArrayBuffer);
-  return Array.from(new Uint8Array(d))
-    .map((x) => x.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 /** Dauerhaft: die Unterschiede zur gewaehlten Firmware-Datei einbrennen. */
@@ -627,29 +610,13 @@ export function initPresetManager(h: FxPresetHooks): void {
   hooks = h;
   if (!document.getElementById("pmPanel")) return;
   $("pmGeraet").addEventListener("click", () => void vomGeraetLesen());
-  $("pmSicherungLaden").addEventListener("click", () => ($("pmSicherungIn") as HTMLInputElement).click());
-  $("pmSicherungIn").addEventListener("change", () => {
-    const f = ($("pmSicherungIn") as HTMLInputElement).files?.[0];
-    if (f) void ausSicherung(f);
-  });
-  $("pmFirmwareLaden").addEventListener("click", () => ($("pmFirmwareIn") as HTMLInputElement).click());
-  $("pmFirmwareIn").addEventListener("change", () => {
-    const f = ($("pmFirmwareIn") as HTMLInputElement).files?.[0];
-    if (f) void ausFirmware(f);
-  });
-  $("pmDateiEinfuegen").addEventListener("click", () => ($("pmDateiIn") as HTMLInputElement).click());
-  $("pmDateiIn").addEventListener("change", () => {
-    const f = ($("pmDateiIn") as HTMLInputElement).files?.[0];
-    if (f) void dateiEinfuegen(f);
-  });
+  dateiKnopf("pmSicherungLaden", "pmSicherungIn", (f) => void ausSicherung(f));
+  dateiKnopf("pmFirmwareLaden", "pmFirmwareIn", (f) => void ausFirmware(f));
+  dateiKnopf("pmDateiEinfuegen", "pmDateiIn", (f) => void dateiEinfuegen(f));
   $("pmAusEditor").addEventListener("click", () => void ausEditor());
   $("pmExport").addEventListener("click", () => void exportieren());
   $("pmSchreiben").addEventListener("click", () => void fluechtigSchreiben());
-  $("pmPatchen").addEventListener("click", () => ($("pmBasisIn") as HTMLInputElement).click());
-  $("pmBasisIn").addEventListener("change", () => {
-    const f = ($("pmBasisIn") as HTMLInputElement).files?.[0];
-    if (f) void firmwarePatchen(f);
-  });
+  dateiKnopf("pmPatchen", "pmBasisIn", (f) => void firmwarePatchen(f));
   $("pmVerwerfen").addEventListener("click", () => {
     if (basis && geladen) uebernehmen(basis, quelle);
     else {
@@ -658,11 +625,7 @@ export function initPresetManager(h: FxPresetHooks): void {
       render();
     }
   });
-  $("pmBibLaden").addEventListener("click", () => ($("pmBibIn") as HTMLInputElement).click());
-  $("pmBibIn").addEventListener("change", () => {
-    const f = Array.from(($("pmBibIn") as HTMLInputElement).files ?? []);
-    if (f.length) void bibLaden(f);
-  });
+  dateiKnopfMehrere("pmBibLaden", "pmBibIn", (dateien) => void bibLaden(dateien));
   $("pmBibAusEditor").addEventListener("click", () => {
     const p = aktuellesPreset();
     if (!p) {
