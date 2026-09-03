@@ -30,6 +30,7 @@ import {
   type PoolSample,
 } from "../core/editorModel";
 import { merkeLetzteDatei } from "./start";
+import { dekodiereWav } from "./audioDecode";
 import type { DateiArt } from "../core/letzteDateien";
 import { filterePool, poolRamMb, POOL_RAM_LIMIT_MB, type PoolFilter } from "../core/poolFilter";
 import {
@@ -832,7 +833,7 @@ async function replaceSampleAudio(file: File): Promise<void> {
   const s = project.samples.find((x) => x.number === num);
   if (!s) return;
   try {
-    const rep = processWavToMono(new Uint8Array(await file.arrayBuffer()), file.name);
+    const rep = processWavToMono(await dekodiereWav(file), file.name);
     s.pcm = rep.pcm;
     s.sampleRate = rep.sampleRate;
     // Name nur übernehmen, wenn er noch der Default/Auto-Name war? Nein — Nutzer
@@ -857,7 +858,8 @@ async function importWavFiles(files: FileList | File[]): Promise<void> {
   const errors: string[] = [];
   for (const f of Array.from(files)) {
     try {
-      const bytes = new Uint8Array(await f.arrayBuffer());
+      // Jede Audiodatei: WAV direkt, sonst Chromium oder ffmpeg → WAV-Bytes.
+      const bytes = await dekodiereWav(f);
       project.samples.push(importSampleFromWav(bytes, f.name, project.samples));
       markDirty();
     } catch (err) {

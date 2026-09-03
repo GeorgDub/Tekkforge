@@ -698,6 +698,37 @@ async function ffmpegPfad() {
   }
 }
 
+// ── Audio-Bruecke: beliebige Datei -> WAV ueber ffmpeg (imageio-ffmpeg) ──
+// Der Rueckfallweg fuer alles, was Chromium nicht dekodiert (WMA, APE, AC3,
+// Video-Container …). Kanaele und Rate bleiben; mono macht der Aufrufer.
+function registerAudioIpc() {
+  ipcMain.handle("audio:probe", async () => {
+    const ff = await ffmpegPfad();
+    return ff ? { ok: true, meldung: "ffmpeg bereit", pfad: ff } : { ok: false, meldung: "Kein ffmpeg (pip install imageio-ffmpeg)" };
+  });
+  ipcMain.handle("audio:dekodieren", async (_e, name, bytes) => {
+    const ff = await ffmpegPfad();
+    if (!ff) throw new Error("ffmpeg fehlt (pip install imageio-ffmpeg)");
+    const sicher = String(name || "audio").replace(/[^\w.-]+/g, "_").slice(0, 80) || "audio";
+    const basis = path.join(app.getPath("userData"), "tmp", `audio-${Date.now()}`);
+    fs.mkdirSync(basis, { recursive: true });
+    const quelle = path.join(basis, sicher);
+    const ziel = path.join(basis, "aus.wav");
+    try {
+      fs.writeFileSync(quelle, Buffer.from(bytes));
+      await laufen(ff, ["-hide_banner", "-loglevel", "error", "-y", "-i", quelle, "-vn", "-acodec", "pcm_s16le", ziel], { timeoutMs: 600000 });
+      if (!fs.existsSync(ziel)) throw new Error("ffmpeg hat kein WAV geschrieben");
+      return { name: sicher.replace(/\.[^.]*$/, "") + ".wav", bytes: fs.readFileSync(ziel) };
+    } finally {
+      try {
+        fs.rmSync(basis, { recursive: true, force: true });
+      } catch {
+        /* Temp bleibt liegen — unkritisch */
+      }
+    }
+  });
+}
+
 function registerUrlIpc(win) {
   ipcMain.handle("url:probe", async () => {
     try {
@@ -900,6 +931,7 @@ app.whenReady().then(() => {
   registerKiIpc();
   registerLiedIpc(win);
   registerUrlIpc(win);
+  registerAudioIpc();
   registerUpdateIpc(win);
   registerAutosaveIpc();
   registerBibliothekIpc();

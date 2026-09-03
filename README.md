@@ -908,6 +908,29 @@ Die frühere Annahme („Byte 1 = Velocity, Byte 2 = konstant 0x60") war falsch 
 gingen Melodien verloren und Velocity/Gate landeten im falschen Byte. Details in
 `src/core/electribeImport.ts`.
 
+## Audio in jedem Format (2026-09-03)
+
+Alle Stellen, die Audio annehmen — Sample-Pool (Import und Ersetzen),
+Lied-Import, Stem-Werkbank, „MIDI zu Korg" — nehmen jetzt **jede Datei**:
+WAV geht direkt durch `parseWav`; MP3/M4A/AAC/OGG/Opus/FLAC/AIFF/WebM
+dekodiert Chromium (`decodeAudioData`); alles andere — WMA, APE, WavPack,
+AC3, DTS, AMR, CAF, Video-Container wie MKV/MP4/MOV — laeuft unter Electron
+ueber die **Audio-Bruecke** (`tekkAudio`, `electron/main.cjs`
+`audio:dekodieren`): die Datei geht in einen Temp-Ordner, ffmpeg (das der
+URL-Import ohnehin braucht, `imageio-ffmpeg`) schreibt 16-Bit-WAV mit
+Originalkanaelen und -rate, danach geht es weiter wie bei einer WAV.
+Scheitert Chromium an einem Format, das es eigentlich kennt (Codec-Variante,
+kaputter Kopf), springt ffmpeg ebenfalls ein. `dateiArt` in
+`core/generatorSession.ts` kennt die drei Klassen `wav` / `audio` / `ffmpeg`;
+`gui/audioDecode.ts` hat `dekodiere` (mono 44,1 k fuer Scan/Transkription)
+und `dekodiereWav` (WAV-Bytes fuer den Pool, der daraus wie bisher sein
+Mono-Sample macht). Im reinen Browser fehlt die Bruecke — dann bleibt es bei
+dem, was Chromium kann, mit klarer Meldung.
+
+Im Treiber geprueft (2026-09-03): `probe.wma` (wmav2, 48 kHz stereo),
+`probe.opus` und `probe.mp3` landen je als 1,5-s-Sample im Pool; die Bruecke
+meldet „ffmpeg bereit".
+
 ## Sample-Ordner → Bank + Pattern-Set
 
 Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze

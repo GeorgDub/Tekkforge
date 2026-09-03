@@ -117,6 +117,15 @@ contextBridge.exposeInMainWorld("tekkUrl", {
   },
 });
 
+// ── Audio-Bruecke: beliebige Audio-/Video-Datei -> WAV ueber ffmpeg ──
+contextBridge.exposeInMainWorld("tekkAudio", {
+  available: true,
+  /** { ok, meldung, pfad? } */
+  probe: () => ipcRenderer.invoke("audio:probe"),
+  /** (name, bytes) -> { name, bytes } (16-Bit-WAV, Kanaele/Rate wie die Quelle). */
+  dekodieren: (name, bytes) => ipcRenderer.invoke("audio:dekodieren", name, bytes),
+});
+
 // ── Dateibruecke fuer den Generator-Tab (Projekt auf Platte, SD-Karte, tekk4-Drums) ──
 contextBridge.exposeInMainWorld("tekkFs", {
   available: true,

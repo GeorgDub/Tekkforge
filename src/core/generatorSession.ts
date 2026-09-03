@@ -42,10 +42,20 @@ export function zusammenfassung(eintraege: ScanEintrag[], budgetSekunden = BUDGE
   };
 }
 
-export function dateiArt(name: string): "wav" | "audio" | "skip" {
+/** Was Chromiums decodeAudioData kennt (mp3/aac/ogg/opus/flac/webm/aiff …). */
+export const AUDIO_CHROMIUM = ["mp3", "m4a", "aac", "ogg", "oga", "opus", "flac", "aif", "aiff", "webm", "mp4", "m4b", "weba"];
+/** Was nur ffmpeg dekodiert — unter Electron ueber die Audio-Bruecke, im Browser nicht. */
+export const AUDIO_FFMPEG = ["wma", "wv", "ape", "mpc", "ac3", "dts", "amr", "au", "snd", "caf", "aifc", "mka", "mkv", "avi", "mov", "m4v", "3gp", "mpg", "mpeg", "ts", "tta", "spx", "voc", "w64", "rf64", "gsm", "dsf", "dff", "mp2", "mpa", "ra", "rm", "asf", "wmv", "flv", "ogv"];
+
+/**
+ * "wav" = parseWav, "audio" = Chromium (ffmpeg als Rueckfall), "ffmpeg" = nur
+ * ueber die Audio-Bruecke, "skip" = kein Audio.
+ */
+export function dateiArt(name: string): "wav" | "audio" | "ffmpeg" | "skip" {
   const ext = name.toLowerCase().replace(/^.*\./, "");
   if (ext === "wav" || ext === "wave") return "wav";
-  if (["mp3", "m4a", "aac", "ogg", "flac", "aif", "aiff"].includes(ext)) return "audio";
+  if (AUDIO_CHROMIUM.includes(ext)) return "audio";
+  if (AUDIO_FFMPEG.includes(ext)) return "ffmpeg";
   return "skip";
 }
 

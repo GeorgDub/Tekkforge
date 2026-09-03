@@ -39,6 +39,11 @@ describe("generatorSession", () => {
     expect(dateiArt("Kick.WAV")).toBe("wav");
     expect(dateiArt("x.mp3")).toBe("audio");
     expect(dateiArt("x.m4a")).toBe("audio");
+    expect(dateiArt("x.opus")).toBe("audio");
+    expect(dateiArt("x.webm")).toBe("audio");
+    expect(dateiArt("x.wma")).toBe("ffmpeg");
+    expect(dateiArt("x.ape")).toBe("ffmpeg");
+    expect(dateiArt("clip.mkv")).toBe("ffmpeg");
     expect(dateiArt("x.flp")).toBe("skip");
     expect(dateiArt("manifest.json")).toBe("skip");
   });

@@ -29,7 +29,7 @@ const abschnitte = [
     lead: "Patterns von Grund auf am PC bauen — ohne dass eine ESX-Datei im Spiel sein muss.",
     punkte: [
       "16 Parts × 16/32/64 Steps; je Step Note, Velocity und Gate, bis zu 4 Töne für Akkorde.",
-      "Eigene WAVs importieren, den Parts zuweisen und direkt am Rechner vorhören.",
+      "Eigene Audiodateien in jedem Format importieren — WAV direkt, MP3/AAC/OGG/FLAC über den Browserkern, WMA/APE/Video-Container über ffmpeg —, den Parts zuweisen und direkt am Rechner vorhören.",
       "Sample-Pool als Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken gegen das ~24-MB-Sample-RAM.",
       "<b>Sample-Editor</b> — Wellenform ansehen, Anfang und Ende ziehen, stille Ränder finden, kürzen, ein- und ausblenden, normalisieren, umkehren und den Loop setzen.",
       "<b>Bank ordnen</b> — Lücken schließen oder nach Name, Länge oder Nummer sortieren. Jede Nummernänderung zieht die Verweise der Patterns mit, damit nichts ins Leere zeigt.",
@@ -71,7 +71,7 @@ const abschnitte = [
     lead: "Fertige MIDI-Dateien oder Audio in Electribe-Patterns übersetzen.",
     punkte: [
       "Standard-MIDI-Dateien (.mid, .kar, .rmi) laden und die Spuren den 16 Parts zuordnen.",
-      "<b>Audio zu Noten</b> — eine WAV oder MP3 wird transkribiert: einstimmig oder polyphon mit bis zu vier gleichzeitigen Tönen.",
+      "<b>Audio zu Noten</b> — eine Audiodatei in jedem Format wird transkribiert: einstimmig oder polyphon mit bis zu vier gleichzeitigen Tönen.",
       "<b>Stimmen auf eigene Parts</b> — die erkannten Linien werden getrennt: tiefste zuerst, jede auf einen eigenen Part. Bass und Melodie lassen sich damit getrennt mit Samples belegen, statt als Akkord auf einem Part zu kleben.",
       "Akkord-Parts werden automatisch auf Poly gestellt, damit das Gerät wirklich alle Töne eines Steps spielt.",
       "Piano Roll zum Prüfen: Noten anklicken nimmt sie aus dem Import, Ziehen verschiebt sie — waagrecht in 16teln, senkrecht in Halbtönen.",
