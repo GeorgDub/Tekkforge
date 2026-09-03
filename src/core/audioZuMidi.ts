@@ -304,3 +304,46 @@ export function alsSmfLiedProStimme(noten: SmfNote[], bpm: number, name: string)
   }));
   return { format: 1, ticksProViertel: AUDIO_TPQ, bpm, spuren };
 }
+
+/**
+ * Ein fremdes SMF (basic-pitch schreibt 120 BPM als Zeitbasis) auf das
+ * geschaetzte Lied-Tempo legen: die Zeiten bleiben, die Ticks werden so
+ * umgerechnet, dass das 16tel-Raster des Wizards bei `bpm` stimmt.
+ */
+export function smfAufTempo(lied: SmfLied, bpm: number): SmfLied {
+  if (!(bpm > 0) || !(lied.bpm > 0) || bpm === lied.bpm) return { ...lied, bpm: bpm > 0 ? bpm : lied.bpm };
+  const f = bpm / lied.bpm;
+  return {
+    ...lied,
+    bpm,
+    spuren: lied.spuren.map((s) => ({
+      ...s,
+      noten: s.noten.map((n) => ({ ...n, tick: Math.round(n.tick * f), dauer: Math.max(1, Math.round(n.dauer * f)) })),
+    })),
+  };
+}
+
+/**
+ * Alle Noten eines Lieds nach Tonlage auf bis zu `n` Stimmen verteilen —
+ * gleich grosse Gruppen nach Tonhoehe (tief → hoch), damit Bass und Melodie
+ * getrennt auf Parts landen. Liefert das Lied mit einer Spur je Stimme
+ * (Kanal = Stimmenindex), wie {@link alsSmfLiedProStimme}.
+ */
+export function stimmenNachLage(lied: SmfLied, n: number, name: string): SmfLied {
+  const alle = lied.spuren.flatMap((s) => s.noten);
+  if (!alle.length) return lied;
+  const k = Math.max(1, Math.min(4, Math.floor(n)));
+  if (k === 1) return alsSmfLied(alle.map((x) => ({ ...x, kanal: 0 })), lied.bpm, name);
+  const hoehen = [...new Set(alle.map((x) => x.note))].sort((a, b) => a - b);
+  // Grenzen: gleich viele verschiedene Tonhoehen je Stimme
+  const grenzen: number[] = [];
+  for (let i = 1; i < k; i++) grenzen.push(hoehen[Math.min(hoehen.length - 1, Math.floor((hoehen.length * i) / k))]);
+  const stimme = (note: number): number => {
+    let s = 0;
+    while (s < grenzen.length && note >= grenzen[s]) s++;
+    return s;
+  };
+  const noten = alle.map((x) => ({ ...x, kanal: stimme(x.note) })).sort((a, b) => a.tick - b.tick || a.note - b.note);
+  const r = alsSmfLiedProStimme(noten, lied.bpm, name);
+  return { ...r, ticksProViertel: lied.ticksProViertel };
+}

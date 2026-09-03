@@ -6,7 +6,9 @@
 
 import { $, escapeHtml } from "./shared";
 import { parseSmf, baueMidiPatterns, verschiebeNote, MIDI_PATTERN_MAX, type SmfLied, type SmfNote } from "../core/midiImport";
-import { transkribiereAudio, alsSmfLied, alsSmfLiedProStimme } from "../core/audioZuMidi";
+import { transkribiereAudio, alsSmfLied, alsSmfLiedProStimme, smfAufTempo, stimmenNachLage } from "../core/audioZuMidi";
+import { encodeWav16 } from "../core/wavCodec";
+import { tekkTranskription } from "./tekkTranskription";
 import { tempoSchaetzen } from "../core/tempoAnalyse";
 import { dateiArt } from "../core/generatorSession";
 import { dekodiere } from "./audioDecode";
@@ -33,11 +35,14 @@ interface Zustand {
   audioStimmen: number;
   /** Jede Stimme auf eine eigene Spur (und damit einen eigenen Part) */
   stimmenGetrennt: boolean;
+  /** "auto" = Autokorrelation im Programm, "ki" = basic-pitch ueber die Python-Bruecke. */
+  verfahren: "auto" | "ki";
+  kiOnset: number;
 }
 
 const z: Zustand = {
   lied: null, dateiname: "", fehler: "", ziel: new Map(), weg: new Set(), rollSpur: 0, stepLength: 64, hinweise: [],
-  audio: null, audioBpm: 120, audioLaeuft: false, audioStimmen: 1, stimmenGetrennt: true,
+  audio: null, audioBpm: 120, audioLaeuft: false, audioStimmen: 1, stimmenGetrennt: true, verfahren: "auto", kiOnset: 0.5,
 };
 
 let uebergabe: ((p: EditorProject) => void) | null = null;
@@ -63,9 +68,40 @@ function vorschlagZiel(lied: SmfLied): void {
 
 const MIDI_ENDUNGEN = /\.(mid|midi|kar|rmi|rmid|smf)$/i;
 
-/** Audio einstimmig transkribieren und als Pseudo-SMF in den Wizard legen. */
+/** Mehrstimmig ueber basic-pitch (Python-Bruecke); Ergebnis ist ein echtes SMF auf dem Lied-Tempo. */
+async function transkribiereKi(): Promise<void> {
+  if (!z.audio) return;
+  const b = tekkTranskription();
+  if (!b) {
+    z.hinweise = ["KI-Transkription gibt es nur in der Desktop-App (Python mit basic-pitch)."];
+    return;
+  }
+  z.audioLaeuft = true;
+  render();
+  try {
+    const r = await b.laufen(encodeWav16(z.audio.pcm, 44100, 1), { onset: z.kiOnset, frame: Math.max(0.05, z.kiOnset - 0.2) });
+    const basis = z.audio.name.replace(/\.[^.]+$/, "").slice(0, 12) || "Audio";
+    const roh = smfAufTempo(parseSmf(r.midi), z.audioBpm);
+    z.lied = z.audioStimmen > 1 && z.stimmenGetrennt ? stimmenNachLage(roh, z.audioStimmen, basis) : stimmenNachLage(roh, 1, basis);
+    z.weg.clear();
+    z.hinweise = r.noten
+      ? [`${r.noten} Noten (basic-pitch, ${r.sekunden} s, MIDI ${r.tiefste}–${r.hoechste}) auf ${z.lied.spuren.length} Spur(en), Raster ${z.audioBpm} BPM — im Piano Roll pruefen; Anschlagschwelle hoeher = weniger Noten.`]
+      : ["basic-pitch fand keine Noten — Anschlagschwelle senken oder stimmhafteres Material."];
+    vorschlagZiel(z.lied);
+  } catch (e) {
+    z.fehler = e instanceof Error ? e.message : String(e);
+  } finally {
+    z.audioLaeuft = false;
+  }
+}
+
+/** Audio transkribieren — je nach Verfahren im Programm (sofort) oder ueber die KI-Bruecke (asynchron). */
 function transkribieren(): void {
   if (!z.audio) return;
+  if (z.verfahren === "ki") {
+    void transkribiereKi().then(render);
+    return;
+  }
   const noten = transkribiereAudio(z.audio.pcm, 44100, { bpm: z.audioBpm, stimmen: z.audioStimmen });
   const basis = z.audio.name.replace(/\.[^.]+$/, "").slice(0, 12) || "Audio";
   // Stimmen trennen lohnt nur bei polyphonem Material
@@ -284,7 +320,7 @@ function render(): void {
     <div class="card">
       <h2>1 · MIDI- oder Audio-Datei</h2>
       <div class="zeileEinst">
-        <input id="miDatei" type="file" accept=".mid,.midi,.kar,.rmi,.rmid,.smf,.wav,.mp3,.m4a,.aac,.ogg,.flac,.aif,.aiff" />
+        <input id="miDatei" type="file" accept=".mid,.midi,.kar,.rmi,.rmid,.smf,audio/*,video/*,.wav,.mp3,.m4a,.aac,.ogg,.opus,.flac,.aif,.aiff,.wma,.ape,.wv,.webm,.mp4,.mkv,.mov" />
         ${lied ? `<span class="sub" style="margin:0">${escapeHtml(z.dateiname)}${z.audio ? " · transkribiert" : ` · Format ${lied.format}`} · ${lied.spuren.length} Spur(en) · ${Math.round(lied.bpm)} BPM</span>` : ""}
       </div>
       ${
@@ -292,6 +328,12 @@ function render(): void {
           ? `<div class="zeileEinst" style="margin-top:6px">
               <label for="miAudioBpm">Audio-BPM</label>
               <input id="miAudioBpm" type="number" min="60" max="300" value="${z.audioBpm}" style="width:80px" />
+              <label for="miVerfahren" title="Autokorrelation: sofort, einstimmig am besten. basic-pitch: KI-Modell in der Python-Umgebung, mehrstimmig, braucht die Desktop-App.">Verfahren</label>
+              <select id="miVerfahren">
+                <option value="auto" ${z.verfahren === "auto" ? "selected" : ""}>Autokorrelation (im Programm)</option>
+                <option value="ki" ${z.verfahren === "ki" ? "selected" : ""} ${tekkTranskription() ? "" : "disabled"}>basic-pitch (KI, mehrstimmig)</option>
+              </select>
+              ${z.verfahren === "ki" ? `<label for="miOnset" title="0,1 = alles, was nach Anschlag aussieht; 0,9 = nur sichere">Anschlag</label><input id="miOnset" type="number" min="0.1" max="0.9" step="0.1" value="${z.kiOnset}" style="width:64px" />` : ""}
               <label for="miStimmen">Stimmen</label>
               <select id="miStimmen">
                 ${[1, 2, 3, 4]
@@ -306,7 +348,7 @@ function render(): void {
       }
       ${z.audioLaeuft ? `<p class="sub" style="margin:6px 0 0">Dekodiere und transkribiere …</p>` : ""}
       ${z.fehler ? `<p class="warn">${escapeHtml(z.fehler)}</p>` : ""}
-      ${!lied && !z.fehler && !z.audioLaeuft ? `<p class="sub" style="margin:6px 0 0">SMF 0/1 (.mid, .kar, .rmi) — oder eine Audio-Datei: die wird einstimmig zu Noten transkribiert (Audio zu Korg).</p>` : ""}
+      ${!lied && !z.fehler && !z.audioLaeuft ? `<p class="sub" style="margin:6px 0 0">SMF 0/1 (.mid, .kar, .rmi) — oder eine Audio-Datei: die wird zu Noten transkribiert (Audio zu Korg) — im Programm einstimmig, oder mehrstimmig mit basic-pitch.</p>` : ""}
     </div>
     ${
       lied
@@ -367,12 +409,20 @@ function render(): void {
     $("miNeu").addEventListener("click", () => {
       z.audioBpm = Math.min(300, Math.max(60, Number(($("miAudioBpm") as HTMLInputElement).value) || z.audioBpm));
       z.audioStimmen = Number(($("miStimmen") as HTMLSelectElement).value) || 1;
+      z.verfahren = ($("miVerfahren") as HTMLSelectElement).value === "ki" ? "ki" : "auto";
       transkribieren();
       render();
     });
     $("miStimmen").addEventListener("change", () => {
       z.audioStimmen = Number(($("miStimmen") as HTMLSelectElement).value) || 1;
       ($("miGetrennt") as HTMLInputElement).disabled = z.audioStimmen <= 1;
+    });
+    $("miVerfahren").addEventListener("change", () => {
+      z.verfahren = ($("miVerfahren") as HTMLSelectElement).value === "ki" ? "ki" : "auto";
+      render();
+    });
+    document.getElementById("miOnset")?.addEventListener("change", () => {
+      z.kiOnset = Math.min(0.9, Math.max(0.1, Number((document.getElementById("miOnset") as HTMLInputElement).value) || 0.5));
     });
     $("miGetrennt").addEventListener("change", () => {
       z.stimmenGetrennt = ($("miGetrennt") as HTMLInputElement).checked;

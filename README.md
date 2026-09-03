@@ -931,6 +931,31 @@ Im Treiber geprueft (2026-09-03): `probe.wma` (wmav2, 48 kHz stereo),
 `probe.opus` und `probe.mp3` landen je als 1,5-s-Sample im Pool; die Bruecke
 meldet „ffmpeg bereit".
 
+## KI-Transkription: Audio → MIDI mit basic-pitch (2026-09-03)
+
+Im Wizard „MIDI zu Korg" gibt es neben der Autokorrelation im Programm
+(einstimmig, sofort) das Verfahren **basic-pitch** (Spotify, ICASSP 2022)
+— mehrstimmig, fuer Vollmixe und Akkorde. Es laeuft als ONNX-Modell in der
+py-cuda-Umgebung ueber `scripts/audio-zu-midi.py` (Bruecke
+`tekkTranskription`, IPC `transkription:laufen`): die dekodierte Mono-WAV
+geht in einen Temp-Ordner, das Skript schreibt eine Standard-MIDI-Datei und
+eine JSON-Zeile (Noten, Tonumfang, Dauer, Rechenzeit). Das MIDI wird wie
+jede fremde SMF gelesen, dann per `smfAufTempo` auf das geschaetzte
+Lied-Tempo gelegt (basic-pitch schreibt 120 BPM als Zeitbasis; die Zeiten
+bleiben, das 16tel-Raster stimmt danach) und per `stimmenNachLage` auf bis
+zu vier Stimmen verteilt — gleich viele Tonhoehen je Stimme, tief zuerst,
+jede auf einer eigenen Spur mit eigenem Kanal, also eigenem Part. Die
+Anschlagschwelle (0,1…0,9) steuert, wie viele Noten es werden.
+
+Installation (Python 3.13 baut basic-pitchs alte numpy-Pinnung nicht):
+`pip install --no-deps basic-pitch` und dazu `onnxruntime pretty_midi
+mir_eval resampy scipy`; das Modell `nmp.onnx` liegt im Paket. Gemessen:
+12 s Vollmix (Amphegott) → 66 Noten in 1,9 s. Im Treiber geprueft
+(2026-09-03): Verfahren umgestellt, „Neu transkribieren", drei Spuren
+tief/mittel/hoch mit 17/22/27 Noten, Vorschlag Lead/Stab 1/Stab 2.
+`tests/ki-transkription.test.ts` prueft Tempo-Umrechnung und Lagen an einem
+echten basic-pitch-MIDI (`tests/fixtures/amphe12-basic-pitch.mid`).
+
 ## Sample-Ordner → Bank + Pattern-Set
 
 Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze

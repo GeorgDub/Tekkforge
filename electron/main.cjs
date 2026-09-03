@@ -729,6 +729,61 @@ function registerAudioIpc() {
   });
 }
 
+// ── KI-Transkription: WAV -> MIDI ueber scripts/audio-zu-midi.py (basic-pitch, ONNX) ──
+function registerTranskriptionIpc(win) {
+  const skriptPfad = () => {
+    // gepackt liegt das Skript als extraResource neben der App (asar kann Python nicht lesen)
+    const kandidaten = [path.join(app.getAppPath(), "scripts", "audio-zu-midi.py")];
+    if (process.resourcesPath) kandidaten.unshift(path.join(process.resourcesPath, "scripts", "audio-zu-midi.py"));
+    return kandidaten.find((k) => fs.existsSync(k)) ?? kandidaten[kandidaten.length - 1];
+  };
+  ipcMain.handle("transkription:probe", async () => {
+    const py = pythonMit("basic_pitch");
+    if (!py) return { ok: false, meldung: "basic-pitch fehlt (py-cuda: pip install --no-deps basic-pitch onnxruntime pretty_midi mir_eval resampy scipy)" };
+    if (!fs.existsSync(skriptPfad())) return { ok: false, meldung: "scripts/audio-zu-midi.py fehlt" };
+    return { ok: true, meldung: "basic-pitch bereit" };
+  });
+  ipcMain.handle("transkription:laufen", async (_e, bytes, optionen) => {
+    const py = pythonMit("basic_pitch");
+    if (!py) throw new Error("basic-pitch fehlt (pip install --no-deps basic-pitch onnxruntime pretty_midi mir_eval resampy scipy)");
+    const basis = path.join(app.getPath("userData"), "tmp", `ki-${Date.now()}`);
+    fs.mkdirSync(basis, { recursive: true });
+    const wav = path.join(basis, "ein.wav");
+    const mid = path.join(basis, "aus.mid");
+    try {
+      fs.writeFileSync(wav, Buffer.from(bytes));
+      const o = optionen && typeof optionen === "object" ? optionen : {};
+      const args = [skriptPfad(), wav, mid];
+      const zahl = (k, flag) => {
+        if (typeof o[k] === "number" && Number.isFinite(o[k])) args.push(flag, String(o[k]));
+      };
+      zahl("onset", "--onset");
+      zahl("frame", "--frame");
+      zahl("minMs", "--min-ms");
+      zahl("minHz", "--min-hz");
+      zahl("maxHz", "--max-hz");
+      if (o.melodia) args.push("--melodia");
+      const { out } = await laufen(py, args, {
+        timeoutMs: 900000,
+        onStderr: (t) => {
+          if (win && !win.isDestroyed()) win.webContents.send("transkription:fortschritt", t.trim());
+        },
+      });
+      const zeile = out.trim().split(/\r?\n/).filter((z) => z.startsWith("{")).pop();
+      const ergebnis = zeile ? JSON.parse(zeile) : { ok: false, fehler: "keine Antwort vom Skript" };
+      if (!ergebnis.ok) throw new Error(ergebnis.fehler || "Transkription fehlgeschlagen");
+      if (!fs.existsSync(mid)) throw new Error("Es ist keine MIDI-Datei entstanden");
+      return { ...ergebnis, midi: new Uint8Array(fs.readFileSync(mid)) };
+    } finally {
+      try {
+        fs.rmSync(basis, { recursive: true, force: true });
+      } catch {
+        /* Temp bleibt liegen — unkritisch */
+      }
+    }
+  });
+}
+
 function registerUrlIpc(win) {
   ipcMain.handle("url:probe", async () => {
     try {
@@ -932,6 +987,7 @@ app.whenReady().then(() => {
   registerLiedIpc(win);
   registerUrlIpc(win);
   registerAudioIpc();
+  registerTranskriptionIpc(win);
   registerUpdateIpc(win);
   registerAutosaveIpc();
   registerBibliothekIpc();

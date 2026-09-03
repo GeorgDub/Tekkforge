@@ -126,6 +126,14 @@ contextBridge.exposeInMainWorld("tekkAudio", {
   dekodieren: (name, bytes) => ipcRenderer.invoke("audio:dekodieren", name, bytes),
 });
 
+// ── KI-Transkription: WAV -> MIDI (basic-pitch in der Python-Umgebung) ──
+contextBridge.exposeInMainWorld("tekkTranskription", {
+  available: true,
+  probe: () => ipcRenderer.invoke("transkription:probe"),
+  /** (wavBytes, optionen) -> { midi, noten, tiefste, hoechste, dauer, sekunden } */
+  laufen: (bytes, optionen) => ipcRenderer.invoke("transkription:laufen", bytes, optionen ?? {}),
+});
+
 // ── Dateibruecke fuer den Generator-Tab (Projekt auf Platte, SD-Karte, tekk4-Drums) ──
 contextBridge.exposeInMainWorld("tekkFs", {
   available: true,

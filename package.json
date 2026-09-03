@@ -53,6 +53,10 @@
       {
         "from": "scripts/stems.py",
         "to": "scripts/stems.py"
+      },
+      {
+        "from": "scripts/audio-zu-midi.py",
+        "to": "scripts/audio-zu-midi.py"
       }
     ],
     "win": {
