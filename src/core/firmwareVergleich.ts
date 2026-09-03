@@ -28,7 +28,8 @@ import {
 } from "./firmwareBau";
 import { decodeGroove } from "./e2Groove";
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "./e2sysex";
-import { leseLdrKette, LDR_START } from "./dspPatch";
+import { leseLdrKette, LDR_START, dspPatchStand } from "./dspPatch";
+import { DSP_PATCH_REGISTER } from "./dspPatchRegister";
 
 export interface Unterschied {
   /** ifx | mfx | groove | initPattern | splash | zaehler | header */
@@ -198,6 +199,9 @@ export function vergleicheFirmware(a: Uint8Array, b: Uint8Array): FirmwareVergle
     zeilen.push(
       `DSP-Abbild: ${dsp.length} Block/Blöcke anders — ${dsp.slice(0, 6).map((u) => `${u.links} (${u.bytes} Bytes, ab ${hex(u.offset)})`).join(", ")}${dsp.length > 6 ? ", …" : ""}`,
     );
+    // Und benannt, was davon ein bekannter Patch ist: Stand links ↔ rechts, nur wo er sich unterscheidet.
+    const staende = DSP_PATCH_REGISTER.map((p) => [p.titel, dspPatchStand(a, p), dspPatchStand(b, p)] as const).filter(([, x, y]) => x !== y);
+    if (staende.length) zeilen.push(`DSP-Patches: ${staende.map(([t, x, y]) => `„${t}“ ${x} ↔ ${y}`).join(", ")}`);
   }
   if (sonstige.length) {
     zeilen.push(

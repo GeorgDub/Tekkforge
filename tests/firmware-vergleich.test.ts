@@ -6,7 +6,9 @@ import { IFX_ZAEHLER } from "../src/core/ifxErweiterung";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes } from "../src/core/e2FxPreset";
 import { initGrooveBytes, decodeGroove, encodeGroove, GROOVE_SIZE } from "../src/core/e2Groove";
 import { leererSplash } from "../src/core/splash";
-import { LDR_START } from "../src/core/dspPatch";
+import * as fs from "node:fs";
+import { LDR_START, wendeDspPatchAn } from "../src/core/dspPatch";
+import { DSP_PATCH_REGISTER } from "../src/core/dspPatchRegister";
 
 const ifxMap = E2_RAM_MAP.find((e) => e.key === "ifxPreset")!;
 const grooveMap = E2_RAM_MAP.find((e) => e.key === "groove")!;
@@ -117,6 +119,18 @@ describe("firmwareVergleich", () => {
     const c = a.slice();
     c[LDR_START + 5] ^= 1;
     expect(vergleicheFirmware(a, c).unterschiede[0]).toMatchObject({ bereich: "dsp", links: "Kopf von Block 0" });
+  });
+
+  const VSB = "G:/IdeaProjects/hacktribe/fertige firmwares/SYSTEM.VSB";
+  it.skipIf(!fs.existsSync(VSB))("ein bekannter DSP-Patch wird im Vergleich beim Namen genannt (echte Hacktribe-Datei)", () => {
+    const a = new Uint8Array(fs.readFileSync(VSB));
+    const p = DSP_PATCH_REGISTER.find((x) => x.id === "bf523_coslut_zero")!;
+    const r = wendeDspPatchAn(a, p);
+    if (!r.ok) throw new Error(r.reason);
+    const v = vergleicheFirmware(a, r.bytes);
+    expect(v.sonstige).toEqual([]);
+    expect(v.unterschiede.map((u) => u.bereich)).toEqual(["dsp"]);
+    expect(v.zeilen.join("\n")).toMatch(/DSP-Patches: „Wellentabelle nullen \(Diskriminator\)“ original ↔ gepatcht/);
   });
 
   it("verlangt zwei vollstaendige Abbilder", () => {

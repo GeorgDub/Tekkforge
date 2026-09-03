@@ -750,6 +750,16 @@ ganzen Bootstrom zu verstehen. Der naechste ehrliche Schritt ist die
 Hoerprobe: Patch anhaken, bauen, installieren, hoeren — und den Befund im
 Register eintragen.
 
+**Der einzige offene Weg zu eigenen „Werks"-Samples** ist der Sample-Import
+selbst: ob das Geraet beim „Sample Import All" auch die Plaetze 1–499
+nimmt, steht nirgends. `examples/e2s/WERKSPLATZ.all`
+(`scripts/make-werksplatz-probe.mjs`) fragt es mit drei Toenen auf den
+Anzeigeplaetzen 1, 250 und 499 („TF WERK 001" A, „TF WERK 250" C#, „TF WERK
+499" E). Zeigt Platz 1 danach den Namen und spielt den A-Ton, sind die
+Werksplaetze beschreibbar — dann baut die Sample-Pipeline auch dorthin.
+⚠ Der Import ersetzt den User-Bereich 501–999; vorher exportieren, und
+KORGs Factory-Sample-Datei fuer den Rueckweg bereithalten.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über
