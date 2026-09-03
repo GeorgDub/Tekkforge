@@ -31,6 +31,7 @@ import {
 } from "../core/editorModel";
 import { merkeLetzteDatei } from "./start";
 import { dekodiereWav } from "./audioDecode";
+import { OSZ_LISTEN, oszListeWahl, istOszillatorNummer } from "../core/oszNamen";
 import type { DateiArt } from "../core/letzteDateien";
 import { filterePool, poolRamMb, POOL_RAM_LIMIT_MB, type PoolFilter } from "../core/poolFilter";
 import {
@@ -346,12 +347,22 @@ function renderGrid(): void {
     });
 
     const sampleSel = document.createElement("select");
-    const opts = ['<option value="">— kein Sample —</option>'].concat(
-      project.samples.map(
-        (s) =>
-          `<option value="${s.number}" ${part.sampleNumber === s.number ? "selected" : ""}>${s.number} ${escapeHtml(s.name)}</option>`,
-      ),
+    sampleSel.title = "Sample aus dem Pool oder ein Synth-Oszillator der Firmware (1–362; Liste in den Einstellungen). Vorhören spielt nur Samples.";
+    const poolOpts = project.samples.map(
+      (s) => `<option value="${s.number}" ${part.sampleNumber === s.number ? "selected" : ""}>${s.number} ${escapeHtml(s.name)}</option>`,
     );
+    // Synth-Oszillatoren der Firmware: Nummern 1…362, gruppiert nach Kategorie (Analog, Audio In, FM, VPM).
+    const liste = OSZ_LISTEN[oszListeWahl()];
+    const gruppen = new Map<string, string[]>();
+    liste.forEach(([name, kat], i) => {
+      const n = i + 1;
+      const l = gruppen.get(kat) ?? [];
+      l.push(`<option value="${n}" ${part.sampleNumber === n ? "selected" : ""}>${n} ${escapeHtml(name)}</option>`);
+      gruppen.set(kat, l);
+    });
+    const fremd = istOszillatorNummer(part.sampleNumber) && part.sampleNumber > liste.length ? `<option value="${part.sampleNumber}" selected>${part.sampleNumber} (nicht in der Liste)</option>` : "";
+    const opts = ['<option value="">— kein Sample —</option>', ...(poolOpts.length ? [`<optgroup label="Samples im Pool">${poolOpts.join("")}</optgroup>`] : []), fremd]
+      .concat([...gruppen].map(([kat, l]) => `<optgroup label="Oszillator · ${escapeHtml(kat)}">${l.join("")}</optgroup>`));
     sampleSel.innerHTML = opts.join("");
     sampleSel.addEventListener("change", () => {
       part.sampleNumber = sampleSel.value ? Number(sampleSel.value) : null;

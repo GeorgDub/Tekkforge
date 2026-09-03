@@ -32,6 +32,7 @@ const abschnitte = [
       "Eigene Audiodateien in jedem Format importieren — WAV direkt, MP3/AAC/OGG/FLAC über den Browserkern, WMA/APE/Video-Container über ffmpeg —, den Parts zuweisen und direkt am Rechner vorhören.",
       "Sample-Pool als Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken gegen das ~24-MB-Sample-RAM.",
       "Klangparameter je Part mit Namen: Filter-Typ (electribe, MS20, MG, P5, OB, Acid als Tief-, Hoch- und Bandpass) und alle 96 Modulationstypen der Firmware als Auswahlliste statt nackter Zahlen.",
+      "Synth-Oszillatoren der Firmware direkt im Part wählbar — Analog, Audio In, FM und VPM mit Namen, passend zur Oszillator-Liste des Geräts.",
       "<b>Sample-Editor</b> — Wellenform ansehen, Anfang und Ende ziehen, stille Ränder finden, kürzen, ein- und ausblenden, normalisieren, umkehren und den Loop setzen.",
       "<b>Bank ordnen</b> — Lücken schließen oder nach Name, Länge oder Nummer sortieren. Jede Nummernänderung zieht die Verweise der Patterns mit, damit nichts ins Leere zeigt.",
       "<b>Song-Modus</b> — Patterns zu einem Track aneinanderreihen: Abschnitt wählen, Durchgänge festlegen, Kette schreiben. Danach spielt das Gerät den Song von allein durch. Eine Kette, die schon im Projekt steckt — auch die eines importierten fremden Sets — wird angezeigt, und die ganze Kette lässt sich am Rechner zu einer Audiodatei ausrechnen und anhören.",

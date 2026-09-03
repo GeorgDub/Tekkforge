@@ -4,6 +4,7 @@
  */
 
 import { $ } from "./shared";
+import { oszListeWahl, oszListeSetzen } from "../core/oszNamen";
 import { THEMES } from "../core/themes";
 import { aktuelleWahl, themeSetzen } from "./theme";
 import { tekkFs } from "./tekkFs";
@@ -156,6 +157,16 @@ function render(): void {
         <button id="setAkzentReset" class="ghost">Preset-Akzent</button>
       </div>
     </div>
+    <div class="card">
+      <h2>Oszillator-Liste</h2>
+      <p class="sub">Welche Namen der Editor für die Synth-Oszillatoren 1–362 zeigt — sie müssen zur Firmware auf dem Gerät passen, sonst stimmen die Nummern nicht mit dem Klang überein.</p>
+      <div class="zeileEinst">
+        <select id="setOszListe">
+          <option value="tekkforge" ${oszListeWahl() === "tekkforge" ? "selected" : ""}>TekkForge (sortiert, 362 Plätze — ALLES-Firmware)</option>
+          <option value="hacktribe" ${oszListeWahl() === "hacktribe" ? "selected" : ""}>Hacktribe (274 Plätze, originale Reihenfolge)</option>
+        </select>
+      </div>
+    </div>
     <div class="card" id="setBackupKarte">
       <h2>Backups</h2>
       ${
@@ -211,6 +222,9 @@ function render(): void {
   $("setAkzent").addEventListener("change", () => {
     themeSetzen(aktuelleWahl().name, ($("setAkzent") as HTMLInputElement).value);
     render();
+  });
+  $("setOszListe").addEventListener("change", () => {
+    oszListeSetzen(($("setOszListe") as HTMLSelectElement).value === "hacktribe" ? "hacktribe" : "tekkforge");
   });
   $("setAkzentReset").addEventListener("click", () => {
     themeSetzen(aktuelleWahl().name);

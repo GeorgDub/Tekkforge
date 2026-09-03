@@ -561,7 +561,8 @@ export function buildBankFiles(project: EditorProject): BankBuildResult {
   project.patterns.forEach((p, pi) => {
     p.parts.forEach((part) => {
       const hasSteps = part.steps.some((s) => s.on);
-      if (hasSteps && part.sampleNumber !== null && !known.has(part.sampleNumber)) {
+      // Nummern unter 501 sind Synth-Oszillatoren der Firmware (SAW, X-SAW …, VPM) — die liegen nie im Pool.
+      if (hasSteps && part.sampleNumber !== null && part.sampleNumber >= 501 && !known.has(part.sampleNumber)) {
         warnings.push(
           `Pattern ${pi + 1} „${p.name}": Part „${part.label}" zeigt auf Sample #${part.sampleNumber}, das nicht im Pool ist`,
         );

@@ -1055,6 +1055,18 @@ Getestet an einem synthetischen Takt (Kick 1/3, Snare 2/4, Hats auf den
 jede Klasse richtig. Am besten mit einem Drum-Stem (Stem-Werkbank/Demucs);
 ein Vollmix liefert Bass-Anschlaege als Kicks.
 
+## Synth-Oszillatoren im Editor (2026-09-03)
+
+Die Part-Auswahl im Editor bietet neben den Pool-Samples jetzt die
+**Oszillatoren der Firmware** an, gruppiert nach Analog, Audio In, FM und
+VPM — mit Namen, nicht nur Nummern. Die Listen (`core/oszNamen.ts`) erzeugt
+`scripts/make-osz-namen.mjs` aus den SYSTEM.VSB-Dateien: Hacktribe (274,
+originale Reihenfolge) und TekkForge (362, sortiert wie die ALLES-Firmware).
+Welche gilt, steht in den Einstellungen unter „Oszillator-Liste" (Standard
+TekkForge) — die Nummern muessen zur Firmware auf dem Geraet passen. Der
+Bank-Bau warnt fuer Nummern unter 501 nicht mehr „nicht im Pool"; Vorhoeren
+spielt weiterhin nur Samples.
+
 ## Sample-Ordner → Bank + Pattern-Set
 
 Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze
