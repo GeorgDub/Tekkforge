@@ -28,6 +28,7 @@ import {
 } from "./firmwareBau";
 import { decodeGroove } from "./e2Groove";
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "./e2sysex";
+import { leseLdrKette, LDR_START } from "./dspPatch";
 
 export interface Unterschied {
   /** ifx | mfx | groove | initPattern | splash | zaehler | header */
@@ -137,6 +138,22 @@ export function vergleicheFirmware(a: Uint8Array, b: Uint8Array): FirmwareVergle
     return `${dunkel} dunkle Pixel`;
   });
 
+  // DSP-Abbild (BF523-LDR-Kette): je Datenblock, dazu die Koepfe — nur wenn die Kette in A lesbar ist
+  const kette = leseLdrKette(a);
+  if (kette.ok) {
+    const hx = (n: number): string => `0x${n.toString(16).toUpperCase()}`;
+    bekannt.fill(1, LDR_START, kette.ende);
+    for (const [i, bl] of kette.bloecke.entries()) {
+      const kx = a.subarray(bl.kopf, bl.kopf + 16);
+      const ky = b.subarray(bl.kopf, bl.kopf + 16);
+      if (!gleichBytes(kx, ky)) unterschiede.push({ bereich: "dsp", platz: i, links: `Kopf von Block ${i}`, rechts: "anders — Kette vermutlich ungültig", bytes: zaehlBytes(kx, ky), offset: bl.kopf });
+      if (bl.fuellung) continue;
+      const x = a.subarray(bl.daten, bl.daten + bl.laenge);
+      const y = b.subarray(bl.daten, bl.daten + bl.laenge);
+      if (!gleichBytes(x, y)) unterschiede.push({ bereich: "dsp", platz: i, links: `Block ${i} @ ${hx(bl.ziel)}`, rechts: `${bl.laenge} Bytes lang`, bytes: zaehlBytes(x, y), offset: bl.daten });
+    }
+  }
+
   // Alles andere: Laeufe, Luecken bis 16 Bytes zusammengefasst
   const sonstige: SonstigerLauf[] = [];
   let sonstigeBytes = 0;
@@ -176,6 +193,12 @@ export function vergleicheFirmware(a: Uint8Array, b: Uint8Array): FirmwareVergle
   for (const u of je("splash")) zeilen.push(`Startbild: ${u.links} ↔ ${u.rechts} (${u.bytes} Bytes)`);
   for (const u of je("initGlobal")) zeilen.push(`Init-Global: ${u.links} ↔ ${u.rechts} (${u.bytes} Bytes)`);
   for (const u of je("header")) zeilen.push(`Header: ${u.links} ↔ ${u.rechts} (${u.bytes} Bytes)`);
+  const dsp = je("dsp");
+  if (dsp.length) {
+    zeilen.push(
+      `DSP-Abbild: ${dsp.length} Block/Blöcke anders — ${dsp.slice(0, 6).map((u) => `${u.links} (${u.bytes} Bytes, ab ${hex(u.offset)})`).join(", ")}${dsp.length > 6 ? ", …" : ""}`,
+    );
+  }
   if (sonstige.length) {
     zeilen.push(
       `Außerhalb der bekannten Bereiche: ${sonstigeBytes} Bytes in ${sonstige.length} Lauf/Läufen — ` +

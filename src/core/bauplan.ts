@@ -25,6 +25,7 @@ import {
   INIT_GLOBAL_GROESSE,
   type FirmwareBauBericht,
 } from "./firmwareBau";
+import { dspPatchZuObjekt, dspPatchAusObjekt, wendeDspPatchAn, type DspPatch } from "./dspPatch";
 
 export const BAUPLAN_VERSION = 1;
 
@@ -40,6 +41,8 @@ export interface Bauplan {
   initPattern?: Uint8Array;
   splash?: Uint8Array;
   initGlobal?: Uint8Array;
+  /** Gleichlange Aenderungen im DSP-Abbild (experimentell), vollstaendig mit alten und neuen Bytes. */
+  dsp?: DspPatch[];
 }
 
 export function baueBauplan(plan: Omit<Bauplan, "version" | "wann"> & { wann?: string }): string {
@@ -56,6 +59,7 @@ export function baueBauplan(plan: Omit<Bauplan, "version" | "wann"> & { wann?: s
       ...(plan.initPattern ? { initPattern: bytesToBase64(plan.initPattern) } : {}),
       ...(plan.splash ? { splash: bytesToBase64(plan.splash) } : {}),
       ...(plan.initGlobal ? { initGlobal: bytesToBase64(plan.initGlobal) } : {}),
+      ...(plan.dsp?.length ? { dsp: plan.dsp.map(dspPatchZuObjekt) } : {}),
     },
     null,
     1,
@@ -104,7 +108,17 @@ export function leseBauplan(text: string): Bauplan {
   if (splash) plan.splash = splash;
   const initGlobal = block("initGlobal", [INIT_GLOBAL_GROESSE], [0, "GLST"]);
   if (initGlobal) plan.initGlobal = initGlobal;
-  if (!eintraege.length && !initPattern && !splash && !initGlobal) throw new Error("Der Bauplan ist leer.");
+  if (x.dsp !== undefined) {
+    if (!Array.isArray(x.dsp)) throw new Error("Feld „dsp“ ist keine Liste.");
+    plan.dsp = x.dsp.map((o, i) => {
+      try {
+        return dspPatchAusObjekt(o, `bauplan-${i + 1}`);
+      } catch (e) {
+        throw new Error(`DSP-Patch ${i + 1}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    });
+  }
+  if (!eintraege.length && !initPattern && !splash && !initGlobal && !plan.dsp?.length) throw new Error("Der Bauplan ist leer.");
   return plan;
 }
 
@@ -142,6 +156,12 @@ export function wendeBauplanAn(basis: Uint8Array, plan: Bauplan): BauplanErgebni
     }
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  for (const p of plan.dsp ?? []) {
+    const r = wendeDspPatchAn(bytes, p);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    bytes = r.bytes;
+    zeilen.push(`DSP-Patch „${p.titel}“ gesetzt`);
   }
   return { ok: true, bytes, bericht, zeilen };
 }

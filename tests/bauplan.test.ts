@@ -16,6 +16,7 @@ import {
   liesInitPattern,
 } from "../src/core/firmwareBau";
 import { leererSplash, pixelZuSplash, SPLASH_BREITE, SPLASH_HOEHE } from "../src/core/splash";
+import { LDR_START, hexZuBytes, type DspPatch } from "../src/core/dspPatch";
 
 const ifxMap = E2_RAM_MAP.find((e) => e.key === "ifxPreset")!;
 const grooveMap = E2_RAM_MAP.find((e) => e.key === "groove")!;
@@ -130,6 +131,40 @@ describe("bauplan", () => {
     expect(r.bytes[SPLASH_OFFSET]).toBe(0x7f);
     expect(r.bytes[INIT_GLOBAL_OFFSET + 0x28]).toBe(3);
     expect(r.zeilen).toEqual(["Presets: 1 IFX, 0 MFX, 1 Grooves", "IFX-Menü: bis 49 → bis 50", "Groove-Menü: bis 62 → bis 63", "Init-Pattern gesetzt", "Init-Global gesetzt", "Startbild gesetzt"]);
+  });
+
+  it("DSP-Patches reisen mit alten und neuen Bytes im Plan und werden beim Anwenden gesetzt — oder klar abgelehnt", () => {
+    const patch: DspPatch = { id: "p", titel: "Probe", beschreibung: "", quelle: "t", status: "diskriminator", edits: [{ vaddr: 0x2000, alt: hexZuBytes("a0a1"), neu: hexZuBytes("ffff") }] };
+    const text = baueBauplan({ titel: "D", autor: "", eintraege: [], dsp: [patch] });
+    const plan = leseBauplan(text);
+    expect(plan.dsp).toEqual([patch]);
+    // Basis mit kleiner LDR-Kette: ein SDRAM-Block bei 0x2000 mit 0xA0…
+    const fw = fakeFirmware();
+    const kopf = (flags: number, ziel: number, laenge: number): Uint8Array => {
+      const h = new Uint8Array(16);
+      const dv = new DataView(h.buffer);
+      dv.setUint32(0, ((0xad << 24) | flags) >>> 0, true);
+      dv.setUint32(4, ziel >>> 0, true);
+      dv.setUint32(8, laenge >>> 0, true);
+      let x = 0;
+      for (const b of h) x ^= b;
+      h[2] = x;
+      return h;
+    };
+    fw.set(kopf(0x0001, 0x2000, 8), LDR_START);
+    fw.set([0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7], LDR_START + 16);
+    fw.set(kopf(0x0100 | 0x8000, 0x10000, 16), LDR_START + 24);
+    const r = wendeBauplanAn(fw, plan);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(Array.from(r.bytes.subarray(LDR_START + 16, LDR_START + 20))).toEqual([0xff, 0xff, 0xa2, 0xa3]);
+    expect(r.zeilen).toContain("DSP-Patch „Probe“ gesetzt");
+    // Basis ohne Kette: abgelehnt, mit Grund
+    const ohne = wendeBauplanAn(fakeFirmware(), plan);
+    expect(ohne.ok).toBe(false);
+    if (!ohne.ok) expect(ohne.reason).toMatch(/DSP-Kette/);
+    // Unbrauchbarer Patch im Plan
+    expect(() => leseBauplan(text.replace('"dsp": [', '"dsp": [{"edits":[{"old":"00","new":"0000"}]},'))).toThrow(/DSP-Patch 1/);
   });
 
   it("ein Plan nur mit Startbild braucht keine Eintraege", () => {

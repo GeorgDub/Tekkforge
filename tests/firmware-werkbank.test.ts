@@ -11,7 +11,11 @@ import {
   fwTextSchreiben,
   fwBauplanText,
   fwBauplanLaden,
+  fwDspPatches,
+  fwDspWaehlen,
+  fwDspAufnehmen,
 } from "../src/gui/firmwareWerkbank";
+import { LDR_START, hexZuBytes, type DspPatch } from "../src/core/dspPatch";
 import { pmZustand } from "../src/gui/presetManager";
 import { leseBauplan } from "../src/core/bauplan";
 import { textBreite } from "../src/core/pixelSchrift";
@@ -115,9 +119,33 @@ const ifxMap = E2_RAM_MAP.find((e) => e.key === "ifxPreset")!;
 const mfxMap = E2_RAM_MAP.find((e) => e.key === "mfxPreset")!;
 const grooveMap = E2_RAM_MAP.find((e) => e.key === "groove")!;
 
-/** Ein Abbild wie die Hacktribe-Firmware: 49 IFX, 32 MFX, 62 Grooves, Init-Pattern, leeres Startbild. */
+/** Ein LDR-Blockkopf (Signatur 0xAD, XOR aller 16 Bytes = 0). */
+function ldrKopf(flags: number, ziel: number, laenge: number): Uint8Array {
+  const h = new Uint8Array(16);
+  const dv = new DataView(h.buffer);
+  dv.setUint32(0, ((0xad << 24) | flags) >>> 0, true);
+  dv.setUint32(4, ziel >>> 0, true);
+  dv.setUint32(8, laenge >>> 0, true);
+  let x = 0;
+  for (const b of h) x ^= b;
+  h[2] = x;
+  return h;
+}
+/** Eine kleine DSP-Kette: ein L1-Block (64 Bytes 0x10…0x4F), ein SDRAM-Block (32 Bytes 0xA0…0xBF), Ende. */
+const DSP_L1 = LDR_START + 16;
+const DSP_SDRAM = DSP_L1 + 64 + 16;
+function fakeDspKette(fw: Uint8Array): void {
+  fw.set(ldrKopf(0x0001, 0xff800000, 64), LDR_START);
+  for (let i = 0; i < 64; i++) fw[DSP_L1 + i] = 0x10 + i;
+  fw.set(ldrKopf(0x0001, 0x00002000, 32), DSP_L1 + 64);
+  for (let i = 0; i < 32; i++) fw[DSP_SDRAM + i] = 0xa0 + i;
+  fw.set(ldrKopf(0x0100 | 0x8000, 0x00010000, 4096), DSP_SDRAM + 32);
+}
+
+/** Ein Abbild wie die Hacktribe-Firmware: 49 IFX, 32 MFX, 62 Grooves, Init-Pattern, leeres Startbild, kleine DSP-Kette. */
 function fakeFirmware(): Uint8Array {
   const fw = new Uint8Array(VSB_GROESSE);
+  fakeDspKette(fw);
   fw.set(new TextEncoder().encode("KORG SYSTEM FILE"), 0);
   fw.set(new TextEncoder().encode("E2S"), 0x10);
   for (let s = 0; s < ifxMap.count; s++) fw.set(s < 49 ? presetBytes(`Werk ${s + 1}`) : leererBlock("ifx"), dateiOffset(addressForSlot(ifxMap, s)));
@@ -328,6 +356,61 @@ describe("Firmware-Werkbank", () => {
     expect(el("fwStatus").textContent).toMatch(/„TEKK“ geschrieben/);
     fwTextSchreiben("   ", 2, "mitte");
     expect(el("fwStatus").textContent).toMatch(/Erst einen Text/);
+  });
+
+  it("DSP-Patches: das Register steht in der Liste, ein eigener Patch wird eingebrannt, ein fremder klar abgelehnt, der Bauplan nimmt ihn mit", async () => {
+    await basisLaden(fakeFirmware());
+    expect(fwDspPatches().length).toBeGreaterThanOrEqual(11);
+    expect(el("fwDspListe").innerHTML).toMatch(/data-dsp="bf523_coslut_zero"/);
+    expect(el("fwDspListe").innerHTML).toMatch(/passt nicht zur Basis/); // Register-Patches gehoeren zur echten Hacktribe-Datei
+    el("fwPresets").checked = false;
+
+    // Register-Patch auf die Fake-Basis: sauber abgelehnt, nichts gebaut
+    fwDspWaehlen("bf523_coslut_zero", true);
+    const ab = fwBaueAbbild();
+    expect(ab.ok).toBe(false);
+    if (!ab.ok) expect(ab.reason).toMatch(/Wellentabelle nullen/);
+    fwDspWaehlen("bf523_coslut_zero", false);
+    expect(fwBaueAbbild().ok).toBe(false); // nichts angehakt
+
+    // eigener Patch mit Adresse im SDRAM-Block: Bytes 4..7
+    const eigen: DspPatch = { id: "probe", titel: "Probe", beschreibung: "", quelle: "test", status: "hoerprobe-offen", edits: [{ vaddr: 0x2004, alt: hexZuBytes("a4a5a6a7"), neu: hexZuBytes("01020304") }] };
+    fwDspAufnehmen(eigen);
+    expect(el("fwDspListe").innerHTML).toMatch(/data-dsp="probe" checked/);
+    const r = fwBaueAbbild();
+    expect(r.ok, r.ok ? "" : r.reason).toBe(true);
+    if (!r.ok) return;
+    expect(Array.from(r.bytes.subarray(DSP_SDRAM + 4, DSP_SDRAM + 8))).toEqual([1, 2, 3, 4]);
+    expect(r.zeilen.join("\n")).toMatch(/DSP-Patches \(⚠ experimentell\): Probe/);
+    // Kette drumherum unangetastet
+    expect(Array.from(r.bytes.subarray(LDR_START, LDR_START + 16))).toEqual(Array.from(fakeFirmware().subarray(LDR_START, LDR_START + 16)));
+
+    // Bauplan: Patch drin, nach frischem Start wieder da und angehakt
+    const b = fwBauplanText("DSP-Probe");
+    expect(b.ok).toBe(true);
+    if (!b.ok) return;
+    expect(leseBauplan(b.text).dsp?.map((p) => p.id)).toEqual(["probe"]);
+    initFirmwareWerkbank({ aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }) });
+    expect(fwDspPatches().some((p) => p.id === "probe")).toBe(false);
+    await basisLaden(fakeFirmware());
+    const l = fwBauplanLaden(b.text, "dsp.tfbau");
+    expect(l.ok).toBe(true);
+    if (!l.ok) return;
+    expect(l.zeilen.join("\n")).toMatch(/DSP-Patches: 1 übernommen/);
+    el("fwPresets").checked = false;
+    const wieder = fwBaueAbbild();
+    expect(wieder.ok).toBe(true);
+    if (wieder.ok) expect(wieder.bytes[DSP_SDRAM + 4]).toBe(1);
+
+    // Patch-Datei ueber den Knopf: Omnitribes Listenform
+    el("fwDspIn").files = [fakeTextDatei("meiner.json", JSON.stringify([{ vaddr: "0xFF800010", old: "20212223", new: "00000000", label: "L1-Probe" }]))];
+    el("fwDspIn").feuere("change");
+    await warte();
+    expect(fwDspPatches().some((p) => p.id === "meiner" && p.beschreibung === "L1-Probe")).toBe(true);
+    const drei = fwBaueAbbild();
+    expect(drei.ok).toBe(true);
+    if (drei.ok) expect(drei.bytes[DSP_L1 + 0x10]).toBe(0);
+    expect(fwBaueAbbild().ok).toBe(true);
   });
 
   it("Bauplan: sichern nimmt die angehakten Bausteine mit, laden legt sie zurueck in Manager und Werkbank", async () => {

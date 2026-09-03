@@ -697,6 +697,52 @@ als „leer", weil die Serien-Firmware die Namen an anderer Stelle im Block
 haelt (+0x7D statt +0x01, Omnitribes Befund); das ist eine bekannte Grenze,
 kein Fehler.
 
+### DSP-Patches — der Klang selbst (experimentell)
+
+Die Klangerzeugung der Electribe laeuft nicht auf dem ARM, sondern auf einem
+**ADSP-BF523**. Sein Programm liegt als ADI-LDR-Bootstrom **in der
+SYSTEM.VSB**: 157 Bloecke ab Datei-Offset `0xF9F10` (113 fuer das SDRAM, 44
+fuer das L1, Ende `0x13C0B0`), jeder mit 16-Byte-Kopf und XOR-Pruefziffer,
+die nur den Kopf abdeckt — die Nutzdaten tragen keine Pruefsumme. Omnitribe
+hat am Geraet gezeigt, dass gleichlange Aenderungen darin flashbar und
+hoerbar sind (ein genullter Block toetete die Sample-Wiedergabe, Stock stellte
+sie wieder her). `core/dspPatch.ts` liest diese Kette, prueft jeden Kopf und
+wendet Patches an: gleiche Laenge, ganz innerhalb eines Datenblocks, bei
+bekannter DSP-Adresse muessen die alten Bytes genau dort stehen (sonst genau
+einmal in der Kette vorkommen), danach wird die Kette erneut gelesen. Kein
+Kopf wird je angefasst.
+
+In der Werkbank steht dafuer der Abschnitt **DSP-Patches**: das Register
+(`core/dspPatchRegister.ts`, erzeugt aus Omnitribes `src/firmware/patches/`
+mit `scripts/import-dsp-patches.mjs`) mit elf Patches — Halbcosinus-
+Wellentabelle im L1 (`0xFF803BD8`, 129 × int16: halbe/viertel Amplitude,
+Dreieck, Null), zwei Kurven im Sample-Pfad (`0x9400` 8 × int16,
+`0x99F8` 14 × float 0,02…1,00: halbieren, umkehren, alles Maximum/Minimum)
+und eine Vollausschlag-Konstante im L1-Code (`0xFFA00810`). Jeder Eintrag
+traegt seinen ehrlichen Stand: **Hoerprobe offen** (niemand hat es gehoert),
+**nur Nachweis** (Diskriminator, kein Klang) — „am Geraet gehoert" hat noch
+keiner. Die Liste zeigt ausserdem, ob ein Patch in der geladenen Basis
+schon drin ist oder nicht zu ihr passt. „Eigene Patch-Datei…" nimmt eine
+JSON-Liste `{vaddr, old, new}` (Omnitribes Form) oder ein Objekt mit
+`edits`; der Bauplan nimmt DSP-Patches mit alten und neuen Bytes mit, und
+der Firmware-Vergleich meldet Aenderungen im DSP-Abbild je Block statt als
+fremde Bytes. Alles ist am echten Abbild geprueft (jeder Register-Patch
+findet seine Stelle, die Kette bleibt gueltig, kein Byte ausserhalb aendert
+sich) — **am Geraet gehoert ist noch keiner**.
+
+**Was damit NICHT geht, ehrlich gesagt.** Die Werks-Samples des Samplers
+liegen nicht in der Firmware, sondern im Sample-Flash; hacktribes
+`synth-pcm-dump` liest nur die Synth-PCM aus dem RAM (`0xC3000000`) und
+schreibt nichts zurueck — **Samples tauschen** ist auf diesem Weg nicht
+moeglich, und ein anderer ist nicht bekannt. Hacktribes erweiterte Filter
+sind kein DSP-Umbau, sondern Menue-Eintraege, die vorhandene DSP-Programme
+freischalten. Was an **Filtern und Modulation** in der Engine steckt, ist
+ueber die Tabellen oben nur zu *verbiegen* (Kurven, Wellentabelle), nicht
+neu zu bauen: Bloecke verlaengern oder Code umschreiben geht nicht, ohne den
+ganzen Bootstrom zu verstehen. Der naechste ehrliche Schritt ist die
+Hoerprobe: Patch anhaken, bauen, installieren, hoeren — und den Befund im
+Register eintragen.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über
