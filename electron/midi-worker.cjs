@@ -21,9 +21,33 @@ try {
 }
 
 let out = null;
+/** Name des offenen Ausgangs — zum Wiederfinden nach einem Geraete-Neustart. */
+let outName = null;
+
+/**
+ * Den Ausgang anhand seines Namens neu oeffnen. Nach einem Neustart des
+ * Geraets (Firmware-Update, USB ab und an) ist das alte WinMM-Handle tot:
+ * jedes Senden scheitert mit "error preparing sysex header", obwohl der Port
+ * in der Liste steht (gesehen 2026-09-03). Liefert true, wenn ein Port mit
+ * demselben Namen wieder offen ist.
+ */
+function ausgangNeuOeffnen() {
+  if (!outName) return false;
+  try { if (out) out.closePort(); } catch { /* das alte Handle ist ohnehin tot */ }
+  out = null;
+  const o = new midi.Output();
+  let idx = -1;
+  for (let k = 0; k < o.getPortCount(); k++) if (o.getPortName(k) === outName) { idx = k; break; }
+  if (idx < 0) return false;
+  o.openPort(idx);
+  out = o;
+  return true;
+}
 let input = null;
 /** Portnummer des offenen Geräte-Eingangs — gebraucht, um ihn nach dem Öffnen des Controller-Eingangs neu zu öffnen (siehe openIn2). */
 let inputPort = null;
+/** Name des Geraete-Eingangs — zum Wiederfinden nach einem Geraete-Neustart. */
+let inputName = null;
 /** Zweiter Eingang (Controller, z. B. MIDImix) — Nachrichten werden mit quelle:"controller" markiert. */
 let input2 = null;
 
@@ -31,8 +55,23 @@ function oeffneGeraeteEingang(port) {
   input = new midi.Input();
   input.ignoreTypes(false, false, false); // SysEx NICHT ignorieren
   input.on("message", (_dt, m) => parentPort.postMessage({ type: "midi", data: Array.from(m), quelle: "geraet" }));
+  inputName = input.getPortName(Number(port));
   input.openPort(Number(port));
   inputPort = Number(port);
+}
+
+/** Den Geraete-Eingang anhand seines Namens neu oeffnen — nach einem Neustart ist auch sein Handle tot. */
+function eingangNeuOeffnen() {
+  if (!inputName) return false;
+  try { if (input) input.closePort(); } catch { /* totes Handle */ }
+  input = null;
+  const i = new midi.Input();
+  let idx = -1;
+  for (let k = 0; k < i.getPortCount(); k++) if (i.getPortName(k) === inputName) { idx = k; break; }
+  i.closePort();
+  if (idx < 0) return false;
+  oeffneGeraeteEingang(idx);
+  return true;
 }
 
 // ─── MIDI-Clock-Generator (0xF8, 24 ppqn) ─────────────────────────────────
@@ -95,6 +134,9 @@ parentPort.on("message", (msg) => {
     } else if (cmd === "openOut") {
       if (out) out.closePort();
       out = new midi.Output();
+      // Den NAMEN merken, nicht nur die Nummer: nach einem Neustart des Geraets
+      // (Firmware-Update, USB ab und an) kann die Nummer wandern.
+      outName = out.getPortName(Number(msg.port));
       out.openPort(Number(msg.port));
       parentPort.postMessage({ id, ok: true });
     } else if (cmd === "openIn") {
@@ -126,7 +168,19 @@ parentPort.on("message", (msg) => {
       parentPort.postMessage({ id, ok: true });
     } else if (cmd === "send") {
       if (!out) throw new Error("Kein MIDI-Ausgang geöffnet");
-      out.sendMessage(msg.bytes);
+      try {
+        out.sendMessage(msg.bytes);
+      } catch (e) {
+        // Einmal neu oeffnen und wiederholen — sonst bleibt nach einem
+        // Geraete-Neustart jeder Befehl tot, bis der Nutzer "Geraet suchen" drueckt.
+        if (!ausgangNeuOeffnen()) {
+          throw new Error(`MIDI-Ausgang verloren (${String(e && e.message)}) — Gerät neu suchen`);
+        }
+        out.sendMessage(msg.bytes);
+        // Der Eingang haengt am selben Geraet — sein Handle ist dann genauso tot.
+        const eingang = eingangNeuOeffnen();
+        parentPort.postMessage({ type: "hinweis", text: `MIDI-Ausgang „${outName}“ neu geöffnet${eingang ? ", Eingang ebenfalls" : ""}` });
+      }
       parentPort.postMessage({ id, ok: true });
     } else if (cmd === "clock") {
       // { action: "start"|"stop"|"bpm", bpm? }

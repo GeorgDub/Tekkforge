@@ -43,6 +43,11 @@ function startMidiWorker() {
       console.error("MIDI-Worker fatal:", m.error);
       return;
     }
+    if (m.type === "hinweis") {
+      // Der Worker hat einen toten Port selbst neu geöffnet — nur ins Protokoll.
+      console.log("MIDI-Worker:", m.text);
+      return;
+    }
     const p = midiPending.get(m.id);
     if (p) {
       midiPending.delete(m.id);
