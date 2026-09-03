@@ -544,6 +544,20 @@ bis 96. ✔ **Am Geraet abgenommen (2026-09-02):** die Datei per Update
 installiert, die neuen Plaetze sind im Menue — damit sind Abbild-Layout,
 Zaehler-Zellen und Schreibweg ins Flash belegt.
 
+### Tekk-Groove-Vorlagen
+
+`examples/grooves/` enthaelt 18 Groove-Vorlagen als `.e2gv` plus die
+Sammlung `TekkForge-Grooves-Tekk.tfsam` fuer die Bibliothek des Managers:
+gerade Grundbetonung, Push und Drag auf den Achteln, Achtel- und
+Sechzehntel-Swing in zwei Staerken, Hat-Ghosts, Kick-Punch, Gate-Chop, Stomp,
+Rampen, Rush und Laid Back, dazu „Hardtekk 64" (vier Takte mit eingebautem
+Fill) und „Breaker 32" (Bruch alle zwei Takte). Die Werte sind an den 62
+Werksvorlagen der Hacktribe-Firmware kalibriert; Step 1 bleibt ueberall an Ort
+und Stelle. Erzeugt von `scripts/make-grooves.mjs`, geprueft von
+`tests/grooves-beispiele.test.ts`; Liste und Bedienung in
+[`examples/grooves/README.md`](examples/grooves/README.md). ⚠ Noch nicht
+gehoert.
+
 ### Preset-Manager — die ganze Bank als Liste
 
 Unter dem FX-Preset-Bereich liegt der **Preset-Manager**: alle 96 Insert-
