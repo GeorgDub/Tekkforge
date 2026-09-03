@@ -202,6 +202,76 @@ export const fmHalbtonGemessen = (halbton: number): boolean => FM_STUETZEN.some(
 
 /** „X-SAW -24“ → „X-SAW“: der Name ohne die Halbton-Endung. */
 export const oszStamm = (name: string): string => name.replace(/\s[-+]?\d+$/, "");
+/** Der Name eines FM-Eintrags aus Stamm und Halbton: „X-SAW -3“, „X-SAW 0“, „X-SAW +7“. */
+export const fmName = (stamm: string, halbton: number): string => `${stamm} ${halbton > 0 ? "+" : ""}${halbton}`;
+
+export interface OszSortierung {
+  ok: true;
+  bytes: Uint8Array;
+  /** abbildung[alt] = neu (1-basiert; Index 0 unbenutzt). */
+  abbildung: number[];
+  /** FM-Eintraege, deren Name nicht zu ihrer Tonhoehe passte (Hacktribe: −11/−12 vertauscht). */
+  umbenannt: { platz: number; alt: string; neu: string }[];
+  anzahl: number;
+}
+
+/**
+ * Sortiert die FM-Eintraege der belegten Tabelle: ein Block an der Stelle
+ * des ersten FM-Eintrags (Hacktribe: ab 35), je DSP-Programm (Reihenfolge
+ * des ersten Auftretens) aufsteigend nach TONHOEHE — so stehen Hacktribes
+ * Eintraege und angehaengte Varianten in einer Reihe, −24 … +24. Alles
+ * andere (Analog, Audio In, VPM) behaelt seine Reihenfolge; was vor dem
+ * Block stand, bleibt davor, der Rest rueckt dahinter. FM-Namen werden aus
+ * Stamm + Halbton neu gesetzt, damit Name und Tonhoehe zusammenpassen.
+ * Die Anzahl bleibt; die Beschreiber aendern sich nicht.
+ *
+ * ⚠ Patterns verweisen ueber die NUMMER auf ihren Oszillator — nach dem
+ * Sortieren zeigen sie auf einen anderen Klang. `abbildung` sagt, wohin.
+ */
+export function sortiereOszTabelle(fw: Uint8Array): OszSortierung | { ok: false; reason: string } {
+  const stand = leseOszStandAusFirmware(fw);
+  if (!stand.ok) return { ok: false, reason: `Oszillator-Tabelle: ${stand.reason}` };
+  const alt: { platz: number; bytes: Uint8Array; d: OszEintrag }[] = [];
+  for (let p = 1; p <= stand.anzahl; p++) {
+    const b = liesOsz(fw, p);
+    if (istOszLeer(b)) return { ok: false, reason: `Platz ${p} ist leer — die Liste hat eine Lücke` };
+    alt.push({ platz: p, bytes: b, d: decodeOsz(b) });
+  }
+  // Nur FM wird umsortiert; alles andere behaelt seine Reihenfolge. Der
+  // FM-Block sitzt dort, wo der erste FM-Eintrag stand (Hacktribe: 35) —
+  // davor bleibt der Analog-Block samt Audio In, dahinter folgt VPM.
+  const programme: number[] = [];
+  for (const e of alt) if (e.d.kategorie === 0x0a && !programme.includes(e.d.programm)) programme.push(e.d.programm);
+  const ersterFm = alt.find((e) => e.d.kategorie === 0x0a)?.platz ?? Infinity;
+  const schluessel = (e: (typeof alt)[number]): number[] =>
+    e.d.kategorie === 0x0a ? [1, programme.indexOf(e.d.programm), fmParameterZuHalbton(e.d.parameter), e.d.parameter, e.platz] : [e.platz < ersterFm ? 0 : 2, 0, 0, 0, e.platz];
+  const neu = alt
+    .map((e) => ({ e, k: schluessel(e) }))
+    .sort((a, b) => {
+      for (let i = 0; i < a.k.length; i++) if (a.k[i] !== b.k[i]) return a.k[i] - b.k[i];
+      return 0;
+    })
+    .map((x) => x.e);
+  const abbildung: number[] = new Array(stand.anzahl + 1).fill(0);
+  const umbenannt: OszSortierung["umbenannt"] = [];
+  const eintraege: OszEintragMitPlatz[] = [];
+  neu.forEach((e, i) => {
+    const platz = i + 1;
+    abbildung[e.platz] = platz;
+    let bytes = e.bytes;
+    if (e.d.kategorie === 0x0a) {
+      const soll = fmName(oszStamm(e.d.name), fmParameterZuHalbton(e.d.parameter));
+      if (soll !== e.d.name && soll.length <= OSZ_NAME_LAENGE) {
+        umbenannt.push({ platz, alt: e.d.name, neu: soll });
+        bytes = oszVariante(e.bytes, { name: soll });
+      }
+    }
+    eintraege.push({ platz, bytes });
+  });
+  const r = setzeOszTabelle(fw, eintraege);
+  if (!r.ok) return r;
+  return { ok: true, bytes: r.bytes, abbildung, umbenannt, anzahl: stand.anzahl };
+}
 
 export interface FmSerienEintrag {
   name: string;

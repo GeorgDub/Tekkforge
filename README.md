@@ -837,6 +837,31 @@ diese Datei als Basis (der Hacktribe-Hash stimmt dann nicht mehr, die
 Struktur schon) oder faengt wieder bei Hacktribe an; „fluechtig ins
 Geraet" verlangt, dass die Basis so viele Plaetze zaehlt wie das Geraet.
 
+**Einsortieren** (`--osz-sortieren`, `sortiereOszTabelle`, 2026-09-03 auf
+Nutzerwunsch): angehaengte Varianten stehen sonst hinter den VPM-Modellen.
+Die Sortierung ordnet NUR den FM-Block — an der Stelle des ersten
+FM-Eintrags (35), je Programm in der Reihenfolge des ersten Auftretens,
+darin aufsteigend nach Tonhoehe: X-SAW 35–83, X-SQUARE 84–132, X-TRI
+133–181, X-SINE 182–230, je 49 Halbtoene −24…+24, dann VPM 231–362 in
+alter Reihenfolge. Analog samt Audio In (1–34) bleibt unangetastet;
+Hacktribes vertauschte −11/−12 heissen danach nach ihrer Tonhoehe (acht
+Umbenennungen). ⚠ **Patterns verweisen ueber die Nummer** — nach dem
+Sortieren zeigen sie auf einen anderen Klang; die Abbildung alt → neu
+liegt als `<ziel>.osz-abbildung.json` neben der Datei. Der Nutzer hat
+keine Patterns mit FM/VPM-Verweisen, deshalb gibt es (noch) kein
+Umnummerier-Werkzeug fuer `.e2sallpat`.
+
+**Gesamtfirmware „ALLES" (2026-09-03):** Basis war die `SYSTEM2.VSB` von
+der SD-Karte (IFX bis 96, sechs ersetzte MFX, 18 Tekk-Grooves 63–80,
+Startbild „amphegott" — und, was der Vergleich zeigte, der experimentelle
+DSP-Patch „Amount-Kurve: umgekehrt"). Der DSP-Patch wurde auf
+Hacktribe-Stand zurueckgesetzt (54 Bytes ab 0x103C24, Rest des
+DSP-Bereichs byteweise gleich), dann `--osz-serie alle --osz-sortieren`.
+Ergebnis `TekkForge-ALLES-SYSTEM.VSB` (SHA-256 27ffe374…), liegt als
+`H:\KORG\Hacktribe\System\SYSTEM.VSB` auf der Karte — **das ist ab jetzt
+der Ablageort fuer jede neue Firmware** (Nutzeranweisung); die
+unveraenderte Hacktribe-Datei liegt dort als `SYSTEM_ORI.VSB`.
+
 Was so
 entsteht, sind Varianten der vorhandenen DSP-Programme (andere
 Verstimmung, anderes Ratio, anderer Pegel), keine neuen Klangquellen und

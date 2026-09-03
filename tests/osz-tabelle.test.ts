@@ -15,6 +15,7 @@ import {
   fmParameterZuHalbton,
   fmHalbtonGemessen,
   fmSerieFehlend,
+  sortiereOszTabelle,
   oszStamm,
   FM_STUETZEN,
   oszZaehlerSchreibliste,
@@ -202,6 +203,56 @@ describe("oszTabelle — Firmware", () => {
     if (!t.ok) return;
     expect(leseOszStandAusFirmware(t.bytes)).toEqual({ ok: true, anzahl: 362 });
     expect(decodeOsz(liesOsz(t.bytes, 362))).toMatchObject({ name: "X-SINE +23", programm: 28 });
+  });
+
+  it.skipIf(!fs.existsSync(VSB))("sortieren: FM je Programm −24…+24 in einer Reihe, VPM dahinter, Namen zur Tonhoehe, Abbildung alt → neu", () => {
+    const fw = new Uint8Array(fs.readFileSync(VSB));
+    const neu: { platz: number; bytes: Uint8Array }[] = [];
+    let platz = 275;
+    for (const v of [35, 62, 89, 116]) {
+      const r = fmSerieFehlend(fw, v, 274, neu.map((n) => n.bytes));
+      if (r.ok) for (const e of r.eintraege) neu.push({ platz: platz++, bytes: e.bytes });
+    }
+    const t = setzeOszTabelle(fw, neu);
+    expect(t.ok).toBe(true);
+    if (!t.ok) return;
+    const s = sortiereOszTabelle(t.bytes);
+    expect(s.ok).toBe(true);
+    if (!s.ok) return;
+    expect(s.anzahl).toBe(362);
+    expect(leseOszStandAusFirmware(s.bytes)).toEqual({ ok: true, anzahl: 362 });
+    const name = (p: number) => decodeOsz(liesOsz(s.bytes, p)).name;
+    // Analog bleibt, dann 4 × 49 FM, dann VPM in alter Reihenfolge
+    expect(name(1)).toBe("SAW");
+    expect(name(34)).toBe(decodeOsz(liesOsz(fw, 34)).name);
+    expect([35, 36, 58, 59, 83, 84, 132, 133, 181, 182, 230].map(name)).toEqual(["X-SAW -24", "X-SAW -23", "X-SAW -1", "X-SAW 0", "X-SAW +24", "X-SQUARE -24", "X-SQUARE +24", "X-TRI -24", "X-TRI +24", "X-SINE -24", "X-SINE +24"]);
+    expect(name(231)).toBe(decodeOsz(liesOsz(fw, 143)).name);
+    expect(name(362)).toBe("VPM-SINE 32");
+    // je Programm streng steigende Tonhoehe, jeder Halbton genau einmal
+    for (const start of [35, 84, 133, 182]) {
+      const hs = [];
+      for (let p = start; p < start + 49; p++) hs.push(fmParameterZuHalbton(decodeOsz(liesOsz(s.bytes, p)).parameter));
+      expect(hs).toEqual(Array.from({ length: 49 }, (_, i) => i - 24));
+    }
+    // Hacktribes vertauschte −11/−12 heissen jetzt nach ihrer Tonhoehe (Parameter −48 = −12, −44 = −11)
+    expect(s.umbenannt).toHaveLength(8);
+    expect(s.umbenannt.filter((u) => u.alt === "X-SAW -12" || u.alt === "X-SAW -11").map((u) => `${u.alt}→${u.neu}`).sort()).toEqual(["X-SAW -11→X-SAW -12", "X-SAW -12→X-SAW -11"]);
+    expect(decodeOsz(liesOsz(s.bytes, 47))).toMatchObject({ name: "X-SAW -12", parameter: -48 });
+    expect(decodeOsz(liesOsz(s.bytes, 48))).toMatchObject({ name: "X-SAW -11", parameter: -44 });
+    // Abbildung: alt → neu
+    expect(s.abbildung[35]).toBe(35); // X-SAW -24
+    expect(s.abbildung[36]).toBe(39); // X-SAW -20: nach −24, −23, −22, −21
+    expect(s.abbildung[143]).toBe(231); // erster VPM
+    expect(s.abbildung[274]).toBe(362);
+    expect(s.abbildung[275]).toBe(36); // angehaengtes X-SAW -23
+    expect(new Set(s.abbildung.slice(1)).size).toBe(362);
+    // Nur Namen und Reihenfolge — die Bytes je Eintrag sind bis auf den Namen dieselben
+    const alle = (b: Uint8Array) => Array.from({ length: 362 }, (_, i) => Array.from(liesOsz(b, i + 1).subarray(0x10)).join(","));
+    expect(alle(s.bytes).sort()).toEqual(alle(t.bytes).sort());
+    // Zweimal sortieren aendert nichts mehr
+    const s2 = sortiereOszTabelle(s.bytes);
+    expect(s2.ok && Array.from(s2.bytes)).toEqual(Array.from(s.bytes));
+    expect(s2.ok && s2.umbenannt).toEqual([]);
   });
 
   const STOCK = "G:/IdeaProjects/hacktribe/hacktribe/SYSTEM.VSB";

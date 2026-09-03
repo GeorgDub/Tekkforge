@@ -3,7 +3,12 @@
  *
  *   npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab]
  *                                     [--init-pattern <.e2spat>] [--splash <128x64.pbm>] [--dsp id,id] [--dsp-datei <patch.json>]
- *                                     [--osz-serie X-SAW,X-SINE|alle] [--basis-egal]
+ *                                     [--osz-serie X-SAW,X-SINE|alle] [--osz-sortieren] [--basis-egal]
+ *
+ * `--osz-sortieren` bringt die Tabelle in Reihe: FM je Programm −24…+24
+ * (Hacktribes und angehaengte Eintraege gemischt, Namen nach Tonhoehe), VPM
+ * dahinter. ⚠ Patterns verweisen ueber die Nummer — Abbildung alt → neu liegt
+ * danach als `<ziel>.osz-abbildung.json` daneben.
  *
  * `--osz-serie` haengt je FM-Programm (X-SAW, X-SQUARE, X-TRI, X-SINE) die
  * Halbtoene −24…+24 an, die Hacktribe nicht hat — 22 je Programm, ab Platz
@@ -32,7 +37,7 @@ import { pixelZuSplash, pbmZuPixel } from "../src/core/splash.ts";
 import { leseSammlung, nummerierePlaetze } from "../src/core/sammlung.ts";
 import { decodeFxPreset } from "../src/core/e2FxPreset.ts";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam.ts";
-import { leseOszStandAusFirmware, setzeOszTabelle, liesOsz, decodeOsz, istOszLeer, oszStamm, fmSerieFehlend, OSZ_MAX } from "../src/core/oszTabelle.ts";
+import { leseOszStandAusFirmware, setzeOszTabelle, sortiereOszTabelle, liesOsz, decodeOsz, istOszLeer, oszStamm, fmSerieFehlend, OSZ_MAX } from "../src/core/oszTabelle.ts";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -185,8 +190,24 @@ if (oszSerie) {
   oszBericht = { von: stand.anzahl + 1, bis: platz - 1, n: neu.length, jeProgramm };
   console.log(`Oszillator-Varianten: ${neu.length} auf Platz ${oszBericht.von}–${oszBericht.bis} (${jeProgramm.join(", ")}); Liste bis ${stand.anzahl} → bis ${oszBericht.bis}`);
 }
-if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length && !oszBericht) {
-  console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern, --splash, --dsp noch --osz-serie angegeben.");
+// --osz-sortieren: FM je Programm −24…+24 in einer Reihe (Hacktribes und
+// angehaengte Eintraege gemischt), VPM dahinter. ⚠ Patterns zeigen ueber die
+// Nummer auf ihren Oszillator — die Abbildung alt → neu wird als JSON neben
+// das Ziel gelegt.
+let oszSortierung = null;
+if (flag("osz-sortieren")) {
+  const s = sortiereOszTabelle(r.bytes);
+  if (!s.ok) {
+    console.error(`Sortieren: ${s.reason}`);
+    process.exit(1);
+  }
+  r = { ...r, bytes: s.bytes };
+  oszSortierung = s;
+  const verschoben = s.abbildung.slice(1).filter((n, i) => n !== i + 1).length;
+  console.log(`Oszillator-Tabelle sortiert: ${s.anzahl} Einträge, ${verschoben} Plätze verschoben, ${s.umbenannt.length} umbenannt${s.umbenannt.length ? ` (${s.umbenannt.map((u) => `${u.alt} → ${u.neu}`).join(", ")})` : ""}`);
+}
+if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length && !oszBericht && !oszSortierung) {
+  console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern, --splash, --dsp, --osz-serie noch --osz-sortieren angegeben.");
   process.exit(1);
 }
 
@@ -213,6 +234,25 @@ if (fehl) process.exit(1);
 
 fs.mkdirSync(path.dirname(path.resolve(zielPfad)), { recursive: true });
 fs.writeFileSync(zielPfad, r.bytes);
+if (oszSortierung) {
+  const abb = `${zielPfad}.osz-abbildung.json`;
+  const namen = [];
+  for (let p = 1; p <= oszSortierung.anzahl; p++) namen.push(decodeOsz(liesOsz(r.bytes, p)).name);
+  fs.writeFileSync(
+    abb,
+    JSON.stringify(
+      {
+        hinweis: "Oszillator-Nummern (Anzeige, 1-basiert) vor → nach dem Sortieren; Patterns verweisen über die Nummer.",
+        altNachNeu: Object.fromEntries(oszSortierung.abbildung.map((n, alt) => [alt, n]).filter(([alt]) => alt > 0)),
+        umbenannt: oszSortierung.umbenannt,
+        neueListe: namen,
+      },
+      null,
+      1,
+    ),
+  );
+  console.log(`  Abbildung alt → neu: ${abb}`);
+}
 const geschrieben = r.bericht.geschrieben;
 const arten = ["ifx", "mfx", "groove"].map((a) => [a, geschrieben.filter((g) => g.art === a)]).filter(([, l]) => l.length);
 console.log(`\n${zielPfad}`);
@@ -235,6 +275,10 @@ if (oszBericht) {
   const nach = leseOszStandAusFirmware(r.bytes);
   const namen = [];
   for (let p = oszBericht.von; p <= oszBericht.bis; p++) namen.push(decodeOsz(liesOsz(r.bytes, p)).name);
-  console.log(`  Oszillatoren: ${oszBericht.n} Varianten auf Platz ${oszBericht.von}–${oszBericht.bis}, Beschreiber ${nach.ok ? `zählen ${nach.anzahl}` : `FEHLER: ${nach.reason}`}; ${namen[0]} … ${namen[namen.length - 1]}`);
+  console.log(
+    oszSortierung
+      ? `  Oszillatoren: ${oszBericht.n} Varianten angehängt und einsortiert, Beschreiber ${nach.ok ? `zählen ${nach.anzahl}` : `FEHLER: ${nach.reason}`}; Platz ${oszBericht.von}–${oszBericht.bis} jetzt ${namen[0]} … ${namen[namen.length - 1]}`
+      : `  Oszillatoren: ${oszBericht.n} Varianten auf Platz ${oszBericht.von}–${oszBericht.bis}, Beschreiber ${nach.ok ? `zählen ${nach.anzahl}` : `FEHLER: ${nach.reason}`}; ${namen[0]} … ${namen[namen.length - 1]}`,
+  );
 }
 console.log("\nInstallieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ auf die SD-Karte, dann am Gerät die Update-Funktion.");
