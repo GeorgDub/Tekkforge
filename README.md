@@ -813,9 +813,20 @@ Konsequenz: **„fluechtig ins Geraet" schreibt jetzt zuerst die
 Laufzeitkopie** (nach einer Probe, dass Platz 1 dort der Basis gleicht),
 dann die Tabelle und die Beschreiber; die RAM-Karte kennt sie als
 `oszLaufzeit`. Die **Firmware** braucht nur Tabelle + Beschreiber, weil der
-Start die Kopie selbst anlegt. ⚠ Ob das Display die Plaetze 275/276 nach
-dem Schreiben der Kopie zeigt und spielt, ist der naechste Blick des
-Nutzers.
+Start die Kopie selbst anlegt. ✔ **Am Geraet bestanden (2026-09-03):**
+nach dem Schreiben der Laufzeitkopie stand Platz 275 „X-SAW -3" in der
+Sample-Liste, Nutzer: „klingt richtig". Damit sind Tabellenformat,
+Kennlinie und Anzeigeweg belegt.
+
+Das Skript-Gegenstueck: `npx tsx scripts/make-firmware.mjs --basis
+<Hacktribe.VSB> --ziel <out.VSB> --osz-serie alle` (oder `X-SAW,X-SINE`)
+haengt je FM-Programm die 22 fehlenden Halbtoene an — alle vier ergeben 88
+Varianten auf 275–362, Beschreiber auf 362. Erster Bau:
+`G:\Downloads\TekkForge\Firmware\TekkForge-OSZ88-SYSTEM.VSB` (SHA-256
+397d6109…), gegen die Basis geprueft: genau 88 × 32 Bytes Tabelle plus die
+vier Zellen, sonst nichts. Installation wie immer ueber
+`KORG/electribe sampler/System/SYSTEM.VSB` und die Update-Funktion;
+Rueckweg ist die unveraenderte Hacktribe-Datei.
 
 Was so
 entsteht, sind Varianten der vorhandenen DSP-Programme (andere

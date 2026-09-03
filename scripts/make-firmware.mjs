@@ -2,7 +2,13 @@
  * make-firmware.mjs — eine Sammlung in die Hacktribe-Firmware einbrennen.
  *
  *   npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab]
- *                                     [--init-pattern <.e2spat>] [--splash <128x64.pbm>] [--dsp id,id] [--dsp-datei <patch.json>] [--basis-egal]
+ *                                     [--init-pattern <.e2spat>] [--splash <128x64.pbm>] [--dsp id,id] [--dsp-datei <patch.json>]
+ *                                     [--osz-serie X-SAW,X-SINE|alle] [--basis-egal]
+ *
+ * `--osz-serie` haengt je FM-Programm (X-SAW, X-SQUARE, X-TRI, X-SINE) die
+ * Halbtoene −24…+24 an, die Hacktribe nicht hat — 22 je Programm, ab Platz
+ * 275. Am Geraet belegt (2026-09-03): Platz 275 „X-SAW -3“ erschien in der
+ * Sample-Liste und klang richtig, nachdem die Laufzeitkopie geschrieben war.
  *
  * `--ab` nummeriert die Sammlung vorher wie der ▲/▼-Knopf im Panel neu (je
  * Art eine Reihe ab diesem Platz); Eintraege hinter der Art-Grenze fallen
@@ -26,6 +32,7 @@ import { pixelZuSplash, pbmZuPixel } from "../src/core/splash.ts";
 import { leseSammlung, nummerierePlaetze } from "../src/core/sammlung.ts";
 import { decodeFxPreset } from "../src/core/e2FxPreset.ts";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam.ts";
+import { leseOszStandAusFirmware, setzeOszTabelle, liesOsz, decodeOsz, istOszLeer, oszStamm, fmSerieFehlend, OSZ_MAX } from "../src/core/oszTabelle.ts";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -39,7 +46,7 @@ const zielPfad = arg("ziel");
 const ab = arg("ab");
 const richtung = arg("richtung", "auf");
 if (!basisPfad || !zielPfad) {
-  console.error("Aufruf: --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab] [--init-pattern <.e2spat>] [--splash <.pbm>] [--dsp id,id] [--dsp-datei <patch.json>] [--basis-egal]");
+  console.error("Aufruf: --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab] [--init-pattern <.e2spat>] [--splash <.pbm>] [--dsp id,id] [--dsp-datei <patch.json>] [--osz-serie X-SAW,X-SINE|alle] [--basis-egal]");
   process.exit(1);
 }
 
@@ -127,8 +134,59 @@ for (const p of dspPatches) {
   r = { ...r, bytes: d.bytes };
   console.log(`DSP-Patch: ${p.titel} (${p.status}) — ${d.stellen.map((s) => `${s.bytes} B @ 0x${s.offset.toString(16).toUpperCase()}`).join(", ")} ⚠ experimentell, Hörprobe am Gerät`);
 }
-if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length) {
-  console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern, --splash noch --dsp angegeben.");
+// Oszillator-Varianten: --osz-serie X-SAW,X-SINE oder alle — je FM-Programm
+// die Halbtoene −24…+24 anhaengen, die Hacktribe nicht hat (22 je Programm).
+// Die Firmware braucht nur Tabelle + Beschreiber: der Start legt die
+// Laufzeitkopie selbst an (siehe OSZ_LAUFZEIT_ADDR in core/oszTabelle.ts).
+const oszSerie = arg("osz-serie");
+let oszBericht = null;
+if (oszSerie) {
+  const stand = leseOszStandAusFirmware(r.bytes);
+  if (!stand.ok) {
+    console.error(`Oszillator-Tabelle: ${stand.reason}`);
+    process.exit(1);
+  }
+  const vorlagen = new Map();
+  for (let p = 1; p <= stand.anzahl; p++) {
+    const b = liesOsz(r.bytes, p);
+    if (istOszLeer(b)) continue;
+    const d = decodeOsz(b);
+    if (d.kategorie === 0x0a && !vorlagen.has(d.programm)) vorlagen.set(d.programm, { platz: p, stamm: oszStamm(d.name) });
+  }
+  const bekannt = [...vorlagen.values()].map((v) => v.stamm);
+  const wunsch = oszSerie.toLowerCase() === "alle" ? bekannt : oszSerie.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  const fremd = wunsch.filter((w) => !bekannt.includes(w));
+  if (fremd.length) {
+    console.error(`Unbekanntes FM-Programm „${fremd.join("“, „")}“. In der Basis: ${bekannt.join(", ")} (oder „alle“).`);
+    process.exit(1);
+  }
+  const neu = [];
+  let platz = stand.anzahl + 1;
+  const jeProgramm = [];
+  for (const v of [...vorlagen.values()].filter((v) => wunsch.includes(v.stamm))) {
+    const s = fmSerieFehlend(r.bytes, v.platz, stand.anzahl, neu.map((n) => n.bytes));
+    if (!s.ok) {
+      console.error(`FM-Serie ${v.stamm}: ${s.reason}`);
+      process.exit(1);
+    }
+    for (const e of s.eintraege) neu.push({ platz: platz++, bytes: e.bytes });
+    jeProgramm.push(`${v.stamm} ${s.eintraege.length}`);
+  }
+  if (platz - 1 > OSZ_MAX) {
+    console.error(`${neu.length} Varianten passen nicht: die Tabelle endet bei Platz ${OSZ_MAX}, gebraucht würden ${platz - 1}.`);
+    process.exit(1);
+  }
+  const t = setzeOszTabelle(r.bytes, neu);
+  if (!t.ok) {
+    console.error(`Oszillator-Varianten nicht gesetzt: ${t.reason}`);
+    process.exit(1);
+  }
+  r = { ...r, bytes: t.bytes };
+  oszBericht = { von: stand.anzahl + 1, bis: platz - 1, n: neu.length, jeProgramm };
+  console.log(`Oszillator-Varianten: ${neu.length} auf Platz ${oszBericht.von}–${oszBericht.bis} (${jeProgramm.join(", ")}); Liste bis ${stand.anzahl} → bis ${oszBericht.bis}`);
+}
+if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length && !oszBericht) {
+  console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern, --splash, --dsp noch --osz-serie angegeben.");
   process.exit(1);
 }
 
@@ -171,5 +229,12 @@ if (r.bericht.zaehler.length) {
 }
 if (r.bericht.grooveZaehler.length) {
   console.log(`  Groove-Menü: bis Platz ${r.bericht.grooveMaxVorher + 1} → bis Platz ${r.bericht.grooveMaxNachher + 1} (4 Zähler gesetzt)`);
+}
+if (oszBericht) {
+  // Rueckleseprobe an der fertigen Datei: Beschreiber und Namen der neuen Plaetze.
+  const nach = leseOszStandAusFirmware(r.bytes);
+  const namen = [];
+  for (let p = oszBericht.von; p <= oszBericht.bis; p++) namen.push(decodeOsz(liesOsz(r.bytes, p)).name);
+  console.log(`  Oszillatoren: ${oszBericht.n} Varianten auf Platz ${oszBericht.von}–${oszBericht.bis}, Beschreiber ${nach.ok ? `zählen ${nach.anzahl}` : `FEHLER: ${nach.reason}`}; ${namen[0]} … ${namen[namen.length - 1]}`);
 }
 console.log("\nInstallieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ auf die SD-Karte, dann am Gerät die Update-Funktion.");

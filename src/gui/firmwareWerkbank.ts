@@ -80,6 +80,7 @@ import {
   fmHalbtonZuParameter,
   fmParameterZuHalbton,
   fmHalbtonGemessen,
+  fmSerieFehlend,
   FM_HALBTON_MAX,
   type OszEintragMitPlatz,
 } from "../core/oszTabelle";
@@ -406,21 +407,11 @@ export function fwOszAnhaengen(vorlagePlatz: number, name: string, parameter?: n
 export function fwOszFmSerie(vorlagePlatz: number): { ok: true; anzahl: number } | { ok: false; reason: string } {
   if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
   if (vorlagePlatz < 1 || vorlagePlatz > oszBasisAnzahl) return { ok: false, reason: `Vorlage ${vorlagePlatz} liegt ausserhalb 1…${oszBasisAnzahl}` };
-  const d = decodeOsz(liesOsz(basis, vorlagePlatz));
-  if (d.kategorie !== 0x0a) return { ok: false, reason: `„${d.name}“ ist kein FM-Eintrag — die Serie gilt für X-… (Halbtöne).` };
-  const stamm = d.name.replace(/\s[-+]?\d+$/, "");
-  const vorhanden = new Set<number>();
-  const merke = (b: Uint8Array) => {
-    if (istOszLeer(b)) return;
-    const e = decodeOsz(b);
-    if (e.kategorie === 0x0a && e.programm === d.programm) vorhanden.add(fmParameterZuHalbton(e.parameter));
-  };
-  for (let p = 1; p <= oszBasisAnzahl; p++) merke(liesOsz(basis, p));
-  for (const o of oszNeu) merke(o.bytes);
+  const s = fmSerieFehlend(basis, vorlagePlatz, oszBasisAnzahl, oszNeu.map((o) => o.bytes));
+  if (!s.ok) return s;
   let n = 0;
-  for (let h = -FM_HALBTON_MAX; h <= FM_HALBTON_MAX; h++) {
-    if (vorhanden.has(h)) continue;
-    const r = fwOszAnhaengen(vorlagePlatz, `${stamm} ${h > 0 ? "+" : ""}${h}`, fmHalbtonZuParameter(h));
+  for (const e of s.eintraege) {
+    const r = fwOszAnhaengen(vorlagePlatz, e.name, decodeOsz(e.bytes).parameter);
     if (!r.ok) return n ? { ok: true, anzahl: n } : r;
     n++;
   }

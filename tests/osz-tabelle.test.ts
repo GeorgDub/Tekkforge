@@ -14,6 +14,8 @@ import {
   fmHalbtonZuParameter,
   fmParameterZuHalbton,
   fmHalbtonGemessen,
+  fmSerieFehlend,
+  oszStamm,
   FM_STUETZEN,
   oszZaehlerSchreibliste,
   leseOszStand,
@@ -171,6 +173,37 @@ describe("oszTabelle — Firmware", () => {
   });
 
   const VSB = "G:/IdeaProjects/hacktribe/fertige firmwares/SYSTEM.VSB";
+  it.skipIf(!fs.existsSync(VSB))("FM-Serie an der echten Datei: je X-Programm genau die 22 fehlenden Halbtoene, keine Doppelgaenger, schon Vorgemerktes zaehlt", () => {
+    const fw = new Uint8Array(fs.readFileSync(VSB));
+    expect(oszStamm("X-SAW -24")).toBe("X-SAW");
+    expect(oszStamm("X-SINE +7")).toBe("X-SINE");
+    const s = fmSerieFehlend(fw, 35, 274);
+    expect(s.ok).toBe(true);
+    if (!s.ok) return;
+    expect(s.eintraege.map((e) => e.halbton)).toEqual([-23, -22, -21, -19, -18, -17, -15, -14, -13, -4, -3, 3, 4, 13, 14, 15, 17, 18, 19, 21, 22, 23]);
+    expect(s.eintraege[10]).toMatchObject({ name: "X-SAW -3" });
+    expect(decodeOsz(s.eintraege[10].bytes)).toMatchObject({ name: "X-SAW -3", kategorie: 0x0a, programm: 25, parameter: -19 });
+    // Ein X-SINE-Eintrag (Programm 28) stoert die X-SAW-Serie nicht; ein vorgemerktes X-SAW -3 nimmt den Halbton weg
+    const s2 = fmSerieFehlend(fw, 35, 274, [liesOsz(fw, 116), s.eintraege[10].bytes]);
+    expect(s2.ok && s2.eintraege.map((e) => e.halbton)).not.toContain(-3);
+    expect(s2.ok && s2.eintraege.length).toBe(21);
+    expect(fmSerieFehlend(fw, 1, 274)).toMatchObject({ ok: false, reason: expect.stringMatching(/kein FM/) });
+    expect(fmSerieFehlend(fw, 275, 274)).toMatchObject({ ok: false });
+    // Alle vier Programme zusammen: 88 Varianten, 275–362, in die Tabelle gesetzt und zurueckgelesen
+    const neu: { platz: number; bytes: Uint8Array }[] = [];
+    let platz = 275;
+    for (const v of [35, 62, 89, 116]) {
+      const r = fmSerieFehlend(fw, v, 274, neu.map((n) => n.bytes));
+      if (r.ok) for (const e of r.eintraege) neu.push({ platz: platz++, bytes: e.bytes });
+    }
+    expect(neu).toHaveLength(88);
+    const t = setzeOszTabelle(fw, neu);
+    expect(t.ok).toBe(true);
+    if (!t.ok) return;
+    expect(leseOszStandAusFirmware(t.bytes)).toEqual({ ok: true, anzahl: 362 });
+    expect(decodeOsz(liesOsz(t.bytes, 362))).toMatchObject({ name: "X-SINE +23", programm: 28 });
+  });
+
   const STOCK = "G:/IdeaProjects/hacktribe/hacktribe/SYSTEM.VSB";
   it.skipIf(!fs.existsSync(VSB))("echte Hacktribe-Datei: 274 Eintraege, SAW … VPM-SINE 32, Beschreiber stimmig; 275 anhaengen", () => {
     const fw = new Uint8Array(fs.readFileSync(VSB));

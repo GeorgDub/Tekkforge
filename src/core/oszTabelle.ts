@@ -200,6 +200,45 @@ export const fmParameterZuHalbton = (p: number): number => interpoliere(p, 1);
 /** Hat Hacktribe fuer diesen Halbton einen gemessenen Stuetzpunkt? */
 export const fmHalbtonGemessen = (halbton: number): boolean => FM_STUETZEN.some((s) => s[0] === Math.abs(halbton));
 
+/** „X-SAW -24“ → „X-SAW“: der Name ohne die Halbton-Endung. */
+export const oszStamm = (name: string): string => name.replace(/\s[-+]?\d+$/, "");
+
+export interface FmSerienEintrag {
+  name: string;
+  halbton: number;
+  bytes: Uint8Array;
+}
+
+/**
+ * FM-Serie: alle Halbtoene −24…+24, die es fuer das DSP-Programm der Vorlage
+ * noch nicht gibt — weder in der Tabelle (Plaetze 1…anzahl) noch in `schon`
+ * (schon vorgemerkte Eintraege). Vorhandenes wird am Parameter erkannt,
+ * nicht am Namen. Hacktribe hat je X-Programm 27; es fehlen 22 (±3, ±4,
+ * ±13…±15, ±17…±19, ±21…±23). Die Namen folgen dem Stamm der Vorlage.
+ */
+export function fmSerieFehlend(fw: Uint8Array, vorlagePlatz: number, anzahl: number, schon: readonly Uint8Array[] = []): { ok: true; eintraege: FmSerienEintrag[] } | { ok: false; reason: string } {
+  if (vorlagePlatz < 1 || vorlagePlatz > anzahl) return { ok: false, reason: `Vorlage ${vorlagePlatz} liegt ausserhalb 1…${anzahl}` };
+  const vorlage = liesOsz(fw, vorlagePlatz);
+  const d = decodeOsz(vorlage);
+  if (d.kategorie !== 0x0a) return { ok: false, reason: `„${d.name}“ ist kein FM-Eintrag — die Serie gilt für X-… (Halbtöne).` };
+  const stamm = oszStamm(d.name);
+  const vorhanden = new Set<number>();
+  const merke = (b: Uint8Array) => {
+    if (istOszLeer(b)) return;
+    const e = decodeOsz(b);
+    if (e.kategorie === 0x0a && e.programm === d.programm) vorhanden.add(fmParameterZuHalbton(e.parameter));
+  };
+  for (let p = 1; p <= anzahl; p++) merke(liesOsz(fw, p));
+  for (const b of schon) merke(b);
+  const eintraege: FmSerienEintrag[] = [];
+  for (let h = -FM_HALBTON_MAX; h <= FM_HALBTON_MAX; h++) {
+    if (vorhanden.has(h)) continue;
+    const name = `${stamm} ${h > 0 ? "+" : ""}${h}`;
+    eintraege.push({ name, halbton: h, bytes: oszVariante(vorlage, { name, parameter: fmHalbtonZuParameter(h) }) });
+  }
+  return { ok: true, eintraege };
+}
+
 export interface OszSchreibwert {
   addr: number;
   wert: number;
