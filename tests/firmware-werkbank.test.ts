@@ -20,7 +20,7 @@ import {
   fwOszNeu,
 } from "../src/gui/firmwareWerkbank";
 import { LDR_START, hexZuBytes, type DspPatch } from "../src/core/dspPatch";
-import { OSZ_TABELLE_ADDR, OSZ_LAUFZEIT_ADDR, OSZ_MAX, OSZ_ZEIGER_ADDRS, oszZaehlerSchreibliste, oszOffset, oszVariante, decodeOsz, liesOsz, leseOszStandAusFirmware } from "../src/core/oszTabelle";
+import { OSZ_TABELLE_ADDR, OSZ_LAUFZEIT_ADDR, OSZ_MAX, OSZ_ZEIGER_ADDRS, OSZ_GRENZE_STELLEN, oszZaehlerSchreibliste, oszOffset, oszVariante, decodeOsz, liesOsz, leseOszStandAusFirmware } from "../src/core/oszTabelle";
 import { pmZustand } from "../src/gui/presetManager";
 import { leseBauplan } from "../src/core/bauplan";
 import { textBreite } from "../src/core/pixelSchrift";
@@ -163,6 +163,8 @@ function fakeOszTabelle(fw: Uint8Array): void {
   for (let p = 3; p <= 10; p++) fw.set(oszVariante(OSZ_SAW, { name: `SAW ${p}` }), oszOffset(p));
   for (const a of OSZ_ZEIGER_ADDRS) setU32(fw, dateiOffset(a), OSZ_TABELLE_ADDR);
   for (const z of oszZaehlerSchreibliste(10)) setU32(fw, dateiOffset(z.addr), z.wert);
+  // die drei cmp r0,#272 (Oszillator-Grenze) wie in der Hacktribe-Firmware
+  for (const a of OSZ_GRENZE_STELLEN) setU32(fw, dateiOffset(a), 0xe3500e11);
 }
 
 /** Ein Abbild wie die Hacktribe-Firmware: 49 IFX, 32 MFX, 62 Grooves, Init-Pattern, leeres Startbild, kleine DSP-Kette, Oszillator-Tabelle. */

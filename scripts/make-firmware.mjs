@@ -187,7 +187,8 @@ if (oszSerie) {
     process.exit(1);
   }
   r = { ...r, bytes: t.bytes };
-  oszBericht = { von: stand.anzahl + 1, bis: platz - 1, n: neu.length, jeProgramm };
+  oszBericht = { von: stand.anzahl + 1, bis: platz - 1, n: neu.length, jeProgramm, grenze: t.grenze ?? null };
+  if (t.grenze) console.log(`Oszillator-Grenze im Code: ${t.grenze.vorher} → ${t.grenze.nachher} (3 Vergleiche, sonst liefen Plätze über ${t.grenze.vorher + 1} über den Sample-Pfad)`);
   console.log(`Oszillator-Varianten: ${neu.length} auf Platz ${oszBericht.von}–${oszBericht.bis} (${jeProgramm.join(", ")}); Liste bis ${stand.anzahl} → bis ${oszBericht.bis}`);
 }
 // --osz-sortieren: FM je Programm −24…+24 in einer Reihe (Hacktribes und

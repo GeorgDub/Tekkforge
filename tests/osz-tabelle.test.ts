@@ -6,6 +6,7 @@ import {
   OSZ_MAX,
   OSZ_ZAEHLER,
   OSZ_ZEIGER_ADDRS,
+  OSZ_GRENZE_STELLEN,
   decodeOsz,
   encodeOsz,
   oszVariante,
@@ -55,6 +56,8 @@ function fakeFirmware(anzahl = 20): Uint8Array {
   for (let p = 1; p <= anzahl; p++) fw.set(oszVariante(SAW, { name: `OSZ ${p}`, parameter: p }), oszOffset(p));
   for (const a of OSZ_ZEIGER_ADDRS) setU32(fw, dateiOffset(a), OSZ_TABELLE_ADDR);
   for (const z of oszZaehlerSchreibliste(anzahl)) setU32(fw, dateiOffset(z.addr), z.wert);
+  // die drei cmp r0,#272 (Oszillator-Grenze) wie in der Hacktribe-Firmware
+  for (const a of OSZ_GRENZE_STELLEN) setU32(fw, dateiOffset(a), 0xe3500e11);
   return fw;
 }
 

@@ -393,8 +393,16 @@ export interface OszEintragMitPlatz {
   bytes: Uint8Array;
 }
 
+export interface OszGrenzeBefund {
+  /** Immediate vor/nach dem Patch (272 bei Hacktribe). */
+  vorher: number;
+  nachher: number;
+  /** Adressen, an denen geschrieben wurde. */
+  stellen: number[];
+}
+
 export type OszBauErgebnis =
-  | { ok: true; bytes: Uint8Array; anzahlVorher: number; anzahlNachher: number; geschrieben: number[] }
+  | { ok: true; bytes: Uint8Array; anzahlVorher: number; anzahlNachher: number; geschrieben: number[]; grenze?: OszGrenzeBefund | null }
   | { ok: false; reason: string };
 
 /**
@@ -438,5 +446,95 @@ export function setzeOszTabelle(fw: Uint8Array, eintraege: readonly OszEintragMi
     // Auch ohne Aenderung der Anzahl: die Liste darf keine Luecke haben
     for (let p = 1; p <= ziel; p++) if (!belegt(p)) return { ok: false, reason: `Oszillator-Tabelle: Platz ${p} ist leer — Lücke vor Platz ${ziel}` };
   }
-  return { ok: true, bytes: out, anzahlVorher: stand.anzahl, anzahlNachher: ziel, geschrieben };
+  // Drei Vergleiche im Code trennen Oszillator- von Sample-Plaetzen — sie
+  // muessen mitwachsen, sonst laufen Plaetze ab 274 ueber den Sample-Pfad.
+  const letzter = oszLetzterDspIndex(out, ziel);
+  const g = letzter > 17 ? setzeOszGrenze(out, letzter) : { ok: true as const, befund: null };
+  if (!g.ok) return { ok: false, reason: g.reason };
+  return { ok: true, bytes: out, anzahlVorher: stand.anzahl, anzahlNachher: ziel, geschrieben, grenze: g.befund };
+}
+
+// ─── Oszillator-Grenze im Code ───────────────────────────────────────────────
+//
+// Befund 2026-09-03 (Disassembly Stock ↔ Hacktribe): an drei Stellen steht
+// `cmp r0, #N; bgt …` — N = 17 in Stock (18 Synth-Modelle, dahinter
+// Samples), 272 in Hacktribe (274 Eintraege; 273 ist als ARM-Immediate nicht
+// kodierbar, deshalb 272 — Hacktribes letzter Platz VPM-SINE 32 faellt so schon
+// in den Sample-Pfad). Der Wert ist der 0-basierte Oszillator-Index des Parts
+// (Funktion 0xC0048D74: u16 im Part-Block). N muss der Index des LETZTEN
+// DSP-Eintrags sein (Kategorie Analog/Audio In/FM/VPM) — in Stock 17, weil ab
+// Platz 19 Sample-Namen stehen; bei Hacktribe und allem, was daran haengt,
+// Anzahl−1. Wer die Liste verlaengert, muss N nachziehen, sonst nehmen
+// Plaetze ueber N+1 den Sample-Pfad — bei der sortierten Liste waeren das
+// alle VPM-Modelle ab Platz 274.
+//
+// ARM-Immediates sind 8 Bit, um eine gerade Zahl rotiert; ein passender Wert
+// >= Anzahl−1 wird gesucht (361 → 364 = 0x5B << 2). Die Grenze darf nicht in
+// die User-Samples reichen (Index 500) — bis 421 Plaetze ist Luft.
+
+/** Die drei Vergleichsbefehle (RAM-Adressen), Hacktribe: e3500e11 = cmp r0, #272. */
+export const OSZ_GRENZE_STELLEN: readonly number[] = [0xc00787dc, 0xc0078ab8, 0xc00802e0];
+const CMP_R0_IMM = 0xe3500000;
+
+/** Kleinste als ARM-Immediate kodierbare Zahl >= n; null, wenn keine unter 500 passt. */
+export function armImmediateAb(n: number): { wert: number; kodiert: number } | null {
+  for (let v = Math.max(0, n); v < 500; v++) {
+    for (let rot = 0; rot < 32; rot += 2) {
+      // v == imm8 ror rot  <=>  imm8 == v rol rot
+      const imm = ((v << rot) | (v >>> (32 - rot))) >>> 0;
+      if (rot === 0 ? v <= 0xff : imm <= 0xff && imm !== 0) return { wert: v, kodiert: ((rot / 2) << 8) | imm };
+    }
+  }
+  return null;
+}
+
+/** Immediate eines `cmp r0, #imm`-Worts entschluesseln (null, wenn es kein solches ist). */
+export function cmpR0Immediate(wort: number): number | null {
+  if ((wort & 0xfffff000) >>> 0 !== CMP_R0_IMM) return null;
+  const imm = wort & 0xff;
+  const rot = ((wort >>> 8) & 0xf) * 2;
+  return ((imm >>> rot) | (imm << (32 - rot))) >>> 0;
+}
+
+/** 0-basierter Index des letzten DSP-Eintrags (Analog, Audio In, FM, VPM) unter den Plaetzen 1…anzahl; −1 ohne. */
+export function oszLetzterDspIndex(fw: Uint8Array, anzahl: number): number {
+  for (let p = Math.min(anzahl, OSZ_MAX); p >= 1; p--) {
+    const b = liesOsz(fw, p);
+    if (istOszLeer(b)) continue;
+    if (KATEGORIE_NAMEN[decodeOsz(b).kategorie] !== undefined) return p - 1;
+  }
+  return -1;
+}
+
+/** Was an den drei Stellen stehen muss, damit Index `maxIndex` noch als Oszillator gilt. */
+export function oszGrenzeWert(maxIndex: number): { wert: number; wort: number } | null {
+  const a = armImmediateAb(Math.max(17, maxIndex));
+  return a ? { wert: a.wert, wort: (CMP_R0_IMM | a.kodiert) >>> 0 } : null;
+}
+
+/**
+ * Die drei Vergleiche im Abbild so setzen, dass Index `maxIndex` noch als
+ * Oszillator gilt. Nur wenn dort ein `cmp r0, #…` steht — sonst ist es nicht
+ * die erwartete Firmware und es wird nichts angefasst. Unveraendert, wenn die
+ * vorhandene Grenze schon reicht.
+ */
+export function setzeOszGrenze(fw: Uint8Array, maxIndex: number): { ok: true; befund: OszGrenzeBefund | null } | { ok: false; reason: string } {
+  const woerter = OSZ_GRENZE_STELLEN.map((a) => u32(fw, dateiOffset(a)));
+  const werte = woerter.map(cmpR0Immediate);
+  if (werte.some((w) => w === null)) return { ok: false, reason: `Oszillator-Grenze: an ${hex(OSZ_GRENZE_STELLEN[werte.indexOf(null)])} steht kein cmp r0, #… — fremde Firmware?` };
+  if (new Set(werte).size !== 1) return { ok: false, reason: `Oszillator-Grenze: die drei Stellen sind uneinheitlich (${werte.join(", ")})` };
+  const vorher = werte[0] as number;
+  if (vorher >= maxIndex) return { ok: true, befund: null };
+  const neu = oszGrenzeWert(maxIndex);
+  if (!neu) return { ok: false, reason: `Oszillator-Grenze: fuer Index ${maxIndex} gibt es kein kodierbares Immediate unter 500` };
+  for (const a of OSZ_GRENZE_STELLEN) setU32(fw, dateiOffset(a), neu.wort);
+  return { ok: true, befund: { vorher, nachher: neu.wert, stellen: [...OSZ_GRENZE_STELLEN] } };
+}
+
+/** Fuer den fluechtigen Weg: die drei Woerter als RAM-Schreibliste (leer, wenn nichts zu tun). */
+export function oszGrenzeSchreibliste(aktuell: number, maxIndex: number): { addr: number; wert: number }[] {
+  if (aktuell >= maxIndex) return [];
+  const neu = oszGrenzeWert(maxIndex);
+  if (!neu) return [];
+  return OSZ_GRENZE_STELLEN.map((addr) => ({ addr, wert: neu.wort }));
 }

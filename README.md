@@ -861,6 +861,23 @@ liegt als `<ziel>.osz-abbildung.json` neben der Datei. Der Nutzer hat
 keine Patterns mit FM/VPM-Verweisen, deshalb gibt es (noch) kein
 Umnummerier-Werkzeug fuer `.e2sallpat`.
 
+**Die Oszillator-Grenze im Code (2026-09-03, Disassembly):** an drei
+Stellen (`0xC00787DC`, `0xC0078AB8`, `0xC00802E0`) steht `cmp r0, #N; bgt`
+— N = 17 in Stock (18 Synth-Modelle, dahinter Werks-Samples), 272 in
+Hacktribe (273 ist als ARM-Immediate nicht kodierbar; Hacktribes letzter
+Platz VPM-SINE 32 faellt so schon in den Sample-Pfad). Der Wert ist der
+0-basierte Oszillator-Index des Parts. Wer die Liste verlaengert, muss N
+nachziehen — sonst nehmen alle Plaetze ueber N+1 den Sample-Pfad; bei der
+sortierten Liste waeren das die VPM-Modelle ab Platz 274. `setzeOszTabelle`
+setzt N deshalb auf den Index des letzten DSP-Eintrags (kleinstes
+kodierbares Immediate darueber: 361 → 364 = 0x5B << 2), nur wenn an den
+drei Stellen wirklich ein `cmp r0, #…` steht; „fluechtig ins Geraet"
+schreibt dieselben drei Woerter ins RAM (Code liegt im RAM, wie die
+IFX-Zaehler). Am Geraet (2026-09-03, Treiber): die drei Woerter per
+RAM-Panel von `e3500e11` auf `e3500f5b` gesetzt und zurueckgelesen. Die
+Gesamtfirmware ist damit als **ALLES2** neu gebaut (SHA-256 f3f2bee2…,
+gegen ALLES genau 6 Bytes anders).
+
 **Gesamtfirmware „ALLES" (2026-09-03):** Basis war die `SYSTEM2.VSB` von
 der SD-Karte (IFX bis 96, sechs ersetzte MFX, 18 Tekk-Grooves 63–80,
 Startbild „amphegott" — und, was der Vergleich zeigte, der experimentelle

@@ -64,6 +64,9 @@ import { wendeDspPatchAn, dspPatchStand, leseDspPatchDatei, type DspPatch } from
 import {
   OSZ_TABELLE_ADDR,
   OSZ_LAUFZEIT_ADDR,
+  OSZ_GRENZE_STELLEN,
+  cmpR0Immediate,
+  oszGrenzeSchreibliste,
   OSZ_EINTRAG,
   OSZ_MAX,
   OSZ_ZAEHLER,
@@ -514,8 +517,24 @@ async function oszFluechtig(): Promise<void> {
       return;
     }
   }
+  // Die drei cmp r0,#N im Code (Oszillator ↔ Sample) muessen die Liste abdecken.
+  const g = await hooks.lesen(OSZ_GRENZE_STELLEN[0], 4);
+  const aktuell = g.ok ? cmpR0Immediate((g.bytes[0] | (g.bytes[1] << 8) | (g.bytes[2] << 16) | (g.bytes[3] << 24)) >>> 0) : null;
+  let grenzeText = "";
+  if (aktuell === null) grenzeText = " ⚠ Oszillator-Grenze im Code nicht lesbar/erkannt — Plätze über 273 laufen evtl. über den Sample-Pfad.";
+  else {
+    const liste = oszGrenzeSchreibliste(aktuell, ziel - 1);
+    for (const z of liste) {
+      const b = new Uint8Array([z.wert & 0xff, (z.wert >>> 8) & 0xff, (z.wert >>> 16) & 0xff, (z.wert >>> 24) & 0xff]);
+      if (!(await hooks.schreiben(z.addr, b, "Oszillator-Grenze"))) {
+        setStatus(`Oszillator-Grenze bei ${z.addr.toString(16)} nicht geschrieben — Plätze über ${aktuell + 1} laufen über den Sample-Pfad; aus- und einschalten stellt alles zurück.`);
+        return;
+      }
+    }
+    if (liste.length) grenzeText = ` Grenze im Code ${aktuell} → ${cmpR0Immediate(liste[0].wert)}.`;
+  }
   oszFluechtigBis = ziel;
-  setStatus(`${oszNeu.length} Oszillator-Einträge flüchtig geschrieben (Laufzeitkopie + Tabelle), Liste bis ${ziel}. Am Gerät die Sample-Liste ab ${oszBasisAnzahl + 1} prüfen — gilt bis zum Ausschalten.`);
+  setStatus(`${oszNeu.length} Oszillator-Einträge flüchtig geschrieben (Laufzeitkopie + Tabelle), Liste bis ${ziel}.${grenzeText} Am Gerät die Sample-Liste ab ${oszBasisAnzahl + 1} prüfen — gilt bis zum Ausschalten.`);
 }
 
 // ─── Bauen ───────────────────────────────────────────────────────────────────
