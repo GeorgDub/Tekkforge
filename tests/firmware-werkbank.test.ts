@@ -456,39 +456,43 @@ describe("Firmware-Werkbank", () => {
     expect(fwOszAnhaengen(99, "X", 0)).toMatchObject({ ok: false });
     expect(fwOszAnhaengen(1, "  ", 0)).toMatchObject({ ok: false, reason: expect.stringMatching(/Name/) });
     expect(fwOszAnhaengen(1, "SAW LEISE", undefined, 40)).toEqual({ ok: true, platz: 11 });
-    expect(fwOszAnhaengen(2, "X-SAW -7", -18)).toEqual({ ok: true, platz: 12 });
+    expect(fwOszAnhaengen(2, "X-SAW -7", -28)).toEqual({ ok: true, platz: 12 });
     expect(el("fwOsz").checked).toBe(true);
-    expect(el("fwOszListe").innerHTML).toMatch(/12.*X-SAW -7.*-7 Halbtöne \(-18\)/);
-    // Serie nur fuer FM
+    expect(el("fwOszListe").innerHTML).toMatch(/12.*X-SAW -7.*-7 Halbtöne \(-28\)/);
+    // Serie nur fuer FM — und nur die Halbtoene, die es fuer das Programm noch nicht gibt (−24 in der Basis, −7 vorgemerkt)
     expect(fwOszFmSerie(1)).toMatchObject({ ok: false, reason: expect.stringMatching(/kein FM/) });
-    expect(fwOszFmSerie(2)).toEqual({ ok: true, anzahl: 24 });
-    expect(fwOszNeu()).toHaveLength(26);
-    expect(decodeOsz(fwOszNeu()[2].bytes)).toMatchObject({ name: "X-SAW -23", parameter: -60 });
+    expect(fwOszFmSerie(2)).toEqual({ ok: true, anzahl: 47 });
+    expect(fwOszNeu()).toHaveLength(49);
+    expect(decodeOsz(fwOszNeu()[2].bytes)).toMatchObject({ name: "X-SAW -23", parameter: -62 });
+    expect(el("fwOszListe").innerHTML).toMatch(/X-SAW -23.*-23 Halbtöne \(-62, geschätzt\)/);
+    expect(fwOszNeu().map((o) => decodeOsz(o.bytes).name)).not.toContain("X-SAW -24");
+    expect(fwOszNeu().filter((o) => decodeOsz(o.bytes).name === "X-SAW -7")).toHaveLength(1);
+    expect(fwOszFmSerie(2)).toEqual({ ok: true, anzahl: 0 }); // zweimal aendert nichts
     fwOszEntfernen(0); // SAW LEISE weg → alles rueckt auf
     expect(fwOszNeu()[0]).toMatchObject({ platz: 11 });
     expect(decodeOsz(fwOszNeu()[0].bytes).name).toBe("X-SAW -7");
-    expect(fwOszNeu()).toHaveLength(25);
+    expect(fwOszNeu()).toHaveLength(48);
 
     const r = fwBaueAbbild();
     expect(r.ok, r.ok ? "" : r.reason).toBe(true);
     if (!r.ok) return;
-    expect(leseOszStandAusFirmware(r.bytes)).toEqual({ ok: true, anzahl: 35 });
-    expect(decodeOsz(liesOsz(r.bytes, 11))).toMatchObject({ name: "X-SAW -7", parameter: -18, kategorie: 0x0a, programm: 25 });
-    expect(r.zeilen.join("\n")).toMatch(/Oszillatoren: 25 Variante\(n\) auf 11–35/);
-    expect(r.zeilen.join("\n")).toMatch(/Oszillator-Tabelle: Liste bis 10 → bis 35/);
+    expect(leseOszStandAusFirmware(r.bytes)).toEqual({ ok: true, anzahl: 58 });
+    expect(decodeOsz(liesOsz(r.bytes, 11))).toMatchObject({ name: "X-SAW -7", parameter: -28, kategorie: 0x0a, programm: 25 });
+    expect(r.zeilen.join("\n")).toMatch(/Oszillatoren: 48 Variante\(n\) auf 11–58/);
+    expect(r.zeilen.join("\n")).toMatch(/Oszillator-Tabelle: Liste bis 10 → bis 58/);
 
     // Bauplan hin und zurueck
     const b = fwBauplanText("Osz");
     expect(b.ok).toBe(true);
     if (!b.ok) return;
     const plan = leseBauplan(b.text);
-    expect(plan.osz).toHaveLength(25);
+    expect(plan.osz).toHaveLength(48);
     expect(plan.osz?.[0]).toMatchObject({ platz: 11 });
     initFirmwareWerkbank({ aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }) });
     await basisLaden(fakeFirmware());
     const l = fwBauplanLaden(b.text, "osz.tfbau");
     expect(l.ok).toBe(true);
-    expect(fwOszNeu()).toHaveLength(25);
+    expect(fwOszNeu()).toHaveLength(48);
     expect(el("fwOsz").checked).toBe(true);
 
     // Fluechtig: Eintraege, dann vier Zellen (Bytes, Anzahl, Bytes, Anzahl)

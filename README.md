@@ -759,8 +759,16 @@ keine PCM-Samples, sondern eine **Tabelle in der Firmware** (RAM
 `0xC00D9AB0`, Datei `0xD9BB0`, 32 Bytes je Platz, `core/oszTabelle.ts`):
 Name, Kategorie (0 Analog, 1 Audio In, 0x0A FM, 0x10 VPM), das
 DSP-Programm als u16 (1 SAW … 36 CHIP-TRI 2, 45 Audio In), Zusatzwerte,
-Pegel, ein Vorgabewert und ein signierter Parameter (FM −63…63 fuer
-−24…+24 Halbtoene, VPM 0…32 als Ratio-Stufe). Die **Stock-Firmware** fuehrt
+Pegel, ein Vorgabewert und ein signierter Parameter (FM: Verstimmung in
+Halbtoenen ueber eine **nicht lineare Kennlinie**, VPM 0…32 als
+Ratio-Stufe). Die FM-Kennlinie steht in Hacktribes eigenen Eintraegen, alle
+vier X-Programme 25–28 tragen dieselben Werte: ±1→14, ±2→17, ±5→22, dann 4
+je Halbton bis ±12→48, danach ±16→53, ±20→58, ±24→63 (`FM_STUETZEN`).
+Hacktribe hat 0, ±1, ±2, ±5…±12, ±16, ±20 und ±24 — 27 je Programm — und
+auf der Minusseite −11/−12 vertauscht (−11 ≙ −48, −12 ≙ −44; TekkForge nimmt
+die regulaere Plusseite gespiegelt). Halbtoene ohne Stuetzpunkt (±3, ±4,
+±13…±15, ±17…±19, ±21…±23) werden linear dazwischen geschaetzt und in der
+Liste so markiert; ob sie treffen, entscheidet das Ohr. Die **Stock-Firmware** fuehrt
 in derselben Tabelle 421 Eintraege — ab Platz 19 die Namen der
 Werks-Samples („Hippy", „BigBreaks", …) mit Kategorie und Sample-Index; die
 PCM dazu liegt im Sample-Flash, nicht in der Firmware. Hacktribe hat 19–274
@@ -768,12 +776,14 @@ durch seine DSP-Varianten ersetzt und 275–421 geleert.
 
 Wie viele Plaetze das Geraet anbietet, sagen **zwei Beschreiber im Code**
 (`0xC004E3B8` und `0xC004FAF4`: Zeiger auf die Tabelle, Bytes = n × 32,
-Anzahl n, 999) — Stock 421, Hacktribe 274. Derselbe Mechanismus wie beim
-IFX-Menue. Die Werkbank hat dafuer den Baustein **Oszillator-Varianten**:
-eine Vorlage aus der Basis waehlen (jeder belegte Platz), Name, Parameter
-und Pegel setzen, „anhaengen" — der Eintrag landet auf dem naechsten
-freien Platz ab 275; „FM-Serie" traegt fuer eine X-…-Vorlage die 24
-ungeraden Halbtoene ein (Hacktribe hat nur die geraden). „Firmware bauen"
+Anzahl n, dann 999 bzw. −1116) — Stock 421, Hacktribe 274. Derselbe
+Mechanismus wie beim IFX-Menue. Die Werkbank hat dafuer den Baustein
+**Oszillator-Varianten**: eine Vorlage aus der Basis waehlen (jeder
+belegte Platz), Name, Parameter und Pegel setzen, „anhaengen" — der
+Eintrag landet auf dem naechsten freien Platz ab 275; „FM-Serie" traegt
+fuer eine X-…-Vorlage alle Halbtoene −24…+24 ein, die es fuer ihr
+DSP-Programm noch nicht gibt — erkannt am Parameter, nicht am Namen, auch
+schon vorgemerkte zaehlen; bei Hacktribe sind das 22. „Firmware bauen"
 schreibt die Eintraege und zieht beide Beschreiber nach (`setzeOszTabelle`,
 ohne Luecke, auch kuerzend), der Bauplan nimmt sie mit, und **„fluechtig
 ins Geraet"** schreibt Eintraege und Beschreiber ins RAM — so sieht man
@@ -782,8 +792,13 @@ Ausschalten stellt alles zurueck. Das Skript-Gegenstueck fehlt noch.
 
 Am echten Abbild geprueft (Tests): 274 Eintraege, Beschreiber stimmig,
 Platz 275 anhaengen aendert genau 32 + 16 Bytes; Stock: 421 Eintraege,
-Platz 19 „Hippy" (Kategorie 2, Index 50). ⚠ **Am Geraet noch offen**, ob
-es neue Eintraege annimmt — deshalb erst fluechtig probieren. Was so
+Platz 19 „Hippy" (Kategorie 2, Index 50). **Am Geraet (2026-09-03,
+Treiber):** „X-SAW -3" (−19) und „X-SAW +3" (+19) fluechtig auf 275/276
+geschrieben; das Ruecklesen zeigt beide Eintraege byte-genau und beide
+Beschreiber auf 276 Eintraege / 0x2280 Bytes — der Schreibweg ist damit
+belegt. ⚠ **Noch offen**, ob die Sample-Liste am Geraet die Plaetze
+275/276 auch ANZEIGT und spielt — das sieht nur der Blick aufs Display.
+Was so
 entsteht, sind Varianten der vorhandenen DSP-Programme (andere
 Verstimmung, anderes Ratio, anderer Pegel), keine neuen Klangquellen und
 keine PCM.

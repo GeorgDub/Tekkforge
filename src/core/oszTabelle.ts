@@ -138,9 +138,55 @@ export function oszVariante(vorlage: Uint8Array, aenderung: { name: string; para
   return encodeOsz({ ...v, ...aenderung });
 }
 
-/** FM-Halbtoene ↔ Parameter (hacktribe: −24…+24 Halbtoene auf −63…63). */
-export const fmHalbtonZuParameter = (halbton: number): number => Math.max(-63, Math.min(63, Math.round((halbton * 63) / 24)));
-export const fmParameterZuHalbton = (p: number): number => Math.round((p * 24) / 63);
+/**
+ * FM-Halbtoene ↔ Parameter — Hacktribes Stuetzpunkte, aus dem Abbild gelesen
+ * (2026-09-03; alle vier X-Programme 25–28 tragen dieselben Werte). Die
+ * Kennlinie ist NICHT linear: 1→14, 2→17, 5→22, dann 4 je Halbton bis
+ * 12→48, danach 16→53, 20→58, 24→63. Hacktribe hat auf der Minusseite −11
+ * und −12 vertauscht (−11 ≙ −48, −12 ≙ −44); hier gilt die regulaere
+ * Plusseite gespiegelt. Halbtoene ohne Stuetzpunkt (±3, ±4, ±13–15, ±17–19,
+ * ±21–23) werden linear dazwischen geschaetzt — ob sie treffen, entscheidet
+ * das Ohr am Geraet.
+ */
+export const FM_STUETZEN: readonly (readonly [halbton: number, parameter: number])[] = [
+  [0, 0],
+  [1, 14],
+  [2, 17],
+  [5, 22],
+  [6, 24],
+  [7, 28],
+  [8, 32],
+  [9, 36],
+  [10, 40],
+  [11, 44],
+  [12, 48],
+  [16, 53],
+  [20, 58],
+  [24, 63],
+];
+export const FM_HALBTON_MAX = 24;
+
+function interpoliere(x: number, spalte: 0 | 1): number {
+  const a = Math.min(Math.abs(x), spalte === 0 ? FM_HALBTON_MAX : 63);
+  const andere = spalte === 0 ? 1 : 0;
+  let lo = FM_STUETZEN[0];
+  for (const s of FM_STUETZEN) {
+    if (s[spalte] === a) return Math.sign(x) * s[andere];
+    if (s[spalte] < a) lo = s;
+    else {
+      const t = (a - lo[spalte]) / (s[spalte] - lo[spalte]);
+      return Math.sign(x) * Math.round(lo[andere] + t * (s[andere] - lo[andere]));
+    }
+  }
+  return Math.sign(x) * lo[andere];
+}
+
+/** Halbton (−24…+24) → Parameter; ausserhalb wird auf ±24 begrenzt. */
+export const fmHalbtonZuParameter = (halbton: number): number => interpoliere(halbton, 0);
+/** Parameter (−63…63) → naechster Halbton. */
+export const fmParameterZuHalbton = (p: number): number => interpoliere(p, 1);
+/** Hat Hacktribe fuer diesen Halbton einen gemessenen Stuetzpunkt? */
+export const fmHalbtonGemessen = (halbton: number): boolean => FM_STUETZEN.some((s) => s[0] === Math.abs(halbton));
 
 export interface OszSchreibwert {
   addr: number;

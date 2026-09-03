@@ -13,6 +13,8 @@ import {
   leererOsz,
   fmHalbtonZuParameter,
   fmParameterZuHalbton,
+  fmHalbtonGemessen,
+  FM_STUETZEN,
   oszZaehlerSchreibliste,
   leseOszStand,
   planeOszErweiterung,
@@ -67,13 +69,23 @@ describe("oszTabelle — Eintrag", () => {
     const v = oszVariante(X_SAW_M24, { name: "X-SAW -7", parameter: fmHalbtonZuParameter(-7) });
     const d = decodeOsz(v);
     expect(d.name).toBe("X-SAW -7");
-    expect(d.parameter).toBe(-18);
+    expect(d.parameter).toBe(-28); // Hacktribes Stuetzpunkt, nicht linear
     expect(fmParameterZuHalbton(d.parameter)).toBe(-7);
     // Rest wie die Vorlage
     expect(Array.from(v.subarray(0x10, 0x1c))).toEqual(Array.from(X_SAW_M24.subarray(0x10, 0x1c)));
     expect(fmHalbtonZuParameter(24)).toBe(63);
     expect(fmHalbtonZuParameter(-24)).toBe(-63);
     expect(fmHalbtonZuParameter(99)).toBe(63);
+    // Hacktribes Kennlinie aus dem Abbild: 1→14, 2→17, 5→22, 6…12 → 24…48, 16→53, 20→58
+    expect([1, 2, 5, 6, 11, 12, 16, 20].map(fmHalbtonZuParameter)).toEqual([14, 17, 22, 24, 44, 48, 53, 58]);
+    expect(fmHalbtonZuParameter(0)).toBe(0);
+    // Luecken linear geschaetzt: 3 → 19, 4 → 20, 13 → 49, 23 → 62; Vorzeichen gespiegelt
+    expect([3, 4, 13, 23, -3, -23].map(fmHalbtonZuParameter)).toEqual([19, 20, 49, 62, -19, -62]);
+    expect([3, 4, 13, 23].map(fmHalbtonGemessen)).toEqual([false, false, false, false]);
+    expect(fmHalbtonGemessen(-12)).toBe(true);
+    // Rueckweg: jeder Stuetzpunkt landet auf seinem Halbton, Hacktribes vertauschte −11/−12 auf −12/−11
+    for (const [h, p] of FM_STUETZEN) expect(fmParameterZuHalbton(-p)).toBe(-h);
+    expect([-48, -44, -19, 62, -63].map(fmParameterZuHalbton)).toEqual([-12, -11, -3, 23, -24]);
   });
 
   it("lehnt Unbrauchbares ab: Nicht-ASCII, Parameter ausserhalb, Programm ausserhalb", () => {

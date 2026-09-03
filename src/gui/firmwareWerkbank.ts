@@ -78,6 +78,8 @@ import {
   setzeOszTabelle,
   fmHalbtonZuParameter,
   fmParameterZuHalbton,
+  fmHalbtonGemessen,
+  FM_HALBTON_MAX,
   type OszEintragMitPlatz,
 } from "../core/oszTabelle";
 
@@ -365,7 +367,8 @@ function oszListe(): void {
   el.innerHTML = oszNeu
     .map((o, i) => {
       const d = decodeOsz(o.bytes);
-      const p = d.kategorie === 0x0a ? `${fmParameterZuHalbton(d.parameter)} Halbtöne (${d.parameter})` : `Parameter ${d.parameter}`;
+      const h = fmParameterZuHalbton(d.parameter);
+      const p = d.kategorie === 0x0a ? `${h} Halbtöne (${d.parameter}${fmHalbtonGemessen(h) && fmHalbtonZuParameter(h) === d.parameter ? "" : ", geschätzt"})` : `Parameter ${d.parameter}`;
       return `<div class="sub" style="margin:1px 0;display:flex;gap:6px;align-items:center"><span style="min-width:34px">${o.platz}</span><b>${escapeHtml(d.name)}</b><span style="opacity:.7">${KATEGORIE_NAMEN[d.kategorie] ?? `Kat. ${d.kategorie}`} · Programm ${d.programm} · ${p} · Pegel ${d.pegel}</span><button class="ghost" data-osz-weg="${i}" style="padding:0 6px;font-size:11px" title="Eintrag entfernen">✕</button></div>`;
     })
     .join("");
@@ -391,15 +394,29 @@ export function fwOszAnhaengen(vorlagePlatz: number, name: string, parameter?: n
   return { ok: true, platz };
 }
 
-/** FM-Serie: die ungeraden Halbtoene −23…+23 der Vorlage (Hacktribe hat die geraden). */
+/**
+ * FM-Serie: alle Halbtoene −24…+24, die es fuer das DSP-Programm der Vorlage
+ * noch nicht gibt — weder in der Basis noch schon vorgemerkt. Hacktribe hat
+ * 0, ±1, ±2, ±5…±12, ±16, ±20, ±24; es fehlen 22 (±3, ±4, ±13…±15, ±17…±19,
+ * ±21…±23). Was da ist, wird am Parameter erkannt, nicht am Namen.
+ */
 export function fwOszFmSerie(vorlagePlatz: number): { ok: true; anzahl: number } | { ok: false; reason: string } {
   if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
   if (vorlagePlatz < 1 || vorlagePlatz > oszBasisAnzahl) return { ok: false, reason: `Vorlage ${vorlagePlatz} liegt ausserhalb 1…${oszBasisAnzahl}` };
   const d = decodeOsz(liesOsz(basis, vorlagePlatz));
   if (d.kategorie !== 0x0a) return { ok: false, reason: `„${d.name}“ ist kein FM-Eintrag — die Serie gilt für X-… (Halbtöne).` };
   const stamm = d.name.replace(/\s[-+]?\d+$/, "");
+  const vorhanden = new Set<number>();
+  const merke = (b: Uint8Array) => {
+    if (istOszLeer(b)) return;
+    const e = decodeOsz(b);
+    if (e.kategorie === 0x0a && e.programm === d.programm) vorhanden.add(fmParameterZuHalbton(e.parameter));
+  };
+  for (let p = 1; p <= oszBasisAnzahl; p++) merke(liesOsz(basis, p));
+  for (const o of oszNeu) merke(o.bytes);
   let n = 0;
-  for (let h = -23; h <= 23; h += 2) {
+  for (let h = -FM_HALBTON_MAX; h <= FM_HALBTON_MAX; h++) {
+    if (vorhanden.has(h)) continue;
     const r = fwOszAnhaengen(vorlagePlatz, `${stamm} ${h > 0 ? "+" : ""}${h}`, fmHalbtonZuParameter(h));
     if (!r.ok) return n ? { ok: true, anzahl: n } : r;
     n++;
@@ -434,7 +451,7 @@ function oszVorlageHinweis(): void {
   const p = Number(($("fwOszVorlage") as HTMLSelectElement).value);
   if (!p) return;
   const d = decodeOsz(liesOsz(basis, p));
-  hint.textContent = d.kategorie === 0x0a ? `FM: −63…63 ≙ −24…+24 Halbtöne (Vorlage ${d.parameter})` : d.kategorie === 0x10 ? `VPM: 0…32 Ratio-Stufe (Vorlage ${d.parameter})` : `Vorlage: Parameter ${d.parameter}, Pegel ${d.pegel}, Vorgabe ${d.vorgabe}`;
+  hint.textContent = d.kategorie === 0x0a ? `FM: Hacktribe-Kennlinie, nicht linear — ±1→14, ±2→17, ±5→22, ±6…±12→24…48, ±16→53, ±20→58, ±24→63 (Vorlage ${d.parameter} ≙ ${fmParameterZuHalbton(d.parameter)} Halbtöne)` : d.kategorie === 0x10 ? `VPM: 0…32 Ratio-Stufe (Vorlage ${d.parameter})` : `Vorlage: Parameter ${d.parameter}, Pegel ${d.pegel}, Vorgabe ${d.vorgabe}`;
   if (nameEl && !nameEl.value) nameEl.value = d.name.slice(0, 15);
 }
 
@@ -819,7 +836,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   $("fwOszAnhaengen").addEventListener("click", oszFormularAnhaengen);
   $("fwOszSerie").addEventListener("click", () => {
     const r = fwOszFmSerie(Number(($("fwOszVorlage") as HTMLSelectElement).value));
-    setStatus(r.ok ? `${r.anzahl} FM-Varianten vorgemerkt (ungerade Halbtöne).` : r.reason);
+    setStatus(r.ok ? `${r.anzahl} FM-Varianten vorgemerkt — die Halbtöne −${FM_HALBTON_MAX}…+${FM_HALBTON_MAX}, die für dieses Programm noch fehlten (Zwischenwerte geschätzt).` : r.reason);
   });
   $("fwOszLeeren").addEventListener("click", () => {
     oszNeu = [];
