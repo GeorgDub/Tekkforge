@@ -74,6 +74,7 @@ const abschnitte = [
       "Standard-MIDI-Dateien (.mid, .kar, .rmi) laden und die Spuren den 16 Parts zuordnen.",
       "<b>Audio zu Noten</b> — eine Audiodatei in jedem Format wird transkribiert: einstimmig oder polyphon mit bis zu vier gleichzeitigen Tönen.",
       "<b>KI-Transkription</b> — wahlweise mit basic-pitch (Spotify), einem neuronalen Modell in der eigenen Python-Umgebung: mehrstimmig aus dem Vollmix, die Noten nach Tonlage auf bis zu vier Parts verteilt, Anschlagschwelle einstellbar. Zwölf Sekunden Musik sind in zwei Sekunden Noten.",
+      "<b>Audio zu KORG auf der Kommandozeile</b> — Dateien oder ganze Ordner in jedem Format werden zu einer Sample-Bank; dazu ein Werkzeug, das Pattern-Dateien nach einer umsortierten Oszillator-Liste umnummeriert.",
       "<b>Stimmen auf eigene Parts</b> — die erkannten Linien werden getrennt: tiefste zuerst, jede auf einen eigenen Part. Bass und Melodie lassen sich damit getrennt mit Samples belegen, statt als Akkord auf einem Part zu kleben.",
       "Akkord-Parts werden automatisch auf Poly gestellt, damit das Gerät wirklich alle Töne eines Steps spielt.",
       "Piano Roll zum Prüfen: Noten anklicken nimmt sie aus dem Import, Ziehen verschiebt sie — waagrecht in 16teln, senkrecht in Halbtönen.",

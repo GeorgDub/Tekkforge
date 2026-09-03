@@ -857,9 +857,13 @@ alter Reihenfolge. Analog samt Audio In (1–34) bleibt unangetastet;
 Hacktribes vertauschte −11/−12 heissen danach nach ihrer Tonhoehe (acht
 Umbenennungen). ⚠ **Patterns verweisen ueber die Nummer** — nach dem
 Sortieren zeigen sie auf einen anderen Klang; die Abbildung alt → neu
-liegt als `<ziel>.osz-abbildung.json` neben der Datei. Der Nutzer hat
-keine Patterns mit FM/VPM-Verweisen, deshalb gibt es (noch) kein
-Umnummerier-Werkzeug fuer `.e2sallpat`.
+liegt als `<ziel>.osz-abbildung.json` neben der Datei. Das Werkzeug dazu:
+`npx tsx scripts/remap-osz.mjs --abbildung <…json> --in <.e2spat|.e2sallpat>
+[--out …]` (`core/oszRemap.ts`) nummeriert die Part-Verweise (u16 bei
+Part-Offset 0x08, 0-basiert) um — in .e2spat und in allen PTST-Slots einer
+.e2sallpat; User-Samples 501+ und Verweise ausserhalb der Abbildung bleiben
+stehen, ohne `--out` wird die Datei mit `.vorher`-Sicherung ersetzt. Ablauf
+am Geraet: Pattern Export All → umnummerieren → Import All.
 
 **Die Oszillator-Grenze im Code (2026-09-03, Disassembly):** an drei
 Stellen (`0xC00787DC`, `0xC0078AB8`, `0xC00802E0`) steht `cmp r0, #N; bgt`
@@ -1016,6 +1020,17 @@ hinausgeht und „SawUp Filter" zeigt, ist der naechste Blick — ja: die
 Tabelle traegt ihre Grenze selbst (erster leerer Eintrag) und die 36 Typen
 sind da; nein: die Grenze sitzt woanders (Parameter-Beschreiber), dann
 weiter suchen.
+
+## Audio → KORG auf der Kommandozeile (2026-09-03)
+
+`npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>
+[--ab 501] [--rate 44100|22050]` macht aus beliebigen Audiodateien eine
+Sample-Bank: WAV direkt, alles andere ueber ffmpeg (das aus `imageio-ffmpeg`
+oder eines im PATH), mono, Name aus dem Dateinamen, Nummern fortlaufend,
+Ordner rekursiv. Geprueft mit WMA, Opus, MP3 und WAV → `KONV.all`, vier
+Samples 501–504, Namen und Laengen stimmen beim Rueckwaerts-Lesen. Das ist
+die Kommandozeilen-Fassung des Sample-Pool-Imports, der in der App jetzt
+dieselben Formate nimmt.
 
 ## Sample-Ordner → Bank + Pattern-Set
 
