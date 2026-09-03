@@ -861,6 +861,9 @@ Ergebnis `TekkForge-ALLES-SYSTEM.VSB` (SHA-256 27ffe374…), liegt als
 `H:\KORG\Hacktribe\System\SYSTEM.VSB` auf der Karte — **das ist ab jetzt
 der Ablageort fuer jede neue Firmware** (Nutzeranweisung); die
 unveraenderte Hacktribe-Datei liegt dort als `SYSTEM_ORI.VSB`.
+✔ **Eingebrannt und bestanden (2026-09-03):** Nutzer „firmware ist drauf,
+alles da" — sortierte Liste, IFX 96, Grooves 80, Logo. Alle weiteren
+Bauten (DSP-Tests, Punkt 25) setzen auf dieser Datei auf.
 
 Was so
 entsteht, sind Varianten der vorhandenen DSP-Programme (andere
