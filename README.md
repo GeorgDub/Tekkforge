@@ -556,7 +556,9 @@ gegen sie verglichen und farbig markiert.
 
 Beide Listen zeigen **immer alle Plaetze**, leere als „— leer —" — auch
 bevor etwas geladen ist. Ein **Suchfeld** filtert alle drei Listen nach Name
-oder Algorithmus. Je Zeile: ▲ ▼ verschieben, ⇄ tauschen, ✏
+oder Algorithmus, und Plaetze mit byteweise gleichem Inhalt tragen ein „≡" mit
+den anderen Platznummern — ein Preset zweimal in der Bank ist meist ein
+vergessener Vergleichs-Platz. Je Zeile: ▲ ▼ verschieben, ⇄ tauschen, ✏
 umbenennen, ✎ im Editor oeffnen (Parameter und Zuordnungen aendern, dann „Aus
 Editor uebernehmen…"), ⬇ als Datei sichern, ✕ loeschen (die folgenden Plaetze
 ruecken auf, hinten wird ein Platz frei — Listen-Semantik wie das Menue). Dazu

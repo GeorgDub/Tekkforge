@@ -39,6 +39,7 @@ import {
   alsSammlung,
   hoechsterBelegter,
   luecken,
+  doppelte,
   ramMapFuer,
   type ManagerArt,
   type ManagerZustand,
@@ -127,6 +128,7 @@ function render(): void {
     // Suchfeld: nur Plaetze zeigen, deren Name oder Algorithmus den Text enthaelt; leer = alle.
     const suche = ((document.getElementById("pmSuche") as HTMLInputElement | null)?.value ?? "").trim().toLowerCase();
     let treffer = 0;
+    const dopp = doppelte(zustand, art);
     const zeilen = zustand[art].map((bytes, i) => {
       const platz = i + 1;
       const leer = istLeer(bytes, art);
@@ -135,7 +137,11 @@ function render(): void {
       const rohAlgo = leer ? "" : algorithmusVon(bytes, art);
       if (suche && !`${rohName} ${rohAlgo}`.toLowerCase().includes(suche)) return "";
       treffer++;
-      const name = leer ? `<span style="color:var(--muted)">— leer —</span>` : escapeHtml(rohName);
+      const andere = dopp.get(platz);
+      const doppelMarke = andere
+        ? ` <span title="byteweise gleich wie Platz ${andere.join(", ")}" style="color:var(--accent2);cursor:help">≡</span>`
+        : "";
+      const name = leer ? `<span style="color:var(--muted)">— leer —</span>` : escapeHtml(rohName) + doppelMarke;
       const algo = escapeHtml(rohAlgo);
       const k = (op: string, text: string, title: string) =>
         `<button class="ghost pmOp" data-art="${art}" data-platz="${platz}" data-op="${op}" title="${title}" style="padding:1px 6px;font-size:11px">${text}</button>`;

@@ -18,6 +18,7 @@ import {
   alsSammlung,
   hoechsterBelegter,
   luecken,
+  doppelte,
   type ManagerZustand,
 } from "../src/core/presetManager";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
@@ -170,6 +171,17 @@ describe("presetManager — Unterschiede und Export", () => {
     expect(s[0]).toMatchObject({ art: "ifx", platz: 1, name: "Werk 1" });
     expect(s[49]).toMatchObject({ art: "mfx", platz: 1, name: "Master 1" });
     expect(s.every((e) => e.bytes.length === FX_PRESET_SIZE)).toBe(true);
+  });
+
+  it("doppelte: byteweise gleiche Bloecke finden sich gegenseitig, leere Plaetze zaehlen nicht", () => {
+    const z = ersetzen(ersetzen(geraet(), "ifx", 60, block("Werk 3")), "ifx", 70, block("Werk 3"));
+    const d = doppelte(z, "ifx");
+    expect(d.get(3)).toEqual([60, 70]);
+    expect(d.get(60)).toEqual([3, 70]);
+    expect(d.get(70)).toEqual([3, 60]);
+    expect(d.has(1)).toBe(false);
+    expect(d.has(80)).toBe(false); // leer
+    expect(doppelte(geraet(), "mfx").size).toBe(0);
   });
 
   it("ersetzen mit einem leeren Groove-Block laesst den Platz leer (kein Phantom)", () => {

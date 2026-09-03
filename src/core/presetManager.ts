@@ -294,6 +294,29 @@ export function alsSammlung(z: ManagerZustand): SammlungsEintrag[] {
   return out;
 }
 
+/**
+ * Doppelte Inhalte einer Art: Platz → die anderen Plaetze mit byteweise
+ * demselben Block (leere Plaetze zaehlen nicht). Ein Preset zweimal in der
+ * Bank ist selten Absicht — meistens ein vergessener Vergleichs-Platz.
+ */
+export function doppelte(z: ManagerZustand, art: ManagerArt): Map<number, number[]> {
+  const gruppen = new Map<string, number[]>();
+  z[art].forEach((bytes, i) => {
+    if (istLeer(bytes, art)) return;
+    let key = "";
+    for (let k = 0; k < bytes.length; k++) key += String.fromCharCode(bytes[k]);
+    const l = gruppen.get(key) ?? [];
+    l.push(i + 1);
+    gruppen.set(key, l);
+  });
+  const out = new Map<number, number[]>();
+  for (const plaetze of gruppen.values()) {
+    if (plaetze.length < 2) continue;
+    for (const p of plaetze) out.set(p, plaetze.filter((q) => q !== p));
+  }
+  return out;
+}
+
 /** Fuer die GUI: die RAM-Karte je Art. */
 export function ramMapFuer(art: ManagerArt) {
   return E2_RAM_MAP.find((e) => e.key === mapKey(art))!;
