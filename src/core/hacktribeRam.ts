@@ -127,6 +127,18 @@ export const E2_RAM_MAP: readonly RamMapEntry[] = [
     note: "Was am Geraet als Sample 001–274 steht: Name, Kategorie, DSP-Programm, Parameter. Plaetze 275–421 bei Hacktribe frei.",
   },
   {
+    key: "oszLaufzeit",
+    label: "Oszillator-Tabelle, Laufzeitkopie (Platz 1–999)",
+    base: 0xc047b08c,
+    stride: 32,
+    // Befund 2026-09-03 am Geraet: die Startroutine bei 0xC004E324 kopiert die
+    // Tabelle hierher und legt ab „Anzahl“ Sample-Eintraege an („Sample275“,
+    // Kategorie 17). Die Anzeige liest DIESE Kopie — nicht 0xC00D9AB0.
+    count: 999,
+    size: 32,
+    note: "Die Kopie, die das Geraet beim Start anlegt und tatsaechlich anzeigt. Ab Platz 275 bei Hacktribe „Sample275“ …; ein Oszillator-Eintrag wird erst hier sichtbar.",
+  },
+  {
     key: "ifxPreset",
     label: "IFX-Preset",
     base: 0xc00a80f0,

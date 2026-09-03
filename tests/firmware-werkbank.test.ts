@@ -20,7 +20,7 @@ import {
   fwOszNeu,
 } from "../src/gui/firmwareWerkbank";
 import { LDR_START, hexZuBytes, type DspPatch } from "../src/core/dspPatch";
-import { OSZ_TABELLE_ADDR, OSZ_MAX, OSZ_ZEIGER_ADDRS, oszZaehlerSchreibliste, oszOffset, oszVariante, decodeOsz, liesOsz, leseOszStandAusFirmware } from "../src/core/oszTabelle";
+import { OSZ_TABELLE_ADDR, OSZ_LAUFZEIT_ADDR, OSZ_MAX, OSZ_ZEIGER_ADDRS, oszZaehlerSchreibliste, oszOffset, oszVariante, decodeOsz, liesOsz, leseOszStandAusFirmware } from "../src/core/oszTabelle";
 import { pmZustand } from "../src/gui/presetManager";
 import { leseBauplan } from "../src/core/bauplan";
 import { textBreite } from "../src/core/pixelSchrift";
@@ -495,10 +495,18 @@ describe("Firmware-Werkbank", () => {
     expect(fwOszNeu()).toHaveLength(48);
     expect(el("fwOsz").checked).toBe(true);
 
-    // Fluechtig: Eintraege, dann vier Zellen (Bytes, Anzahl, Bytes, Anzahl)
+    // Fluechtig: erst die Laufzeitkopie (die Anzeige liest sie), dann die Tabelle im Abbild, dann vier Zellen (Bytes, Anzahl, Bytes, Anzahl).
+    // Das „Geraet“ liefert die Laufzeitkopie aus derselben Tabelle wie das Abbild — so, wie der Start sie anlegt.
+    let laufzeitKopie = (addr: number, len: number): Uint8Array => {
+      const o = dateiOffset(OSZ_TABELLE_ADDR + (addr - OSZ_LAUFZEIT_ADDR));
+      return fw.slice(o, o + len);
+    };
     initFirmwareWerkbank({
       aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }),
-      lesen: async (addr, len) => ({ ok: true as const, bytes: fw.slice(dateiOffset(addr), dateiOffset(addr) + len) }),
+      lesen: async (addr, len) => ({
+        ok: true as const,
+        bytes: addr >= OSZ_LAUFZEIT_ADDR && addr < OSZ_LAUFZEIT_ADDR + OSZ_MAX * 32 ? laufzeitKopie(addr, len) : fw.slice(dateiOffset(addr), dateiOffset(addr) + len),
+      }),
       schreiben: async (addr, bytes) => {
         schreibungen.push({ addr, bytes: Array.from(bytes) });
         return true;
@@ -510,11 +518,23 @@ describe("Firmware-Werkbank", () => {
     await warte();
     await warte();
     // Der DOM-Stub behaelt die Klick-Handler frueherer Inits — deshalb nach Adresse pruefen, nicht nach Reihenfolge der Laeufe.
-    expect([...new Set(schreibungen.map((s) => s.addr))]).toEqual([OSZ_TABELLE_ADDR + 10 * 32, 0xc004e3bc, 0xc004e3c0, 0xc004faf8, 0xc004fafc]);
+    expect([...new Set(schreibungen.map((s) => s.addr))]).toEqual([OSZ_LAUFZEIT_ADDR + 10 * 32, OSZ_TABELLE_ADDR + 10 * 32, 0xc004e3bc, 0xc004e3c0, 0xc004faf8, 0xc004fafc]);
     const nachAddr = new Map(schreibungen.map((s) => [s.addr, s.bytes]));
     expect(nachAddr.get(0xc004e3bc)).toEqual([(11 * 32) & 0xff, (11 * 32) >> 8, 0, 0]);
     expect(nachAddr.get(0xc004e3c0)).toEqual([11, 0, 0, 0]);
     expect(nachAddr.get(OSZ_TABELLE_ADDR + 10 * 32)?.slice(0, 8)).toEqual(Array.from(new TextEncoder().encode("X-SAW -1")));
+    expect(nachAddr.get(OSZ_LAUFZEIT_ADDR + 10 * 32)).toEqual(nachAddr.get(OSZ_TABELLE_ADDR + 10 * 32));
+
+    // Passt die Laufzeitkopie nicht zur Basis (Platz 1 dort heisst anders), wird nichts geschrieben.
+    schreibungen.length = 0;
+    // basisLaden leert die Vormerkliste, sobald der Hash fertig ist — deshalb hier neu vormerken.
+    expect(fwOszAnhaengen(2, "X-SAW -1", -3)).toMatchObject({ ok: true });
+    laufzeitKopie = () => oszVariante(OSZ_SAW, { name: "FREMD" });
+    el("fwOszGeraet").feuere("click");
+    await warte();
+    await warte();
+    expect(schreibungen).toEqual([]);
+    expect(el("fwStatus").textContent).toMatch(/Laufzeitkopie.*FREMD.*nichts geschrieben/);
     // (Die Statuszeile ist hier nicht belastbar: basisLaden setzt sie nach dem asynchronen Hash noch einmal.)
   });
 

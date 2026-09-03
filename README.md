@@ -792,12 +792,31 @@ Ausschalten stellt alles zurueck. Das Skript-Gegenstueck fehlt noch.
 
 Am echten Abbild geprueft (Tests): 274 Eintraege, Beschreiber stimmig,
 Platz 275 anhaengen aendert genau 32 + 16 Bytes; Stock: 421 Eintraege,
-Platz 19 „Hippy" (Kategorie 2, Index 50). **Am Geraet (2026-09-03,
-Treiber):** „X-SAW -3" (−19) und „X-SAW +3" (+19) fluechtig auf 275/276
-geschrieben; das Ruecklesen zeigt beide Eintraege byte-genau und beide
-Beschreiber auf 276 Eintraege / 0x2280 Bytes — der Schreibweg ist damit
-belegt. ⚠ **Noch offen**, ob die Sample-Liste am Geraet die Plaetze
-275/276 auch ANZEIGT und spielt — das sieht nur der Blick aufs Display.
+Platz 19 „Hippy" (Kategorie 2, Index 50).
+
+**Am Geraet (2026-09-03, Treiber) — und der Irrtum dahinter.** „X-SAW -3"
+(−19) und „X-SAW +3" (+19) fluechtig auf 275/276 in die Tabelle
+geschrieben, Beschreiber auf 276, Ruecklesen byte-genau — und das Display
+zeigte Platz 275 trotzdem nicht (Nutzerbefund). Ursache im Disassembly
+(ARM, `arm-none-eabi-objdump`): die Beschreiber sind der Literal-Pool der
+Startroutine bei `0xC004E324`. Die kopiert beim Einschalten die Tabelle
+(so viele Bytes, wie der Beschreiber sagt) nach **`0xC047B08C`** — eine
+**Laufzeitkopie** — und legt fuer die Plaetze ab „Anzahl" bis 998 ueber
+`0xC004DF90` Sample-Eintraege an („Sample275", Kategorie 17, Programm =
+Platz + 50, Pegel 127). Die Anzeige liest diese Kopie; die Tabelle im
+Abbild wird nach dem Start nicht mehr angefasst. Am Geraet stand in der
+Kopie auf 275 genau „Sample275" (`53 61 6D 70 6C 65 32 37 35 … 11 00 44 01`).
+Die Nebenstrukturen je Platz (`0xC0350644` + n·8, `0xC035F06C` + n·16,
+`0xC036AD88` + n·0x45C) sind fuer Oszillator- und Sample-Plaetze gleich
+initialisiert — die 32-Byte-Kopie ist die entscheidende Stelle.
+Konsequenz: **„fluechtig ins Geraet" schreibt jetzt zuerst die
+Laufzeitkopie** (nach einer Probe, dass Platz 1 dort der Basis gleicht),
+dann die Tabelle und die Beschreiber; die RAM-Karte kennt sie als
+`oszLaufzeit`. Die **Firmware** braucht nur Tabelle + Beschreiber, weil der
+Start die Kopie selbst anlegt. ⚠ Ob das Display die Plaetze 275/276 nach
+dem Schreiben der Kopie zeigt und spielt, ist der naechste Blick des
+Nutzers.
+
 Was so
 entsteht, sind Varianten der vorhandenen DSP-Programme (andere
 Verstimmung, anderes Ratio, anderer Pegel), keine neuen Klangquellen und

@@ -63,6 +63,7 @@ import { DSP_PATCH_REGISTER } from "../core/dspPatchRegister";
 import { wendeDspPatchAn, dspPatchStand, leseDspPatchDatei, type DspPatch } from "../core/dspPatch";
 import {
   OSZ_TABELLE_ADDR,
+  OSZ_LAUFZEIT_ADDR,
   OSZ_EINTRAG,
   OSZ_MAX,
   OSZ_ZAEHLER,
@@ -343,6 +344,8 @@ async function dspLaden(f: File): Promise<void> {
 // ─── Oszillator-Tabelle ──────────────────────────────────────────────────────
 
 const oszNaechsterPlatz = (): number => oszBasisAnzahl + oszNeu.length + 1;
+/** Bis zu welchem Platz der letzte fluechtige Lauf die Beschreiber am Geraet gesetzt hat (0 = keiner). */
+let oszFluechtigBis = 0;
 
 function oszVorlagenFuellen(): void {
   const sel = document.getElementById("fwOszVorlage") as HTMLSelectElement | null;
@@ -488,12 +491,25 @@ async function oszFluechtig(): Promise<void> {
     setStatus(`Gerät: ${stand.reason} — nichts geschrieben.`);
     return;
   }
-  if (stand.anzahl !== oszBasisAnzahl) {
+  // Nach einem fluechtigen Lauf zaehlt das Geraet schon bis zum zuletzt
+  // geschriebenen Platz — das ist kein Widerspruch zur Basis.
+  if (stand.anzahl !== oszBasisAnzahl && stand.anzahl !== oszFluechtigBis) {
     setStatus(`Das Gerät zählt ${stand.anzahl} Einträge, die Basis ${oszBasisAnzahl} — die Plätze passen nicht. Erst dieselbe Firmware als Basis laden.`);
     return;
   }
+  // Die Anzeige liest nicht die Tabelle im Abbild, sondern die Kopie, die der
+  // Start nach OSZ_LAUFZEIT_ADDR legt. Probe, dass sie dort liegt: Platz 1
+  // muss der Basis gleichen.
+  if (!basis) return;
+  const probe = await hooks.lesen(OSZ_LAUFZEIT_ADDR, OSZ_EINTRAG);
+  const erster = liesOsz(basis, 1);
+  if (!probe.ok || probe.bytes.length !== OSZ_EINTRAG || !probe.bytes.every((b, i) => b === erster[i])) {
+    setStatus(`Laufzeitkopie bei 0x${OSZ_LAUFZEIT_ADDR.toString(16).toUpperCase()} passt nicht zur Basis (${probe.ok ? `Platz 1 dort: „${decodeOsz(probe.bytes).name}“` : probe.reason}) — nichts geschrieben.`);
+    return;
+  }
   for (const o of oszNeu) {
-    const ok = await hooks.schreiben(OSZ_TABELLE_ADDR + (o.platz - 1) * OSZ_EINTRAG, o.bytes, `Oszillator ${o.platz}`);
+    const laufzeit = await hooks.schreiben(OSZ_LAUFZEIT_ADDR + (o.platz - 1) * OSZ_EINTRAG, o.bytes, `Oszillator ${o.platz} (Laufzeitkopie)`);
+    const ok = laufzeit && (await hooks.schreiben(OSZ_TABELLE_ADDR + (o.platz - 1) * OSZ_EINTRAG, o.bytes, `Oszillator ${o.platz}`));
     if (!ok) {
       setStatus(`Platz ${o.platz} nicht geschrieben — abgebrochen, Beschreiber unverändert.`);
       return;
@@ -507,7 +523,8 @@ async function oszFluechtig(): Promise<void> {
       return;
     }
   }
-  setStatus(`${oszNeu.length} Oszillator-Einträge flüchtig geschrieben, Liste bis ${ziel}. Am Gerät die Sample-Liste ab 275 prüfen — gilt bis zum Ausschalten.`);
+  oszFluechtigBis = ziel;
+  setStatus(`${oszNeu.length} Oszillator-Einträge flüchtig geschrieben (Laufzeitkopie + Tabelle), Liste bis ${ziel}. Am Gerät die Sample-Liste ab ${oszBasisAnzahl + 1} prüfen — gilt bis zum Ausschalten.`);
 }
 
 // ─── Bauen ───────────────────────────────────────────────────────────────────

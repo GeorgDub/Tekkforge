@@ -33,6 +33,18 @@
 import { dateiOffset, VSB_GROESSE } from "./firmwareBau";
 
 export const OSZ_TABELLE_ADDR = 0xc00d9ab0;
+/**
+ * Die Laufzeitkopie. Beim Start kopiert die Routine bei 0xC004E324 die
+ * Tabelle (Bytes aus dem Beschreiber) nach 0xC047B08C und legt fuer die
+ * Plaetze ab „Anzahl“ bis 998 Sample-Eintraege an („Sample275“, Kategorie
+ * 17, Programm = Platz + 50). Die Anzeige liest DIESE Kopie — ein Eintrag,
+ * der nur im Abbild bei 0xC00D9AB0 steht, bleibt am Geraet unsichtbar
+ * (Befund 2026-09-03: Beschreiber und Tabelle geschrieben, Display zeigte
+ * Platz 275 nicht; in der Kopie stand „Sample275“). Fluechtig muss also
+ * hierher geschrieben werden; die Firmware braucht nur Tabelle + Beschreiber,
+ * weil der Start die Kopie selbst anlegt.
+ */
+export const OSZ_LAUFZEIT_ADDR = 0xc047b08c;
 export const OSZ_EINTRAG = 32;
 /** Plaetze, die der Stock-Beschreiber kennt — dahinter liegen andere Daten. */
 export const OSZ_MAX = 421;
