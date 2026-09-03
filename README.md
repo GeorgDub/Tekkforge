@@ -7,14 +7,17 @@ Werkzeuge in einer App (Icon-Leiste links, Start-Dashboard mit Statuskacheln,
 Themes unter „Einstellungen"):
 
 1. **Pattern-Editor** — E2-Sampler-Patterns von Grund auf am PC bauen (ohne ESX-Datei):
-   16-Part-Grid × 16/32/64 Steps, Noten/Velocity/Gate pro Step, eigene WAV-Samples
-   importieren und den Parts zuweisen, vorhören, exportieren als `.e2spat` (Einzel-Pattern)
+   16-Part-Grid × 16/32/64 Steps, Noten/Velocity/Gate pro Step, eigene Samples in
+   jedem Audioformat importieren und den Parts zuweisen — oder einen Synth-Oszillator
+   der Firmware (mit Namen) —, vorhören, exportieren als `.e2spat` (Einzel-Pattern)
    oder `.e2sallpat` + `.all` (Bank + Sample-Bank). Der Sample-Pool ist eine kleine
    Bibliothek: Filter Alle/Factory/User, Suche, +12-dB-Flag, Speicherbalken (~24 MB).
 2. **ESX-Converter** — ein ESX-1-All-Backup (`.esx`) in importfertige E2-Dateien wandeln.
-3. **MIDI zu Korg** — SMF-Dateien (.mid/.kar/.rmi) ODER Audio laden (Audio wird
-   einstimmig zu Noten transkribiert), Spuren den Parts zuordnen, Noten im Piano
-   Roll sichten/abwaehlen/verschieben, als 4-Takt-Patterns in den Editor uebernehmen.
+3. **MIDI zu Korg** — SMF-Dateien (.mid/.kar/.rmi) ODER Audio in jedem Format laden
+   und transkribieren: einstimmig im Programm, mehrstimmig mit basic-pitch (KI,
+   Python-Umgebung) oder als Drums (Anschlaege → Kick/Snare/Hats); Spuren den Parts
+   zuordnen, Noten im Piano Roll sichten/abwaehlen/verschieben, als 4-Takt-Patterns
+   in den Editor uebernehmen.
 4. **Generator** — Bank + Patterns aus einem Sample-Ordner oder direkt aus einem Lied
    (Demucs-Stems, Drum-Schnitt, Tonart/Camelot-Anzeige); Lieder auch per
    YouTube-/SoundCloud-Link holen (braucht `pip install yt-dlp imageio-ffmpeg`).
@@ -1078,6 +1081,20 @@ Platz (⚠), Zahl der Modulationstypen. So sieht man ohne Display, welcher
 Stand im Geraet steckt und ob fluechtige Aenderungen noch da sind. Am
 Geraet (2026-09-03 nachts): 362 Oszillatoren byteweise wie ALLES2, Grenze
 364, 132 Modulationstypen (96 der Basis + 36 fluechtige).
+
+## Vorhoeren mit Synth-Oszillatoren (2026-09-03)
+
+Zeigt ein Part auf einen Oszillator der Firmware (1…362), bleibt das
+Vorhoeren nicht mehr stumm: `core/oszSynth.ts` liefert einen Ersatzklang
+nach Name und Kategorie der Oszillator-Liste — Saegezahn, Puls, Dreieck,
+Sinus, UNI/DUAL verstimmt, OCT mit Oktave, SYNC hart synchronisiert, RING
+ringmoduliert, CHIP als schmaler Puls, NOISE gefiltert, X-… als
+Zwei-Operator-FM mit dem Halbton aus dem Namen, VPM als Phasenmodulation
+mit dem Ratio aus dem Namen; Audio In bleibt still. Alles auf C4 und 2 s,
+die Tonhoehe kommt wie bei Samples ueber die Abspielrate. Das ist eine grobe
+Naeherung, kein Nachbau der Engine — es geht darum, Lage und Rhythmus zu
+hoeren. Sowohl der Spieler im Fenster als auch „als WAV ausrechnen" nutzen
+sie; ein Pool-Sample derselben Nummer hat Vorrang.
 
 ## Sample-Ordner → Bank + Pattern-Set
 

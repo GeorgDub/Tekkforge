@@ -8,6 +8,8 @@
 
 import type { EditorPattern, PoolSample } from "../core/editorModel";
 import { stepDauer, stimmen, type Stimme } from "../core/patternStimmen";
+import { oszSample } from "../core/oszSynth";
+import { istOszillatorNummer } from "../core/oszNamen";
 
 const LOOKAHEAD_S = 0.12;
 const TICK_MS = 30;
@@ -44,6 +46,16 @@ export class PreviewPlayer {
       const buf = this.ctx.createBuffer(1, Math.max(1, s.pcm.length), s.sampleRate);
       buf.getChannelData(0).set(s.pcm);
       this.buffers.set(s.number, buf);
+    }
+    // Synth-Oszillatoren der Firmware (1…362) haben kein PCM — der Ersatzklang aus oszSynth springt ein.
+    for (const part of pattern.parts) {
+      const n = part.sampleNumber;
+      if (!istOszillatorNummer(n) || this.buffers.has(n)) continue;
+      const o = oszSample(n);
+      if (!o) continue;
+      const buf = this.ctx.createBuffer(1, Math.max(1, o.pcm.length), o.sampleRate);
+      buf.getChannelData(0).set(o.pcm);
+      this.buffers.set(n, buf);
     }
     this.stimmenAb.clear();
     for (const v of stimmen(pattern)) {

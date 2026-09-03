@@ -17,6 +17,8 @@
 
 import type { EditorPattern, PoolSample } from "./editorModel";
 import { stepDauer, stimmen } from "./patternStimmen";
+import { oszSample } from "./oszSynth";
+import { istOszillatorNummer } from "./oszNamen";
 
 export interface RenderErgebnis {
   /** Ineinander verschraenkt: L, R, L, R … */
@@ -59,7 +61,8 @@ export function rendere(
 
   for (let d = 0; d < durchgaenge; d++) {
     for (const v of stimmenListe) {
-      const s = nachNummer.get(v.sampleNumber);
+      // Synth-Oszillatoren (1…362) haben kein PCM im Pool — dafuer springt der Ersatzklang ein.
+      const s = nachNummer.get(v.sampleNumber) ?? (istOszillatorNummer(v.sampleNumber) ? oszSample(v.sampleNumber) : undefined);
       // Ein Part kann auf eine Nummer zeigen, die es im Pool nicht (mehr) gibt.
       // Dann bleibt er still, statt den ganzen Lauf abzubrechen.
       if (!s || s.pcm.length === 0) continue;
