@@ -33,9 +33,19 @@
  *     jeweils mit 0. Das Geraet setzt beim Laden ueber SysEx ALLES ab Typ 73
  *     (Anzeige) auf 1 zurueck — auch Hacktribes Sinus-Typen. Eigene Typen
  *     (und Hacktribes) lassen sich also nur am Geraet per Regler setzen; ob
- *     der SD-Pattern-Import denselben Lader nimmt, ist offen. Die Stelle, die
- *     zurueckstellt, ist noch nicht gefunden (keine 0x47-Grenztabelle im
- *     Abbild, die vier cmp #71 schreiben nicht ins Pattern).
+ *     der SD-Pattern-Import denselben Lader nimmt, ist offen. Wer
+ *     zurueckstellt (Befund 2026-09-04): die Grenze 72 steckt nicht in EINER
+ *     Tabelle, sondern in ~15 `cmp #71`-Stellen (0xC000B6B0, 0xC000C380,
+ *     0xC000C52C/5A0/620, 0xC00402F8, 0xC0048E80, 0xC0049BA0, 0xC004A0D8,
+ *     0xC0098D14, 0xC00994DC, 0xC0099558/584, 0xC00995D0, 0xC0099614,
+ *     0xC00A1954/19E4) plus `cmp #72` bei 0xC0072068 — der Pattern-Lader
+ *     (Schleife ueber 16 Parts bei 0xC004AA34) holt den Typ ueber den Getter
+ *     0xC0048E70, der ihn bei > 71 auf 0 setzt, und schreibt ihn so zurueck.
+ *     Dazu zwei Felder je Part von 72 × 2 Bytes (Basis 0xC06924DD/0xC069256D,
+ *     Stride 0x90). Mehr als 72 Typen richtig freizuschalten heisst: alle
+ *     Stellen auf N setzen, die Felder auf 16 × 2N Bytes verlegen (frei waere
+ *     0xC01A3000+), Init-Kopierer 0xC0099458 anpassen — ein eigenes,
+ *     hoerbar zu pruefendes Vorhaben, nicht Teil dieser Fassung.
  *
  * Eigene Typen entstehen als KOMBINATIONEN vorhandener: Wellenform und
  * BPM-Flags sind getrennte Bytes, also gibt es zu jedem BPM-Typ (SawUpB,
