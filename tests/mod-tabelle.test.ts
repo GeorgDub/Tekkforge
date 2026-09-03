@@ -56,7 +56,7 @@ describe("modTabelle — Eintraege", () => {
     const fw = new Uint8Array(fs.readFileSync(VSB));
     const t = liesModTabelle(fw);
     expect(t).toHaveLength(96);
-    expect(t.map((b) => modName(b).replace(/ Osc$/, " OSC"))).toEqual([...MOD_TYPEN]);
+    expect(t.map((b) => modName(b).replace(/ Osc$/, " OSC"))).toEqual(MOD_TYPEN.slice(0, 96));
     expect(decodeMod(t[0])).toMatchObject({ name: "EG+ Filter", ziel: 3 });
     expect(decodeMod(t[36])).toMatchObject({ name: "SawUpB Filter", welle: 0, bpm: true, ziel: 3 });
     expect(decodeMod(t[37])).toMatchObject({ name: "SawUpB Pitch", depthMin: -63, depthMax: 0 }); // „Up“ bei Pitch: Hacktribe-Bereich, wie er ist

@@ -17,11 +17,14 @@
 export const MOD_QUELLEN_STOCK = ["EG+", "EG+ BPM", "EG-", "EG- BPM", "LFOTri", "LFOTriB", "SawUpB", "SawDwnB", "SquUpB", "SquDwnB", "S&HBPM", "Random"] as const;
 /** Hacktribes Anhang (Typ 72…95). */
 export const MOD_QUELLEN_HACKTRIBE = ["SinUp", "SinDwn", "SinUpB", "SinDwnB"] as const;
+/** TekkForges Kombinationen (Typ 96…131, core/modTabelle.ts): freilaufende Saw/Square/S&H, Random im Takt. */
+export const MOD_QUELLEN_TEKKFORGE = ["SawUp", "SawDwn", "SquUp", "SquDwn", "S&H", "RandomB"] as const;
 export const MOD_ZIELE = ["Filter", "Pitch", "OSC", "Level", "Pan", "IFX"] as const;
 
-/** Alle 96 Namen, Index = gespeicherter Typ (0-basiert). 0…71 Stock, 72…95 nur Hacktribe. */
-export const MOD_TYPEN: readonly string[] = [...MOD_QUELLEN_STOCK, ...MOD_QUELLEN_HACKTRIBE].flatMap((q) => MOD_ZIELE.map((z) => `${q} ${z}`));
+/** Alle 132 Namen, Index = gespeicherter Typ (0-basiert). 0…71 Stock, 72…95 nur Hacktribe, 96…131 nur mit TekkForges Modulations-Baustein. */
+export const MOD_TYPEN: readonly string[] = [...MOD_QUELLEN_STOCK, ...MOD_QUELLEN_HACKTRIBE, ...MOD_QUELLEN_TEKKFORGE].flatMap((q) => MOD_ZIELE.map((z) => `${q} ${z}`));
 export const MOD_TYPEN_STOCK_ANZAHL = MOD_QUELLEN_STOCK.length * MOD_ZIELE.length; // 72
+export const MOD_TYPEN_HACKTRIBE_ANZAHL = MOD_TYPEN_STOCK_ANZAHL + MOD_QUELLEN_HACKTRIBE.length * MOD_ZIELE.length; // 96
 
 export const FILTER_TYPEN: readonly string[] = [
   "electribe LPF",
@@ -45,7 +48,8 @@ export const FILTER_TYPEN: readonly string[] = [
 /** Name eines gespeicherten Typs, mit Anzeigenummer (1-basiert) davor; unbekannt → nur die Nummer. */
 export function modTypName(gespeichert: number): string {
   const n = MOD_TYPEN[gespeichert];
-  return n ? `${gespeichert + 1} · ${n}${gespeichert >= MOD_TYPEN_STOCK_ANZAHL ? " (Hacktribe)" : ""}` : `${gespeichert + 1}`;
+  const herkunft = gespeichert >= MOD_TYPEN_HACKTRIBE_ANZAHL ? " (TekkForge)" : gespeichert >= MOD_TYPEN_STOCK_ANZAHL ? " (Hacktribe)" : "";
+  return n ? `${gespeichert + 1} · ${n}${herkunft}` : `${gespeichert + 1}`;
 }
 
 export function filterTypName(gespeichert: number): string {

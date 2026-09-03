@@ -5,13 +5,16 @@ import { PART_PARAMS } from "../src/core/partParams";
 
 describe("e2ModTypen — Namen aus der Firmware", () => {
   it("96 Modulationstypen: 12 Stock-Quellen und 4 Hacktribe-Quellen × 6 Ziele, in Tabellenreihenfolge", () => {
-    expect(MOD_TYPEN).toHaveLength(96);
+    expect(MOD_TYPEN).toHaveLength(132);
     expect(MOD_TYPEN_STOCK_ANZAHL).toBe(72);
     expect(MOD_TYPEN.slice(0, 6)).toEqual(["EG+ Filter", "EG+ Pitch", "EG+ OSC", "EG+ Level", "EG+ Pan", "EG+ IFX"]);
     expect(MOD_TYPEN[24]).toBe("LFOTri Filter");
     expect(MOD_TYPEN[71]).toBe("Random IFX");
     expect(MOD_TYPEN[72]).toBe("SinUp Filter");
     expect(MOD_TYPEN[95]).toBe("SinDwnB IFX");
+    expect(MOD_TYPEN[96]).toBe("SawUp Filter");
+    expect(MOD_TYPEN[131]).toBe("RandomB IFX");
+    expect(modTypName(96)).toBe("97 · SawUp Filter (TekkForge)");
     expect(modTypName(0)).toBe("1 · EG+ Filter");
     expect(modTypName(72)).toBe("73 · SinUp Filter (Hacktribe)");
     expect(modTypName(200)).toBe("201");
@@ -39,6 +42,7 @@ describe("e2ModTypen — Namen aus der Firmware", () => {
       return s;
     };
     for (let i = 0; i < 96; i++) expect(name(0x1a0100 + i * 0x58).replace(/ Osc$/, " OSC")).toBe(MOD_TYPEN[i]);
+    // 96…131 stehen nicht in Hacktribes Datei — das sind TekkForges Kombinationen
     expect(b[0x1a0100 + 96 * 0x58]).toBe(0xff); // dahinter frei
   });
 });
