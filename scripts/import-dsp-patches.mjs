@@ -26,10 +26,10 @@ const hex = (u) => Array.from(u).map((b) => b.toString(16).padStart(2, "0")).joi
 
 /** Deutsche Kurzfassung und Status je Patch — von Hand, aus Omnitribes Beschreibungen. */
 const TEXTE = {
-  bf523_coslut_zero: ["Wellentabelle nullen (Diskriminator)", "Die 129-Punkt-Halbcosinus-Tabelle im L1 auf Null — kein Klang, sondern der Nachweis, dass das gepatchte DSP-Abbild läuft. Nur zum Testen.", "diskriminator"],
-  bf523_coslut_halfamp: ["Wellentabelle halbe Amplitude", "Halbcosinus-Tabelle (129 × int16) um 6 dB leiser, gleiche Form. Betrifft Klangquellen, die diese Tabelle lesen (LFO/Oszillator im DSP).", "hoerprobe-offen"],
-  bf523_coslut_quarteramp: ["Wellentabelle viertel Amplitude", "Dieselbe Tabelle um 12 dB leiser.", "hoerprobe-offen"],
-  bf523_coslut_triangle: ["Wellentabelle Dreieck statt Cosinus", "Die Halbcosinus-Form wird durch eine lineare Rampe mit denselben Endpunkten ersetzt — härterer Verlauf.", "hoerprobe-offen"],
+  bf523_coslut_zero: ["Wellentabelle nullen (Diskriminator)", "Die 129-Punkt-Halbcosinus-Tabelle im L1 auf Null. ✔ Am Gerät gehört (2026-09-03, auf der Gesamtfirmware): „klingt alles unverändert“ — die Tabelle liegt auf keinem hörbaren Pfad, oder das Gerät liest sie nicht aus diesem Block. Damit sind die anderen Wellentabellen-Patches voraussichtlich wirkungslos.", "am-geraet-gehoert"],
+  bf523_coslut_halfamp: ["Wellentabelle halbe Amplitude", "Halbcosinus-Tabelle (129 × int16) um 6 dB leiser, gleiche Form. ⚠ Der Diskriminator „nullen“ blieb am Gerät unhörbar (2026-09-03) — voraussichtlich ohne Wirkung. Betrifft Klangquellen, die diese Tabelle lesen (LFO/Oszillator im DSP).", "hoerprobe-offen"],
+  bf523_coslut_quarteramp: ["Wellentabelle viertel Amplitude", "Dieselbe Tabelle um 12 dB leiser. ⚠ Der Diskriminator „nullen“ blieb am Gerät unhörbar (2026-09-03) — voraussichtlich ohne Wirkung.", "hoerprobe-offen"],
+  bf523_coslut_triangle: ["Wellentabelle Dreieck statt Cosinus", "Die Halbcosinus-Form wird durch eine lineare Rampe mit denselben Endpunkten ersetzt — härterer Verlauf. ⚠ Der Diskriminator „nullen“ blieb am Gerät unhörbar (2026-09-03) — voraussichtlich ohne Wirkung.", "hoerprobe-offen"],
   bf523_blk15_paramcurve_halftop: ["Voice-Kurve: Endpunkt halbiert", "8-stufige int16-Parameterkurve im Sample-Pfad (SDRAM-Block 15): nur der Vollausschlag 0x7FFF → 0x3FFF.", "hoerprobe-offen"],
   bf523_blk15_paramcurve_halfall: ["Voice-Kurve: alles halbiert", "Dieselbe Kurve, alle 8 Stufen halbiert, Form bleibt.", "hoerprobe-offen"],
   bf523_blk15_amount_halfmax: ["Amount-Kurve: Maximum halbiert", "14-stufige float-Kurve 0,02…1,00 im Sample-Pfad: nur das Maximum 1,0 → 0,5. Rolle unklar (Filter-Anteil, Pegel oder Modulationstiefe).", "hoerprobe-offen"],

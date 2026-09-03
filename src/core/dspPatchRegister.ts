@@ -54,7 +54,7 @@ const ROH = [
  {
   "id": "bf523_coslut_halfamp",
   "titel": "Wellentabelle halbe Amplitude",
-  "beschreibung": "Halbcosinus-Tabelle (129 × int16) um 6 dB leiser, gleiche Form. Betrifft Klangquellen, die diese Tabelle lesen (LFO/Oszillator im DSP).",
+  "beschreibung": "Halbcosinus-Tabelle (129 × int16) um 6 dB leiser, gleiche Form. ⚠ Der Diskriminator „nullen“ blieb am Gerät unhörbar (2026-09-03) — voraussichtlich ohne Wirkung. Betrifft Klangquellen, die diese Tabelle lesen (LFO/Oszillator im DSP).",
   "status": "hoerprobe-offen",
   "edits": [
    {
@@ -68,7 +68,7 @@ const ROH = [
  {
   "id": "bf523_coslut_quarteramp",
   "titel": "Wellentabelle viertel Amplitude",
-  "beschreibung": "Dieselbe Tabelle um 12 dB leiser.",
+  "beschreibung": "Dieselbe Tabelle um 12 dB leiser. ⚠ Der Diskriminator „nullen“ blieb am Gerät unhörbar (2026-09-03) — voraussichtlich ohne Wirkung.",
   "status": "hoerprobe-offen",
   "edits": [
    {
@@ -82,7 +82,7 @@ const ROH = [
  {
   "id": "bf523_coslut_triangle",
   "titel": "Wellentabelle Dreieck statt Cosinus",
-  "beschreibung": "Die Halbcosinus-Form wird durch eine lineare Rampe mit denselben Endpunkten ersetzt — härterer Verlauf.",
+  "beschreibung": "Die Halbcosinus-Form wird durch eine lineare Rampe mit denselben Endpunkten ersetzt — härterer Verlauf. ⚠ Der Diskriminator „nullen“ blieb am Gerät unhörbar (2026-09-03) — voraussichtlich ohne Wirkung.",
   "status": "hoerprobe-offen",
   "edits": [
    {
@@ -96,8 +96,8 @@ const ROH = [
  {
   "id": "bf523_coslut_zero",
   "titel": "Wellentabelle nullen (Diskriminator)",
-  "beschreibung": "Die 129-Punkt-Halbcosinus-Tabelle im L1 auf Null — kein Klang, sondern der Nachweis, dass das gepatchte DSP-Abbild läuft. Nur zum Testen.",
-  "status": "diskriminator",
+  "beschreibung": "Die 129-Punkt-Halbcosinus-Tabelle im L1 auf Null. ✔ Am Gerät gehört (2026-09-03, auf der Gesamtfirmware): „klingt alles unverändert“ — die Tabelle liegt auf keinem hörbaren Pfad, oder das Gerät liest sie nicht aus diesem Block. Damit sind die anderen Wellentabellen-Patches voraussichtlich wirkungslos.",
+  "status": "am-geraet-gehoert",
   "edits": [
    {
     "vaddr": "0xFF803BD8",
