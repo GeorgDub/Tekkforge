@@ -1680,7 +1680,7 @@ function setupRamPanel(): void {
   // Der Preset-Manager teilt sich Lese- und Schreibweg mit dem Editor.
   initPresetManager(fxHooks);
   // Die Firmware-Werkbank holt sich das aktuelle Pattern als Init-Pattern.
-  initFirmwareWerkbank({ aktuellesPattern: aktuellesPatternDatei, lesen: ramReadBytes });
+  initFirmwareWerkbank({ aktuellesPattern: aktuellesPatternDatei, lesen: ramReadBytes, schreiben: fxHooks.schreiben });
 }
 
 /**

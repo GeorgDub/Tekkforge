@@ -23,11 +23,16 @@ export interface WerkbankHooks {
   aktuellesPattern(): { name: string; bytes: Uint8Array };
   /** RAM lesen (fuer den Init-Global-Block vom Geraet); fehlt ohne MIDI. */
   lesen?(addr: number, len: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
+  /** RAM schreiben mit Rueckleseprobe (fuer die fluechtige Oszillator-Probe); fehlt ohne MIDI. */
+  schreiben?(addr: number, bytes: Uint8Array, was: string): Promise<boolean>;
 }
 let hooks: WerkbankHooks | null = null;
 /** Eigene DSP-Patches aus Dateien oder Bauplaenen; das Register kommt dazu. */
 let dspEigene: DspPatch[] = [];
 const dspGewaehlt = new Set<string>();
+/** Neue Oszillator-Eintraege (Varianten), fortlaufend hinter dem Stand der Basis. */
+let oszNeu: OszEintragMitPlatz[] = [];
+let oszBasisAnzahl = 0;
 const aktuellesPatternDatei = (): { name: string; bytes: Uint8Array } => {
   if (!hooks) throw new Error("kein Editor angebunden");
   return hooks.aktuellesPattern();
@@ -56,6 +61,25 @@ import { vergleicheFirmware } from "../core/firmwareVergleich";
 import { schreibeText, textBreite } from "../core/pixelSchrift";
 import { DSP_PATCH_REGISTER } from "../core/dspPatchRegister";
 import { wendeDspPatchAn, dspPatchStand, leseDspPatchDatei, type DspPatch } from "../core/dspPatch";
+import {
+  OSZ_TABELLE_ADDR,
+  OSZ_EINTRAG,
+  OSZ_MAX,
+  OSZ_ZAEHLER,
+  OSZ_ZEIGER_ADDRS,
+  KATEGORIE_NAMEN,
+  decodeOsz,
+  oszVariante,
+  liesOsz,
+  istOszLeer,
+  leseOszStandAusFirmware,
+  leseOszStand,
+  oszZaehlerSchreibliste,
+  setzeOszTabelle,
+  fmHalbtonZuParameter,
+  fmParameterZuHalbton,
+  type OszEintragMitPlatz,
+} from "../core/oszTabelle";
 
 /** Text ins Startbild schreiben — fuer Tests direkt aufrufbar. */
 export function fwTextSchreiben(text: string, skala: number, zeile: number | "mitte"): void {
@@ -191,6 +215,13 @@ async function basisLaden(f: File): Promise<void> {
   ($("fwBasisInfo") as HTMLElement).textContent =
     `${f.name} — ${herkunft}; IFX-Menü bis ${befund.ifxMaxIndex + 1}, Grooves bis ${befund.grooveMaxIndex + 1}, Init-Pattern „${befund.initPatternName || "?"}“`;
   setStatus(`Basis geladen. Startbild mit „aus Firmware“ holen, Bausteine anhaken, bauen.`);
+  const osz = leseOszStandAusFirmware(bytes);
+  oszBasisAnzahl = osz.ok ? osz.anzahl : 0;
+  oszNeu = [];
+  oszListe();
+  oszVorlagenFuellen();
+  oszVorlageHinweis();
+  if (!osz.ok) ($("fwOszInfo") as HTMLElement).textContent = `Tabelle nicht lesbar: ${osz.reason}`;
   dspListe();
   vorschau();
 }
@@ -307,6 +338,161 @@ async function dspLaden(f: File): Promise<void> {
   }
 }
 
+// ─── Oszillator-Tabelle ──────────────────────────────────────────────────────
+
+const oszNaechsterPlatz = (): number => oszBasisAnzahl + oszNeu.length + 1;
+
+function oszVorlagenFuellen(): void {
+  const sel = document.getElementById("fwOszVorlage") as HTMLSelectElement | null;
+  if (!sel) return;
+  const opts: string[] = [];
+  if (basis) {
+    for (let p = 1; p <= oszBasisAnzahl; p++) {
+      const b = liesOsz(basis, p);
+      if (istOszLeer(b)) continue;
+      const d = decodeOsz(b);
+      opts.push(`<option value="${p}">${p}: ${escapeHtml(d.name)} (${KATEGORIE_NAMEN[d.kategorie] ?? `Kat. ${d.kategorie}`})</option>`);
+    }
+  }
+  sel.innerHTML = opts.join("");
+  const info = document.getElementById("fwOszInfo");
+  if (info) info.textContent = basis ? `${oszBasisAnzahl} belegt, ${OSZ_MAX - oszBasisAnzahl} frei (275…${OSZ_MAX})` : "";
+}
+
+function oszListe(): void {
+  const el = document.getElementById("fwOszListe");
+  if (!el) return;
+  el.innerHTML = oszNeu
+    .map((o, i) => {
+      const d = decodeOsz(o.bytes);
+      const p = d.kategorie === 0x0a ? `${fmParameterZuHalbton(d.parameter)} Halbtöne (${d.parameter})` : `Parameter ${d.parameter}`;
+      return `<div class="sub" style="margin:1px 0;display:flex;gap:6px;align-items:center"><span style="min-width:34px">${o.platz}</span><b>${escapeHtml(d.name)}</b><span style="opacity:.7">${KATEGORIE_NAMEN[d.kategorie] ?? `Kat. ${d.kategorie}`} · Programm ${d.programm} · ${p} · Pegel ${d.pegel}</span><button class="ghost" data-osz-weg="${i}" style="padding:0 6px;font-size:11px" title="Eintrag entfernen">✕</button></div>`;
+    })
+    .join("");
+}
+
+/** Eine Variante der Vorlage (Platz in der Basis) anhaengen — fuer Tests direkt aufrufbar. */
+export function fwOszAnhaengen(vorlagePlatz: number, name: string, parameter?: number, pegel?: number): { ok: true; platz: number } | { ok: false; reason: string } {
+  if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
+  if (vorlagePlatz < 1 || vorlagePlatz > oszBasisAnzahl) return { ok: false, reason: `Vorlage ${vorlagePlatz}: die Basis hat Plätze 1…${oszBasisAnzahl}` };
+  if (!name.trim()) return { ok: false, reason: "Ein Name fehlt." };
+  const platz = oszNaechsterPlatz();
+  if (platz > OSZ_MAX) return { ok: false, reason: `Die Tabelle ist voll (${OSZ_MAX} Plätze).` };
+  let bytes: Uint8Array;
+  try {
+    bytes = oszVariante(liesOsz(basis, vorlagePlatz), { name: name.trim(), ...(parameter !== undefined ? { parameter } : {}), ...(pegel !== undefined ? { pegel } : {}) });
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  oszNeu.push({ platz, bytes });
+  oszListe();
+  ($("fwOsz") as HTMLInputElement).checked = true;
+  vorschau();
+  return { ok: true, platz };
+}
+
+/** FM-Serie: die ungeraden Halbtoene −23…+23 der Vorlage (Hacktribe hat die geraden). */
+export function fwOszFmSerie(vorlagePlatz: number): { ok: true; anzahl: number } | { ok: false; reason: string } {
+  if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
+  if (vorlagePlatz < 1 || vorlagePlatz > oszBasisAnzahl) return { ok: false, reason: `Vorlage ${vorlagePlatz} liegt ausserhalb 1…${oszBasisAnzahl}` };
+  const d = decodeOsz(liesOsz(basis, vorlagePlatz));
+  if (d.kategorie !== 0x0a) return { ok: false, reason: `„${d.name}“ ist kein FM-Eintrag — die Serie gilt für X-… (Halbtöne).` };
+  const stamm = d.name.replace(/\s[-+]?\d+$/, "");
+  let n = 0;
+  for (let h = -23; h <= 23; h += 2) {
+    const r = fwOszAnhaengen(vorlagePlatz, `${stamm} ${h > 0 ? "+" : ""}${h}`, fmHalbtonZuParameter(h));
+    if (!r.ok) return n ? { ok: true, anzahl: n } : r;
+    n++;
+  }
+  return { ok: true, anzahl: n };
+}
+
+export function fwOszEntfernen(index: number): void {
+  oszNeu.splice(index, 1);
+  oszNeu = oszNeu.map((o, i) => ({ platz: oszBasisAnzahl + i + 1, bytes: o.bytes }));
+  oszListe();
+  vorschau();
+}
+
+export function fwOszNeu(): readonly OszEintragMitPlatz[] {
+  return oszNeu;
+}
+
+function oszFormularAnhaengen(): void {
+  const vorlage = Number(($("fwOszVorlage") as HTMLSelectElement).value);
+  const name = ($("fwOszName") as HTMLInputElement).value;
+  const pRoh = ($("fwOszParam") as HTMLInputElement).value.trim();
+  const pegelRoh = ($("fwOszPegel") as HTMLInputElement).value.trim();
+  const r = fwOszAnhaengen(vorlage, name, pRoh === "" ? undefined : Number(pRoh), pegelRoh === "" ? undefined : Number(pegelRoh));
+  setStatus(r.ok ? `Oszillator-Variante auf Platz ${r.platz} vorgemerkt — ⚠ ob das Gerät neue Einträge annimmt, ist noch offen; erst flüchtig probieren.` : r.reason);
+}
+
+function oszVorlageHinweis(): void {
+  const hint = document.getElementById("fwOszParamHinweis");
+  const nameEl = document.getElementById("fwOszName") as HTMLInputElement | null;
+  if (!hint || !basis) return;
+  const p = Number(($("fwOszVorlage") as HTMLSelectElement).value);
+  if (!p) return;
+  const d = decodeOsz(liesOsz(basis, p));
+  hint.textContent = d.kategorie === 0x0a ? `FM: −63…63 ≙ −24…+24 Halbtöne (Vorlage ${d.parameter})` : d.kategorie === 0x10 ? `VPM: 0…32 Ratio-Stufe (Vorlage ${d.parameter})` : `Vorlage: Parameter ${d.parameter}, Pegel ${d.pegel}, Vorgabe ${d.vorgabe}`;
+  if (nameEl && !nameEl.value) nameEl.value = d.name.slice(0, 15);
+}
+
+/** Fluechtig: Eintraege und Beschreiber ins Geraete-RAM — bis zum Ausschalten. */
+async function oszFluechtig(): Promise<void> {
+  if (!hooks?.schreiben || !hooks.lesen) {
+    setStatus("Kein Geräte-Schreibweg (MIDI aus).");
+    return;
+  }
+  if (!oszNeu.length) {
+    setStatus("Keine Oszillator-Einträge vorgemerkt.");
+    return;
+  }
+  const zellen = [];
+  for (const z of OSZ_ZAEHLER) {
+    const r = await hooks.lesen(z.addr, 4);
+    if (!r.ok) {
+      setStatus(`Beschreiber nicht lesbar: ${r.reason}`);
+      return;
+    }
+    zellen.push({ addr: z.addr, wert: (r.bytes[0] | (r.bytes[1] << 8) | (r.bytes[2] << 16) | (r.bytes[3] << 24)) >>> 0 });
+  }
+  const zeiger: number[] = [];
+  for (const a of OSZ_ZEIGER_ADDRS) {
+    const r = await hooks.lesen(a, 4);
+    if (!r.ok) {
+      setStatus(`Zeiger nicht lesbar: ${r.reason}`);
+      return;
+    }
+    zeiger.push((r.bytes[0] | (r.bytes[1] << 8) | (r.bytes[2] << 16) | (r.bytes[3] << 24)) >>> 0);
+  }
+  const stand = leseOszStand(zellen, zeiger);
+  if (!stand.ok) {
+    setStatus(`Gerät: ${stand.reason} — nichts geschrieben.`);
+    return;
+  }
+  if (stand.anzahl !== oszBasisAnzahl) {
+    setStatus(`Das Gerät zählt ${stand.anzahl} Einträge, die Basis ${oszBasisAnzahl} — die Plätze passen nicht. Erst dieselbe Firmware als Basis laden.`);
+    return;
+  }
+  for (const o of oszNeu) {
+    const ok = await hooks.schreiben(OSZ_TABELLE_ADDR + (o.platz - 1) * OSZ_EINTRAG, o.bytes, `Oszillator ${o.platz}`);
+    if (!ok) {
+      setStatus(`Platz ${o.platz} nicht geschrieben — abgebrochen, Beschreiber unverändert.`);
+      return;
+    }
+  }
+  const ziel = oszNeu[oszNeu.length - 1].platz;
+  for (const z of oszZaehlerSchreibliste(ziel)) {
+    const b = new Uint8Array([z.wert & 0xff, (z.wert >>> 8) & 0xff, (z.wert >>> 16) & 0xff, (z.wert >>> 24) & 0xff]);
+    if (!(await hooks.schreiben(z.addr, b, `Oszillator-Zähler`))) {
+      setStatus(`Beschreiber ${z.addr.toString(16)} nicht geschrieben — Liste am Gerät möglicherweise uneinheitlich; aus- und einschalten stellt alles zurück.`);
+      return;
+    }
+  }
+  setStatus(`${oszNeu.length} Oszillator-Einträge flüchtig geschrieben, Liste bis ${ziel}. Am Gerät die Sample-Liste ab 275 prüfen — gilt bis zum Ausschalten.`);
+}
+
 // ─── Bauen ───────────────────────────────────────────────────────────────────
 
 interface Bauplan {
@@ -316,6 +502,7 @@ interface Bauplan {
   global: { name: string; bytes: Uint8Array } | null;
   splash: boolean;
   dsp: DspPatch[];
+  osz: OszEintragMitPlatz[];
   zeilen: string[];
 }
 
@@ -365,7 +552,9 @@ function bauplan(): Bauplan | null {
   }
   const dsp = fwDspPatches().filter((p) => dspGewaehlt.has(p.id));
   if (dsp.length) zeilen.push(`DSP-Patches (⚠ experimentell): ${dsp.map((p) => p.titel).join(", ")}`);
-  return { presets, grooves: gv, init, global, splash, dsp, zeilen };
+  const osz = an("fwOsz") ? oszNeu : [];
+  if (an("fwOsz")) zeilen.push(osz.length ? `Oszillatoren: ${osz.length} Variante(n) auf ${osz[0].platz}–${osz[osz.length - 1].platz} (⚠ am Gerät noch offen)` : "Oszillatoren: nichts vorgemerkt");
+  return { presets, grooves: gv, init, global, splash, dsp, osz, zeilen };
 }
 
 function vorschau(): void {
@@ -401,7 +590,13 @@ export function fwBaueAbbild(): { ok: true; bytes: Uint8Array; zeilen: string[] 
     bytes = r.bytes;
     zeilen.push(`DSP: ${p.titel} — ${r.stellen.map((st) => `${st.bytes} B @ 0x${st.offset.toString(16).toUpperCase()}`).join(", ")}`);
   }
-  if (!eintraege.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
+  if (plan.osz.length) {
+    const r = setzeOszTabelle(bytes, plan.osz);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    bytes = r.bytes;
+    zeilen.push(`Oszillator-Tabelle: Liste bis ${r.anzahlVorher} → bis ${r.anzahlNachher}`);
+  }
+  if (!eintraege.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length && !plan.osz.length) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
   return { ok: true, bytes, zeilen };
 }
 
@@ -490,7 +685,7 @@ async function sicherungEinbrennen(f: File): Promise<void> {
 export function fwBauplanText(titel: string): { ok: true; text: string; zeilen: string[] } | { ok: false; reason: string } {
   const plan = bauplan();
   if (!plan) return { ok: false, reason: "Erst eine Basis laden." };
-  if (!plan.presets.length && !plan.grooves.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length) {
+  if (!plan.presets.length && !plan.grooves.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length && !plan.osz.length) {
     return { ok: false, reason: "Kein Baustein angehakt — der Bauplan wäre leer." };
   }
   const text = baueBauplan({
@@ -502,6 +697,7 @@ export function fwBauplanText(titel: string): { ok: true; text: string; zeilen: 
     ...(plan.global ? { initGlobal: plan.global.bytes } : {}),
     ...(plan.splash ? { splash: pixelZuSplash(pixel) } : {}),
     ...(plan.dsp.length ? { dsp: plan.dsp } : {}),
+    ...(plan.osz.length ? { osz: plan.osz } : {}),
   });
   return { ok: true, text, zeilen: plan.zeilen };
 }
@@ -557,6 +753,15 @@ export function fwBauplanLaden(text: string, woher: string): { ok: true; zeilen:
     for (const p of plan.dsp) fwDspAufnehmen(p);
     zeilen.push(`DSP-Patches: ${plan.dsp.length} übernommen und angehakt (⚠ experimentell)`);
   }
+  if (plan.osz?.length) {
+    // Die Plaetze des Plans gelten, wenn sie hinter dem Stand der Basis anschliessen; sonst werden sie neu vergeben.
+    const sortiert = [...plan.osz].sort((a, b) => a.platz - b.platz);
+    const passt = sortiert[0].platz === oszBasisAnzahl + 1;
+    oszNeu = sortiert.map((o, i) => ({ platz: passt ? o.platz : oszBasisAnzahl + i + 1, bytes: o.bytes }));
+    oszListe();
+    ($("fwOsz") as HTMLInputElement).checked = true;
+    zeilen.push(`Oszillatoren: ${oszNeu.length} übernommen${passt ? "" : " (Plätze neu vergeben, die Basis zählt anders)"}`);
+  }
   vorschau();
   return { ok: true, zeilen };
 }
@@ -596,6 +801,8 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   invertiert = false;
   dspEigene = [];
   dspGewaehlt.clear();
+  oszNeu = [];
+  oszBasisAnzahl = 0;
   pixel = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
   if (!document.getElementById("fwPanel")) return;
   dateiKnopf("fwBasisLaden", "fwBasisIn", (f) => void basisLaden(f));
@@ -607,6 +814,24 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   $("fwBauplanSichern").addEventListener("click", () => void bauplanSichern());
   dateiKnopf("fwBauplanLaden", "fwBauplanIn", (f) => void bauplanLaden(f));
   dateiKnopf("fwDspLaden", "fwDspIn", (f) => void dspLaden(f));
+  $("fwOsz").addEventListener("change", vorschau);
+  $("fwOszVorlage").addEventListener("change", oszVorlageHinweis);
+  $("fwOszAnhaengen").addEventListener("click", oszFormularAnhaengen);
+  $("fwOszSerie").addEventListener("click", () => {
+    const r = fwOszFmSerie(Number(($("fwOszVorlage") as HTMLSelectElement).value));
+    setStatus(r.ok ? `${r.anzahl} FM-Varianten vorgemerkt (ungerade Halbtöne).` : r.reason);
+  });
+  $("fwOszLeeren").addEventListener("click", () => {
+    oszNeu = [];
+    oszListe();
+    vorschau();
+  });
+  $("fwOszGeraet").addEventListener("click", () => void oszFluechtig());
+  $("fwOszListe").addEventListener("click", (ev) => {
+    const t = (ev as Event | undefined)?.target as HTMLElement | null | undefined;
+    const i = t?.dataset?.oszWeg;
+    if (i !== undefined) fwOszEntfernen(Number(i));
+  });
   $("fwDspListe").addEventListener("change", (ev) => {
     const t = (ev as Event | undefined)?.target as HTMLInputElement | null | undefined;
     const id = t?.dataset?.dsp;

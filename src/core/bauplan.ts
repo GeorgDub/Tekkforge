@@ -26,6 +26,7 @@ import {
   type FirmwareBauBericht,
 } from "./firmwareBau";
 import { dspPatchZuObjekt, dspPatchAusObjekt, wendeDspPatchAn, type DspPatch } from "./dspPatch";
+import { setzeOszTabelle, OSZ_EINTRAG, OSZ_MAX, type OszEintragMitPlatz } from "./oszTabelle";
 
 export const BAUPLAN_VERSION = 1;
 
@@ -43,6 +44,8 @@ export interface Bauplan {
   initGlobal?: Uint8Array;
   /** Gleichlange Aenderungen im DSP-Abbild (experimentell), vollstaendig mit alten und neuen Bytes. */
   dsp?: DspPatch[];
+  /** Eintraege der Oszillator-Tabelle (Sample-Liste), je 32 Bytes mit Platz. */
+  osz?: OszEintragMitPlatz[];
 }
 
 export function baueBauplan(plan: Omit<Bauplan, "version" | "wann"> & { wann?: string }): string {
@@ -60,6 +63,7 @@ export function baueBauplan(plan: Omit<Bauplan, "version" | "wann"> & { wann?: s
       ...(plan.splash ? { splash: bytesToBase64(plan.splash) } : {}),
       ...(plan.initGlobal ? { initGlobal: bytesToBase64(plan.initGlobal) } : {}),
       ...(plan.dsp?.length ? { dsp: plan.dsp.map(dspPatchZuObjekt) } : {}),
+      ...(plan.osz?.length ? { osz: plan.osz.map((o) => ({ platz: o.platz, bytes: bytesToBase64(o.bytes) })) } : {}),
     },
     null,
     1,
@@ -118,7 +122,19 @@ export function leseBauplan(text: string): Bauplan {
       }
     });
   }
-  if (!eintraege.length && !initPattern && !splash && !initGlobal && !plan.dsp?.length) throw new Error("Der Bauplan ist leer.");
+  if (x.osz !== undefined) {
+    if (!Array.isArray(x.osz)) throw new Error("Feld „osz“ ist keine Liste.");
+    plan.osz = x.osz.map((o, i) => {
+      const r = (typeof o === "object" && o ? o : {}) as Record<string, unknown>;
+      const platz = Number(r.platz);
+      if (!Number.isInteger(platz) || platz < 1 || platz > OSZ_MAX) throw new Error(`Oszillator ${i + 1}: Platz ${String(r.platz)} ausserhalb 1…${OSZ_MAX}.`);
+      if (typeof r.bytes !== "string") throw new Error(`Oszillator ${i + 1}: bytes fehlen.`);
+      const bytes = base64ToBytes(r.bytes);
+      if (bytes.length !== OSZ_EINTRAG) throw new Error(`Oszillator ${i + 1}: ${bytes.length} Bytes, erwartet ${OSZ_EINTRAG}.`);
+      return { platz, bytes };
+    });
+  }
+  if (!eintraege.length && !initPattern && !splash && !initGlobal && !plan.dsp?.length && !plan.osz?.length) throw new Error("Der Bauplan ist leer.");
   return plan;
 }
 
@@ -162,6 +178,12 @@ export function wendeBauplanAn(basis: Uint8Array, plan: Bauplan): BauplanErgebni
     if (!r.ok) return { ok: false, reason: r.reason };
     bytes = r.bytes;
     zeilen.push(`DSP-Patch „${p.titel}“ gesetzt`);
+  }
+  if (plan.osz?.length) {
+    const r = setzeOszTabelle(bytes, plan.osz);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    bytes = r.bytes;
+    zeilen.push(`Oszillator-Tabelle: ${r.geschrieben.length} Platz/Plätze, Liste bis ${r.anzahlVorher} → bis ${r.anzahlNachher}`);
   }
   return { ok: true, bytes, bericht, zeilen };
 }

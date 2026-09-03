@@ -115,6 +115,18 @@ export interface RamMapEntry {
  */
 export const E2_RAM_MAP: readonly RamMapEntry[] = [
   {
+    key: "oszTabelle",
+    label: "Oszillator-Tabelle (Sample 1–421)",
+    base: 0xc00d9ab0,
+    stride: 32,
+    // Befund 2026-09-03 (Stock 2.02 ↔ Hacktribe): Name + Kategorie + DSP-Programm +
+    // Parameter je Platz; Stock zaehlt 421, Hacktribe 274. Beschreiber (Zeiger,
+    // Bytes, Anzahl, 999) bei 0xC004E3B8 und 0xC004FAF4. Siehe core/oszTabelle.ts.
+    count: 421,
+    size: 32,
+    note: "Was am Geraet als Sample 001–274 steht: Name, Kategorie, DSP-Programm, Parameter. Plaetze 275–421 bei Hacktribe frei.",
+  },
+  {
     key: "ifxPreset",
     label: "IFX-Preset",
     base: 0xc00a80f0,

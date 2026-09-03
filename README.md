@@ -750,6 +750,44 @@ ganzen Bootstrom zu verstehen. Der naechste ehrliche Schritt ist die
 Hoerprobe: Patch anhaken, bauen, installieren, hoeren — und den Befund im
 Register eintragen.
 
+### Oszillator-Tabelle — was am Geraet „Sample 001–274" heisst
+
+Der Nutzerbefund vom 2026-09-03: Hacktribe zeigt in der Sample-Liste ab 001
+SAW, PULSE, TRIANGLE, SINE, UNI-SAW … 013 HPF NOISE … Audio In, bis 034
+die Analog-Modelle, 035–142 FM, 143–274 VPM, danach leer bis 501. Das sind
+keine PCM-Samples, sondern eine **Tabelle in der Firmware** (RAM
+`0xC00D9AB0`, Datei `0xD9BB0`, 32 Bytes je Platz, `core/oszTabelle.ts`):
+Name, Kategorie (0 Analog, 1 Audio In, 0x0A FM, 0x10 VPM), das
+DSP-Programm als u16 (1 SAW … 36 CHIP-TRI 2, 45 Audio In), Zusatzwerte,
+Pegel, ein Vorgabewert und ein signierter Parameter (FM −63…63 fuer
+−24…+24 Halbtoene, VPM 0…32 als Ratio-Stufe). Die **Stock-Firmware** fuehrt
+in derselben Tabelle 421 Eintraege — ab Platz 19 die Namen der
+Werks-Samples („Hippy", „BigBreaks", …) mit Kategorie und Sample-Index; die
+PCM dazu liegt im Sample-Flash, nicht in der Firmware. Hacktribe hat 19–274
+durch seine DSP-Varianten ersetzt und 275–421 geleert.
+
+Wie viele Plaetze das Geraet anbietet, sagen **zwei Beschreiber im Code**
+(`0xC004E3B8` und `0xC004FAF4`: Zeiger auf die Tabelle, Bytes = n × 32,
+Anzahl n, 999) — Stock 421, Hacktribe 274. Derselbe Mechanismus wie beim
+IFX-Menue. Die Werkbank hat dafuer den Baustein **Oszillator-Varianten**:
+eine Vorlage aus der Basis waehlen (jeder belegte Platz), Name, Parameter
+und Pegel setzen, „anhaengen" — der Eintrag landet auf dem naechsten
+freien Platz ab 275; „FM-Serie" traegt fuer eine X-…-Vorlage die 24
+ungeraden Halbtoene ein (Hacktribe hat nur die geraden). „Firmware bauen"
+schreibt die Eintraege und zieht beide Beschreiber nach (`setzeOszTabelle`,
+ohne Luecke, auch kuerzend), der Bauplan nimmt sie mit, und **„fluechtig
+ins Geraet"** schreibt Eintraege und Beschreiber ins RAM — so sieht man
+ohne Flashen, ob die Sample-Liste am Geraet die neuen Plaetze zeigt; das
+Ausschalten stellt alles zurueck. Das Skript-Gegenstueck fehlt noch.
+
+Am echten Abbild geprueft (Tests): 274 Eintraege, Beschreiber stimmig,
+Platz 275 anhaengen aendert genau 32 + 16 Bytes; Stock: 421 Eintraege,
+Platz 19 „Hippy" (Kategorie 2, Index 50). ⚠ **Am Geraet noch offen**, ob
+es neue Eintraege annimmt — deshalb erst fluechtig probieren. Was so
+entsteht, sind Varianten der vorhandenen DSP-Programme (andere
+Verstimmung, anderes Ratio, anderer Pegel), keine neuen Klangquellen und
+keine PCM.
+
 **Der einzige offene Weg zu eigenen „Werks"-Samples** ist der Sample-Import
 selbst: ob das Geraet beim „Sample Import All" auch die Plaetze 1–499
 nimmt, steht nirgends. `examples/e2s/WERKSPLATZ.all`

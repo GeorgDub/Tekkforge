@@ -14,8 +14,13 @@ import {
   fwDspPatches,
   fwDspWaehlen,
   fwDspAufnehmen,
+  fwOszAnhaengen,
+  fwOszFmSerie,
+  fwOszEntfernen,
+  fwOszNeu,
 } from "../src/gui/firmwareWerkbank";
 import { LDR_START, hexZuBytes, type DspPatch } from "../src/core/dspPatch";
+import { OSZ_TABELLE_ADDR, OSZ_MAX, OSZ_ZEIGER_ADDRS, oszZaehlerSchreibliste, oszOffset, oszVariante, decodeOsz, liesOsz, leseOszStandAusFirmware } from "../src/core/oszTabelle";
 import { pmZustand } from "../src/gui/presetManager";
 import { leseBauplan } from "../src/core/bauplan";
 import { textBreite } from "../src/core/pixelSchrift";
@@ -142,10 +147,29 @@ function fakeDspKette(fw: Uint8Array): void {
   fw.set(ldrKopf(0x0100 | 0x8000, 0x00010000, 4096), DSP_SDRAM + 32);
 }
 
-/** Ein Abbild wie die Hacktribe-Firmware: 49 IFX, 32 MFX, 62 Grooves, Init-Pattern, leeres Startbild, kleine DSP-Kette. */
+const OSZ_SAW = Uint8Array.from("53415700000000000000000000000000000001000000007f0001000000000000".match(/../g)!.map((x) => parseInt(x, 16)));
+const OSZ_XSAW = Uint8Array.from("582d534157202d3234000000000000000a0019000000004420010000c1000000".match(/../g)!.map((x) => parseInt(x, 16)));
+const setU32 = (b: Uint8Array, off: number, v: number): void => {
+  b[off] = v & 0xff;
+  b[off + 1] = (v >>> 8) & 0xff;
+  b[off + 2] = (v >>> 16) & 0xff;
+  b[off + 3] = (v >>> 24) & 0xff;
+};
+/** Oszillator-Tabelle: 1 = SAW, 2 = X-SAW -24, 3…10 SAW-Varianten; Beschreiber auf 10. */
+function fakeOszTabelle(fw: Uint8Array): void {
+  fw.fill(0xff, oszOffset(1), oszOffset(OSZ_MAX) + 32);
+  fw.set(OSZ_SAW, oszOffset(1));
+  fw.set(OSZ_XSAW, oszOffset(2));
+  for (let p = 3; p <= 10; p++) fw.set(oszVariante(OSZ_SAW, { name: `SAW ${p}` }), oszOffset(p));
+  for (const a of OSZ_ZEIGER_ADDRS) setU32(fw, dateiOffset(a), OSZ_TABELLE_ADDR);
+  for (const z of oszZaehlerSchreibliste(10)) setU32(fw, dateiOffset(z.addr), z.wert);
+}
+
+/** Ein Abbild wie die Hacktribe-Firmware: 49 IFX, 32 MFX, 62 Grooves, Init-Pattern, leeres Startbild, kleine DSP-Kette, Oszillator-Tabelle. */
 function fakeFirmware(): Uint8Array {
   const fw = new Uint8Array(VSB_GROESSE);
   fakeDspKette(fw);
+  fakeOszTabelle(fw);
   fw.set(new TextEncoder().encode("KORG SYSTEM FILE"), 0);
   fw.set(new TextEncoder().encode("E2S"), 0x10);
   for (let s = 0; s < ifxMap.count; s++) fw.set(s < 49 ? presetBytes(`Werk ${s + 1}`) : leererBlock("ifx"), dateiOffset(addressForSlot(ifxMap, s)));
@@ -411,6 +435,83 @@ describe("Firmware-Werkbank", () => {
     expect(drei.ok).toBe(true);
     if (drei.ok) expect(drei.bytes[DSP_L1 + 0x10]).toBe(0);
     expect(fwBaueAbbild().ok).toBe(true);
+  });
+
+  it("Oszillator-Varianten: Vorlagen aus der Basis, anhaengen ab 11, FM-Serie, bauen zieht die Beschreiber nach, Bauplan nimmt sie mit, fluechtig schreibt Eintraege und Zellen", async () => {
+    const schreibungen: { addr: number; bytes: number[] }[] = [];
+    const fw = fakeFirmware();
+    initFirmwareWerkbank({
+      aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }),
+      lesen: async (addr, len) => ({ ok: true as const, bytes: fw.slice(dateiOffset(addr), dateiOffset(addr) + len) }),
+      schreiben: async (addr, bytes) => {
+        schreibungen.push({ addr, bytes: Array.from(bytes) });
+        return true;
+      },
+    });
+    await basisLaden(fw);
+    expect(el("fwOszInfo").textContent).toMatch(/10 belegt, 411 frei/);
+    expect(el("fwOszVorlage").innerHTML).toMatch(/<option value="2">2: X-SAW -24 \(FM\)/);
+    el("fwPresets").checked = false;
+
+    expect(fwOszAnhaengen(99, "X", 0)).toMatchObject({ ok: false });
+    expect(fwOszAnhaengen(1, "  ", 0)).toMatchObject({ ok: false, reason: expect.stringMatching(/Name/) });
+    expect(fwOszAnhaengen(1, "SAW LEISE", undefined, 40)).toEqual({ ok: true, platz: 11 });
+    expect(fwOszAnhaengen(2, "X-SAW -7", -18)).toEqual({ ok: true, platz: 12 });
+    expect(el("fwOsz").checked).toBe(true);
+    expect(el("fwOszListe").innerHTML).toMatch(/12.*X-SAW -7.*-7 Halbtöne \(-18\)/);
+    // Serie nur fuer FM
+    expect(fwOszFmSerie(1)).toMatchObject({ ok: false, reason: expect.stringMatching(/kein FM/) });
+    expect(fwOszFmSerie(2)).toEqual({ ok: true, anzahl: 24 });
+    expect(fwOszNeu()).toHaveLength(26);
+    expect(decodeOsz(fwOszNeu()[2].bytes)).toMatchObject({ name: "X-SAW -23", parameter: -60 });
+    fwOszEntfernen(0); // SAW LEISE weg → alles rueckt auf
+    expect(fwOszNeu()[0]).toMatchObject({ platz: 11 });
+    expect(decodeOsz(fwOszNeu()[0].bytes).name).toBe("X-SAW -7");
+    expect(fwOszNeu()).toHaveLength(25);
+
+    const r = fwBaueAbbild();
+    expect(r.ok, r.ok ? "" : r.reason).toBe(true);
+    if (!r.ok) return;
+    expect(leseOszStandAusFirmware(r.bytes)).toEqual({ ok: true, anzahl: 35 });
+    expect(decodeOsz(liesOsz(r.bytes, 11))).toMatchObject({ name: "X-SAW -7", parameter: -18, kategorie: 0x0a, programm: 25 });
+    expect(r.zeilen.join("\n")).toMatch(/Oszillatoren: 25 Variante\(n\) auf 11–35/);
+    expect(r.zeilen.join("\n")).toMatch(/Oszillator-Tabelle: Liste bis 10 → bis 35/);
+
+    // Bauplan hin und zurueck
+    const b = fwBauplanText("Osz");
+    expect(b.ok).toBe(true);
+    if (!b.ok) return;
+    const plan = leseBauplan(b.text);
+    expect(plan.osz).toHaveLength(25);
+    expect(plan.osz?.[0]).toMatchObject({ platz: 11 });
+    initFirmwareWerkbank({ aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }) });
+    await basisLaden(fakeFirmware());
+    const l = fwBauplanLaden(b.text, "osz.tfbau");
+    expect(l.ok).toBe(true);
+    expect(fwOszNeu()).toHaveLength(25);
+    expect(el("fwOsz").checked).toBe(true);
+
+    // Fluechtig: Eintraege, dann vier Zellen (Bytes, Anzahl, Bytes, Anzahl)
+    initFirmwareWerkbank({
+      aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }),
+      lesen: async (addr, len) => ({ ok: true as const, bytes: fw.slice(dateiOffset(addr), dateiOffset(addr) + len) }),
+      schreiben: async (addr, bytes) => {
+        schreibungen.push({ addr, bytes: Array.from(bytes) });
+        return true;
+      },
+    });
+    await basisLaden(fw);
+    fwOszAnhaengen(2, "X-SAW -1", -3);
+    el("fwOszGeraet").feuere("click");
+    await warte();
+    await warte();
+    // Der DOM-Stub behaelt die Klick-Handler frueherer Inits — deshalb nach Adresse pruefen, nicht nach Reihenfolge der Laeufe.
+    expect([...new Set(schreibungen.map((s) => s.addr))]).toEqual([OSZ_TABELLE_ADDR + 10 * 32, 0xc004e3bc, 0xc004e3c0, 0xc004faf8, 0xc004fafc]);
+    const nachAddr = new Map(schreibungen.map((s) => [s.addr, s.bytes]));
+    expect(nachAddr.get(0xc004e3bc)).toEqual([(11 * 32) & 0xff, (11 * 32) >> 8, 0, 0]);
+    expect(nachAddr.get(0xc004e3c0)).toEqual([11, 0, 0, 0]);
+    expect(nachAddr.get(OSZ_TABELLE_ADDR + 10 * 32)?.slice(0, 8)).toEqual(Array.from(new TextEncoder().encode("X-SAW -1")));
+    // (Die Statuszeile ist hier nicht belastbar: basisLaden setzt sie nach dem asynchronen Hash noch einmal.)
   });
 
   it("Bauplan: sichern nimmt die angehakten Bausteine mit, laden legt sie zurueck in Manager und Werkbank", async () => {
