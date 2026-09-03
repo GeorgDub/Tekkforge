@@ -18,6 +18,7 @@ import {
   fwOszFmSerie,
   fwOszEntfernen,
   fwOszNeu,
+  fwGeraetVergleich,
 } from "../src/gui/firmwareWerkbank";
 import { LDR_START, hexZuBytes, type DspPatch } from "../src/core/dspPatch";
 import { OSZ_TABELLE_ADDR, OSZ_LAUFZEIT_ADDR, OSZ_MAX, OSZ_ZEIGER_ADDRS, OSZ_GRENZE_STELLEN, oszZaehlerSchreibliste, oszOffset, oszVariante, decodeOsz, liesOsz, leseOszStandAusFirmware } from "../src/core/oszTabelle";
@@ -627,5 +628,34 @@ describe("Firmware-Werkbank", () => {
     el("fwGlobalIn").feuere("change");
     await warte();
     expect(el("fwStatus").textContent).toMatch(/kein Global-Block/);
+  });
+  it("Gerät ↔ Basis: Laufzeitkopie, Beschreiber, Grenze und Modulationstabelle vom Geraet gegen die Basis", async () => {
+    const fw = fakeFirmware();
+    const geraet = fw.slice();
+    // am „Geraet“: Platz 3 heisst anders, die Grenze steht auf 272
+    geraet.set(oszVariante(OSZ_SAW, { name: "FREMD 3" }), oszOffset(3));
+    const lesen = async (addr: number, len: number) => {
+      if (addr >= OSZ_LAUFZEIT_ADDR && addr < OSZ_LAUFZEIT_ADDR + OSZ_MAX * 32) {
+        const o = dateiOffset(OSZ_TABELLE_ADDR + (addr - OSZ_LAUFZEIT_ADDR));
+        return { ok: true as const, bytes: geraet.slice(o, o + len) };
+      }
+      if (addr >= 0xc01a0000 && addr < 0xc01a0000 + 0x20000) return { ok: true as const, bytes: new Uint8Array(len).fill(0xff) };
+      return { ok: true as const, bytes: geraet.slice(dateiOffset(addr), dateiOffset(addr) + len) };
+    };
+    initFirmwareWerkbank({ aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }), lesen });
+    await basisLaden(fw);
+    const z = await fwGeraetVergleich();
+    const text = z.join("\n");
+    expect(text).toMatch(/Gerät zählt 10, Basis 10/);
+    expect(text).toMatch(/1 „SAW“ … 10 „SAW 10“/);
+    expect(text).toMatch(/1 Platz\/Plätze anders.*3: Gerät „FREMD 3“ ↔ Basis „SAW 3“/);
+    expect(text).toMatch(/Grenze im Code: 272 ✓/);
+    expect(text).toMatch(/Modulationstypen am Gerät: 0 \(Basis 0\)/);
+    expect(el("fwStatus").textContent).toMatch(/10 Oszillatoren \(1 anders\), Grenze 272, 0 Modulationstypen/);
+    // ohne Leseweg
+    initFirmwareWerkbank({ aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }) });
+    await basisLaden(fw);
+    expect((await fwGeraetVergleich()).length).toBe(0);
+    expect(el("fwStatus").textContent).toMatch(/Kein Geräte-Leseweg/);
   });
 });

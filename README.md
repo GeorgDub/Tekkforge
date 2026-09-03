@@ -1067,6 +1067,18 @@ TekkForge) — die Nummern muessen zur Firmware auf dem Geraet passen. Der
 Bank-Bau warnt fuer Nummern unter 501 nicht mehr „nicht im Pool"; Vorhoeren
 spielt weiterhin nur Samples.
 
+## Gerät ↔ Basis (2026-09-03)
+
+Knopf in der Werkbank neben „Mit Datei vergleichen": liest vom laufenden
+Geraet die Oszillator-Beschreiber, die Laufzeitkopie der Oszillator-Liste
+(0xC047B08C, in 256er-Haeppchen), die Oszillator-Grenze im Code und die
+Modulationstabelle (bis zum ersten leeren Eintrag) und haelt alles gegen
+die Basis: Zaehler, erster abweichender Platz, Grenze unter dem letzten
+Platz (⚠), Zahl der Modulationstypen. So sieht man ohne Display, welcher
+Stand im Geraet steckt und ob fluechtige Aenderungen noch da sind. Am
+Geraet (2026-09-03 nachts): 362 Oszillatoren byteweise wie ALLES2, Grenze
+364, 132 Modulationstypen (96 der Basis + 36 fluechtige).
+
 ## Sample-Ordner → Bank + Pattern-Set
 
 Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze

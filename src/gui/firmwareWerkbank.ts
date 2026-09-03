@@ -113,7 +113,7 @@ import {
   pbmZuPixel,
 } from "../core/splash";
 import { legeAb } from "./ablage";
-import { liesModTabelle, modKombinationen, modName, decodeMod, setzeModTabelle, MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG, MOD_WELLEN, MOD_ZIEL_NAMEN, type ModEintragMitPlatz } from "../core/modTabelle";
+import { liesModTabelle, modKombinationen, modName, decodeMod, setzeModTabelle, istModLeer, MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG, MOD_MAX, MOD_WELLEN, MOD_ZIEL_NAMEN, type ModEintragMitPlatz } from "../core/modTabelle";
 
 const FIRMWARE_ORDNER = "Firmware";
 const SKALA = 4;
@@ -795,6 +795,80 @@ async function vergleichen(f: File): Promise<void> {
   }
 }
 
+/** Einen Bereich in 256er-Haeppchen vom Geraet lesen (RAM-Lesen liefert hoechstens 0x100 je Anfrage). */
+async function geraetLesen(addr: number, len: number): Promise<Uint8Array | null> {
+  if (!hooks?.lesen) return null;
+  const out = new Uint8Array(len);
+  for (let o = 0; o < len; o += 0x100) {
+    const r = await hooks.lesen(addr + o, Math.min(0x100, len - o));
+    if (!r.ok) return null;
+    out.set(r.bytes.subarray(0, Math.min(0x100, len - o)), o);
+  }
+  return out;
+}
+
+/**
+ * Geraet ↔ Basis: Oszillator-Liste (Laufzeitkopie + Beschreiber), Grenze im
+ * Code und Modulationstabelle vom laufenden Geraet lesen und gegen die Basis
+ * halten. Fuer Tests direkt aufrufbar; liefert die Berichtzeilen.
+ */
+export async function fwGeraetVergleich(): Promise<string[]> {
+  const zeilen: string[] = [];
+  const fertig = (status: string): string[] => {
+    const el = document.getElementById("fwBericht");
+    if (el) el.textContent = zeilen.join("\n");
+    setStatus(status);
+    return zeilen;
+  };
+  if (!basis) return fertig("Erst eine Basis laden.");
+  if (!hooks?.lesen) return fertig("Kein Geräte-Leseweg (MIDI aus).");
+  zeilen.push(`Gerät ↔ Basis (${basisName})`);
+  // 1) Oszillator-Beschreiber
+  const zellen = [];
+  for (const z of OSZ_ZAEHLER) {
+    const r = await hooks.lesen(z.addr, 4);
+    if (!r.ok) return fertig(`Beschreiber nicht lesbar: ${r.reason} — erst „Gerät suchen“?`);
+    zellen.push({ addr: z.addr, wert: (r.bytes[0] | (r.bytes[1] << 8) | (r.bytes[2] << 16) | (r.bytes[3] << 24)) >>> 0 });
+  }
+  const stand = leseOszStand(zellen);
+  if (!stand.ok) return fertig(`Gerät: ${stand.reason}`);
+  zeilen.push(`Oszillator-Beschreiber: Gerät zählt ${stand.anzahl}, Basis ${oszBasisAnzahl}${stand.anzahl === oszBasisAnzahl ? "" : " ⚠"}`);
+  // 2) Laufzeitkopie gegen die Basis-Tabelle
+  const n = Math.min(stand.anzahl, OSZ_MAX);
+  const kopie = await geraetLesen(OSZ_LAUFZEIT_ADDR, n * OSZ_EINTRAG);
+  if (!kopie) return fertig("Laufzeitkopie nicht lesbar.");
+  let anders = 0;
+  let erster = "";
+  for (let p = 1; p <= n; p++) {
+    const g = kopie.subarray((p - 1) * OSZ_EINTRAG, p * OSZ_EINTRAG);
+    const b = p <= oszBasisAnzahl ? liesOsz(basis, p) : null;
+    const gleich = !!b && g.every((x, i) => x === b[i]);
+    if (!gleich) {
+      anders++;
+      if (!erster) erster = `${p}: Gerät „${istOszLeer(g) ? "—" : decodeOsz(g).name}“ ↔ Basis „${b && !istOszLeer(b) ? decodeOsz(b).name : "—"}“`;
+    }
+  }
+  const gn = (p: number) => decodeOsz(kopie.subarray((p - 1) * OSZ_EINTRAG, p * OSZ_EINTRAG)).name;
+  zeilen.push(`Oszillator-Liste am Gerät: ${n} Plätze, 1 „${gn(1)}“ … ${n} „${gn(n)}“${n >= 35 ? `, 35 „${gn(35)}“` : ""}`);
+  zeilen.push(anders ? `  ${anders} Platz/Plätze anders als die Basis — erster: ${erster}` : "  byteweise wie die Basis");
+  // 3) Grenze im Code
+  const g = await hooks.lesen(OSZ_GRENZE_STELLEN[0], 4);
+  const grenze = g.ok ? cmpR0Immediate((g.bytes[0] | (g.bytes[1] << 8) | (g.bytes[2] << 16) | (g.bytes[3] << 24)) >>> 0) : null;
+  zeilen.push(grenze === null ? "Oszillator-Grenze im Code: nicht lesbar/erkannt" : `Oszillator-Grenze im Code: ${grenze}${grenze < n - 1 ? ` ⚠ unter dem letzten Platz (${n - 1}) — Plätze darüber laufen über den Sample-Pfad` : " ✓"}`);
+  // 4) Modulationstabelle
+  const modBasis = liesModTabelle(basis);
+  const geraetMod: Uint8Array[] = [];
+  for (let i = 0; i < MOD_MAX; i++) {
+    const r = await hooks.lesen(MOD_TABELLE_ADDR_HACKTRIBE + i * MOD_EINTRAG, MOD_EINTRAG);
+    if (!r.ok) return fertig("Modulationstabelle nicht lesbar.");
+    if (istModLeer(r.bytes.subarray(0, MOD_EINTRAG))) break;
+    geraetMod.push(r.bytes.slice(0, MOD_EINTRAG));
+  }
+  const modAnders = geraetMod.filter((b, i) => !modBasis[i] || modName(b) !== modName(modBasis[i])).length;
+  zeilen.push(`Modulationstypen am Gerät: ${geraetMod.length} (Basis ${modBasis.length})${geraetMod.length ? `, letzter „${modName(geraetMod[geraetMod.length - 1])}“` : ""}${modAnders ? ` — ${modAnders} Name(n) anders als die Basis` : ""}`);
+  return fertig(`Gerät gelesen: ${n} Oszillatoren (${anders ? `${anders} anders` : "wie die Basis"}), Grenze ${grenze ?? "?"}, ${geraetMod.length} Modulationstypen.`);
+}
+
 async function sicherungEinbrennen(f: File): Promise<void> {
   const r = fwBaueAusSicherung(await f.text());
   if (!r.ok) {
@@ -992,6 +1066,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   $("fwSichtbar").addEventListener("click", vorschau);
   $("fwBauen").addEventListener("click", () => void bauen());
   dateiKnopf("fwVergleichen", "fwVergleichIn", (f) => void vergleichen(f));
+  $("fwGeraetVergleich").addEventListener("click", () => void fwGeraetVergleich());
   dateiKnopf("fwSicherungBrennen", "fwSicherungIn", (f) => void sicherungEinbrennen(f));
 
   // Pixel-Editor

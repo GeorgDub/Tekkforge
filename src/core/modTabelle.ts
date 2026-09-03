@@ -20,9 +20,14 @@
  *     +0x2A Depth-Vorgabe, +0x2B Depth-Min, +0x2C Depth-Max (signiert; „Up"
  *     = 0…63, „Dwn" = −63…0). EG-Typen haben ab +0x19 ein anderes Layout.
  *   - ⚠ Wo das Menue seine Obergrenze (96) hernimmt, ist NICHT gefunden: im
- *     Code-Diff gibt es kein 72 → 96, und vier Funktionen klemmen den Typ
- *     unveraendert bei 71 (0xC0098D14 u. a.). Ob ein 97. Eintrag im Menue
- *     erscheint, entscheidet nur der Versuch am Geraet („fluechtig").
+ *     Code-Diff gibt es kein 72 → 96. Die vier Funktionen mit `cmp #71`
+ *     (0xC0098D14, 0xC00994DC, 0xC00995D0, 0xC0099614) bedienen ein Feld je
+ *     Part von 72 × 2 Bytes (0xC0099458 kopiert beim Start +0x16/+0x17 jedes
+ *     Typs hinein: die Regler-Vorgaben Speed/Depth je Typ, Stride 0x90) —
+ *     Typen ab 73 bekommen dort keinen Platz, ihre Reglerwerte werden also
+ *     nicht je Typ gemerkt. Hacktribes Sinus-Typen laufen trotzdem; ein 97.
+ *     Eintrag wuerde es genauso. Ob das MENUE ihn zeigt, entscheidet nur der
+ *     Versuch am Geraet („fluechtig").
  *
  * Eigene Typen entstehen als KOMBINATIONEN vorhandener: Wellenform und
  * BPM-Flags sind getrennte Bytes, also gibt es zu jedem BPM-Typ (SawUpB,
