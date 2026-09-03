@@ -130,7 +130,8 @@ describe("firmwareVergleich", () => {
     const v = vergleicheFirmware(a, r.bytes);
     expect(v.sonstige).toEqual([]);
     expect(v.unterschiede.map((u) => u.bereich)).toEqual(["dsp"]);
-    expect(v.zeilen.join("\n")).toMatch(/DSP-Patches: „Wellentabelle nullen \(Diskriminator\)“ original ↔ gepatcht/);
+    // Registerreihenfolge: die Geschwister-Patches derselben Tabelle sind danach „unbekannt“, der gesetzte „gepatcht“
+    expect(v.zeilen.join("\n")).toMatch(/DSP-Patches: .*„Wellentabelle halbe Amplitude“ original ↔ unbekannt.*„Wellentabelle nullen \(Diskriminator\)“ original ↔ gepatcht/);
   });
 
   it("verlangt zwei vollstaendige Abbilder", () => {
