@@ -159,7 +159,7 @@ function fakeFirmware(): Uint8Array {
   for (const z of GROOVE_ZAEHLER) fw[dateiOffset(z.addr)] = z.plusEins ? 62 : 61;
   const init = new Uint8Array(buildE2PatternFile({ name: "WERK INIT", parts: [] } as never));
   fw.set(init.subarray(0x100, 0x100 + INIT_PATTERN_GROESSE), INIT_PATTERN_OFFSET);
-  fw.fill(0xff, SPLASH_OFFSET, SPLASH_OFFSET + 1024);
+  fw.fill(0x00, SPLASH_OFFSET, SPLASH_OFFSET + 1024);
   const gl = new Uint8Array(INIT_GLOBAL_GROESSE);
   gl.set(new TextEncoder().encode("GLST"), 0);
   gl.set(new TextEncoder().encode("GLED"), 0xfc);
@@ -308,7 +308,7 @@ describe("Firmware-Werkbank", () => {
     for (let i = 0; i < 32; i++) mfx.set(presetBytes(`RAM M${i + 1}`, true), i * FX_PRESET_SIZE);
     const gv = new Uint8Array(96 * GROOVE_SIZE).fill(0xff);
     for (let i = 0; i < 62; i++) gv.set(grooveBytes(`G${i + 1}`), i * GROOVE_SIZE);
-    const splash = new Uint8Array(1024).fill(0xff);
+    const splash = new Uint8Array(1024).fill(0x00);
     splash[5] = 0x00;
     const text = baueSicherung(
       [
@@ -435,8 +435,8 @@ describe("Firmware-Werkbank", () => {
     const plan = leseBauplan(r.text);
     expect(plan.eintraege.map((e) => `${e.art}:${e.platz}:${e.name}`)).toEqual(["ifx:50:Ring LFO"]);
     expect(plan.initPattern).toBeDefined();
-    expect(plan.splash?.[0]).toBe(0xff); // Pixel 7 in Zeile 0 → Byte 7, nicht Byte 0
-    expect(plan.splash?.[7]).toBe(0x7f);
+    expect(plan.splash?.[0]).toBe(0x00); // Pixel 7 in Zeile 0 → Byte 7, nicht Byte 0
+    expect(plan.splash?.[7]).toBe(0x80);
 
     // Frisch starten, Basis laden, Bauplan laden: alles wieder da
     initFirmwareWerkbank({ aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }) });
@@ -455,13 +455,13 @@ describe("Firmware-Werkbank", () => {
     expect(gebaut.ok).toBe(true);
     if (!gebaut.ok) return;
     expect(fwInitPatternName(gebaut.bytes)).toBe("TEKK INIT");
-    expect(gebaut.bytes[SPLASH_OFFSET + 7]).toBe(0x7f);
+    expect(gebaut.bytes[SPLASH_OFFSET + 7]).toBe(0x80);
     expect(fwBauplanLaden("kaputt", "x").ok).toBe(false);
   });
 
   it("Init-Pattern aus einer Datei; „aus Firmware“ holt das Startbild der Basis", async () => {
     const fw = fakeFirmware();
-    fw[SPLASH_OFFSET] = 0x7f; // Pixel (0,0) dunkel
+    fw[SPLASH_OFFSET] = 0x80; // Pixel (0,0) dunkel
     await basisLaden(fw);
     el("fwPresets").checked = false;
     const datei = new Uint8Array(buildE2PatternFile({ name: "AUS DATEI", parts: [] } as never));
@@ -477,7 +477,7 @@ describe("Firmware-Werkbank", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(fwInitPatternName(r.bytes)).toBe("AUS DATEI");
-    expect(r.bytes[SPLASH_OFFSET]).toBe(0x7f);
+    expect(r.bytes[SPLASH_OFFSET]).toBe(0x80);
   });
 
   it("Init-Global aus einer Datei landet im Abbild; eine falsche Datei wird abgelehnt", async () => {

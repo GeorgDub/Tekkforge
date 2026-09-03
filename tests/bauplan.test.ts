@@ -128,7 +128,7 @@ describe("bauplan", () => {
     for (const z of IFX_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 50 : 49);
     for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 63 : 62);
     expect(String.fromCharCode(...liesInitPattern(r.bytes).subarray(0x110, 0x119))).toBe("MEIN INIT");
-    expect(r.bytes[SPLASH_OFFSET]).toBe(0x7f);
+    expect(r.bytes[SPLASH_OFFSET]).toBe(0x80);
     expect(r.bytes[INIT_GLOBAL_OFFSET + 0x28]).toBe(3);
     expect(r.zeilen).toEqual(["Presets: 1 IFX, 0 MFX, 1 Grooves", "IFX-Menü: bis 49 → bis 50", "Groove-Menü: bis 62 → bis 63", "Init-Pattern gesetzt", "Init-Global gesetzt", "Startbild gesetzt"]);
   });

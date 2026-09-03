@@ -913,3 +913,19 @@ app.whenReady().then(() => {
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
+
+// Vor dem Ende erst die MIDI-Ports schliessen lassen: ein Worker, der mit
+// offenem Eingang abgeraeumt wird, reisst den Prozess unter Windows mit
+// (midiInUnprepareHeader, 0xC0000409). Einmal warten, dann wirklich beenden.
+let midiSauberBeendet = false;
+app.on("before-quit", (ev) => {
+  if (midiSauberBeendet || !midiWorker) return;
+  ev.preventDefault();
+  const w = midiWorker;
+  const weiter = () => {
+    midiSauberBeendet = true;
+    midiWorker = null;
+    w.terminate().catch(() => {}).finally(() => app.quit());
+  };
+  midiCall("close", {}, 800).then(weiter, weiter);
+});

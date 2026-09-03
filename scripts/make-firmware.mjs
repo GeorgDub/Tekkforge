@@ -2,7 +2,7 @@
  * make-firmware.mjs — eine Sammlung in die Hacktribe-Firmware einbrennen.
  *
  *   npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab]
- *                                     [--init-pattern <.e2spat>] [--splash <128x64.pbm>] [--basis-egal]
+ *                                     [--init-pattern <.e2spat>] [--splash <128x64.pbm>] [--dsp id,id] [--dsp-datei <patch.json>] [--basis-egal]
  *
  * `--ab` nummeriert die Sammlung vorher wie der ▲/▼-Knopf im Panel neu (je
  * Art eine Reihe ab diesem Platz); Eintraege hinter der Art-Grenze fallen
@@ -20,6 +20,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { baueFirmware, pruefeFirmware, pruefeBasis, HACKTRIBE_SHA256, dateiOffset, setzeInitPattern, setzeSplash } from "../src/core/firmwareBau.ts";
+import { wendeDspPatchAn, leseDspPatchDatei } from "../src/core/dspPatch.ts";
+import { DSP_PATCH_REGISTER } from "../src/core/dspPatchRegister.ts";
 import { pixelZuSplash, pbmZuPixel } from "../src/core/splash.ts";
 import { leseSammlung, nummerierePlaetze } from "../src/core/sammlung.ts";
 import { decodeFxPreset } from "../src/core/e2FxPreset.ts";
@@ -37,7 +39,7 @@ const zielPfad = arg("ziel");
 const ab = arg("ab");
 const richtung = arg("richtung", "auf");
 if (!basisPfad || !zielPfad) {
-  console.error("Aufruf: --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab] [--init-pattern <.e2spat>] [--splash <.pbm>] [--basis-egal]");
+  console.error("Aufruf: --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab] [--init-pattern <.e2spat>] [--splash <.pbm>] [--dsp id,id] [--dsp-datei <patch.json>] [--basis-egal]");
   process.exit(1);
 }
 
@@ -96,8 +98,37 @@ if (splashPfad) {
     process.exit(1);
   }
 }
-if (!eintraege.length && !initPfad && !splashPfad) {
-  console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern noch --splash angegeben.");
+// DSP-Patches (experimentell): --dsp id1,id2 aus dem Register, --dsp-datei <json> als eigener Patch.
+const dspIds = (arg("dsp") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const dspDatei = arg("dsp-datei");
+const dspPatches = [];
+for (const id of dspIds) {
+  const p = DSP_PATCH_REGISTER.find((x) => x.id === id);
+  if (!p) {
+    console.error(`Unbekannter DSP-Patch „${id}“. Bekannt: ${DSP_PATCH_REGISTER.map((x) => x.id).join(", ")}`);
+    process.exit(1);
+  }
+  dspPatches.push(p);
+}
+if (dspDatei) {
+  try {
+    dspPatches.push(leseDspPatchDatei(fs.readFileSync(dspDatei, "utf8"), path.basename(dspDatei).replace(/\.json$/i, "")));
+  } catch (e) {
+    console.error(`DSP-Patch-Datei nicht lesbar: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+}
+for (const p of dspPatches) {
+  const d = wendeDspPatchAn(r.bytes, p);
+  if (!d.ok) {
+    console.error(`DSP-Patch nicht gesetzt: ${d.reason}`);
+    process.exit(1);
+  }
+  r = { ...r, bytes: d.bytes };
+  console.log(`DSP-Patch: ${p.titel} (${p.status}) — ${d.stellen.map((s) => `${s.bytes} B @ 0x${s.offset.toString(16).toUpperCase()}`).join(", ")} ⚠ experimentell, Hörprobe am Gerät`);
+}
+if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length) {
+  console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern, --splash noch --dsp angegeben.");
   process.exit(1);
 }
 

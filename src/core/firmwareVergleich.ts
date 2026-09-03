@@ -134,7 +134,7 @@ export function vergleicheFirmware(a: Uint8Array, b: Uint8Array): FirmwareVergle
   block(INIT_GLOBAL_OFFSET, INIT_GLOBAL_GROESSE, "initGlobal", (u) => `Chain ${u[E2_GLOBAL_CHAIN_MODE_OFF]}, Clock ${u[E2_GLOBAL_CLOCK_SOURCE_OFF]}`);
   block(SPLASH_OFFSET, SPLASH_GROESSE, "splash", (u) => {
     let dunkel = 0;
-    for (const v of u) for (let k = 0; k < 8; k++) if (((v >> k) & 1) === 0) dunkel++;
+    for (const v of u) for (let k = 0; k < 8; k++) if ((v >> k) & 1) dunkel++;
     return `${dunkel} dunkle Pixel`;
   });
 

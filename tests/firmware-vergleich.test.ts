@@ -72,7 +72,7 @@ describe("firmwareVergleich", () => {
     const a = fakeFirmware();
     const b = a.slice();
     b.set(new TextEncoder().encode("TEKK INIT"), INIT_PATTERN_OFFSET + 0x10);
-    b[SPLASH_OFFSET] = 0x7f;
+    b[SPLASH_OFFSET] = 0x80;
     b.set(grooveBytes("Neu"), dateiOffset(addressForSlot(grooveMap, 3)));
     b[0x12345] = 0xaa;
     b[0x12350] = 0xbb; // innerhalb 16 Bytes → derselbe Lauf

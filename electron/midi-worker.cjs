@@ -182,6 +182,20 @@ parentPort.on("message", (msg) => {
         parentPort.postMessage({ type: "hinweis", text: `MIDI-Ausgang „${outName}“ neu geöffnet${eingang ? ", Eingang ebenfalls" : ""}` });
       }
       parentPort.postMessage({ id, ok: true });
+    } else if (cmd === "close") {
+      // Sauberes Ende vor dem Beenden der App: alle Ports schliessen, solange
+      // der Worker noch lebt. Wird er stattdessen mit offenem Eingang
+      // abgeraeumt, stirbt der Prozess unter Windows in midiInUnprepareHeader
+      // (0xC0000409) — der KORG-Treiber mag kein Ende mitten im SysEx-Puffer.
+      for (const port of [input, input2, out]) {
+        try {
+          if (port) port.closePort();
+        } catch { /* totes Handle */ }
+      }
+      input = null;
+      input2 = null;
+      out = null;
+      parentPort.postMessage({ id, ok: true });
     } else if (cmd === "clock") {
       // { action: "start"|"stop"|"bpm", bpm? }
       if (msg.action === "start") {

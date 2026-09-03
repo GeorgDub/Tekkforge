@@ -25,6 +25,9 @@ export interface WerkbankHooks {
   lesen?(addr: number, len: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
 }
 let hooks: WerkbankHooks | null = null;
+/** Eigene DSP-Patches aus Dateien oder Bauplaenen; das Register kommt dazu. */
+let dspEigene: DspPatch[] = [];
+const dspGewaehlt = new Set<string>();
 const aktuellesPatternDatei = (): { name: string; bytes: Uint8Array } => {
   if (!hooks) throw new Error("kein Editor angebunden");
   return hooks.aktuellesPattern();
@@ -51,6 +54,8 @@ import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
 import { vergleicheFirmware } from "../core/firmwareVergleich";
 import { schreibeText, textBreite } from "../core/pixelSchrift";
+import { DSP_PATCH_REGISTER } from "../core/dspPatchRegister";
+import { wendeDspPatchAn, dspPatchStand, leseDspPatchDatei, type DspPatch } from "../core/dspPatch";
 
 /** Text ins Startbild schreiben — fuer Tests direkt aufrufbar. */
 export function fwTextSchreiben(text: string, skala: number, zeile: number | "mitte"): void {
@@ -186,6 +191,7 @@ async function basisLaden(f: File): Promise<void> {
   ($("fwBasisInfo") as HTMLElement).textContent =
     `${f.name} — ${herkunft}; IFX-Menü bis ${befund.ifxMaxIndex + 1}, Grooves bis ${befund.grooveMaxIndex + 1}, Init-Pattern „${befund.initPatternName || "?"}“`;
   setStatus(`Basis geladen. Startbild mit „aus Firmware“ holen, Bausteine anhaken, bauen.`);
+  dspListe();
   vorschau();
 }
 
@@ -247,6 +253,60 @@ async function globalVomGeraet(): Promise<void> {
   setStatus("Global-Block vom Gerät übernommen — ob er den Werksstand oder den laufenden Stand zeigt, ist am Gerät noch offen.");
 }
 
+// ─── DSP-Patches ─────────────────────────────────────────────────────────────
+
+const DSP_STATUS_TEXT: Record<DspPatch["status"], string> = {
+  "hoerprobe-offen": "Hörprobe offen",
+  "am-geraet-gehoert": "am Gerät gehört",
+  diskriminator: "nur Nachweis, kein Klang",
+};
+
+/** Register plus eigene Patches; ein eigener mit gleicher id verdraengt den Register-Eintrag. */
+export function fwDspPatches(): DspPatch[] {
+  return [...DSP_PATCH_REGISTER.filter((r) => !dspEigene.some((e) => e.id === r.id)), ...dspEigene];
+}
+
+/** Einen Patch an- oder abwaehlen — fuer Tests direkt aufrufbar. */
+export function fwDspWaehlen(id: string, an: boolean): void {
+  if (an) dspGewaehlt.add(id);
+  else dspGewaehlt.delete(id);
+  vorschau();
+}
+
+/** Einen eigenen Patch aufnehmen (ersetzt einen gleichnamigen) und anhaken. */
+export function fwDspAufnehmen(p: DspPatch): void {
+  dspEigene = [...dspEigene.filter((e) => e.id !== p.id), p];
+  dspGewaehlt.add(p.id);
+  dspListe();
+  vorschau();
+}
+
+function dspListe(): void {
+  const el = document.getElementById("fwDspListe");
+  if (!el) return;
+  const stand = (p: DspPatch): string => {
+    if (!basis) return "";
+    const s = dspPatchStand(basis, p);
+    return s === "original" ? "" : s === "gepatcht" ? " · <b>in der Basis schon drin</b>" : " · <b>passt nicht zur Basis</b>";
+  };
+  el.innerHTML = fwDspPatches()
+    .map(
+      (p) =>
+        `<label class="sub" style="margin:2px 0;display:flex;align-items:flex-start;gap:4px" title="${escapeHtml(p.beschreibung)}&#10;Quelle: ${escapeHtml(p.quelle)}"><input type="checkbox" data-dsp="${escapeHtml(p.id)}"${dspGewaehlt.has(p.id) ? " checked" : ""} /><span>${escapeHtml(p.titel)} <span style="opacity:.7">— ${p.edits.reduce((a, e) => a + e.alt.length, 0)} Bytes, ${DSP_STATUS_TEXT[p.status]}${stand(p)}</span></span></label>`,
+    )
+    .join("");
+}
+
+async function dspLaden(f: File): Promise<void> {
+  try {
+    const p = leseDspPatchDatei(await f.text(), f.name.replace(/\.json$/i, ""));
+    fwDspAufnehmen(p);
+    setStatus(`DSP-Patch „${p.titel}“ aufgenommen und angehakt (${p.edits.length} Änderung(en)) — ⚠ experimentell, erst am Gerät hören.`);
+  } catch (e) {
+    setStatus(`Patch-Datei nicht lesbar: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 // ─── Bauen ───────────────────────────────────────────────────────────────────
 
 interface Bauplan {
@@ -255,6 +315,7 @@ interface Bauplan {
   init: { name: string; bytes: Uint8Array } | null;
   global: { name: string; bytes: Uint8Array } | null;
   splash: boolean;
+  dsp: DspPatch[];
   zeilen: string[];
 }
 
@@ -302,7 +363,9 @@ function bauplan(): Bauplan | null {
     global = globalBlock;
     zeilen.push(global ? `Init-Global: ${global.name} (Chain ${global.bytes[E2_GLOBAL_CHAIN_MODE_OFF]}, Clock ${global.bytes[E2_GLOBAL_CLOCK_SOURCE_OFF]})` : "Init-Global: kein Block geladen");
   }
-  return { presets, grooves: gv, init, global, splash, zeilen };
+  const dsp = fwDspPatches().filter((p) => dspGewaehlt.has(p.id));
+  if (dsp.length) zeilen.push(`DSP-Patches (⚠ experimentell): ${dsp.map((p) => p.titel).join(", ")}`);
+  return { presets, grooves: gv, init, global, splash, dsp, zeilen };
 }
 
 function vorschau(): void {
@@ -332,7 +395,13 @@ export function fwBaueAbbild(): { ok: true; bytes: Uint8Array; zeilen: string[] 
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
-  if (!eintraege.length && !plan.init && !plan.global && !plan.splash) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
+  for (const p of plan.dsp) {
+    const r = wendeDspPatchAn(bytes, p);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    bytes = r.bytes;
+    zeilen.push(`DSP: ${p.titel} — ${r.stellen.map((st) => `${st.bytes} B @ 0x${st.offset.toString(16).toUpperCase()}`).join(", ")}`);
+  }
+  if (!eintraege.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
   return { ok: true, bytes, zeilen };
 }
 
@@ -421,7 +490,7 @@ async function sicherungEinbrennen(f: File): Promise<void> {
 export function fwBauplanText(titel: string): { ok: true; text: string; zeilen: string[] } | { ok: false; reason: string } {
   const plan = bauplan();
   if (!plan) return { ok: false, reason: "Erst eine Basis laden." };
-  if (!plan.presets.length && !plan.grooves.length && !plan.init && !plan.global && !plan.splash) {
+  if (!plan.presets.length && !plan.grooves.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length) {
     return { ok: false, reason: "Kein Baustein angehakt — der Bauplan wäre leer." };
   }
   const text = baueBauplan({
@@ -432,6 +501,7 @@ export function fwBauplanText(titel: string): { ok: true; text: string; zeilen: 
     ...(plan.init ? { initPattern: plan.init.bytes } : {}),
     ...(plan.global ? { initGlobal: plan.global.bytes } : {}),
     ...(plan.splash ? { splash: pixelZuSplash(pixel) } : {}),
+    ...(plan.dsp.length ? { dsp: plan.dsp } : {}),
   });
   return { ok: true, text, zeilen: plan.zeilen };
 }
@@ -483,6 +553,10 @@ export function fwBauplanLaden(text: string, woher: string): { ok: true; zeilen:
     ($("fwSplash") as HTMLInputElement).checked = true;
     zeilen.push("Startbild übernommen");
   }
+  if (plan.dsp?.length) {
+    for (const p of plan.dsp) fwDspAufnehmen(p);
+    zeilen.push(`DSP-Patches: ${plan.dsp.length} übernommen und angehakt (⚠ experimentell)`);
+  }
   vorschau();
   return { ok: true, zeilen };
 }
@@ -520,6 +594,8 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   globalBlock = null;
   bildHell = null;
   invertiert = false;
+  dspEigene = [];
+  dspGewaehlt.clear();
   pixel = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
   if (!document.getElementById("fwPanel")) return;
   dateiKnopf("fwBasisLaden", "fwBasisIn", (f) => void basisLaden(f));
@@ -530,6 +606,13 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   $("fwGlobalGeraet").addEventListener("click", () => void globalVomGeraet());
   $("fwBauplanSichern").addEventListener("click", () => void bauplanSichern());
   dateiKnopf("fwBauplanLaden", "fwBauplanIn", (f) => void bauplanLaden(f));
+  dateiKnopf("fwDspLaden", "fwDspIn", (f) => void dspLaden(f));
+  $("fwDspListe").addEventListener("change", (ev) => {
+    const t = (ev as Event | undefined)?.target as HTMLInputElement | null | undefined;
+    const id = t?.dataset?.dsp;
+    if (id) fwDspWaehlen(id, t!.checked);
+  });
+  dspListe();
   $("fwSichtbar").addEventListener("click", vorschau);
   $("fwBauen").addEventListener("click", () => void bauen());
   dateiKnopf("fwVergleichen", "fwVergleichIn", (f) => void vergleichen(f));

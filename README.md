@@ -640,8 +640,15 @@ Alle Stellen stammen aus hacktribes Skripten (`e2-init-pat.py`,
 Init-Pattern beginnt dort mit „PTST", der Startbildschirm dekodiert zum
 Hacktribe-Logo. Die **Bit-Belegung des Startbilds** (`core/splash.ts`) ist mit
 Einzel-Bit-Sonden am Python-Decoder abgeleitet: acht Baender zu acht Zeilen,
-ein Byte je Spalte, Bit 7 oben, 1 = hell. Der echte Splash geht byte-genau hin
-und zurueck (Fixture `tests/fixtures/splash-hacktribe.json`).
+ein Byte je Spalte, Bit 7 oben. Die **Polaritaet hat das Geraet entschieden**
+(2026-09-03): ein im Editor weiss-auf-schwarz gesetzter Schriftzug kam am
+Geraet schwarz-auf-weiss — Bitwert 1 ist also *dunkel*, 0 hell, und
+hacktribes `get_image` zeigt das Bild als Negativ. Seitdem zeigt der
+Pixel-Editor, was das Geraet zeigt: was man schwarz malt, bleibt am Geraet
+dunkel; wer helle Schrift auf dunklem Grund will, malt hell auf dunkel
+(„Invertieren"). Damit ist der Startbild-Weg **am Geraet abgenommen**. Der
+echte Splash geht byte-genau hin und zurueck (Fixture
+`tests/fixtures/splash-hacktribe.json`, dort als Negativ hinterlegt).
 
 Der **Pixel-Editor**: linke Maustaste malt, rechte radiert; „Bild laden…"
 passt ein beliebiges Bild seitenverhaeltnis-treu ein und schwellt es nach

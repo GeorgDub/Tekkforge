@@ -6,15 +6,19 @@
  * `ht_splash_screen.py` abgeleitet und mit Einzel-Bit-Sonden bestaetigt
  * (2026-09-02): acht Baender zu je acht Zeilen, je Band 128 Bytes — ein
  * Byte pro Spalte. Bit 7 ist die oberste Zeile des Bands, Bit 0 die
- * unterste. Bitwert 1 = hell, 0 = dunkel: ein Puffer aus lauter 0xFF ist
- * ein leerer Bildschirm.
+ * unterste. Die POLARITAET hat das Geraet entschieden (2026-09-03, Nutzer:
+ * ein im Editor weiss-auf-schwarz gesetzter Schriftzug kam am Geraet
+ * schwarz-auf-weiss): Bitwert 1 = dunkel, 0 = hell — ein Puffer aus lauter
+ * Nullen ist ein leerer (heller) Bildschirm. Hacktribes `get_image` zeigt
+ * das Bild also als Negativ; die Bit-LAGE stimmt trotzdem.
  *
  *     byte  = (y >> 3) * 128 + x
  *     bit   = 7 - (y & 7)
- *     dunkel ⇔ (byte >> bit) & 1 === 0
+ *     dunkel ⇔ (byte >> bit) & 1 === 1
  *
  * Pixel werden hier als `Uint8Array(128 * 64)` gefuehrt, zeilenweise, 1 =
- * dunkel (gesetzt) — das ist die Sicht dessen, der malt.
+ * dunkel (gesetzt) — das ist die Sicht dessen, der malt, und seit der
+ * Polaritaets-Korrektur auch die Sicht am Geraet.
  */
 export const SPLASH_BREITE = 128;
 export const SPLASH_HOEHE = 64;
@@ -22,7 +26,7 @@ export const SPLASH_BYTES = (SPLASH_BREITE * SPLASH_HOEHE) / 8;
 
 /** Ein leerer (heller) Bildschirm. */
 export function leererSplash(): Uint8Array {
-  return new Uint8Array(SPLASH_BYTES).fill(0xff);
+  return new Uint8Array(SPLASH_BYTES);
 }
 
 export function splashZuPixel(bytes: Uint8Array): Uint8Array {
@@ -32,7 +36,7 @@ export function splashZuPixel(bytes: Uint8Array): Uint8Array {
     const band = (y >> 3) * SPLASH_BREITE;
     const bit = 7 - (y & 7);
     for (let x = 0; x < SPLASH_BREITE; x++) {
-      px[y * SPLASH_BREITE + x] = ((bytes[band + x] >> bit) & 1) === 0 ? 1 : 0;
+      px[y * SPLASH_BREITE + x] = (bytes[band + x] >> bit) & 1;
     }
   }
   return px;
@@ -45,7 +49,7 @@ export function pixelZuSplash(px: Uint8Array): Uint8Array {
     const band = (y >> 3) * SPLASH_BREITE;
     const bit = 7 - (y & 7);
     for (let x = 0; x < SPLASH_BREITE; x++) {
-      if (px[y * SPLASH_BREITE + x]) out[band + x] &= ~(1 << bit) & 0xff;
+      if (px[y * SPLASH_BREITE + x]) out[band + x] |= 1 << bit;
     }
   }
   return out;

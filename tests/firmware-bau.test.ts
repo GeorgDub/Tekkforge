@@ -254,13 +254,13 @@ describe("firmwareBau — Grooves, Init-Pattern, Startbild", () => {
 
   it("Startbild: lesen und setzen, 1024 Bytes an 0xF9954", () => {
     const fw = fakeFirmware();
-    expect(liesSplash(fw).every((b) => b === 0xff)).toBe(true);
+    expect(liesSplash(fw).every((b) => b === 0)).toBe(true);
     const px = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
     px[0] = 1;
     const fw2 = setzeSplash(fw, pixelZuSplash(px));
-    expect(fw2[SPLASH_OFFSET]).toBe(0x7f);
-    expect(liesSplash(fw2)[0]).toBe(0x7f);
-    expect(fw[SPLASH_OFFSET]).toBe(0xff);
+    expect(fw2[SPLASH_OFFSET]).toBe(0x80);
+    expect(liesSplash(fw2)[0]).toBe(0x80);
+    expect(fw[SPLASH_OFFSET]).toBe(0x00);
     expect(() => setzeSplash(fw, new Uint8Array(10))).toThrow(/Bytes/);
     expect(SPLASH_GROESSE).toBe(1024);
   });
@@ -282,7 +282,7 @@ describe("firmwareBau — den ganzen Geraetestand einbrennen", () => {
     init.set(new TextEncoder().encode("PTST"), 0);
     init.set(new TextEncoder().encode("RAM INIT"), 0x10);
     const splash = leererSplash();
-    splash[0] = 0x7f;
+    splash[0] = 0x80;
     return [
       { key: "ifxPreset", bytes: ifx },
       { key: "mfxPreset", bytes: mfx },
@@ -307,7 +307,7 @@ describe("firmwareBau — den ganzen Geraetestand einbrennen", () => {
     const g = dateiOffset(addressForSlot(grooveMapL, 69));
     expect(decodeGroove(r.bytes.subarray(g, g + GROOVE_SIZE)).name).toBe("RAM G70");
     expect(String.fromCharCode(...r.bytes.subarray(INIT_PATTERN_OFFSET + 0x10, INIT_PATTERN_OFFSET + 0x18))).toBe("RAM INIT");
-    expect(r.bytes[SPLASH_OFFSET]).toBe(0x7f);
+    expect(r.bytes[SPLASH_OFFSET]).toBe(0x80);
     expect(r.bericht.ifxMaxIndex).toBe(59);
     expect(r.bericht.grooveMaxIndex).toBe(69);
     expect(r.bericht.fehlend).toEqual(["initGlobal"]); // die Test-Sicherung hat keinen Global-Block

@@ -18,7 +18,9 @@ import {
  * Der Startbildschirm: 1024 Bytes ↔ 128 × 64 Pixel. Die Wahrheit ist der
  * echte Hacktribe-Splash aus der Firmware, dekodiert mit hacktribes eigenem
  * `get_image` (Fixture, 2026-09-02) — das Logo war dabei lesbar, also stimmt
- * der Decoder, und unser Encoder muss dessen Umkehrung sein.
+ * die Bit-LAGE. Die POLARITAET hat das Geraet entschieden (2026-09-03): was
+ * hacktribes Decoder als hell zeigt, leuchtet am Geraet nicht — Bit 1 ist
+ * dunkel. Unsere Pixel sind deshalb das Negativ der Fixture.
  */
 const fixture = JSON.parse(fs.readFileSync("tests/fixtures/splash-hacktribe.json", "utf8")) as {
   bytes: number[];
@@ -32,16 +34,16 @@ describe("splash — Codec", () => {
     expect(SPLASH_BREITE).toBe(128);
     expect(SPLASH_HOEHE).toBe(64);
     expect(SPLASH_BYTES).toBe(1024);
-    expect(leererSplash().every((b) => b === 0xff)).toBe(true);
+    expect(leererSplash().every((b) => b === 0)).toBe(true);
   });
 
   it("dekodiert den echten Hacktribe-Splash genau wie hacktribes get_image", () => {
-    expect(Array.from(splashZuPixel(echteBytes))).toEqual(Array.from(echtePixel));
-    expect(echtePixel.reduce((a, b) => a + b, 0)).toBe(1376); // dunkle Pixel im Logo
+    expect(Array.from(splashZuPixel(echteBytes))).toEqual(Array.from(echtePixel, (p) => 1 - p));
+    expect(echtePixel.reduce((a, b) => a + b, 0)).toBe(1376); // Logo-Pixel (am Geraet die hellen)
   });
 
   it("kodiert die Pixel byte-genau zurueck — Round-Trip in beide Richtungen", () => {
-    expect(Array.from(pixelZuSplash(echtePixel))).toEqual(Array.from(echteBytes));
+    expect(Array.from(pixelZuSplash(Uint8Array.from(echtePixel, (p) => 1 - p)))).toEqual(Array.from(echteBytes));
     const px = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
     px[0] = 1; // (0,0)
     px[7 * SPLASH_BREITE] = 1; // (0,7)
@@ -51,10 +53,10 @@ describe("splash — Codec", () => {
     const b = pixelZuSplash(px);
     // Sonden aus dem Python-Decoder: byte 0 bit 7 = (0,0), byte 0 bit 0 = (0,7),
     // byte 128 bit 7 = (0,8), byte 133 bit 3 = (5,12), byte 1023 bit 0 = (127,63)
-    expect(b[0]).toBe(0xff & ~0x80 & ~0x01);
-    expect(b[128]).toBe(0xff & ~0x80);
-    expect(b[133]).toBe(0xff & ~0x08);
-    expect(b[1023]).toBe(0xff & ~0x01);
+    expect(b[0]).toBe(0x80 | 0x01);
+    expect(b[128]).toBe(0x80);
+    expect(b[133]).toBe(0x08);
+    expect(b[1023]).toBe(0x01);
     expect(Array.from(splashZuPixel(b))).toEqual(Array.from(px));
   });
 
