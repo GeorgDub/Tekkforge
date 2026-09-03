@@ -10,6 +10,8 @@ import {
   bildZuPixel,
   pixelZuPbm,
   pbmZuPixel,
+  bildZuHelligkeit,
+  helligkeitZuPixel,
 } from "../src/core/splash";
 
 /**
@@ -90,6 +92,32 @@ describe("splash — Codec", () => {
   it("bildZuPixel: transparente Pixel bleiben hell", () => {
     const rgba = new Uint8Array(128 * 64 * 4); // alles schwarz, aber Alpha 0
     expect(bildZuPixel(rgba, 128, 64).every((v) => v === 0)).toBe(true);
+  });
+
+  it("PBM mit Kommentarzeile (wie GIMP sie schreibt) wird gelesen", () => {
+    const pbm = pixelZuPbm(echtePixel);
+    const daten = pbm.subarray(new TextEncoder().encode("P4\n128 64\n").length);
+    const kopf = new TextEncoder().encode("P4\n# CREATOR: GIMP PNM Filter Version 1.1\n128 64\n");
+    const mit = new Uint8Array(kopf.length + daten.length);
+    mit.set(kopf, 0);
+    mit.set(daten, kopf.length);
+    expect(Array.from(pbmZuPixel(mit))).toEqual(Array.from(echtePixel));
+  });
+
+  it("Helligkeitsstufe: einmal reduzieren, dann nur noch schwellen — gleiches Ergebnis wie bildZuPixel", () => {
+    const b = 64;
+    const h = 16; // 4:1 → eingepasst auf 128 × 32, oben und unten Rand
+    const rgba = new Uint8Array(b * h * 4);
+    for (let i = 0; i < b * h; i++) {
+      const v = (i * 7) % 256;
+      rgba.set([v, v, v, 255], i * 4);
+    }
+    const hell = bildZuHelligkeit(rgba, b, h);
+    for (const schwelle of [40, 128, 200]) {
+      expect(Array.from(helligkeitZuPixel(hell, schwelle))).toEqual(Array.from(bildZuPixel(rgba, b, h, schwelle)));
+    }
+    expect(hell[0]).toBe(-1); // oben: ausserhalb des eingepassten Bereichs
+    expect(hell[16 * SPLASH_BREITE]).toBeGreaterThanOrEqual(0); // erste eingepasste Zeile
   });
 
   it("PBM hin und zurueck", () => {

@@ -693,8 +693,11 @@ export async function verteileEintraege(eintraege: readonly SammlungsEintrag[], 
   document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
 
   // Auf Wunsch das Menue nachziehen: Presets hinter dem Belegungszaehler
-  // sind sonst zwar im RAM, aber am Geraet unsichtbar.
-  const ifxPlaetze = plan.schritte.filter((s) => s.eintrag.art === "ifx").map((s) => s.eintrag.platz!);
+  // sind sonst zwar im RAM, aber am Geraet unsichtbar. Massgeblich ist der
+  // hoechste BELEGTE geschriebene Platz — ein geleerter Platz zaehlt nicht.
+  const ifxPlaetze = plan.schritte
+    .filter((s) => s.eintrag.art === "ifx" && !istPresetPlatzLeer(s.eintrag.bytes))
+    .map((s) => s.eintrag.platz!);
   if (erweitern && ifxPlaetze.length) {
     // Das Ergebnis der Erweiterung steht in der Statuszeile; die Presets
     // selbst sind geschrieben — das ist, was der Rueckgabewert sagt.
@@ -771,29 +774,48 @@ async function menueErweitern(spec: MenueSpec, bisPlatz: number, vorspann = ""):
     }
   }
   const zielMax = bisPlatz - 1;
-  if (zielMax <= max) {
-    setStatus(`${vorspann}Platz ${bisPlatz} ist schon im ${spec.label} — es reicht bis Platz ${max + 1}.`);
+  if (zielMax === max) {
+    setStatus(`${vorspann}${spec.label} reicht schon bis Platz ${bisPlatz}.`);
     return false;
   }
-  if (zielMax > spec.maxSlot) {
-    setStatus(`${vorspann}Platz ${bisPlatz} liegt über der Schreibgrenze (Platz ${spec.maxSlot + 1}).`);
+  if (zielMax > spec.maxSlot || zielMax < 0) {
+    setStatus(`${vorspann}Platz ${bisPlatz} liegt außerhalb (1..${spec.maxSlot + 1}).`);
     return false;
   }
 
-  // Die neuen Plaetze muessen belegt sein — sonst zeigte das Menue Leerplaetze.
-  const luecken: number[] = [];
-  for (let slot = max + 1; slot <= zielMax; slot++) {
-    setStatus(`${vorspann}prüfe Platz ${slot + 1} …`);
-    const r = await hooks.lesen(addressForSlot(map, slot), spec.blockGroesse);
-    if (!r.ok) {
-      setStatus(`${vorspann}${spec.label} nicht erweitert: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
+  if (zielMax > max) {
+    // Erweitern: die neuen Plaetze muessen belegt sein — sonst zeigte das Menue Leerplaetze.
+    const luecken: number[] = [];
+    for (let slot = max + 1; slot <= zielMax; slot++) {
+      setStatus(`${vorspann}prüfe Platz ${slot + 1} …`);
+      const r = await hooks.lesen(addressForSlot(map, slot), spec.blockGroesse);
+      if (!r.ok) {
+        setStatus(`${vorspann}${spec.label} nicht erweitert: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
+        return false;
+      }
+      if (spec.istLeer(r.bytes)) luecken.push(slot + 1);
+    }
+    if (luecken.length) {
+      setStatus(`${vorspann}${spec.label} nicht erweitert — im neuen Bereich ${luecken.length === 1 ? "ist" : "sind"} Platz ${luecken.join(", ")} leer; erst dort etwas ablegen.`);
       return false;
     }
-    if (spec.istLeer(r.bytes)) luecken.push(slot + 1);
-  }
-  if (luecken.length) {
-    setStatus(`${vorspann}${spec.label} nicht erweitert — im neuen Bereich ${luecken.length === 1 ? "ist" : "sind"} Platz ${luecken.join(", ")} leer; erst dort etwas ablegen.`);
-    return false;
+  } else {
+    // Kuerzen: die Plaetze hinter dem neuen Ende muessen leer sein — sonst
+    // verschwaende ein belegtes Preset aus dem Menue, ohne dass es weg ist.
+    const belegt: number[] = [];
+    for (let slot = zielMax + 1; slot <= max; slot++) {
+      setStatus(`${vorspann}prüfe Platz ${slot + 1} …`);
+      const r = await hooks.lesen(addressForSlot(map, slot), spec.blockGroesse);
+      if (!r.ok) {
+        setStatus(`${vorspann}${spec.label} nicht gekürzt: Platz ${slot + 1} nicht lesbar — ${r.reason}.`);
+        return false;
+      }
+      if (!spec.istLeer(r.bytes)) belegt.push(slot + 1);
+    }
+    if (belegt.length) {
+      setStatus(`${vorspann}${spec.label} nicht gekürzt — hinter Platz ${bisPlatz} ${belegt.length === 1 ? "ist" : "sind"} Platz ${belegt.join(", ")} noch belegt.`);
+      return false;
+    }
   }
 
   const gesetzt: ZaehlerWert[] = [];
@@ -821,7 +843,7 @@ async function menueErweitern(spec: MenueSpec, bisPlatz: number, vorspann = ""):
   }
   document.getElementById("fxpSamZurueck")?.classList.remove("hidden");
   setStatus(
-    `${vorspann}${spec.label} erweitert: bis Platz ${max + 1} → bis Platz ${bisPlatz} (${zielMax - max} neu). ` +
+    `${vorspann}${spec.label} ${zielMax > max ? "erweitert" : "gekürzt"}: bis Platz ${max + 1} → bis Platz ${bisPlatz}. ` +
       "Gilt bis zum Ausschalten; „Alle zurückschreiben“ nimmt auch die Zähler zurück.",
   );
   return true;

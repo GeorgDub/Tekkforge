@@ -585,8 +585,12 @@ es ueber den →-Knopf am Eintrag (fragt nach dem Platz).
 Geschrieben wird nur, was sich gegen die Basis unterscheidet:
 - **⚠ Fluechtig schreiben (RAM)** — derselbe geprüfte Weg wie beim Verteilen
   einer Sammlung (`verteileEintraege`: je Platz lesen, schreiben,
-  Rueckleseprobe), danach die IFX-Zaehler bis zum hoechsten belegten Platz,
-  sofern der Bereich lueckenlos ist. Gilt bis zum Ausschalten; „Alle
+  Rueckleseprobe). Danach folgen die Menue-Zaehler der **Bank**: bis zum
+  hoechsten belegten Platz nach oben (Lueckenpruefung), und nach unten, wenn
+  das oberste Preset geloescht wurde — sonst bliebe ein namenloser Eintrag im
+  Geraetemenue. Massgeblich ist der hoechste *belegte* Platz, nicht der
+  hoechste *geaenderte*: wer nur Platz 10 umbenennt, waehrend 50–60 belegt
+  sind, bekommt 50–60 trotzdem ins Menue. Gilt bis zum Ausschalten; „Alle
   zurueckschreiben" im FX-Preset-Bereich nimmt es zurueck.
 - **🔥 Firmware patchen…** — fragt nach der unveraenderten Hacktribe-
   `SYSTEM.VSB`, prueft den Hash, brennt die Unterschiede **zur Datei** ein

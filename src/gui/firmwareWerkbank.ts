@@ -67,7 +67,8 @@ import {
   SPLASH_HOEHE,
   splashZuPixel,
   pixelZuSplash,
-  bildZuPixel,
+  bildZuHelligkeit,
+  helligkeitZuPixel,
   pixelZuPbm,
   pbmZuPixel,
 } from "../core/splash";
@@ -86,8 +87,8 @@ let initDatei: { name: string; bytes: Uint8Array } | null = null;
 let globalBlock: { name: string; bytes: Uint8Array } | null = null;
 /** Das Startbild, wie es gemalt ist: 128 × 64, 1 = dunkel. */
 let pixel: Uint8Array = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
-/** Das zuletzt geladene Bild (RGBA) — die Schwelle wirkt darauf, nicht auf das Gemalte. */
-let bildRoh: { rgba: Uint8ClampedArray; breite: number; hoehe: number } | null = null;
+/** Das zuletzt geladene Bild, schon auf 128 × 64 Helligkeiten reduziert — die Schwelle wirkt darauf, nicht auf das Gemalte. */
+let bildHell: Float32Array | null = null;
 let invertiert = false;
 
 function setStatus(t: string): void {
@@ -132,9 +133,10 @@ function malen(canvas: HTMLCanvasElement, e: PointerEvent, wert: 0 | 1): void {
 }
 
 function bildAnwenden(): void {
-  if (!bildRoh) return;
+  if (!bildHell) return;
   const schwelle = Number(($("fwSplashSchwelle") as HTMLInputElement).value) || 128;
-  pixel = bildZuPixel(bildRoh.rgba, bildRoh.breite, bildRoh.hoehe, schwelle, invertiert);
+  // Nur noch 8192 Vergleiche je Reglerzug — das Quellbild wurde beim Laden einmal reduziert.
+  pixel = helligkeitZuPixel(bildHell, schwelle, invertiert);
   zeichne();
 }
 
@@ -142,7 +144,7 @@ async function bildLaden(f: File): Promise<void> {
   try {
     if (/\.pbm$/i.test(f.name)) {
       fwSetzePixel(pbmZuPixel(new Uint8Array(await f.arrayBuffer())));
-      bildRoh = null;
+      bildHell = null;
       setStatus(`${f.name} als Startbild geladen.`);
       return;
     }
@@ -155,7 +157,7 @@ async function bildLaden(f: File): Promise<void> {
     if (!ctx) throw new Error("kein Canvas");
     ctx.drawImage(bmp, 0, 0);
     const d = ctx.getImageData(0, 0, bmp.width, bmp.height);
-    bildRoh = { rgba: d.data, breite: bmp.width, hoehe: bmp.height };
+    bildHell = bildZuHelligkeit(d.data, bmp.width, bmp.height);
     bildAnwenden();
     setStatus(`${f.name} (${bmp.width} × ${bmp.height}) eingepasst — Schwelle und Invertieren wirken weiter darauf; Malen geht darüber.`);
   } catch (e) {
@@ -409,7 +411,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   grooves = [];
   initDatei = null;
   globalBlock = null;
-  bildRoh = null;
+  bildHell = null;
   invertiert = false;
   pixel = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
   if (!document.getElementById("fwPanel")) return;
@@ -447,7 +449,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   $("fwSplashSchwelle").addEventListener("input", bildAnwenden);
   $("fwSplashInvert").addEventListener("click", () => {
     invertiert = !invertiert;
-    if (bildRoh) bildAnwenden();
+    if (bildHell) bildAnwenden();
     else {
       pixel = pixel.map((v) => (v ? 0 : 1));
       zeichne();
@@ -458,12 +460,12 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
       setStatus("Erst eine Basis laden.");
       return;
     }
-    bildRoh = null;
+    bildHell = null;
     fwSetzePixel(splashZuPixel(liesSplash(basis)));
     setStatus("Startbild aus der Basis geholt.");
   });
   $("fwSplashLeer").addEventListener("click", () => {
-    bildRoh = null;
+    bildHell = null;
     fwSetzePixel(new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE));
   });
   $("fwSplashTextSetzen").addEventListener("click", () => {

@@ -372,7 +372,8 @@ describe("firmwareBau — geleerte Plaetze (Befunde der Code-Pruefung 2026-09-03
     if (!r.ok) return;
     const off = dateiOffset(addressForSlot(grooveMapL, 61));
     expect(r.bytes.subarray(off, off + GROOVE_SIZE).every((b) => b === 0xff)).toBe(true);
-    for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 62 : 61);
+    // Platz 62 war der oberste — das Menue folgt der Bank und endet jetzt bei 61
+    for (const z of GROOVE_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 61 : 60);
   });
 
   it("ein geleerter IFX-Platz hinter dem Zaehler zieht das Menue NICHT nach", () => {
@@ -381,5 +382,28 @@ describe("firmwareBau — geleerte Plaetze (Befunde der Code-Pruefung 2026-09-03
     if (!r.ok) return;
     expect(r.bytes[dateiOffset(IFX_ANZAHL_ADDR)]).toBe(49);
     expect(r.bericht.zaehler).toEqual([]);
+  });
+
+  it("wird das oberste Preset geleert, sinken die Zaehler auf den hoechsten belegten Platz", () => {
+    const r = baueFirmware(fakeFirmware(), [
+      { art: "ifx", name: "", bytes: presetBytes(""), platz: 49 },
+      { art: "ifx", name: "", bytes: presetBytes(""), platz: 48 },
+    ]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    for (const z of IFX_ZAEHLER) expect(r.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 47 : 46);
+    expect(r.bericht.ifxMaxNachher).toBe(46);
+    const g = baueFirmware(fakeFirmware(), [{ art: "groove", name: "", bytes: new Uint8Array(GROOVE_SIZE).fill(0xff), platz: 62 }]);
+    expect(g.ok).toBe(true);
+    if (!g.ok) return;
+    for (const z of GROOVE_ZAEHLER) expect(g.bytes[dateiOffset(z.addr)]).toBe(z.plusEins ? 61 : 60);
+  });
+
+  it("ein Bau, der die IFX-Bank nicht beruehrt, laesst die IFX-Zaehler in Ruhe", () => {
+    const r = baueFirmware(fakeFirmware(), [{ art: "mfx", name: "Neu", bytes: presetBytes("Neu", true), platz: 3 }]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bericht.zaehler).toEqual([]);
+    expect(r.bericht.grooveZaehler).toEqual([]);
   });
 });

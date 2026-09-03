@@ -58,8 +58,17 @@ export function pixelZuSplash(px: Uint8Array): Uint8Array {
  * hell — transparente Raender bleiben leer.
  */
 export function bildZuPixel(rgba: Uint8Array | Uint8ClampedArray, breite: number, hoehe: number, schwelle = 128, invertieren = false): Uint8Array {
+  return helligkeitZuPixel(bildZuHelligkeit(rgba, breite, hoehe), schwelle, invertieren);
+}
+
+/**
+ * Erste Stufe: das Bild einmal auf 128 × 64 Helligkeiten (0..255) bringen,
+ * -1 ausserhalb des eingepassten Bereichs. Danach kostet jeder Schwellwert nur
+ * noch 8192 Vergleiche — statt bei jedem Reglerzug ueber alle Quellpixel zu laufen.
+ */
+export function bildZuHelligkeit(rgba: Uint8Array | Uint8ClampedArray, breite: number, hoehe: number): Float32Array {
   if (rgba.length < breite * hoehe * 4) throw new Error("Bilddaten zu kurz");
-  const px = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
+  const hell = new Float32Array(SPLASH_BREITE * SPLASH_HOEHE).fill(-1);
   const skala = Math.min(SPLASH_BREITE / breite, SPLASH_HOEHE / hoehe);
   const zb = Math.max(1, Math.round(breite * skala));
   const zh = Math.max(1, Math.round(hoehe * skala));
@@ -83,10 +92,21 @@ export function bildZuPixel(rgba: Uint8Array | Uint8ClampedArray, breite: number
           n++;
         }
       }
-      let dunkel = summe / n < schwelle;
-      if (invertieren) dunkel = !dunkel;
-      px[(y0 + y) * SPLASH_BREITE + (x0 + x)] = dunkel ? 1 : 0;
+      hell[(y0 + y) * SPLASH_BREITE + (x0 + x)] = summe / n;
     }
+  }
+  return hell;
+}
+
+/** Zweite Stufe: Helligkeiten schwellen (dunkler als `schwelle` = gesetzt); -1 bleibt leer. */
+export function helligkeitZuPixel(hell: Float32Array, schwelle = 128, invertieren = false): Uint8Array {
+  if (hell.length !== SPLASH_BREITE * SPLASH_HOEHE) throw new Error("falsche Pixelzahl");
+  const px = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
+  for (let i = 0; i < px.length; i++) {
+    if (hell[i] < 0) continue;
+    let dunkel = hell[i] < schwelle;
+    if (invertieren) dunkel = !dunkel;
+    px[i] = dunkel ? 1 : 0;
   }
   return px;
 }
@@ -107,13 +127,32 @@ export function pixelZuPbm(px: Uint8Array): Uint8Array {
 
 /** PBM (P4, 128 × 64) zurueck zu Pixeln. */
 export function pbmZuPixel(bytes: Uint8Array): Uint8Array {
-  const text = new TextDecoder("latin1").decode(bytes.subarray(0, 64));
-  const m = /^P4\s+(\d+)\s+(\d+)\s/.exec(text);
-  if (!m) throw new Error("Kein PBM (P4)");
-  const b = Number(m[1]);
-  const h = Number(m[2]);
+  // Kopf: "P4", dann Breite und Hoehe — dazwischen duerfen Kommentarzeilen
+  // stehen (GIMP schreibt "# CREATOR: …" hinter das Magic). Der Kopf endet mit
+  // genau einem Weissraum-Zeichen vor den Bilddaten.
+  const text = new TextDecoder("latin1").decode(bytes.subarray(0, Math.min(bytes.length, 512)));
+  if (!text.startsWith("P4")) throw new Error("Kein PBM (P4)");
+  const zahlen: number[] = [];
+  let pos = 2;
+  while (zahlen.length < 2 && pos < text.length) {
+    const c = text[pos];
+    if (c === "#") {
+      const ende = text.indexOf("\n", pos);
+      pos = ende < 0 ? text.length : ende + 1;
+    } else if (/\s/.test(c)) {
+      pos++;
+    } else {
+      const m = /^\d+/.exec(text.slice(pos));
+      if (!m) throw new Error("Kein PBM (P4): Kopf unlesbar");
+      zahlen.push(Number(m[0]));
+      pos += m[0].length;
+    }
+  }
+  if (zahlen.length < 2) throw new Error("Kein PBM (P4): Kopf unvollstaendig");
+  const b = zahlen[0];
+  const h = zahlen[1];
   if (b !== SPLASH_BREITE || h !== SPLASH_HOEHE) throw new Error(`PBM ist ${b} × ${h}, erwartet ${SPLASH_BREITE} × ${SPLASH_HOEHE}`);
-  const start = m[0].length;
+  const start = pos + 1; // das eine Weissraum-Zeichen nach der Hoehe
   const zeile = SPLASH_BREITE / 8;
   const px = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
   for (let y = 0; y < SPLASH_HOEHE; y++) {

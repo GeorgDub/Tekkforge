@@ -34,7 +34,7 @@
  * Init-Pattern, Startbild und Init-Global sind am Geraet noch offen.
  */
 import { DDR2_BASE, E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "./hacktribeRam";
-import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, type ZaehlerWert } from "./ifxErweiterung";
+import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, zaehlerSchreibliste, type ZaehlerWert } from "./ifxErweiterung";
 import { decodeFxPreset, encodeFxPreset, FX_PRESET_SIZE } from "./e2FxPreset";
 import { decodeGroove, encodeGroove, GROOVE_SIZE } from "./e2Groove";
 import { planeVerteilung, type SammlungsEintrag, type SammlungsArt } from "./sammlung";
@@ -210,19 +210,22 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
   bericht.ifxMaxVorher = stand.maxIndex;
   bericht.ifxMaxNachher = stand.maxIndex;
   const ifxMap = mapFuer("ifx");
-  // Nur BELEGTE Eintraege zaehlen: ein geleerter Platz darf das Menue nicht
-  // verlaengern (er wuerde sonst als Luecke gemeldet oder namenlos gezeigt).
-  const belegtGeschrieben = (art: SammlungsArt): number[] =>
-    bericht.geschrieben
-      .filter((g) => g.art === art)
-      .filter((g) => {
-        const off = g.offset;
-        const len = art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
-        const block = out.subarray(off, off + len);
-        return art === "groove" ? !istGroovePlatzLeer(block) : !istPresetPlatzLeer(block);
-      })
-      .map((g) => g.platz - 1);
-  const hoechster = Math.max(-1, ...belegtGeschrieben("ifx"));
+  // Das Menue folgt der BANK, nicht den geschriebenen Eintraegen: Zaehler auf
+  // den hoechsten belegten Platz im Abbild — nach oben mit Lueckenpruefung,
+  // nach unten, wenn das oberste Preset geleert wurde (sonst bliebe ein
+  // namenloser Eintrag im Menue). Angefasst wird nur, was der Bau beruehrt hat.
+  const hoechsterBelegtImAbbild = (art: SammlungsArt, bis: number): number => {
+    const map = mapFuer(art);
+    const len = art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
+    for (let slot = bis; slot >= 0; slot--) {
+      const off = dateiOffset(addressForSlot(map, slot));
+      const block = out.subarray(off, off + len);
+      if (art === "groove" ? !istGroovePlatzLeer(block) : !istPresetPlatzLeer(block)) return slot;
+    }
+    return -1;
+  };
+  const beruehrt = (art: SammlungsArt): boolean => bericht.geschrieben.some((g) => g.art === art);
+  const hoechster = beruehrt("ifx") ? hoechsterBelegtImAbbild("ifx", IFX_PRESET_WRITE_MAX) : stand.maxIndex;
   if (hoechster > stand.maxIndex) {
     const erweiterung = planeIfxErweiterung(stand.maxIndex, hoechster, (slot) => {
       const off = dateiOffset(addressForSlot(ifxMap, slot));
@@ -232,6 +235,10 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
     for (const w of erweiterung.schreiben) out[dateiOffset(w.addr)] = w.wert;
     bericht.zaehler = erweiterung.schreiben;
     bericht.ifxMaxNachher = hoechster;
+  } else if (hoechster >= 0 && hoechster < stand.maxIndex) {
+    bericht.zaehler = zaehlerSchreibliste(hoechster);
+    for (const w of bericht.zaehler) out[dateiOffset(w.addr)] = w.wert;
+    bericht.ifxMaxNachher = hoechster;
   }
 
   // Groove-Zaehler: dieselbe Regel — lueckenlos bis zum hoechsten belegten Platz.
@@ -240,8 +247,12 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
   bericht.grooveMaxVorher = grooveStand.maxIndex;
   bericht.grooveMaxNachher = grooveStand.maxIndex;
   const grooveMap = mapFuer("groove");
-  const hoechsterGroove = Math.max(-1, ...belegtGeschrieben("groove"));
-  if (hoechsterGroove > grooveStand.maxIndex) {
+  const hoechsterGroove = beruehrt("groove") ? hoechsterBelegtImAbbild("groove", grooveMap.count - 1) : grooveStand.maxIndex;
+  if (hoechsterGroove >= 0 && hoechsterGroove < grooveStand.maxIndex) {
+    bericht.grooveZaehler = GROOVE_ZAEHLER.map((z) => ({ addr: z.addr, wert: z.plusEins ? hoechsterGroove + 1 : hoechsterGroove }));
+    for (const w of bericht.grooveZaehler) out[dateiOffset(w.addr)] = w.wert;
+    bericht.grooveMaxNachher = hoechsterGroove;
+  } else if (hoechsterGroove > grooveStand.maxIndex) {
     const luecken: number[] = [];
     for (let slot = grooveStand.maxIndex + 1; slot <= hoechsterGroove; slot++) {
       const off = dateiOffset(addressForSlot(grooveMap, slot));

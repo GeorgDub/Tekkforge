@@ -231,7 +231,7 @@ describe("Preset-Manager: schreiben", () => {
     expect(el("pmStatus").textContent).toMatch(/Nichts geändert/);
   });
 
-  it("loeschen in der Mitte schreibt die aufgerueckten Plaetze und laesst die Zaehler in Ruhe", async () => {
+  it("loeschen in der Mitte schreibt die aufgerueckten Plaetze und kuerzt das Menue um eins", async () => {
     await sicherungLaden();
     await pmAktion("weg", "ifx", 1);
     await klickUndWarte("pmSchreiben");
@@ -240,7 +240,13 @@ describe("Preset-Manager: schreiben", () => {
     expect(presets[0].addr).toBe(ifxAdresse(0));
     expect(decodeFxPreset(presets[0].bytes).name).toBe("Werk 2");
     expect(istLeer(presets[48].bytes)).toBe(true);
-    expect(geschrieben.filter((w) => w.bytes.length === 1)).toHaveLength(0);
+    // Platz 49 ist jetzt leer → das Menue folgt der Bank: 13 Zaehler auf 47/48
+    const zaehler = geschrieben.filter((w) => w.bytes.length === 1);
+    expect(zaehler).toHaveLength(13);
+    for (const w of zaehler) {
+      const z = IFX_ZAEHLER.find((x) => x.addr === w.addr)!;
+      expect(w.bytes[0]).toBe(z.plusEins ? 48 : 47);
+    }
   });
 
   it("Firmware patchen lehnt eine fremde Datei am Hash ab", async () => {
@@ -366,7 +372,7 @@ describe("Preset-Manager: Groove-Vorlagen", () => {
     expect(el("pmStatus").textContent).toMatch(/leer/);
   });
 
-  it("ein geloeschter Groove wird als 0xFF-Block geschrieben, und die Zaehler bleiben", async () => {
+  it("ein geloeschter Groove wird als 0xFF-Block geschrieben, und das Groove-Menue kuerzt sich", async () => {
     await sicherungLaden();
     await pmAktion("weg", "groove", 62);
     await klickUndWarte("pmSchreiben");
@@ -374,7 +380,12 @@ describe("Preset-Manager: Groove-Vorlagen", () => {
     expect(bloecke).toHaveLength(1);
     expect(bloecke[0].addr).toBe(grooveAdresse(61));
     expect(bloecke[0].bytes.every((b) => b === 0xff)).toBe(true);
-    expect(geschrieben.filter((w) => w.bytes.length === 1)).toHaveLength(0);
+    const zaehler = geschrieben.filter((w) => w.bytes.length === 1);
+    expect(zaehler).toHaveLength(4);
+    for (const w of zaehler) {
+      const z = GROOVE_ZAEHLER.find((x) => x.addr === w.addr)!;
+      expect(w.bytes[0]).toBe(z.plusEins ? 61 : 60);
+    }
   });
 
   it("ein gelesener Groove-Block, der weder 0xFF noch GVST ist, stoppt den Schreibweg", async () => {
@@ -397,5 +408,36 @@ describe("Preset-Manager: Groove-Vorlagen", () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(el("pmStatus").textContent).toMatch(/echten Stand/);
     expect(geschrieben).toHaveLength(0);
+  });
+
+  it("fluechtig: das Menue richtet sich am hoechsten BELEGTEN Platz aus, nicht am hoechsten geaenderten", async () => {
+    await sicherungLaden();
+    // Plaetze 50 und 51 belegen, dann nur Platz 3 umbenennen — das Menue muss trotzdem bis 51 reichen
+    bibAufnehmen({ art: "ifx", name: "A", bytes: presetBytes("A"), woher: "Test" });
+    await pmBibAblegen(0, "ifx", 50);
+    await pmBibAblegen(0, "ifx", 51);
+    await pmAktion("name", "ifx", 3, "Umbenannt");
+    await klickUndWarte("pmSchreiben");
+    const zaehler = geschrieben.filter((w) => w.bytes.length === 1);
+    expect(zaehler).toHaveLength(13);
+    for (const w of zaehler) {
+      const z = IFX_ZAEHLER.find((x) => x.addr === w.addr)!;
+      expect(w.bytes[0]).toBe(z.plusEins ? 51 : 50);
+    }
+    expect(pmZustand()!.ifxMaxIndex).toBe(50);
+    expect(el("pmStatus").textContent).toMatch(/IFX-Menü erweitert: bis Platz 49 → bis Platz 51/);
+  });
+
+  it("fluechtig: wird das oberste Preset geloescht, wird das Menue gekuerzt", async () => {
+    await sicherungLaden();
+    await pmAktion("weg", "ifx", 49);
+    await klickUndWarte("pmSchreiben");
+    const zaehler = geschrieben.filter((w) => w.bytes.length === 1);
+    expect(zaehler).toHaveLength(13);
+    for (const w of zaehler) {
+      const z = IFX_ZAEHLER.find((x) => x.addr === w.addr)!;
+      expect(w.bytes[0]).toBe(z.plusEins ? 48 : 47);
+    }
+    expect(el("pmStatus").textContent).toMatch(/IFX-Menü gekürzt: bis Platz 49 → bis Platz 48/);
   });
 });

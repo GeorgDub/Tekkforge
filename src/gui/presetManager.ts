@@ -17,7 +17,7 @@
  */
 import { $, escapeHtml, frageText, frageAuswahl, download, sha256Hex, dateiKnopf, dateiKnopfMehrere } from "./shared";
 import type { FxPresetHooks } from "./fxPreset";
-import { verteileEintraege, oeffneImEditor, aktuellesPreset, grooveMenueErweitern } from "./fxPreset";
+import { verteileEintraege, oeffneImEditor, aktuellesPreset, ifxMenueErweitern, grooveMenueErweitern } from "./fxPreset";
 import {
   MANAGER_ARTEN,
   anzahlPlaetze,
@@ -300,7 +300,9 @@ async function bibZuPlatzGefragt(index: number): Promise<void> {
   const e = bibliothek[index];
   if (!e || !zustand) return;
   const vorschlag = ersterLeerer(e.art) || 1;
-  const antwort = Number(await frageText(`„${e.name}“ (${ARTEN_LABEL[e.art]}) auf Platz (1..${anzahlPlaetze(e.art)}):`, String(vorschlag)));
+  const roh = await frageText(`„${e.name}“ (${ARTEN_LABEL[e.art]}) auf Platz (1..${anzahlPlaetze(e.art)}):`, String(vorschlag));
+  if (roh === null || roh.trim() === "") return; // Escape = abbrechen
+  const antwort = Number(roh);
   if (!Number.isFinite(antwort)) return;
   await pmBibAblegen(index, e.art, antwort);
 }
@@ -322,13 +324,18 @@ export async function pmAktion(op: string, art: ManagerArt, platz: number, wert?
         if (platz < anzahlPlaetze(art)) zustand = verschieben(zustand, art, platz, platz + 1);
         break;
       case "nach": {
-        const ziel = Number(wert ?? (await frageText(`Platz ${platz} verschieben nach Platz (1..${anzahlPlaetze(art)}):`, String(platz))));
+        // Escape in der Abfrage heisst abbrechen — Number(null) waere 0 und liefe als "Platz 0" weiter.
+        const antwort = wert ?? (await frageText(`Platz ${platz} verschieben nach Platz (1..${anzahlPlaetze(art)}):`, String(platz)));
+        if (antwort === null || antwort === undefined || String(antwort).trim() === "") return;
+        const ziel = Number(antwort);
         if (!Number.isFinite(ziel)) return;
         zustand = verschieben(zustand, art, platz, ziel);
         break;
       }
       case "tausch": {
-        const ziel = Number(wert ?? (await frageText(`Platz ${platz} tauschen mit Platz (1..${anzahlPlaetze(art)}):`, "")));
+        const antwort = wert ?? (await frageText(`Platz ${platz} tauschen mit Platz (1..${anzahlPlaetze(art)}):`, ""));
+        if (antwort === null || antwort === undefined || String(antwort).trim() === "") return;
+        const ziel = Number(antwort);
         if (!Number.isFinite(ziel) || ziel === platz) return;
         zustand = tauschen(zustand, art, platz, ziel);
         break;
@@ -488,7 +495,12 @@ async function ausEditor(platzVorgabe?: number): Promise<void> {
     return;
   }
   const vorschlag = ersterLeerer(p.art) || 1;
-  const antwort = platzVorgabe ?? Number(await frageText(`„${nameVon(p.bytes, p.art)}“ (${ARTEN_LABEL[p.art]}) auf Platz (1..${anzahlPlaetze(p.art)}):`, String(vorschlag)));
+  let antwort = platzVorgabe;
+  if (antwort === undefined) {
+    const roh = await frageText(`„${nameVon(p.bytes, p.art)}“ (${ARTEN_LABEL[p.art]}) auf Platz (1..${anzahlPlaetze(p.art)}):`, String(vorschlag));
+    if (roh === null || roh.trim() === "") return; // Escape = abbrechen
+    antwort = Number(roh);
+  }
   if (!Number.isFinite(antwort)) return;
   try {
     zustand = ersetzen(zustand, p.art, antwort, p.bytes);
@@ -531,25 +543,38 @@ async function fluechtigSchreiben(): Promise<void> {
   }
   const diff = aenderungen();
   if (!diff || !zustand || !basis) return;
-  const lIfx = luecken(zustand, "ifx");
-  const lGv = luecken(zustand, "groove");
-  const ok = await verteileEintraege(diff, lIfx.length === 0, "Manager: ");
-  if (ok && diff.some((e) => e.art === "groove") && lGv.length === 0) {
-    await grooveMenueErweitern(hoechsterBelegter(zustand, "groove"), "Manager: ");
-  }
-  const fxStatus = document.getElementById("fxpStatus")?.textContent ?? "";
+  // Erst die Bloecke, dann die Menues — ausgerichtet am hoechsten BELEGTEN
+  // Platz der Bank, nicht am hoechsten geaenderten: wer nur Platz 10 umbenennt,
+  // waehrend 50–60 belegt sind, soll 50–60 trotzdem im Menue bekommen.
+  const ok = await verteileEintraege(diff, false, "Manager: ");
+  const meldungen: string[] = [document.getElementById("fxpStatus")?.textContent ?? ""];
   if (ok) {
+    for (const [art, bekannt, anpassen] of [
+      ["ifx", zustand.ifxMaxIndex, ifxMenueErweitern],
+      ["groove", zustand.grooveMaxIndex, grooveMenueErweitern],
+    ] as const) {
+      const belegt = hoechsterBelegter(zustand, art);
+      const l = luecken(zustand, art);
+      if (l.length) {
+        meldungen.push(`⚠ ${art === "ifx" ? "IFX" : "Groove"}-Zähler nicht angepasst — leer dazwischen: Platz ${l.join(", ")}.`);
+        continue;
+      }
+      // Nur anfassen, wenn das Menue nicht schon genau bis dorthin reicht.
+      if (belegt > 0 && belegt - 1 !== bekannt) {
+        const geaendert = await anpassen(belegt, "Manager: ");
+        meldungen.push(document.getElementById("fxpStatus")?.textContent ?? "");
+        if (geaendert) {
+          if (art === "ifx") zustand.ifxMaxIndex = belegt - 1;
+          else zustand.grooveMaxIndex = belegt - 1;
+        }
+      }
+    }
     // Der geschriebene Stand ist jetzt die Basis — weitere Aenderungen zaehlen von hier.
     basis = kopieVon(zustand);
     quelle = "Auf dem Gerät (flüchtig)";
     render();
   }
-  setStatus(
-    `${fxStatus}` +
-      (lIfx.length ? ` ⚠ IFX-Zähler nicht nachgezogen — leer dazwischen: Platz ${lIfx.join(", ")}.` : "") +
-      (lGv.length ? ` ⚠ Groove-Zähler nicht nachgezogen — leer dazwischen: Platz ${lGv.join(", ")}.` : "") +
-      " Gilt bis zum Ausschalten; „Alle zurückschreiben“ im FX-Preset-Bereich nimmt es zurück.",
-  );
+  setStatus(`${meldungen.filter(Boolean).join(" ")} Gilt bis zum Ausschalten; „Alle zurückschreiben“ im FX-Preset-Bereich nimmt es zurück.`);
 }
 
 /** Dauerhaft: die Unterschiede zur gewaehlten Firmware-Datei einbrennen. */
