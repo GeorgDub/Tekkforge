@@ -38,6 +38,8 @@
  * testbar, welche Offsets stimmen.
  */
 
+import { MOD_TYPEN, FILTER_TYPEN } from "./e2ModTypen";
+
 export const PART_PARAMS_STRIDE = 0x330;
 export const PART_PARAMS_BASE = 0x800;
 
@@ -57,6 +59,8 @@ export interface PartParam {
   max: number;
   kind: ParamKind;
   group: "Filter" | "Amp/EG" | "Mod" | "IFX" | "Groove" | "Osc";
+  /** Namen je gespeichertem Wert (Index = Wert) — der Editor zeigt dann eine Auswahl statt einer Zahl. */
+  namen?: readonly string[];
 }
 
 /**
@@ -310,11 +314,11 @@ export interface PartParam {
  */
 export const PART_PARAMS: PartParam[] = [
   { key: "voiceAssign", label: "Voice Assign", offset: 0x02, min: 0, max: 3, kind: "u8", group: "Osc" }, // ✔ geraetebestaetigt, s. Kommentar unten
-  { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt; Testpattern zeigte 1..16
+  { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter", namen: FILTER_TYPEN }, // ✔ geraetebestaetigt; Testpattern zeigte 1..16
   { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "egInt", label: "EG-Int", offset: 0x0f, min: -63, max: 63, kind: "i8", group: "Filter" }, // ✔ geraetebestaetigt bipolar (+63…-63 gemessen)
-  { key: "modType", label: "Mod-Typ", offset: 0x10, min: 0, max: 255, kind: "u8", group: "Mod" }, // ✔ geraetebestaetigt (V-Muster); Speicher 0-basiert, Anzeige 1-basiert
+  { key: "modType", label: "Mod-Typ", offset: 0x10, min: 0, max: 255, kind: "u8", group: "Mod", namen: MOD_TYPEN }, // ✔ geraetebestaetigt (V-Muster); Speicher 0-basiert, Anzeige 1-basiert
   { key: "modSpeed", label: "Mod-Speed", offset: 0x11, min: 0, max: 127, kind: "u8", group: "Mod" }, // ✔ geraetebestaetigt (8er-Rampe)
   { key: "modDepth", label: "Mod-Depth", offset: 0x12, min: 0, max: 127, kind: "u8", group: "Mod" }, // ✔ per Ausschluss (Paar mit 0x11)
   { key: "egAttack", label: "Amp Attack", offset: 0x14, min: 0, max: 127, kind: "u8", group: "Amp/EG" }, // ✔ geraetebestaetigt (absteigende Rampe)

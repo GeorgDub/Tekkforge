@@ -533,10 +533,15 @@ function openPartParams(anchor: HTMLElement, pi: number): void {
       const items = PART_PARAMS.filter((p) => p.group === g)
         .map((p: PartParam) => {
           const val = params[p.key] ?? 0;
+          // Typen mit Namen (Filter, Modulation) als Auswahl — Anzeige 1-basiert wie am Geraet, gespeichert 0-basiert.
           const ctrl =
             p.kind === "bool"
               ? `<input type="checkbox" data-key="${p.key}" ${val ? "checked" : ""}>`
-              : `<input type="number" data-key="${p.key}" min="${p.min}" max="${p.max}" value="${val}" style="width:56px">`;
+              : p.namen
+                ? `<select data-key="${p.key}" style="max-width:170px;font-size:11px">${p.namen
+                    .map((n, i) => `<option value="${i}" ${i === val ? "selected" : ""}>${i + 1} · ${escapeHtml(n)}</option>`)
+                    .join("")}${val >= p.namen.length ? `<option value="${val}" selected>${val + 1} · ?</option>` : ""}</select>`
+                : `<input type="number" data-key="${p.key}" min="${p.min}" max="${p.max}" value="${val}" style="width:56px">`;
           return `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin:2px 0">
             <span style="color:var(--muted);font-size:11px">${p.label}</span>${ctrl}</div>`;
         })
@@ -563,13 +568,13 @@ function openPartParams(anchor: HTMLElement, pi: number): void {
   const renderFxSection = () => renderPartFxSection(pop, pi, params);
   renderFxSection();
 
-  pop.querySelectorAll<HTMLInputElement>("input[data-key]").forEach((inp) => {
+  pop.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input[data-key], select[data-key]").forEach((inp) => {
     inp.addEventListener("change", () => {
       const key = inp.dataset.key!;
-      const raw = inp.type === "checkbox" ? (inp.checked ? 1 : 0) : Number(inp.value);
+      const raw = inp instanceof HTMLInputElement && inp.type === "checkbox" ? (inp.checked ? 1 : 0) : Number(inp.value);
       const v = clampParamValue(key, raw);
       params[key] = v;
-      if (inp.type !== "checkbox") inp.value = String(v);
+      if (!(inp instanceof HTMLInputElement && inp.type === "checkbox")) inp.value = String(v);
       markDirty();
       // Der IFX-Typ bestimmt, welche Parameter der FX-Abschnitt anbietet.
       if (key === "ifxType") renderFxSection();

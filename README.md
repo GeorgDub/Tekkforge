@@ -956,6 +956,23 @@ tief/mittel/hoch mit 17/22/27 Noten, Vorschlag Lead/Stab 1/Stab 2.
 `tests/ki-transkription.test.ts` prueft Tempo-Umrechnung und Lagen an einem
 echten basic-pitch-MIDI (`tests/fixtures/amphe12-basic-pitch.mid`).
 
+## Filter- und Modulationstypen mit Namen (2026-09-03)
+
+Der Part-Parameter-Dialog im Editor zeigt Filter-Typ und Mod-Typ jetzt als
+Auswahl mit Namen statt als Zahl. Die Namen stammen aus der Firmware
+(`core/e2ModTypen.ts`): 16 Filter (electribe/MS20/MG/P5/OB/Acid als
+LPF/HPF/BPF, Strings bei Datei 0xA6E4F) und die **Modulationstabelle** —
+88 Bytes je Eintrag, Stock 72 Eintraege bei RAM 0xC00D81F0 (12 Quellen EG+,
+EG+ BPM, EG-, EG- BPM, LFOTri, LFOTriB, SawUpB, SawDwnB, SquUpB, SquDwnB,
+S&HBPM, Random × 6 Ziele Filter/Pitch/OSC/Level/Pan/IFX), Hacktribe verlegt
+sie nach 0xC01A0000 und haengt 24 Sinus-Typen an (SinUp, SinDwn, SinUpB,
+SinDwnB). Anzeige 1-basiert, gespeichert 0-basiert; Typen ab 73 sind als
+„(Hacktribe)" markiert. Was die 88 Bytes je Eintrag bedeuten (Ziel bei
++0x29, Wellenform bei +0x18, BPM-Flags bei +0x19/+0x1A, Depth-Bereich bei
++0x2A…+0x2C), steht als Befund in `e2ModTypen.ts` — das ist der Ansatz fuer
+eigene Modulationstypen; hinter Hacktribes Tabelle sind 645 Eintraege frei,
+die Menuegrenze ist noch nicht gefunden (kein 72→96 im Code-Diff).
+
 ## Sample-Ordner → Bank + Pattern-Set
 
 Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze
