@@ -826,7 +826,13 @@ Varianten auf 275–362, Beschreiber auf 362. Erster Bau:
 397d6109…), gegen die Basis geprueft: genau 88 × 32 Bytes Tabelle plus die
 vier Zellen, sonst nichts. Installation wie immer ueber
 `KORG/electribe sampler/System/SYSTEM.VSB` und die Update-Funktion;
-Rueckweg ist die unveraenderte Hacktribe-Datei.
+Rueckweg ist die unveraenderte Hacktribe-Datei. ✔ **Eingebrannt und
+bestanden (2026-09-03):** Nutzer „firmware ist drauf, 275 bis 362 sind
+da" — der Start legt die Laufzeitkopie aus Tabelle + Beschreibern selbst
+an, genau wie aus dem Disassembly vorhergesagt. Wer weiter baut, nimmt
+diese Datei als Basis (der Hacktribe-Hash stimmt dann nicht mehr, die
+Struktur schon) oder faengt wieder bei Hacktribe an; „fluechtig ins
+Geraet" verlangt, dass die Basis so viele Plaetze zaehlt wie das Geraet.
 
 Was so
 entsteht, sind Varianten der vorhandenen DSP-Programme (andere
