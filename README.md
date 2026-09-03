@@ -1032,6 +1032,29 @@ Samples 501–504, Namen und Laengen stimmen beim Rueckwaerts-Lesen. Das ist
 die Kommandozeilen-Fassung des Sample-Pool-Imports, der in der App jetzt
 dieselben Formate nimmt.
 
+## Drum-Transkription: Anschlaege → Kick, Snare, Hats (2026-09-03)
+
+Drittes Verfahren im Wizard „MIDI zu Korg": **Drums**. `core/drumsZuMidi.ts`
+findet Anschlaege in der Energie-Differenzkurve (`onsetKurve`, gleitende
+Schwelle ueber ±0,35 s, Boden relativ zum staerksten Anschlag — echte
+Anschlaege liegen um 4…6, das Phasenflimmern tiefer Kicks bei 0,2…0,9 —,
+Mindestabstand 60 ms) und misst je Anschlag ein 2048er-Fenster:
+Bandenergien tief/mittel/hoch, spektraler Schwerpunkt und die Ausklingzeit
+bis −20 dB, begrenzt auf den Abstand zum naechsten Anschlag, sonst faerbt
+der naechste Schlag die Messung. Regeln: viel Tief und Schwerpunkt unter
+500 Hz → Kick; Hoehen dominant → HiHat, unter 150 ms geschlossen, sonst
+offen; kurz, rauschig, ohne Tief → Clap; mittel + hoch und 90…300 ms →
+Snare; Rest → Perc. Je Klasse eine Spur auf Kanal 10, benannt wie der
+Drum-Part des Editors (Kick, Snare, Clap, HiHat cl, HiHat op, Perc 1) —
+`vorschlagZiel` legt eine so benannte Spur genau auf diesen Part. Noten auf
+dem 16tel-Raster des geschaetzten Tempos, Velocity aus der
+Anschlagstaerke (40…127), Empfindlichkeit 0,1…0,9 im Wizard.
+
+Getestet an einem synthetischen Takt (Kick 1/3, Snare 2/4, Hats auf den
+8teln, offene Hat auf 4+): alle acht Anschlaege auf dem richtigen 16tel,
+jede Klasse richtig. Am besten mit einem Drum-Stem (Stem-Werkbank/Demucs);
+ein Vollmix liefert Bass-Anschlaege als Kicks.
+
 ## Sample-Ordner → Bank + Pattern-Set
 
 Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze

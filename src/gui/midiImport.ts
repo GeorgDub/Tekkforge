@@ -8,6 +8,7 @@ import { $, escapeHtml } from "./shared";
 import { parseSmf, baueMidiPatterns, verschiebeNote, MIDI_PATTERN_MAX, type SmfLied, type SmfNote } from "../core/midiImport";
 import { transkribiereAudio, alsSmfLied, alsSmfLiedProStimme, smfAufTempo, stimmenNachLage } from "../core/audioZuMidi";
 import { encodeWav16 } from "../core/wavCodec";
+import { transkribiereDrums } from "../core/drumsZuMidi";
 import { tekkTranskription } from "./tekkTranskription";
 import { tempoSchaetzen } from "../core/tempoAnalyse";
 import { dateiArt } from "../core/generatorSession";
@@ -35,14 +36,16 @@ interface Zustand {
   audioStimmen: number;
   /** Jede Stimme auf eine eigene Spur (und damit einen eigenen Part) */
   stimmenGetrennt: boolean;
-  /** "auto" = Autokorrelation im Programm, "ki" = basic-pitch ueber die Python-Bruecke. */
-  verfahren: "auto" | "ki";
+  /** "auto" = Autokorrelation im Programm, "ki" = basic-pitch ueber die Python-Bruecke, "drums" = Anschlaege nach Klangfarbe. */
+  verfahren: "auto" | "ki" | "drums";
   kiOnset: number;
+  /** Empfindlichkeit der Drum-Erkennung 0…1. */
+  drumsEmpf: number;
 }
 
 const z: Zustand = {
   lied: null, dateiname: "", fehler: "", ziel: new Map(), weg: new Set(), rollSpur: 0, stepLength: 64, hinweise: [],
-  audio: null, audioBpm: 120, audioLaeuft: false, audioStimmen: 1, stimmenGetrennt: true, verfahren: "auto", kiOnset: 0.5,
+  audio: null, audioBpm: 120, audioLaeuft: false, audioStimmen: 1, stimmenGetrennt: true, verfahren: "auto", kiOnset: 0.5, drumsEmpf: 0.5,
 };
 
 let uebergabe: ((p: EditorProject) => void) | null = null;
@@ -55,13 +58,26 @@ function vorschlagZiel(lied: SmfLied): void {
   // Kanal 10 auf die Drum-Parts vorn.
   let melo = 10;
   let drum = 0;
+  const belegt = new Set<number>();
   lied.spuren.forEach((s, i) => {
     if (!s.noten.length) {
       z.ziel.set(i, null);
       return;
     }
-    if (s.kanal === 9) z.ziel.set(i, drum < 8 ? drum++ : null);
-    else z.ziel.set(i, melo < 16 ? melo++ : null);
+    if (s.kanal === 9) {
+      // Heisst die Spur wie ein Drum-Part des Editors (Kick, Snare, HiHat cl …), landet sie genau dort.
+      const passend = PART_LAYOUT_LABELS.findIndex((l, k) => k < 8 && l === s.name);
+      if (passend >= 0 && !belegt.has(passend)) {
+        z.ziel.set(i, passend);
+        belegt.add(passend);
+        return;
+      }
+      while (drum < 8 && belegt.has(drum)) drum++;
+      if (drum < 8) {
+        z.ziel.set(i, drum);
+        belegt.add(drum++);
+      } else z.ziel.set(i, null);
+    } else z.ziel.set(i, melo < 16 ? melo++ : null);
   });
   z.rollSpur = lied.spuren.findIndex((s) => s.noten.length > 0);
 }
@@ -100,6 +116,18 @@ function transkribieren(): void {
   if (!z.audio) return;
   if (z.verfahren === "ki") {
     void transkribiereKi().then(render);
+    return;
+  }
+  if (z.verfahren === "drums") {
+    const basis = z.audio.name.replace(/\.[^.]+$/, "").slice(0, 12) || "Drums";
+    const r = transkribiereDrums(z.audio.pcm, 44100, { bpm: z.audioBpm, empfindlichkeit: z.drumsEmpf }, basis);
+    z.lied = r.lied;
+    z.weg.clear();
+    const jeKlasse = r.lied.spuren.filter((s) => s.noten.length).map((s) => `${s.name} ${s.noten.length}`);
+    z.hinweise = r.schlaege.length
+      ? [`${r.schlaege.length} Anschläge erkannt (${jeKlasse.join(", ")}), 16tel-Raster bei ${z.audioBpm} BPM — jede Klasse auf ihrem Drum-Part; Empfindlichkeit höher = mehr Anschläge. Am besten mit einem Drum-Stem.`]
+      : ["keine Anschläge gefunden — Empfindlichkeit erhöhen oder lauteres Material."];
+    vorschlagZiel(r.lied);
     return;
   }
   const noten = transkribiereAudio(z.audio.pcm, 44100, { bpm: z.audioBpm, stimmen: z.audioStimmen });
@@ -332,7 +360,9 @@ function render(): void {
               <select id="miVerfahren">
                 <option value="auto" ${z.verfahren === "auto" ? "selected" : ""}>Autokorrelation (im Programm)</option>
                 <option value="ki" ${z.verfahren === "ki" ? "selected" : ""} ${tekkTranskription() ? "" : "disabled"}>basic-pitch (KI, mehrstimmig)</option>
+                <option value="drums" ${z.verfahren === "drums" ? "selected" : ""}>Drums (Anschläge → Kick/Snare/Hats)</option>
               </select>
+              ${z.verfahren === "drums" ? `<label for="miEmpf" title="0,1 = nur die lautesten Anschläge; 0,9 = auch leise Ghost-Notes">Empfindlichkeit</label><input id="miEmpf" type="number" min="0.1" max="0.9" step="0.1" value="${z.drumsEmpf}" style="width:64px" />` : ""}
               ${z.verfahren === "ki" ? `<label for="miOnset" title="0,1 = alles, was nach Anschlag aussieht; 0,9 = nur sichere">Anschlag</label><input id="miOnset" type="number" min="0.1" max="0.9" step="0.1" value="${z.kiOnset}" style="width:64px" />` : ""}
               <label for="miStimmen">Stimmen</label>
               <select id="miStimmen">
@@ -409,7 +439,8 @@ function render(): void {
     $("miNeu").addEventListener("click", () => {
       z.audioBpm = Math.min(300, Math.max(60, Number(($("miAudioBpm") as HTMLInputElement).value) || z.audioBpm));
       z.audioStimmen = Number(($("miStimmen") as HTMLSelectElement).value) || 1;
-      z.verfahren = ($("miVerfahren") as HTMLSelectElement).value === "ki" ? "ki" : "auto";
+      const v = ($("miVerfahren") as HTMLSelectElement).value;
+      z.verfahren = v === "ki" ? "ki" : v === "drums" ? "drums" : "auto";
       transkribieren();
       render();
     });
@@ -418,8 +449,12 @@ function render(): void {
       ($("miGetrennt") as HTMLInputElement).disabled = z.audioStimmen <= 1;
     });
     $("miVerfahren").addEventListener("change", () => {
-      z.verfahren = ($("miVerfahren") as HTMLSelectElement).value === "ki" ? "ki" : "auto";
+      const v = ($("miVerfahren") as HTMLSelectElement).value;
+      z.verfahren = v === "ki" ? "ki" : v === "drums" ? "drums" : "auto";
       render();
+    });
+    document.getElementById("miEmpf")?.addEventListener("change", () => {
+      z.drumsEmpf = Math.min(0.9, Math.max(0.1, Number((document.getElementById("miEmpf") as HTMLInputElement).value) || 0.5));
     });
     document.getElementById("miOnset")?.addEventListener("change", () => {
       z.kiOnset = Math.min(0.9, Math.max(0.1, Number((document.getElementById("miOnset") as HTMLInputElement).value) || 0.5));
