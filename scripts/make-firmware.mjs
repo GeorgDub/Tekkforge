@@ -101,17 +101,23 @@ if (!eintraege.length && !initPfad && !splashPfad) {
   process.exit(1);
 }
 
-// Rueckleseprobe an der fertigen Datei: jeder Platz traegt den Namen des Eintrags.
+// Rueckleseprobe an der fertigen Datei: jeder Platz traegt den Namen, der in
+// den BYTES des Eintrags steht — nicht das Etikett aus der Sammlungs-Datei.
+// Das Etikett darf abweichen (Umlaute, von Hand geaendert); die Bytes koennen
+// nur ASCII tragen, und genau die landen in der Firmware.
 const ifxMap = E2_RAM_MAP.find((e) => e.key === "ifxPreset");
 const mfxMap = E2_RAM_MAP.find((e) => e.key === "mfxPreset");
+const eintragFuer = (g) => eintraege.find((e) => e.art === g.art && e.platz === g.platz);
 let fehl = 0;
 for (const g of r.bericht.geschrieben) {
   if (g.art === "groove") continue;
   const off = dateiOffset(addressForSlot(g.art === "mfx" ? mfxMap : ifxMap, g.platz - 1));
   const p = decodeFxPreset(r.bytes.subarray(off, off + 0x20c), g.art === "mfx");
-  if (p.name !== g.name.slice(0, 15)) {
+  const quelle = eintragFuer(g);
+  const soll = quelle ? decodeFxPreset(quelle.bytes, g.art === "mfx").name : g.name.slice(0, 15);
+  if (p.name !== soll) {
     fehl++;
-    console.error(`Platz ${g.platz} (${g.art}): erwartet „${g.name}“, gelesen „${p.name}“`);
+    console.error(`Platz ${g.platz} (${g.art}): erwartet „${soll}“, gelesen „${p.name}“`);
   }
 }
 if (fehl) process.exit(1);
