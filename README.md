@@ -1024,6 +1024,19 @@ Tabelle traegt ihre Grenze selbst (erster leerer Eintrag) und die 36 Typen
 sind da; nein: die Grenze sitzt woanders (Parameter-Beschreiber), dann
 weiter suchen.
 
+**Gemessen (2026-09-04 nachts, Edit-Buffer-Roundtrip):** `MODPROBE.e2spat`
+mit den gespeicherten Typen 71, 72, 80, 95, 96, 131, 200, 255 in den
+Edit-Buffer geschickt und zurueckgeholt — 71 bleibt, alles andere kommt
+als 0 zurueck. Das Geraet setzt beim Laden ueber SysEx **jeden Typ ab
+Anzeige 73 auf 1**, Hacktribes Sinus-Typen eingeschlossen. Neue Typen
+lassen sich also nur am Geraet per Regler waehlen, nicht per Pattern-Datei
+ueber MIDI; die vier `cmp #71`-Funktionen bedienen dabei ein Feld je Part
+von 72 × 2 Bytes (Reglerwerte je Typ, Initialisierung bei 0xC0099458 mit
+Stride 0x90) und schreiben nichts ins Pattern — wer zurueckstellt, ist
+noch offen. `MODTEST.e2spat` (`scripts/make-modtest.mjs`, zehn Parts mit
+neuen Typen und ihren Hacktribe-Gegenstuecken) taugt deshalb erst, wenn
+der Lader gefunden ist; bis dahin: Typ am Geraet drehen.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

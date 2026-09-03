@@ -28,6 +28,14 @@
  *     nicht je Typ gemerkt. Hacktribes Sinus-Typen laufen trotzdem; ein 97.
  *     Eintrag wuerde es genauso. Ob das MENUE ihn zeigt, entscheidet nur der
  *     Versuch am Geraet („fluechtig").
+ *   - ⚠ Gemessen (2026-09-04, Edit-Buffer-Roundtrip per SysEx): ein Pattern
+ *     mit Mod-Typ 71 kommt mit 71 zurueck, mit 72, 80, 95, 96, 131, 200, 255
+ *     jeweils mit 0. Das Geraet setzt beim Laden ueber SysEx ALLES ab Typ 73
+ *     (Anzeige) auf 1 zurueck — auch Hacktribes Sinus-Typen. Eigene Typen
+ *     (und Hacktribes) lassen sich also nur am Geraet per Regler setzen; ob
+ *     der SD-Pattern-Import denselben Lader nimmt, ist offen. Die Stelle, die
+ *     zurueckstellt, ist noch nicht gefunden (keine 0x47-Grenztabelle im
+ *     Abbild, die vier cmp #71 schreiben nicht ins Pattern).
  *
  * Eigene Typen entstehen als KOMBINATIONEN vorhandener: Wellenform und
  * BPM-Flags sind getrennte Bytes, also gibt es zu jedem BPM-Typ (SawUpB,
