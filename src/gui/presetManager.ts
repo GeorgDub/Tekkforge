@@ -124,12 +124,19 @@ function render(): void {
         (l.length ? ` — ⚠ leer dazwischen: ${l.join(", ")}` : "");
     }
     if (!liste) continue;
+    // Suchfeld: nur Plaetze zeigen, deren Name oder Algorithmus den Text enthaelt; leer = alle.
+    const suche = ((document.getElementById("pmSuche") as HTMLInputElement | null)?.value ?? "").trim().toLowerCase();
+    let treffer = 0;
     const zeilen = zustand[art].map((bytes, i) => {
       const platz = i + 1;
       const leer = istLeer(bytes, art);
       const geaendert = !gleich(bytes, basis![art][i]);
-      const name = leer ? `<span style="color:var(--muted)">— leer —</span>` : escapeHtml(nameVon(bytes, art));
-      const algo = leer ? "" : escapeHtml(algorithmusVon(bytes, art));
+      const rohName = leer ? "" : nameVon(bytes, art);
+      const rohAlgo = leer ? "" : algorithmusVon(bytes, art);
+      if (suche && !`${rohName} ${rohAlgo}`.toLowerCase().includes(suche)) return "";
+      treffer++;
+      const name = leer ? `<span style="color:var(--muted)">— leer —</span>` : escapeHtml(rohName);
+      const algo = escapeHtml(rohAlgo);
       const k = (op: string, text: string, title: string) =>
         `<button class="ghost pmOp" data-art="${art}" data-platz="${platz}" data-op="${op}" title="${title}" style="padding:1px 6px;font-size:11px">${text}</button>`;
       return (
@@ -147,7 +154,10 @@ function render(): void {
         `</div>`
       );
     });
-    liste.innerHTML = `<div class="startListe" style="max-height:420px;overflow:auto">${zeilen.join("")}</div>`;
+    liste.innerHTML =
+      suche && !treffer
+        ? `<p class="sub" style="margin:0">Kein Platz passt zu „${escapeHtml(suche)}“.</p>`
+        : `<div class="startListe" style="max-height:420px;overflow:auto">${zeilen.join("")}</div>`;
     for (const b of liste.querySelectorAll<HTMLButtonElement>(".pmOp")) {
       b.addEventListener("click", () => void pmAktion(b.dataset.op ?? "", b.dataset.art as ManagerArt, Number(b.dataset.platz)));
     }
@@ -661,6 +671,7 @@ export function initPresetManager(h: FxPresetHooks): void {
     setStatus(`„${nameVon(p.bytes, p.art)}“ in die Bibliothek gelegt.`);
   });
   $("pmBibFilter").addEventListener("change", renderBibliothek);
+  $("pmSuche").addEventListener("input", render);
   $("pmBibLeeren").addEventListener("click", () => {
     bibliothek = [];
     renderBibliothek();
@@ -675,6 +686,31 @@ export function initPresetManager(h: FxPresetHooks): void {
 /** Fuer Tests: der aktuelle Zustand. */
 export function pmZustand(): ManagerZustand | null {
   return zustand;
+}
+
+/**
+ * Eintraege mit Platz in den Manager legen (Bauplan laden): ist ein Stand
+ * geladen, direkt auf ihre Plaetze; sonst in die Bibliothek, damit nichts
+ * verloren geht und der Nutzer sie nach dem Laden selbst ablegen kann.
+ */
+export function pmEintraegeUebernehmen(eintraege: readonly SammlungsEintrag[], woher: string): { gesetzt: number; inBibliothek: number } {
+  let gesetzt = 0;
+  let inBibliothek = 0;
+  for (const e of eintraege) {
+    if (geladen && zustand && e.platz !== undefined) {
+      try {
+        zustand = ersetzen(zustand, e.art, e.platz, e.bytes);
+        gesetzt++;
+        continue;
+      } catch {
+        /* dann eben in die Bibliothek */
+      }
+    }
+    bibliothek.push({ art: e.art, name: e.name, bytes: e.bytes.slice(), woher });
+    inBibliothek++;
+  }
+  render();
+  return { gesetzt, inBibliothek };
 }
 
 /** Wurde ein echter Stand geladen? Ohne den ist die leere Bank kein Wunsch, sondern nur die Vorschau. */

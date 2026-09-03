@@ -15,7 +15,8 @@
  * das Bild aus der Basis laesst sich als Ausgang holen.
  */
 import { $, escapeHtml, frageText, download, sha256Hex, dateiKnopf } from "./shared";
-import { pmZustand, pmGeladen } from "./presetManager";
+import { pmZustand, pmGeladen, pmEintraegeUebernehmen } from "./presetManager";
+import { baueBauplan, leseBauplan } from "../core/bauplan";
 
 export interface WerkbankHooks {
   /** Das aktuelle Pattern des Editors als .e2spat — kommt von editor.ts, damit hier kein Import-Kreis entsteht. */
@@ -345,7 +346,13 @@ async function bauen(): Promise<void> {
   const name = (await frageText("Dateiname (im Ordner Firmware/):", "SYSTEM.VSB")) ?? "SYSTEM.VSB";
   const ab = await legeAb(name.trim() || "SYSTEM.VSB", r.bytes, FIRMWARE_ORDNER);
   const el = document.getElementById("fwBericht");
-  if (el) el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download"].filter(Boolean).join("\n");
+  // Nach dem Bau die Gegenprobe: was hat sich gegenueber der Basis wirklich geaendert?
+  const gegenprobe = basis ? vergleicheFirmware(basis, r.bytes).zeilen.map((z) => `  ${z}`) : [];
+  if (el) {
+    el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download", "Gegenprobe Basis ↔ Ergebnis:", ...gegenprobe]
+      .filter(Boolean)
+      .join("\n");
+  }
   setStatus(
     `Firmware gebaut${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Installieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ auf die SD-Karte, dann am Gerät die Update-Funktion.`,
   );
@@ -398,8 +405,108 @@ async function sicherungEinbrennen(f: File): Promise<void> {
   const name = (await frageText("Dateiname (im Ordner Firmware/):", "SYSTEM.VSB")) ?? "SYSTEM.VSB";
   const ab = await legeAb(name.trim() || "SYSTEM.VSB", r.bytes, FIRMWARE_ORDNER);
   const el = document.getElementById("fwBericht");
-  if (el) el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download"].filter(Boolean).join("\n");
+  // Nach dem Bau die Gegenprobe: was hat sich gegenueber der Basis wirklich geaendert?
+  const gegenprobe = basis ? vergleicheFirmware(basis, r.bytes).zeilen.map((z) => `  ${z}`) : [];
+  if (el) {
+    el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download", "Gegenprobe Basis ↔ Ergebnis:", ...gegenprobe]
+      .filter(Boolean)
+      .join("\n");
+  }
   setStatus(`Gerätestand aus ${f.name} eingebrannt${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Installieren wie gehabt über die SD-Karte.`);
+}
+
+// ─── Bauplan ─────────────────────────────────────────────────────────────────
+
+/** Die angehakten Bausteine als Bauplan-Text — fuer Tests direkt aufrufbar. */
+export function fwBauplanText(titel: string): { ok: true; text: string; zeilen: string[] } | { ok: false; reason: string } {
+  const plan = bauplan();
+  if (!plan) return { ok: false, reason: "Erst eine Basis laden." };
+  if (!plan.presets.length && !plan.grooves.length && !plan.init && !plan.global && !plan.splash) {
+    return { ok: false, reason: "Kein Baustein angehakt — der Bauplan wäre leer." };
+  }
+  const text = baueBauplan({
+    titel,
+    autor: "TekkForge",
+    basisSha256: basisHash ?? undefined,
+    eintraege: [...plan.presets, ...plan.grooves],
+    ...(plan.init ? { initPattern: plan.init.bytes } : {}),
+    ...(plan.global ? { initGlobal: plan.global.bytes } : {}),
+    ...(plan.splash ? { splash: pixelZuSplash(pixel) } : {}),
+  });
+  return { ok: true, text, zeilen: plan.zeilen };
+}
+
+async function bauplanSichern(): Promise<void> {
+  const titel = (await frageText("Titel des Bauplans:", "Mein Umbau")) ?? "";
+  if (!titel.trim()) return;
+  const r = fwBauplanText(titel.trim());
+  if (!r.ok) {
+    setStatus(r.reason);
+    return;
+  }
+  const datei = `${titel.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "bauplan"}.tfbau`;
+  download(r.text, datei, "application/json");
+  setStatus(`Bauplan als ${datei} gesichert (${r.zeilen.length} Bausteine).`);
+}
+
+/** Einen Bauplan in Manager und Werkbank laden — fuer Tests direkt aufrufbar. */
+export function fwBauplanLaden(text: string, woher: string): { ok: true; zeilen: string[] } | { ok: false; reason: string } {
+  let plan;
+  try {
+    plan = leseBauplan(text);
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  const zeilen: string[] = [`Bauplan „${plan.titel}“${plan.autor ? ` von ${plan.autor}` : ""}`];
+  if (plan.basisSha256 && basisHash && plan.basisSha256 !== basisHash) {
+    zeilen.push(`⚠ Der Plan entstand auf einer anderen Basis (SHA-256 ${plan.basisSha256.slice(0, 16)}…) — Plätze und Zähler können abweichen.`);
+  }
+  if (plan.eintraege.length) {
+    const u = pmEintraegeUebernehmen(plan.eintraege, `Bauplan ${woher}`);
+    zeilen.push(`Presets/Grooves: ${u.gesetzt} in den Manager gelegt${u.inBibliothek ? `, ${u.inBibliothek} in die Bibliothek (kein Stand geladen)` : ""}`);
+    ($("fwPresets") as HTMLInputElement).checked = true;
+  }
+  if (plan.initPattern) {
+    initDatei = { name: `Bauplan ${woher}`, bytes: plan.initPattern.length === E2SPAT_GROESSE ? plan.initPattern : liesInitPatternAlsDatei(plan.initPattern) };
+    ($("fwInitQuelle") as HTMLSelectElement).value = "datei";
+    ($("fwInit") as HTMLInputElement).checked = true;
+    ($("fwInitInfo") as HTMLElement).textContent = initDatei.name;
+    zeilen.push("Init-Pattern übernommen");
+  }
+  if (plan.initGlobal) {
+    globalUebernehmen(plan.initGlobal, `Bauplan ${woher}`);
+    zeilen.push("Init-Global übernommen");
+  }
+  if (plan.splash) {
+    bildHell = null;
+    fwSetzePixel(splashZuPixel(plan.splash));
+    ($("fwSplash") as HTMLInputElement).checked = true;
+    zeilen.push("Startbild übernommen");
+  }
+  vorschau();
+  return { ok: true, zeilen };
+}
+
+/** Einen nackten Init-Block als .e2spat verpacken — so, wie die Werkbank Dateien erwartet. */
+function liesInitPatternAlsDatei(block: Uint8Array): Uint8Array {
+  const out = new Uint8Array(E2SPAT_GROESSE);
+  out.fill(0xff, 0x24, 0x100);
+  out.set(new TextEncoder().encode("KORG"), 0);
+  out.set(new TextEncoder().encode("e2sampler"), 0x10);
+  out[0x20] = 1;
+  out.set(block, 0x100);
+  return out;
+}
+
+async function bauplanLaden(f: File): Promise<void> {
+  const r = fwBauplanLaden(await f.text(), f.name);
+  if (!r.ok) {
+    setStatus(`Bauplan nicht geladen: ${r.reason}`);
+    return;
+  }
+  const el = document.getElementById("fwBericht");
+  if (el) el.textContent = r.zeilen.join("\n");
+  setStatus(`Bauplan geladen — Haken prüfen, dann „Firmware bauen“.`);
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
@@ -421,6 +528,8 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwGlobal", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);
   dateiKnopf("fwGlobalLaden", "fwGlobalIn", (f) => void globalAusDatei(f));
   $("fwGlobalGeraet").addEventListener("click", () => void globalVomGeraet());
+  $("fwBauplanSichern").addEventListener("click", () => void bauplanSichern());
+  dateiKnopf("fwBauplanLaden", "fwBauplanIn", (f) => void bauplanLaden(f));
   $("fwSichtbar").addEventListener("click", vorschau);
   $("fwBauen").addEventListener("click", () => void bauen());
   dateiKnopf("fwVergleichen", "fwVergleichIn", (f) => void vergleichen(f));

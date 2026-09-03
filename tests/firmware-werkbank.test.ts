@@ -1,7 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initFxPresetPanel } from "../src/gui/fxPreset";
 import { initPresetManager, pmAktion } from "../src/gui/presetManager";
-import { initFirmwareWerkbank, fwBaueAbbild, fwBaueAusSicherung, fwSetzePixel, fwPixel, fwInitPatternName, fwTextSchreiben } from "../src/gui/firmwareWerkbank";
+import {
+  initFirmwareWerkbank,
+  fwBaueAbbild,
+  fwBaueAusSicherung,
+  fwSetzePixel,
+  fwPixel,
+  fwInitPatternName,
+  fwTextSchreiben,
+  fwBauplanText,
+  fwBauplanLaden,
+} from "../src/gui/firmwareWerkbank";
+import { pmZustand } from "../src/gui/presetManager";
+import { leseBauplan } from "../src/core/bauplan";
 import { textBreite } from "../src/core/pixelSchrift";
 import { baueSicherung } from "../src/core/geraetSicherung";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
@@ -316,6 +328,52 @@ describe("Firmware-Werkbank", () => {
     expect(el("fwStatus").textContent).toMatch(/„TEKK“ geschrieben/);
     fwTextSchreiben("   ", 2, "mitte");
     expect(el("fwStatus").textContent).toMatch(/Erst einen Text/);
+  });
+
+  it("Bauplan: sichern nimmt die angehakten Bausteine mit, laden legt sie zurueck in Manager und Werkbank", async () => {
+    const fw = fakeFirmware();
+    await basisLaden(fw);
+    // Manager mit demselben Stand, ein Preset auf 50; Startbild gemalt; Init aus dem Editor
+    el("pmFirmwareIn").files = [fakeDatei("SYSTEM.VSB", fw)];
+    el("pmFirmwareIn").feuere("change");
+    await warte();
+    el("pmDateiIn").files = [fakeDatei("ring-lfo.e2fxp", presetBytes("Ring LFO"))];
+    el("pmDateiIn").feuere("change");
+    await warte();
+    el("fwPresets").checked = true;
+    el("fwInit").checked = true;
+    el("fwSplash").checked = true;
+    const px = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
+    px[7] = 1;
+    fwSetzePixel(px);
+    const r = fwBauplanText("Mein Umbau");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const plan = leseBauplan(r.text);
+    expect(plan.eintraege.map((e) => `${e.art}:${e.platz}:${e.name}`)).toEqual(["ifx:50:Ring LFO"]);
+    expect(plan.initPattern).toBeDefined();
+    expect(plan.splash?.[0]).toBe(0xff); // Pixel 7 in Zeile 0 → Byte 7, nicht Byte 0
+    expect(plan.splash?.[7]).toBe(0x7f);
+
+    // Frisch starten, Basis laden, Bauplan laden: alles wieder da
+    initFirmwareWerkbank({ aktuellesPattern: () => ({ name: "X", bytes: new Uint8Array(buildE2PatternFile({ name: "X", parts: [] } as never)) }) });
+    await basisLaden(fakeFirmware());
+    await pmAktion("weg", "ifx", 50); // Manager: Platz 50 wieder leer
+    const l = fwBauplanLaden(r.text, "test.tfbau");
+    expect(l.ok).toBe(true);
+    if (!l.ok) return;
+    expect(nameVon(pmZustand()!.ifx[49])).toBe("Ring LFO");
+    expect(el("fwInit").checked).toBe(true);
+    expect(el("fwInitQuelle").value).toBe("datei");
+    expect(el("fwSplash").checked).toBe(true);
+    expect(fwPixel()[7]).toBe(1);
+    expect(l.zeilen.join("\n")).toMatch(/1 in den Manager gelegt/);
+    const gebaut = fwBaueAbbild();
+    expect(gebaut.ok).toBe(true);
+    if (!gebaut.ok) return;
+    expect(fwInitPatternName(gebaut.bytes)).toBe("TEKK INIT");
+    expect(gebaut.bytes[SPLASH_OFFSET + 7]).toBe(0x7f);
+    expect(fwBauplanLaden("kaputt", "x").ok).toBe(false);
   });
 
   it("Init-Pattern aus einer Datei; „aus Firmware“ holt das Startbild der Basis", async () => {

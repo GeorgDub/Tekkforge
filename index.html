@@ -580,6 +580,7 @@
                   <input id="pmDateiIn" type="file" accept=".e2fxp,.mfx,.ifx,.e2gv,.tfsam,.json" class="hidden" />
                   <button id="pmAusEditor" class="ghost" title="Das Preset aus dem Editor oben in einen Platz legen (fragt nach dem Platz)">Aus Editor übernehmen…</button>
                   <button id="pmExport" class="ghost" title="Alle belegten Plätze mit Platznummer als .tfsam sichern">Als Sammlung sichern…</button>
+                  <input id="pmSuche" type="search" placeholder="Suchen: Name oder Algorithmus" title="Zeigt in allen drei Listen nur Plätze, deren Name oder Algorithmus den Text enthält; leer = alle" style="width:200px;font-size:11px;padding:2px 6px;margin-left:auto" />
                 </div>
                 <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:8px">
                   <div style="flex:0 0 280px;min-width:260px">
@@ -633,6 +634,12 @@
                       <span class="sub" style="margin:0"><b>Oder den ganzen Gerätestand:</b></span>
                       <button id="fwSicherungBrennen" class="ghost" title="Eine Komplettsicherung (.tfbak, „Gerät sichern…“ im FX-Preset-Bereich) als Ganzes in die Basis legen — IFX- und MFX-Bank, Grooves, alle Zähler, Init-Pattern und Startbild, genau wie das Gerät sie im RAM hatte. So wird dauerhaft, was man sich am Gerät zusammengebaut und gehört hat.">Sicherung einbrennen…</button>
                       <input id="fwSicherungIn" type="file" accept=".tfbak,.json" class="hidden" />
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                      <span class="sub" style="margin:0"><b>Bauplan:</b></span>
+                      <button id="fwBauplanSichern" class="ghost" title="Die angehakten Bausteine als Datei (.tfbau) sichern — Presets und Grooves mit Plätzen, Init-Pattern, Startbild, Init-Global und der Hash der Basis. Zum Weitergeben oder für die nächste Hacktribe-Fassung.">Bauplan sichern…</button>
+                      <button id="fwBauplanLaden" class="ghost" title="Einen Bauplan laden: Presets in den Manager (oder die Bibliothek, wenn kein Stand geladen ist), Init-Pattern, Startbild und Init-Global in die Werkbank — und die Haken setzen. Dann „Firmware bauen“.">Bauplan laden…</button>
+                      <input id="fwBauplanIn" type="file" accept=".tfbau,.json" class="hidden" />
                     </div>
                     <pre id="fwBericht" class="sub" style="margin:6px 0 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
                   </div>

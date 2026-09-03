@@ -42,6 +42,7 @@ Keine Datei verlässt den Rechner.
 | `*.tekkforge` | Projekt-Datei des Editors (Patterns + eingebettete Samples, JSON) |
 | `*.e2fxp` / `*.e2gv` | Einzelnes FX-Preset (524 B) bzw. Groove-Vorlage (320 B), roher RAM-Block |
 | `*.tfsam` | Sammlung mehrerer Presets/Grooves in einer Datei (JSON + Base64), optional mit Ziel-Platz je Eintrag |
+| `*.tfbau` | Bauplan fuer die Firmware-Werkbank: Presets/Grooves mit Platz, Init-Pattern, Startbild, Init-Global, Basis-Hash |
 
 ## Schnellstart
 
@@ -554,7 +555,8 @@ Zaehler), aus einer **Sicherung** (`.tfbak`) oder aus einer **Firmware**
 gegen sie verglichen und farbig markiert.
 
 Beide Listen zeigen **immer alle Plaetze**, leere als „— leer —" — auch
-bevor etwas geladen ist. Je Zeile: ▲ ▼ verschieben, ⇄ tauschen, ✏
+bevor etwas geladen ist. Ein **Suchfeld** filtert alle drei Listen nach Name
+oder Algorithmus. Je Zeile: ▲ ▼ verschieben, ⇄ tauschen, ✏
 umbenennen, ✎ im Editor oeffnen (Parameter und Zuordnungen aendern, dann „Aus
 Editor uebernehmen…"), ⬇ als Datei sichern, ✕ loeschen (die folgenden Plaetze
 ruecken auf, hinten wird ein Platz frei — Listen-Semantik wie das Menue). Dazu
@@ -655,6 +657,16 @@ aus den gesicherten Werten abgeleitet, Init-Pattern und Startbild. Was man
 sich am Geraet im RAM zusammengebaut und gehoert hat, wird damit in einem
 Schritt dauerhaft. Aeltere Sicherungen ohne die neuen Bereiche lassen diese
 Teile in der Basis stehen; der Bericht nennt sie.
+
+**Bauplan.** „Bauplan sichern…" schreibt die angehakten Bausteine als
+`.tfbau` (`core/bauplan.ts`): Presets und Grooves mit Plaetzen, Init-Pattern,
+Startbild, Init-Global und den Hash der Basis, auf der er entstand. „Bauplan
+laden…" legt alles zurueck — Presets in den Manager (oder in die Bibliothek,
+wenn kein Stand geladen ist), den Rest in die Werkbank, Haken gesetzt — und
+warnt, wenn die Basis eine andere ist. So wandert ein Umbau auf die naechste
+Hacktribe-Fassung oder zu jemand anderem, ohne eine 2-MB-Firmware zu
+verschicken. Nach jedem Bau steht ausserdem die **Gegenprobe** im Bericht:
+der Vergleich Basis ↔ Ergebnis, Bereich fuer Bereich.
 
 **Zwei Firmwares vergleichen.** „Mit Datei vergleichen…" haelt die Basis
 gegen eine zweite `SYSTEM.VSB` (`core/firmwareVergleich.ts`): je Bereich, mit
