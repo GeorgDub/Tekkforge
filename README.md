@@ -735,7 +735,17 @@ JSON-Liste `{vaddr, old, new}` (Omnitribes Form) oder ein Objekt mit
 der Firmware-Vergleich meldet Aenderungen im DSP-Abbild je Block statt als
 fremde Bytes. Alles ist am echten Abbild geprueft (jeder Register-Patch
 findet seine Stelle, die Kette bleibt gueltig, kein Byte ausserhalb aendert
-sich) — **am Geraet gehoert ist noch keiner**.
+sich).
+
+**Am Geraet gehoert (2026-09-03, jeweils auf der Gesamtfirmware, Datei
+fuer Datei ueber die SD):** (1) `bf523_coslut_zero`, Wellentabelle
+genullt → Nutzer „klingt alles unveraendert". Die 129-Punkt-Tabelle liegt
+also auf keinem hoerbaren Pfad — oder der DSP liest sie nicht aus diesem
+Block; die drei anderen Wellentabellen-Patches (halbe/viertel Amplitude,
+Dreieck) sind damit voraussichtlich wirkungslos und wurden nicht mehr
+geflasht. Als Naechstes das A/B-Paar der Amount-Kurve (alles Maximum,
+dann alles Minimum). Status je Patch steht im TEXTE-Block von
+`scripts/import-dsp-patches.mjs`, das Register wird daraus erzeugt.
 
 **Was damit NICHT geht, ehrlich gesagt.** Die Werks-Samples des Samplers
 liegen nicht in der Firmware, sondern im Sample-Flash; hacktribes
