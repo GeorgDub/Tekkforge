@@ -27,6 +27,7 @@ import {
 } from "./firmwareBau";
 import { dspPatchZuObjekt, dspPatchAusObjekt, wendeDspPatchAn, type DspPatch } from "./dspPatch";
 import { setzeOszTabelle, OSZ_EINTRAG, OSZ_MAX, type OszEintragMitPlatz } from "./oszTabelle";
+import { setzeModTabelle, MOD_EINTRAG, MOD_MAX, type ModEintragMitPlatz } from "./modTabelle";
 
 export const BAUPLAN_VERSION = 1;
 
@@ -46,6 +47,8 @@ export interface Bauplan {
   dsp?: DspPatch[];
   /** Eintraege der Oszillator-Tabelle (Sample-Liste), je 32 Bytes mit Platz. */
   osz?: OszEintragMitPlatz[];
+  /** Modulationstypen hinter der Tabelle (Platz 0-basiert ab 96). */
+  mod?: ModEintragMitPlatz[];
 }
 
 export function baueBauplan(plan: Omit<Bauplan, "version" | "wann"> & { wann?: string }): string {
@@ -64,6 +67,7 @@ export function baueBauplan(plan: Omit<Bauplan, "version" | "wann"> & { wann?: s
       ...(plan.initGlobal ? { initGlobal: bytesToBase64(plan.initGlobal) } : {}),
       ...(plan.dsp?.length ? { dsp: plan.dsp.map(dspPatchZuObjekt) } : {}),
       ...(plan.osz?.length ? { osz: plan.osz.map((o) => ({ platz: o.platz, bytes: bytesToBase64(o.bytes) })) } : {}),
+      ...(plan.mod?.length ? { mod: plan.mod.map((o) => ({ platz: o.platz, bytes: bytesToBase64(o.bytes) })) } : {}),
     },
     null,
     1,
@@ -134,7 +138,19 @@ export function leseBauplan(text: string): Bauplan {
       return { platz, bytes };
     });
   }
-  if (!eintraege.length && !initPattern && !splash && !initGlobal && !plan.dsp?.length && !plan.osz?.length) throw new Error("Der Bauplan ist leer.");
+  if (x.mod !== undefined) {
+    if (!Array.isArray(x.mod)) throw new Error("Feld „mod“ ist keine Liste.");
+    plan.mod = x.mod.map((o, i) => {
+      const r = (typeof o === "object" && o ? o : {}) as Record<string, unknown>;
+      const platz = Number(r.platz);
+      if (!Number.isInteger(platz) || platz < 0 || platz >= MOD_MAX) throw new Error(`Modulationstyp ${i + 1}: Platz ${String(r.platz)} ausserhalb 0…${MOD_MAX - 1}.`);
+      if (typeof r.bytes !== "string") throw new Error(`Modulationstyp ${i + 1}: bytes fehlen.`);
+      const bytes = base64ToBytes(r.bytes);
+      if (bytes.length !== MOD_EINTRAG) throw new Error(`Modulationstyp ${i + 1}: ${bytes.length} Bytes, erwartet ${MOD_EINTRAG}.`);
+      return { platz, bytes };
+    });
+  }
+  if (!eintraege.length && !initPattern && !splash && !initGlobal && !plan.dsp?.length && !plan.osz?.length && !plan.mod?.length) throw new Error("Der Bauplan ist leer.");
   return plan;
 }
 
@@ -184,6 +200,12 @@ export function wendeBauplanAn(basis: Uint8Array, plan: Bauplan): BauplanErgebni
     if (!r.ok) return { ok: false, reason: r.reason };
     bytes = r.bytes;
     zeilen.push(`Oszillator-Tabelle: ${r.geschrieben.length} Platz/Plätze, Liste bis ${r.anzahlVorher} → bis ${r.anzahlNachher}`);
+  }
+  if (plan.mod?.length) {
+    const r = setzeModTabelle(bytes, plan.mod);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    bytes = r.bytes;
+    zeilen.push(`Modulations-Typen: ${plan.mod.length} angehängt, Tabelle bis ${r.anzahlVorher} → bis ${r.anzahlNachher} (⚠ Menügrenze am Gerät offen)`);
   }
   return { ok: true, bytes, bericht, zeilen };
 }

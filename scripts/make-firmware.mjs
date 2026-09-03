@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/make-firmware.mjs --basis <SYSTEM.VSB> --ziel <out.VSB> [--sammlung <.tfsam>] [--ab <platz>] [--richtung auf|ab]
  *                                     [--init-pattern <.e2spat>] [--splash <128x64.pbm>] [--dsp id,id] [--dsp-datei <patch.json>]
- *                                     [--osz-serie X-SAW,X-SINE|alle] [--osz-sortieren] [--basis-egal]
+ *                                     [--osz-serie X-SAW,X-SINE|alle] [--osz-sortieren] [--mod-serie] [--basis-egal]
  *
  * `--osz-sortieren` bringt die Tabelle in Reihe: FM je Programm −24…+24
  * (Hacktribes und angehaengte Eintraege gemischt, Namen nach Tonhoehe), VPM
@@ -37,6 +37,7 @@ import { pixelZuSplash, pbmZuPixel } from "../src/core/splash.ts";
 import { leseSammlung, nummerierePlaetze } from "../src/core/sammlung.ts";
 import { decodeFxPreset } from "../src/core/e2FxPreset.ts";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam.ts";
+import { liesModTabelle, modKombinationen, setzeModTabelle } from "../src/core/modTabelle.ts";
 import { leseOszStandAusFirmware, setzeOszTabelle, sortiereOszTabelle, liesOsz, decodeOsz, istOszLeer, oszStamm, fmSerieFehlend, OSZ_MAX } from "../src/core/oszTabelle.ts";
 
 const arg = (name, fallback) => {
@@ -207,7 +208,25 @@ if (flag("osz-sortieren")) {
   const verschoben = s.abbildung.slice(1).filter((n, i) => n !== i + 1).length;
   console.log(`Oszillator-Tabelle sortiert: ${s.anzahl} Einträge, ${verschoben} Plätze verschoben, ${s.umbenannt.length} umbenannt${s.umbenannt.length ? ` (${s.umbenannt.map((u) => `${u.alt} → ${u.neu}`).join(", ")})` : ""}`);
 }
-if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length && !oszBericht && !oszSortierung) {
+// --mod-serie: die 36 Kombinationen der Modulationstypen anhaengen (⚠ Menuegrenze am Geraet offen).
+let modBericht = null;
+if (flag("mod-serie")) {
+  const t = liesModTabelle(r.bytes);
+  if (!t.length) {
+    console.error("Keine Modulationstabelle bei 0xC01A0000 — Stock-Firmware?");
+    process.exit(1);
+  }
+  const k = modKombinationen(t);
+  const m = setzeModTabelle(r.bytes, k.eintraege.map((e, i) => ({ platz: t.length + i, bytes: e.bytes })));
+  if (!m.ok) {
+    console.error(`Modulations-Typen nicht gesetzt: ${m.reason}`);
+    process.exit(1);
+  }
+  r = { ...r, bytes: m.bytes };
+  modBericht = { n: k.eintraege.length, von: m.anzahlVorher + 1, bis: m.anzahlNachher, fehlend: k.fehlend };
+  console.log(`Modulations-Typen: ${k.eintraege.length} angehängt (${modBericht.von}–${modBericht.bis})${k.fehlend.length ? `, ohne Vorlage: ${k.fehlend.join(", ")}` : ""} ⚠ Menügrenze am Gerät offen`);
+}
+if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length && !oszBericht && !oszSortierung && !modBericht) {
   console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern, --splash, --dsp, --osz-serie noch --osz-sortieren angegeben.");
   process.exit(1);
 }

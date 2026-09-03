@@ -990,6 +990,33 @@ SinDwnB). Anzeige 1-basiert, gespeichert 0-basiert; Typen ab 73 sind als
 eigene Modulationstypen; hinter Hacktribes Tabelle sind 645 Eintraege frei,
 die Menuegrenze ist noch nicht gefunden (kein 72→96 im Code-Diff).
 
+## Eigene Modulationstypen (2026-09-03, am Geraet offen)
+
+Die Modulationstabelle (`core/modTabelle.ts`, 88 Bytes je Eintrag, bei
+Hacktribe RAM 0xC01A0000, 96 Eintraege, dahinter 645 frei) ist **live**:
+die Funktionen bei 0xC0098D10/0xC0099498 greifen zur Laufzeit direkt hinein.
+Aus dem Vergleich der 96 Eintraege: +0x18 Wellenform (0 Saw, 1 Square, 2
+Dreieck/EG, 3 S&H, 4 Random, 6 Sinus), +0x19/+0x1A BPM-Sync, +0x1B…+0x1D
+Speed-Vorgabe/-Min/-Max (0x7F frei, 0x10 Taktteiler), +0x29 Ziel (3 Filter,
+1 Pitch, 2 OSC, 8 Level, 9 Pan, 10 IFX), +0x2A…+0x2C Depth-Vorgabe/-Min/-Max
+signiert („Up" 0…63, „Dwn" −63…0). Wellenform und BPM-Sync sind getrennte
+Bytes — also gibt es zu jedem BPM-Typ (SawUpB, SawDwnB, SquUpB, SquDwnB,
+S&HBPM) eine **freilaufende Fassung** und zu Random eine **BPM-Fassung**:
+36 Kombinationen (`modKombinationen`), die Speed-Bytes kommen von LFOTri
+bzw. LFOTriB desselben Ziels. Werkbank-Baustein **Modulations-Typen**
+(„Kombinationen anhaengen", „fluechtig ins Geraet", Bauplan-Feld `mod`),
+Skript `--mod-serie`.
+
+⚠ **Die Menuegrenze ist nicht gefunden:** im Code-Diff Stock ↔ Hacktribe
+gibt es kein 72 → 96, vier Funktionen klemmen den Typ unveraendert bei 71,
+und Hacktribes eigener Code vergleicht nirgends mit 96. Am Geraet
+(2026-09-03, Treiber): die 36 Eintraege fluechtig auf Platz 97–132
+geschrieben und zurueckgelesen. Ob der Mod-Typ-Regler am Geraet ueber 96
+hinausgeht und „SawUp Filter" zeigt, ist der naechste Blick — ja: die
+Tabelle traegt ihre Grenze selbst (erster leerer Eintrag) und die 36 Typen
+sind da; nein: die Grenze sitzt woanders (Parameter-Beschreiber), dann
+weiter suchen.
+
 ## Sample-Ordner → Bank + Pattern-Set
 
 Aus einem beliebigen flachen Sample-Ordner (One-Shots, Loops, Vocals, ganze

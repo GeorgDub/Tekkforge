@@ -644,6 +644,13 @@
                       </div>
                       <span id="fwOszParamHinweis" class="sub" style="margin:0;font-size:11px;opacity:.7"></span>
                       <div id="fwOszListe" style="max-height:150px;overflow:auto;font-size:11px;margin-top:2px"></div>
+                      <label class="sub" style="margin:8px 0 0;display:flex;align-items:center;gap:4px" title="Die Modulationstypen (EG+, LFOTri, SawUpB … Random × Filter/Pitch/OSC/Level/Pan/IFX) sind eine Tabelle in der Firmware, 88 Bytes je Eintrag; Hacktribe hat 24 Sinus-Typen angehängt (96). Wellenform und BPM-Sync sind getrennte Bytes — daraus entstehen die Kombinationen, die es noch nicht gibt: SawUp/SawDwn/SquUp/SquDwn/S&amp;H freilaufend und Random im Takt, je sechs Ziele = 36. ⚠ Ob das Menü am Gerät einen 97. Typ zeigt, ist offen — die Menügrenze ist im Code nicht gefunden; erst „flüchtig ins Gerät“ probieren."><input id="fwMod" type="checkbox" /> <b>Modulations-Typen</b> (Tabelle ab 97) <span id="fwModInfo"></span></label>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 0 18px">
+                        <button id="fwModKombis" class="ghost" style="padding:1px 6px;font-size:11px" title="Die 36 Kombinationen vormerken, die in der Basis fehlen">Kombinationen anhängen (36)</button>
+                        <button id="fwModLeeren" class="ghost" style="padding:1px 6px;font-size:11px">Liste leeren</button>
+                        <button id="fwModGeraet" class="ghost" style="padding:1px 6px;font-size:11px" title="Die vorgemerkten Einträge hinter die Tabelle im Geräte-RAM schreiben (0xC01A0000 + 96 × 88) — gilt bis zum Ausschalten. Danach am Gerät den Mod-Typ eines Parts über 96 hinausdrehen: erscheint „SawUp Filter“, nimmt das Menü die Tabelle bis zum ersten leeren Eintrag; bleibt es bei 96, sitzt die Grenze woanders.">flüchtig ins Gerät</button>
+                      </div>
+                      <div id="fwModListe" style="max-height:120px;overflow:auto;font-size:11px;margin-top:2px"></div>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
                       <button id="fwBauen" class="primary" title="Alle angehakten Bausteine in die Basis einbrennen und als SYSTEM.VSB ablegen (Ordner Firmware/)">🔥 Firmware bauen</button>

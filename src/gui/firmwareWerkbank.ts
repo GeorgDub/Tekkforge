@@ -33,6 +33,9 @@ const dspGewaehlt = new Set<string>();
 /** Neue Oszillator-Eintraege (Varianten), fortlaufend hinter dem Stand der Basis. */
 let oszNeu: OszEintragMitPlatz[] = [];
 let oszBasisAnzahl = 0;
+/** Neue Modulationstypen hinter der Tabelle der Basis (Platz 0-basiert). */
+let modNeu: ModEintragMitPlatz[] = [];
+let modBasisAnzahl = 0;
 const aktuellesPatternDatei = (): { name: string; bytes: Uint8Array } => {
   if (!hooks) throw new Error("kein Editor angebunden");
   return hooks.aktuellesPattern();
@@ -110,6 +113,7 @@ import {
   pbmZuPixel,
 } from "../core/splash";
 import { legeAb } from "./ablage";
+import { liesModTabelle, modKombinationen, modName, decodeMod, setzeModTabelle, MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG, MOD_WELLEN, MOD_ZIEL_NAMEN, type ModEintragMitPlatz } from "../core/modTabelle";
 
 const FIRMWARE_ORDNER = "Firmware";
 const SKALA = 4;
@@ -227,6 +231,11 @@ async function basisLaden(f: File): Promise<void> {
   oszNeu = [];
   oszListe();
   oszVorlagenFuellen();
+  modNeu = [];
+  modBasisAnzahl = basis ? liesModTabelle(basis).length : 0;
+  modListe();
+  const modInfo = document.getElementById("fwModInfo");
+  if (modInfo) modInfo.textContent = basis ? (modBasisAnzahl ? `${modBasisAnzahl} in der Basis` : "keine Tabelle bei 0xC01A0000 — Stock-Firmware?") : "";
   oszVorlageHinweis();
   if (!osz.ok) ($("fwOszInfo") as HTMLElement).textContent = `Tabelle nicht lesbar: ${osz.reason}`;
   dspListe();
@@ -452,6 +461,80 @@ function oszVorlageHinweis(): void {
   if (nameEl && !nameEl.value) nameEl.value = d.name.slice(0, 15);
 }
 
+// ─── Modulations-Typen ───────────────────────────────────────────────────────
+
+function modListe(): void {
+  const el = document.getElementById("fwModListe");
+  if (!el) return;
+  el.innerHTML = modNeu
+    .map((o, i) => {
+      const d = decodeMod(o.bytes);
+      return `<div class="sub" style="margin:1px 0;display:flex;gap:6px;align-items:center"><span style="min-width:34px">${o.platz + 1}</span><b>${escapeHtml(d.name)}</b><span style="opacity:.7">${MOD_WELLEN[d.welle] ?? `Welle ${d.welle}`}${d.bpm ? " · BPM" : " · frei"} · Ziel ${MOD_ZIEL_NAMEN[d.ziel] ?? d.ziel} · Depth ${d.depthMin}…${d.depthMax}</span><button class="ghost" data-mod-weg="${i}" style="padding:0 6px;font-size:11px" title="Eintrag entfernen">✕</button></div>`;
+    })
+    .join("");
+}
+
+/** Die 36 Kombinationen der Basis vormerken — fuer Tests direkt aufrufbar. */
+export function fwModKombinationen(): { ok: true; anzahl: number; fehlend: string[] } | { ok: false; reason: string } {
+  if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
+  const tabelle = liesModTabelle(basis);
+  if (!tabelle.length) return { ok: false, reason: "Die Basis hat keine Modulationstabelle bei 0xC01A0000 (Stock-Firmware?)." };
+  const k = modKombinationen([...tabelle, ...modNeu.map((m) => m.bytes)]);
+  for (const e of k.eintraege) modNeu.push({ platz: tabelle.length + modNeu.length, bytes: e.bytes });
+  modListe();
+  ($("fwMod") as HTMLInputElement).checked = true;
+  vorschau();
+  return { ok: true, anzahl: k.eintraege.length, fehlend: k.fehlend };
+}
+
+export function fwModEntfernen(index: number): void {
+  modNeu.splice(index, 1);
+  modNeu = modNeu.map((o, i) => ({ platz: modBasisAnzahl + i, bytes: o.bytes }));
+  modListe();
+  vorschau();
+}
+
+export function fwModNeu(): readonly ModEintragMitPlatz[] {
+  return modNeu;
+}
+
+/** Fluechtig: die Eintraege hinter die Tabelle im Geraete-RAM — die Tabelle ist dort live. */
+async function modFluechtig(): Promise<void> {
+  if (!hooks?.schreiben || !hooks.lesen) {
+    setStatus("Kein Geräte-Schreibweg (MIDI aus).");
+    return;
+  }
+  if (!modNeu.length) {
+    setStatus("Keine Modulations-Typen vorgemerkt.");
+    return;
+  }
+  if (!basis) return;
+  // Probe: Platz 1 und der letzte Platz der Basis muessen am Geraet stehen, der erste freie leer sein.
+  const erster = await hooks.lesen(MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG);
+  const letzter = await hooks.lesen(MOD_TABELLE_ADDR_HACKTRIBE + (modBasisAnzahl - 1) * MOD_EINTRAG, MOD_EINTRAG);
+  const frei = await hooks.lesen(MOD_TABELLE_ADDR_HACKTRIBE + modBasisAnzahl * MOD_EINTRAG, 1);
+  if (!erster.ok || !letzter.ok || !frei.ok) {
+    setStatus("Modulationstabelle am Gerät nicht lesbar.");
+    return;
+  }
+  const b = liesModTabelle(basis);
+  if (modName(erster.bytes) !== modName(b[0]) || modName(letzter.bytes) !== modName(b[modBasisAnzahl - 1])) {
+    setStatus(`Die Tabelle am Gerät passt nicht zur Basis (dort „${modName(erster.bytes)}“ … „${modName(letzter.bytes)}“) — nichts geschrieben.`);
+    return;
+  }
+  if (frei.bytes[0] !== 0xff && frei.bytes[0] !== 0) {
+    setStatus(`Platz ${modBasisAnzahl + 1} am Gerät ist schon belegt — nichts geschrieben.`);
+    return;
+  }
+  for (const m of modNeu) {
+    if (!(await hooks.schreiben(MOD_TABELLE_ADDR_HACKTRIBE + m.platz * MOD_EINTRAG, m.bytes, `Mod-Typ ${m.platz + 1}`))) {
+      setStatus(`Mod-Typ ${m.platz + 1} nicht geschrieben — abgebrochen.`);
+      return;
+    }
+  }
+  setStatus(`${modNeu.length} Modulations-Typen flüchtig geschrieben (${modBasisAnzahl + 1}…${modBasisAnzahl + modNeu.length}). Am Gerät den Mod-Typ eines Parts über ${modBasisAnzahl} hinausdrehen — zeigt er „${modName(modNeu[0].bytes)}“? Gilt bis zum Ausschalten.`);
+}
+
 /** Fluechtig: Eintraege und Beschreiber ins Geraete-RAM — bis zum Ausschalten. */
 async function oszFluechtig(): Promise<void> {
   if (!hooks?.schreiben || !hooks.lesen) {
@@ -547,6 +630,7 @@ interface Bauplan {
   splash: boolean;
   dsp: DspPatch[];
   osz: OszEintragMitPlatz[];
+  mod: ModEintragMitPlatz[];
   zeilen: string[];
 }
 
@@ -597,8 +681,10 @@ function bauplan(): Bauplan | null {
   const dsp = fwDspPatches().filter((p) => dspGewaehlt.has(p.id));
   if (dsp.length) zeilen.push(`DSP-Patches (⚠ experimentell): ${dsp.map((p) => p.titel).join(", ")}`);
   const osz = an("fwOsz") ? oszNeu : [];
-  if (an("fwOsz")) zeilen.push(osz.length ? `Oszillatoren: ${osz.length} Variante(n) auf ${osz[0].platz}–${osz[osz.length - 1].platz} (⚠ am Gerät noch offen)` : "Oszillatoren: nichts vorgemerkt");
-  return { presets, grooves: gv, init, global, splash, dsp, osz, zeilen };
+  if (an("fwOsz")) zeilen.push(osz.length ? `Oszillatoren: ${osz.length} Variante(n) auf ${osz[0].platz}–${osz[osz.length - 1].platz}` : "Oszillatoren: nichts vorgemerkt");
+  const mod = an("fwMod") ? modNeu : [];
+  if (an("fwMod")) zeilen.push(mod.length ? `Modulations-Typen: ${mod.length} neu auf ${mod[0].platz + 1}–${mod[mod.length - 1].platz + 1} (⚠ Menügrenze am Gerät offen)` : "Modulations-Typen: nichts vorgemerkt");
+  return { presets, grooves: gv, init, global, splash, dsp, osz, mod, zeilen };
 }
 
 function vorschau(): void {
@@ -640,7 +726,13 @@ export function fwBaueAbbild(): { ok: true; bytes: Uint8Array; zeilen: string[] 
     bytes = r.bytes;
     zeilen.push(`Oszillator-Tabelle: Liste bis ${r.anzahlVorher} → bis ${r.anzahlNachher}`);
   }
-  if (!eintraege.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length && !plan.osz.length) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
+  if (plan.mod.length) {
+    const r = setzeModTabelle(bytes, plan.mod);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    bytes = r.bytes;
+    zeilen.push(`Modulations-Tabelle: bis ${r.anzahlVorher} → bis ${r.anzahlNachher}`);
+  }
+  if (!eintraege.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length && !plan.osz.length && !plan.mod.length) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
   return { ok: true, bytes, zeilen };
 }
 
@@ -871,6 +963,21 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
     vorschau();
   });
   $("fwOszGeraet").addEventListener("click", () => void oszFluechtig());
+  $("fwModKombis").addEventListener("click", () => {
+    const r = fwModKombinationen();
+    setStatus(r.ok ? `${r.anzahl} Modulations-Typen vorgemerkt (Platz ${modBasisAnzahl + 1}…${modBasisAnzahl + modNeu.length})${r.fehlend.length ? ` — ohne Vorlage: ${r.fehlend.join(", ")}` : ""}. ⚠ Ob das Menü sie zeigt, entscheidet der Versuch am Gerät.` : r.reason);
+  });
+  $("fwModLeeren").addEventListener("click", () => {
+    modNeu = [];
+    modListe();
+    vorschau();
+  });
+  $("fwModGeraet").addEventListener("click", () => void modFluechtig());
+  $("fwModListe").addEventListener("click", (ev) => {
+    const t = (ev as Event | undefined)?.target as HTMLElement | null | undefined;
+    const i = t?.dataset?.modWeg;
+    if (i !== undefined) fwModEntfernen(Number(i));
+  });
   $("fwOszListe").addEventListener("click", (ev) => {
     const t = (ev as Event | undefined)?.target as HTMLElement | null | undefined;
     const i = t?.dataset?.oszWeg;
