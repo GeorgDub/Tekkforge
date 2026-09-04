@@ -79,6 +79,8 @@ export interface ProjektSample {
    * wirklich in der Bank liegt — halb, wenn sich die Schleife wiederholt.
    */
   loop?: { start: number; ende: number; takte: number; gespeicherteTakte: number };
+  /** Bassline des Fensters (Melodie-Loops aus einem Lied): MIDI-Note je Viertel, null = Pause. */
+  bassLinie?: (number | null)[];
 }
 export interface Projekt {
   name: string;
@@ -426,6 +428,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
         gruppe: t.kind === "loop" ? `${e.rolle}:${e.familie}` : e.rolle,
         ...(t.chunk !== undefined ? { chunk: t.chunk, chunks: 2 as const } : {}),
         ...(e.rolle === "melo" && t.kind === "loop" ? { raster: meloRaster(t.pcm, SR, t.takte) } : {}),
+        ...(e.bassLinie && t.kind === "loop" && t.chunk !== 1 ? { bassLinie: e.bassLinie } : {}),
         // Am fertigen Slot gemessen: der Varispeed hat die Tonhoehe schon
         // verschoben, und bei sparsamen Vocals steht die halbe Rate. Ein Profil
         // von der Quelldatei beschriebe etwas, das so nicht in der Bank liegt.

@@ -1177,6 +1177,26 @@ Punkt; Slice-Marker schrieb nur `make-folder-bank.mjs`. Jetzt
 Pattern rund ueber die Taktgrenze, und fuellt ein halb gespeicherter
 Vier-Takter die vier Takte ohne Naht?
 
+## Bassline aus dem Bass-Stem als Noten (2026-09-04, Hoerprobe offen)
+
+Der Bass-Stem von Demucs war bisher nur ein weiteres Sample. Jetzt
+(`core/grundton.ts`): `grundtonYin` misst den Grundton eines Ausschnitts
+(YIN, 30–300 Hz, Fenster 4096, Parabel-Feinabstimmung), `bassNoten` eine
+MIDI-Note je Viertel ueber vier Takte (null bei Pause oder Sicherheit
+unter 0,6). `stems.py` liefert den Bass-Stem jetzt IMMER mit, sobald er
+hoerbar ist (als Sample landet er weiter nur, wenn „Bass“ angehakt ist);
+`liedZuSet` und der Generator-Tab haengen die Linie als `bassLinie` an das
+Melodie-Fenster, `planeBank` traegt sie in `ProjektSample`, und
+`patternGen` legt sie auf Part 9: die Tekk-Figur bleibt (wo geschlagen
+wird), die Note folgt dem Original — Tonklasse eine Oktave unter der
+Sample-Tonhoehe (48…59, `noteFuerBassSample`), Pausen halten die letzte
+Note. Voraussetzung: das Bass-Sample steht auf C (Unison_Bass_C3, Kick als
+Bass); dann spielt der Synth-Bass mit jedem der 362 Oszillatoren die Linie
+des Lieds.
+
+⚠ Am Ohr zu pruefen: sitzt die Linie auf den richtigen Toenen, und passt
+die Oktave zum Bass-Sample?
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

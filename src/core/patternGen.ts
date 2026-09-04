@@ -15,6 +15,24 @@ import { stabAusRaster, bassAnMelo } from "./meloRaster";
 import { fillSchlaege } from "./patternVarianten";
 import { variierePattern } from "./kettenVariation";
 import { aufbauMotion, dropMotion } from "./motionGen";
+import { noteFuerBassSample } from "./grundton";
+
+/**
+ * Die Bass-Figur mit den Noten der gemessenen Bassline: jeder Schlag der
+ * Figur bekommt die Note des Viertels, in dem er liegt (Pausen halten die
+ * letzte Note; ganz ohne Note bleibt 60). Die Figur selbst — wo geschlagen
+ * wird — bleibt die Tekk-Figur, nur die Tonhoehe folgt dem Original.
+ */
+export function bassMitLinie(figur: E2StepInput[], linie: readonly (number | null)[]): E2StepInput[] {
+  let letzte: number | null = null;
+  const jeViertel = linie.map((n) => (n === null ? null : noteFuerBassSample(n)));
+  return figur.map((s, i) => {
+    const note = jeViertel[Math.floor(i / 4) % Math.max(1, jeViertel.length)];
+    if (note !== null && note !== undefined) letzte = note;
+    if (!s.active) return s;
+    return { ...s, notes: [letzte ?? 60] };
+  });
+}
 
 const N = 64;
 const MONO1 = 0;
@@ -167,7 +185,10 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   wach[7] = i >= 5;
   // Melo-Raster: Bass weicht Melo-Bass aus, Stab-Hits sitzen auf den staerksten Melo-Onsets
   const raster = melo?.raster;
-  steps[8] = raster ? bassAnMelo(BASS[rezept.figuren.bass](), raster) : BASS[rezept.figuren.bass]();
+  const bassFigur = raster ? bassAnMelo(BASS[rezept.figuren.bass](), raster) : BASS[rezept.figuren.bass]();
+  // Bassline aus dem Bass-Stem des Lieds: die Figur bleibt, die Noten kommen
+  // vom Original (Tonklasse eine Oktave unter der Sample-Tonhoehe)
+  steps[8] = melo?.bassLinie ? bassMitLinie(bassFigur, melo.bassLinie) : bassFigur;
   wach[8] = a.lagen.includes("bass") && !!bass;
   const stabFig: StabFigur | "phrase" = stab && (stab.kind === "loop" || stab.sekunden >= 2) ? "phrase" : rezept.figuren.stab;
   steps[9] = raster && stabFig !== "phrase" ? stabAusRaster(raster) : STAB[stabFig]();

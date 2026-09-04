@@ -26,6 +26,7 @@ import { regelRezept } from "./rezept";
 import { baueAufbau, baueRezept } from "./patternGen";
 import type { E2PatternInput } from "./electribePatternBuilder";
 import { grooveFuerLied, mitSwing, type LiedGroove } from "./grooveAnschluss";
+import { bassNoten } from "./grundton";
 import type { Groove } from "./e2Groove";
 
 /** Kuerzel je Drum-Rolle, wie im Generator-Tab. */
@@ -36,6 +37,8 @@ export interface StemErgebnis {
   melo: Float32Array | null;
   vox: Float32Array | null;
   drums: Float32Array | null;
+  /** Bass-Stem des Fensters — nur fuer die Bassline-Noten, kein eigenes Sample. */
+  bass?: Float32Array | null;
 }
 
 export interface LiedZuSetOptionen {
@@ -188,7 +191,14 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
       // Patterns nachbauen. Sonst vom ersten Stem, das Drums hat.
       if (r.drums && (!grooveQuelle || r.id === "DROP")) grooveQuelle = r.drums;
       if (r.melo) {
-        eintraege.push(eintrag(name, r.id, r.melo, "melo"));
+        const m = eintrag(name, r.id, r.melo, "melo");
+        // Bassline aus dem Bass-Stem: Note je Viertel ueber die ersten vier
+        // Takte (das Pattern hat 64 Steps; ein 8-Takter laeuft ueber Alternate).
+        if (r.bass) {
+          const linie = bassNoten(r.bass, sr, bpm, 4);
+          if (linie.some((n) => n !== null)) m.bassLinie = linie;
+        }
+        eintraege.push(m);
         zaehler.fenster++;
       }
       if (r.vox) {

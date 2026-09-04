@@ -8,7 +8,7 @@ Generator-Tab. Eingabe ist ein JSON (Pfad als Argument):
 
 Je Fenster entstehen <ziel>/<id>-melo.wav (bass + other; Vocals werden
 eingefaltet, wenn sie leiser als -36 dB sind), <ziel>/<id>-vox.wav (nur
-wenn Vocals > -36 dB, dann auf 0,95 normalisiert) und <ziel>/<id>-drums.wav
+wenn Vocals > -36 dB, dann auf 0,95 normalisiert) und <ziel>/<id>-drums.wav, dazu <id>-bass.wav sobald hoerbar (fuer die Bassline-Noten)
 (Drums-Stem, normalisiert — Quelle fuer geschnittene Kick/Snare/Hat-One-Shots).
 Fenster mit "nurVox": true liefern nur die Vocals (Vocal-Vollabdeckung des
 ganzen Lieds); melo und drums sind dann null.
@@ -126,8 +126,11 @@ def main():
         if "melo" in teile:
             melo_pfad = os.path.join(ziel, f"{f['id']}-melo.wav")
             sf.write(melo_pfad, normalisiere(melo), SR, subtype="PCM_16")
+        # Der Bass-Stem kommt IMMER mit, wenn er hoerbar ist: TekkForge liest
+        # daraus die Bassline als Noten (core/grundton.ts). Als eigenes Sample
+        # landet er nur, wenn "bass" in teile steht — das entscheidet der Aufrufer.
         bass_pfad = None
-        if bass_extra and rms_db(st["bass"]) > -45:
+        if rms_db(st["bass"]) > -45:
             bass_pfad = os.path.join(ziel, f"{f['id']}-bass.wav")
             sf.write(bass_pfad, normalisiere(st["bass"]), SR, subtype="PCM_16")
         vox_pfad = None

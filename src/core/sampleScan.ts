@@ -41,6 +41,11 @@ export interface ScanEintrag {
   lied?: string;
   /** Einmal gemessen, ueberall weiterverwendet — siehe `klangProfil`. */
   klang: Klangprofil;
+  /**
+   * Bassline des Fensters aus dem Bass-Stem: eine MIDI-Note je Viertel, null
+   * bei Pause (`grundton.bassNoten`). Nur bei Melodie-Fenstern eines Lieds.
+   */
+  bassLinie?: (number | null)[];
 }
 
 export const LANG_AB = 2.5;

@@ -30,6 +30,7 @@ import { tonartErkennen } from "../core/keyAnalyse";
 import { klangProfil } from "../core/klangProfil";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, voxSegmentEintrag, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import { bassNoten } from "../core/grundton";
 import {
   type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
 } from "../core/projektStatus";
@@ -740,8 +741,16 @@ async function liedAnalysieren(): Promise<void> {
         });
         const je = new Map(antwort.fenster.map((f) => [f.id, f]));
         for (const f of res.fenster) {
-          const r = je.get(f.label);
-          if (r?.melo) neue.push(fensterEintrag(liedName, f.label, parseWav(Uint8Array.from(r.melo)).pcm));
+          const r = je.get(f.label) as { melo?: Uint8Array | number[] | null; bass?: Uint8Array | number[] | null } | undefined;
+          if (!r?.melo) continue;
+          const m = fensterEintrag(liedName, f.label, parseWav(Uint8Array.from(r.melo)).pcm);
+          // Bassline aus dem Bass-Stem (Note je Viertel, vier Takte) — der
+          // Synth-Bass spielt dann die Linie des Originals
+          if (r.bass) {
+            const linie = bassNoten(parseWav(Uint8Array.from(r.bass)).pcm, 44100, zielBpm, 4);
+            if (linie.some((n) => n !== null)) m.bassLinie = linie;
+          }
+          neue.push(m);
         }
         // je hoerbarem Segment mit Vocals ein "V01…"-Eintrag in Liedreihenfolge
         let vNr = 0;

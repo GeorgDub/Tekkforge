@@ -322,10 +322,10 @@ function stemsUeberPython(python: string) {
       });
       if (res.status !== 0) fail(`Stem-Trennung fehlgeschlagen: ${res.stderr?.slice(-400) ?? res.error}`);
       const letzte = res.stdout.trim().split(NEUZEILE).pop() ?? "{}";
-      const raus = JSON.parse(letzte) as { fenster: { id: string; melo: string | null; vox: string | null; drums: string | null }[] };
+      const raus = JSON.parse(letzte) as { fenster: { id: string; melo: string | null; vox: string | null; drums: string | null; bass?: string | null }[] };
       const lies = (p: string | null): Float32Array | null =>
         p && fs.existsSync(p) ? parseWav(new Uint8Array(fs.readFileSync(p))).pcm : null;
-      return raus.fenster.map((f) => ({ id: f.id, melo: lies(f.melo), vox: lies(f.vox), drums: lies(f.drums) }));
+      return raus.fenster.map((f) => ({ id: f.id, melo: lies(f.melo), vox: lies(f.vox), drums: lies(f.drums), bass: lies(f.bass ?? null) }));
     } finally {
       try {
         fs.rmSync(tmp, { recursive: true, force: true });
