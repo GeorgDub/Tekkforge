@@ -133,7 +133,9 @@ describe("Nachmessen: schlank gegen voll", () => {
     const schlank = messe("schlank");
     const voll = messe("voll");
     expect(schlank).toBeGreaterThan(voll);
-  });
+    // Zwei ganze Drop-Patterns rendern dauert rund 5 s — unter Last der ganzen
+    // Suite lag das an der Grenze; die Messung braucht die Zeit, nicht ein Fehler.
+  }, 20000);
 });
 
 describe("Nachmessen: die Kick wiederholt sich nicht", () => {

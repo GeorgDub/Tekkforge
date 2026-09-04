@@ -36,15 +36,30 @@ const kosinus = (a: number[], b: number[]): number => {
   return aa > 0 && bb > 0 ? ab / Math.sqrt(aa * bb) : 0;
 };
 
-/** Chroma je Takt eines Fensters. */
+/** Viererbloecke mitteln: die Chroma-Bins reichen bis B6 (knapp 2 kHz), da genuegt ein Viertel der Rate. */
+const DEZIMIERUNG = 4;
+
+function dezimiert(pcm: Float32Array): Float32Array {
+  const n = Math.floor(pcm.length / DEZIMIERUNG);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = i * DEZIMIERUNG;
+    out[i] = (pcm[k] + pcm[k + 1] + pcm[k + 2] + pcm[k + 3]) * 0.25;
+  }
+  return out;
+}
+
+/** Chroma je Takt eines Fensters (auf ein Viertel der Rate gebracht — viermal schneller, gleiche Tonklassen). */
 export function taktChromas(pcm: Float32Array, sr: number, bpm: number): number[][] {
-  const tf = (240 / bpm) * sr;
-  const takte = Math.max(1, Math.floor(pcm.length / tf + 0.02));
+  const y = dezimiert(pcm);
+  const srY = sr / DEZIMIERUNG;
+  const tf = (240 / bpm) * srY;
+  const takte = Math.max(1, Math.floor(y.length / tf + 0.02));
   const out: number[][] = [];
   for (let t = 0; t < takte; t++) {
     const von = Math.round(t * tf);
-    const bis = Math.min(pcm.length, Math.round((t + 1) * tf));
-    out.push(chromaAusPcm(pcm.subarray(von, bis), sr));
+    const bis = Math.min(y.length, Math.round((t + 1) * tf));
+    out.push(chromaAusPcm(y.subarray(von, bis), srY));
   }
   return out;
 }

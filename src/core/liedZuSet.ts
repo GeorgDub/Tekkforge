@@ -169,7 +169,8 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
    * und DANN mit diesem Ziel richtig analysieren. So macht es der Generator-Tab
    * seit jeher; hier war es beim Herausloesen verlorengegangen.
    */
-  const vorlauf = analysiereLied(pcm, sr, { zielBpm: opts.zielBpm ?? 180, bpmHinweis: opts.bpm, anzahl: 1 });
+  // Der Vorlauf braucht nur das Tempo — Beat-Raster und Hook-Suche spart er sich.
+  const vorlauf = analysiereLied(pcm, sr, { zielBpm: opts.zielBpm ?? 180, bpmHinweis: opts.bpm, anzahl: 1, beatRaster: false, hook: false });
   const bpm = opts.bpm ?? Math.round(vorlauf.bpm * vorlauf.k * 10) / 10;
   const analyse = analysiereLied(pcm, sr, { zielBpm: bpm, bpmHinweis: opts.bpm });
 
