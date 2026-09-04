@@ -9,7 +9,7 @@ import { ramBytesFuer } from "./sampleRam";
 import { tempoVorschlag } from "./tempoAnalyse";
 import { type Projekt, BUDGET_SEKUNDEN, waehleVolumes } from "./bankPlan";
 import { type Rezept, type Modus, regelRezept, regelRezeptProMelo } from "./rezept";
-import { baueRezept, baueProMelo, baueAufbau, baueProMeloAufbau, alsAllPat, alsPat } from "./patternGen";
+import { baueRezept, baueProMelo, bauePaare, bauePaareProMelo, alsAllPat, alsPat } from "./patternGen";
 import type { E2PatternInput } from "./electribePatternBuilder";
 
 export interface Zusammenfassung {
@@ -193,17 +193,17 @@ export function erzeuge(
     const rezepte = (wunsch.rezepte?.length ? wunsch.rezepte.map((r) => ({ ...r, bpm: wunsch.bpm })) : regelRezeptProMelo(projekt, wunsch.bpm)).map(
       (r) => mitDichte(r, wunsch.dichteVoll),
     );
-    const { patterns, hinweise } = wunsch.aufbau ? baueProMeloAufbau(rezepte, projekt) : baueProMelo(rezepte, projekt);
+    const { patterns, hinweise } = wunsch.aufbau ? bauePaareProMelo(rezepte, projekt) : baueProMelo(rezepte, projekt);
     return {
       modus: "promelo",
       rezepte,
       patterns,
       bytes: new Uint8Array(alsAllPat(patterns)),
-      dateiname: `${basis}-promelo${wunsch.aufbau ? "-aufbau" : ""}.e2sallpat`,
+      dateiname: `${basis}-promelo${wunsch.aufbau ? "-paare" : ""}.e2sallpat`,
       hinweise,
       startSlot: 1,
       warumSo:
-        `${rezepte.length} Melodien, je ${wunsch.aufbau ? "eine Aufbau-Kette (Entmuten bis zum Drop)" : "ein Jam-Pattern"}; ` +
+        `${rezepte.length} Melodien, ${wunsch.aufbau ? "Vocal-Paare reihum als A ↔ B plus KICK" : "je ein Jam-Pattern"}; ` +
         `Kick-Familien rotieren: ${rezepte.map((r) => `${r.thema.melo} → ${r.thema.kickFamilie}`).join(", ")}.`,
     };
   }
@@ -215,22 +215,18 @@ export function erzeuge(
   );
   const start = wunsch.startSlot ?? 1;
   if (wunsch.aufbau) {
-    const { patterns, hinweise } = baueAufbau(rezept, projekt, {
-      startSlot: start,
-      intro: wunsch.duennesIntro ? "duenn" : "voll",
-    });
+    const { patterns, hinweise } = bauePaare(rezept, projekt, { startSlot: start });
     return {
       modus: wunsch.modus,
       rezepte: [rezept],
       patterns,
       bytes: new Uint8Array(alsAllPat(patterns, start)),
-      dateiname: `${basis}-aufbau.e2sallpat`,
+      dateiname: `${basis}-paare.e2sallpat`,
       hinweise,
       warumSo:
         rezept.begruendung +
-        ` Aufbau-Kette: ${patterns.length} Patterns, Steps ueberall gesetzt, entmutet wird stufenweise — Kick erst im Drop; ` +
-        `Aufbau leicht gedimmt, Snare-Fill vor dem Drop, Drop-Kicks auf Maximum; Vocal-Paare wandern ueber die Kette. Am Geraet frei weiter entmuten.` +
-        (wunsch.duennesIntro ? " Erste Stufe ausgeduennt: nur jeder zweite Schlagzeug-Schlag." : "") +
+        ` Paare: ${patterns.length} Patterns — je Vocal-Paar A ↔ B (Vocal auf Part 16, kein Alternate), danach ein KICK-Pattern ohne Kette; ` +
+        `Steps ueberall gesetzt, Melodie und Vocal im KICK gemutet. Am Geraet frei weiter entmuten.` +
         (rezept.figuren.dichte === "voll" ? " Dichter Satz (voll)." : ""),
       startSlot: start,
     };

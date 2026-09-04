@@ -123,7 +123,19 @@ const VOLUME = [127, 104, 110, 96, 88, 82, 84, 80, 70, 100, 112, 108, 112, 112, 
  */
 const SCHLEIFEN_DAEMPFUNG = 0.78;
 
-function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zweiteHaelfte: boolean, stepsImmer = false): E2PartInput[] {
+/**
+ * Paar-Layout (Nutzerwunsch 2026-09-04): kein Alternate mehr. Das Vocal liegt
+ * NUR auf Part 16 (`vers`), Part 15 bleibt leer; die Melodie liegt auf Part
+ * 13 und wird nur getriggert, wenn `meloTrigger` gilt (A-Pattern) oder sie
+ * hoechstens vier Takte lang ist — ein Acht-Takter laeuft ueber das
+ * B-Pattern weiter, ohne neu anzusetzen. Part 14 bleibt leer.
+ */
+export interface PaarLayout {
+  vers?: ProjektSample;
+  meloTrigger: boolean;
+}
+
+function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zweiteHaelfte: boolean, stepsImmer = false, paar?: PaarLayout): E2PartInput[] {
   const pl = pools(projekt);
   const byName = (n?: string) => (n ? projekt.samples.find((s) => s.name === n) : undefined);
   const t: Thema = rezept.thema;
@@ -197,14 +209,28 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   wach[10] = a.lagen.includes("shot") && !!shotA;
   steps[11] = shotB?.kind === "loop" ? loopHit(shotB.takte, 110) : SHOT_B();
   wach[11] = riserAktiv || (a.lagen.includes("shot") && !!shotB);
-  steps[12] = melo ? loopHit(melo.takte) : leer();
-  steps[13] = melo && !lang(melo) ? loopHit(melo.takte) : leer();
-  wach[12] = a.lagen.includes("melo") && !!melo;
-  wach[13] = wach[12] && !lang(melo);
-  steps[14] = vers ? loopHit(vers.takte) : leer();
-  steps[15] = versB ? loopHit(versB.takte) : vers && !lang(vers) ? loopHit(vers.takte) : leer();
-  wach[14] = a.lagen.includes("vers") && !!vers;
-  wach[15] = wach[14] && (versB ? true : !lang(vers));
+  if (paar) {
+    // Paar-Layout: Melodie nur auf 13 (Trigger im A-Pattern oder bei <= 4 Takten),
+    // 14 leer; Vocal nur auf 16, 15 leer. Ein laufender Acht-Takter bleibt im
+    // B-Pattern hoerbar, weil der Part wach bleibt und nichts neu triggert.
+    steps[12] = melo && (paar.meloTrigger || !lang(melo)) ? loopHit(melo.takte) : leer();
+    steps[13] = leer();
+    wach[12] = a.lagen.includes("melo") && !!melo;
+    wach[13] = false;
+    steps[14] = leer();
+    steps[15] = paar.vers ? loopHit(paar.vers.takte) : leer();
+    wach[14] = false;
+    wach[15] = a.lagen.includes("vers") && !!paar.vers;
+  } else {
+    steps[12] = melo ? loopHit(melo.takte) : leer();
+    steps[13] = melo && !lang(melo) ? loopHit(melo.takte) : leer();
+    wach[12] = a.lagen.includes("melo") && !!melo;
+    wach[13] = wach[12] && !lang(melo);
+    steps[14] = vers ? loopHit(vers.takte) : leer();
+    steps[15] = versB ? loopHit(versB.takte) : vers && !lang(vers) ? loopHit(vers.takte) : leer();
+    wach[14] = a.lagen.includes("vers") && !!vers;
+    wach[15] = wach[14] && (versB ? true : !lang(vers));
+  }
 
   const pc = pl.percs.length ? pl.percs[(2 * pos) % pl.percs.length] : undefined;
   const pc2 = pl.percs.length ? pl.percs[(2 * pos + 1) % pl.percs.length] : undefined;
@@ -212,6 +238,11 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
     kicks[0], kick2, byName(t.snare), byName(t.clap), byName(t.hats[0]), byName(t.hats[1]),
     byName(t.percs?.[0]) ?? pc, byName(t.percs?.[1]) ?? pc2, bass, stab, shotA, shotB, melo, melo, vers, versB ?? vers,
   ];
+  if (paar) {
+    sample[13] = undefined;
+    sample[14] = undefined;
+    sample[15] = paar.vers;
+  }
   return steps.map((st, idx) => {
     const smp = sample[idx];
     const params: Record<string, number> = { voiceAssign: idx === 9 ? POLY2 : MONO1 };
@@ -249,14 +280,16 @@ export function baueRezept(
   const hinweise: string[] = [];
   const tag = tagAus(rezept);
   const n = rezept.abschnitte.length;
+  // Paar-Layout auch hier: Vocal A auf 16, kein Alternate (Nutzerwunsch 2026-09-04)
+  const versA = rezept.thema.vers ? projekt.samples.find((s) => s.name === rezept.thema.vers) : undefined;
   const patterns: E2PatternInput[] = rezept.abschnitte.map((a, i) => ({
     name: (rezept.modus === "miniset" ? `${tag} ${a.name}` : `${tag} JAM`).slice(0, 16),
     bpm: rezept.bpm,
     mfxType: opts.mfxType ?? 11,
     stepLength: 64 as const,
-    parts: parts(rezept, projekt, a, i, n > 1 && i >= Math.ceil(n / 2)),
-    alternate13_14: true,
-    alternate15_16: true,
+    parts: parts(rezept, projekt, a, i, n > 1 && i >= Math.ceil(n / 2), false, { vers: versA, meloTrigger: true }),
+    alternate13_14: false,
+    alternate15_16: false,
     chainTo: rezept.modus === "miniset" && i < n - 1 ? start + i + 1 : 0,
     chainRepeat: rezept.modus === "miniset" ? a.wiederholungen : 1,
   }));
@@ -328,7 +361,12 @@ export function baueAufbau(
     intro?: "duenn" | "voll";
     /** Ketten-Variation (Vorgabe an): jedes Pattern ausser dem Drop bekommt eine eigene Handschrift. */
     variation?: boolean;
-    /** Motion-Sequenzen (Vorgabe an): Filter-Sweep ueber den Aufbau, MFX-Rampe und Kick-Fall im Drop. */
+    /**
+     * Motion-Sequenzen (Vorgabe AUS): Filter-Sweep ueber den Aufbau, MFX-Rampe
+     * und Kick-Fall im Drop. Aus, bis MOTTEST die ParamIDs am Geraet belegt —
+     * Nutzerbefund 2026-09-04: Tonhoehe in den letzten Durchgaengen falsch,
+     * und der Pitch-Fall (ID 2, nur vermutet) ist der einzige Verdaechtige.
+     */
     motion?: boolean;
   } = {},
 ): { patterns: E2PatternInput[]; hinweise: string[] } {
@@ -433,7 +471,7 @@ export function baueAufbau(
       variiere(stufenPegel(mitMutes(dropParts, an), i, stufen.length), i),
     ),
     // Filter-Sweep ueber die Melo-Parts: die Kette spielt einen durchgehenden Anstieg
-    motionSlots: opts.motion === false ? undefined : aufbauMotion(i, stufen.length),
+    motionSlots: opts.motion === true ? aufbauMotion(i, stufen.length) : undefined,
     chainTo: start + i + 1,
     // EINMAL je Stufe, nicht zweimal.
     //
@@ -450,7 +488,7 @@ export function baueAufbau(
     name: `${tag} DROP`.slice(0, 16),
     parts: punch(mitMutes(partsFuer(versFuer(1)), null)),
     // Master-FX faehrt hoch, die Kick faellt im letzten halben Takt
-    motionSlots: opts.motion === false ? undefined : dropMotion(),
+    motionSlots: opts.motion === true ? dropMotion() : undefined,
     chainTo: extras ? start + patterns.length + 1 : 0,
     chainRepeat: 4,
   });
@@ -501,6 +539,82 @@ export function baueProMelo(rezepte: Rezept[], projekt: Projekt): { patterns: E2
     out.push(...res.patterns);
     hinweise.push(...res.hinweise);
   });
+  return { patterns: out, hinweise };
+}
+
+/**
+ * Paare (Nutzerwunsch 2026-09-04): je Vocal-Paar zwei Patterns, die
+ * gegenseitig aufeinander zeigen — A traegt Vocal A auf Part 16, B Vocal B —
+ * so laeuft das Acht-Takt-Vocal so lange, wie man will. Nach jedem Paar ein
+ * KICK-Pattern ohne Kette: dieselben Drums, Melodie und Vocal gemutet, zum
+ * freien Weiterspielen. Kein Alternate, kein Motion (ParamIDs am Geraet
+ * noch unbelegt). Die Melodie triggert im A-Pattern; ein Acht-Takter laeuft
+ * im B-Pattern weiter. Ohne Vocals entsteht ein Paar mit leerem Part 16.
+ */
+export function bauePaare(
+  rezept: Rezept,
+  projekt: Projekt,
+  opts: { startSlot?: number; mfxType?: number; variation?: boolean; paare?: ProjektSample[] } = {},
+): { patterns: E2PatternInput[]; hinweise: string[] } {
+  const start = opts.startSlot ?? 1;
+  const hinweise: string[] = [];
+  const tag = tagAus(rezept);
+  const t = rezept.thema;
+  const paare = opts.paare ?? voxPaare(projekt, t.melo ?? t.vers);
+  const lagen: Lage[] = (["melo", "vers", "bass", "stab", "shot"] as Lage[]).filter((l) =>
+    l === "melo" ? !!t.melo : l === "vers" ? paare.length > 0 || !!t.vers : l === "bass" ? !!t.bass : l === "stab" ? !!t.stab : !!t.shots,
+  );
+  if (t.riser) lagen.push("riser");
+  const kick = rezept.abschnitte.reduce((a, b) => (b.intensitaet > a.intensitaet ? b : a), rezept.abschnitte[0]).kick;
+  const drop: Abschnitt = { name: "DROP", wiederholungen: 1, intensitaet: 5, kick, lagen };
+  const partner = (a: ProjektSample): ProjektSample => projekt.samples.find((x) => x.gruppe === a.gruppe && x.chunk === 1) ?? a;
+  const einzel = t.vers ? projekt.samples.find((s) => s.name === t.vers) : undefined;
+  const liste: { A?: ProjektSample; B?: ProjektSample }[] = paare.length ? paare.map((a) => ({ A: a, B: partner(a) })) : [{ A: einzel, B: einzel }];
+  const basis = { bpm: rezept.bpm, mfxType: opts.mfxType ?? 11, stepLength: 64 as const, alternate13_14: false, alternate15_16: false };
+  const variiere = (ps: E2PartInput[], k: number): E2PartInput[] => (opts.variation === false ? ps : variierePattern({ ...basis, name: "", parts: ps }, k).parts);
+  const patterns: E2PatternInput[] = [];
+  liste.forEach((pr, k) => {
+    const slotA = start + patterns.length;
+    const partsA = parts(rezept, projekt, drop, k, false, true, { vers: pr.A, meloTrigger: true });
+    const partsB = parts(rezept, projekt, drop, k, false, true, { vers: pr.B, meloTrigger: false });
+    patterns.push({ ...basis, name: `${tag} V${k + 1}A`.slice(0, 16), parts: partsA, chainTo: slotA + 1, chainRepeat: 1 });
+    patterns.push({ ...basis, name: `${tag} V${k + 1}B`.slice(0, 16), parts: variiere(partsB, 2 * k + 1), chainTo: slotA, chainRepeat: 1 });
+    // KICK: Drums, Bass, Stab, Shots — Melodie und Vocal gemutet, Steps bleiben zum Entmuten
+    const kickParts = variiere(partsA, 2 * k + 2).map((p, idx) => (idx >= 12 ? { ...p, muted: true } : p));
+    patterns.push({ ...basis, name: `${tag} KICK${k + 1}`.slice(0, 16), parts: kickParts, chainTo: 0, chainRepeat: 1 });
+  });
+  if (!t.melo) hinweise.push("keine Melodie im Projekt — Paare nur ueber Drums/Bass/Shots");
+  hinweise.push(paare.length ? `${paare.length} Vocal-Paar(e): je A ↔ B gekettet, danach ein KICK-Pattern ohne Kette` : "keine Vocal-Paare — ein Paar A ↔ B plus KICK");
+  return { patterns, hinweise };
+}
+
+/**
+ * Paare fuer mehrere Rezepte: die Vocal-Paare eines Lieds werden reihum auf
+ * dessen Melodien verteilt (Paar k → Rezept k mod n), damit jedes Paar genau
+ * einmal vorkommt und jede Melodie drankommt.
+ */
+export function bauePaareProMelo(rezepte: Rezept[], projekt: Projekt): { patterns: E2PatternInput[]; hinweise: string[] } {
+  const out: E2PatternInput[] = [];
+  const hinweise: string[] = [];
+  const schluessel = rezepte.map((r) => voxPaare(projekt, r.thema.melo ?? r.thema.vers).map((p) => p.nr).join(","));
+  const gruppen = new Map<string, number[]>();
+  schluessel.forEach((k, i) => gruppen.set(k, [...(gruppen.get(k) ?? []), i]));
+  for (const [, idx] of gruppen) {
+    const paare = voxPaare(projekt, rezepte[idx[0]].thema.melo ?? rezepte[idx[0]].thema.vers);
+    if (!paare.length) {
+      for (const i of idx) {
+        const r = bauePaare(rezepte[i], projekt, { startSlot: out.length + 1 });
+        out.push(...r.patterns);
+        hinweise.push(...r.hinweise);
+      }
+      continue;
+    }
+    paare.forEach((p, k) => {
+      const r = bauePaare(rezepte[idx[k % idx.length]], projekt, { startSlot: out.length + 1, paare: [p] });
+      out.push(...r.patterns);
+    });
+    hinweise.push(`${paare.length} Vocal-Paar(e) auf ${idx.length} Melodie(n) verteilt — je A ↔ B plus KICK`);
+  }
   return { patterns: out, hinweise };
 }
 

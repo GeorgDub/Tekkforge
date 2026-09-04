@@ -261,8 +261,8 @@ function render(): void {
         <label><input type="radio" name="genModus" value="miniset" /> Mini-Set (6)</label>
         <label><input type="radio" name="genModus" value="promelo" /> Pro Melo (${melos.length})</label>
       </div>
-      <div class="zeile"><label title="Steps in allen Patterns gesetzt; entmutet wird stufenweise (Melo+Snare → Hats → … → Drop mit Kick). Aufbau leicht gedimmt, Snare-Fill vor dem Drop, Drop-Kicks auf Maximum; die Vocal-Paare des Lieds wandern ueber die Kette (AUF → DROP → VRS). Spielweise: am Geraet Parts entmuten.">
-        <input id="genAufbau" type="checkbox" ${z.aufbau ? "checked" : ""} /> Aufbau-Kette (Mute/Unmute-Spielweise)</label>
+      <div class="zeile"><label title="Je Vocal-Paar zwei Patterns, die aufeinander zeigen: A traegt Vocal A auf Part 16, B Vocal B — das Acht-Takt-Vocal laeuft so lange, wie man will. Nach jedem Paar ein KICK-Pattern ohne Kette (Melodie und Vocal gemutet, Steps bleiben). Kein Alternate. Spielweise: am Geraet Parts entmuten und Patterns wechseln.">
+        <input id="genAufbau" type="checkbox" ${z.aufbau ? "checked" : ""} /> Vocal-Paare (A ↔ B + KICK)</label>
       </div>
       <div class="zeile"><label title="Laesst die erste Stufe nur jeden zweiten Schlagzeug-Schlag spielen. Melodie und Vocals bleiben ganz. Ohne diesen Haken tragen alle Stufen dieselben Steps und nur die Mutes unterscheiden sich — das ist die Spielweise, fuer die die Kette gebaut ist.">
         <input id="genIntroDuenn" type="checkbox" ${z.duennesIntro ? "checked" : ""} /> Anfangsstufe ausduennen</label>

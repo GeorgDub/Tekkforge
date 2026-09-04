@@ -75,19 +75,23 @@ describe("generatorSession", () => {
     expect(bank.patterns[9].name.trim()).toBe("BaRe INTRO");
     expect(bank.patterns[0].name.trim()).toBe("-");
   });
-  it("erzeuge aufbau: Kette mit -aufbau-Datei, Steps auch in gemuteten Parts, Kick erst im Drop", () => {
+  it("erzeuge aufbau: Paare mit -paare-Datei — A ↔ B gekettet, KICK ohne Kette, Steps auch in gemuteten Parts", () => {
     const e = erzeuge(projekt, { modus: "jam", bpm: 180, startSlot: 3, aufbau: true });
-    expect(e.dateiname).toBe("KORG3-aufbau.e2sallpat");
+    expect(e.dateiname).toBe("KORG3-paare.e2sallpat");
     expect(e.patterns.length).toBeGreaterThanOrEqual(3);
     expect(e.startSlot).toBe(3);
-    // Kick-Part 1: gemutet, aber Steps gesetzt (Mute/Unmute-Spielweise)
-    expect(e.patterns[0].parts[0].muted).toBe(true);
-    expect(e.patterns[0].parts[0].steps.some((s) => s.active)).toBe(true);
-    expect(e.patterns[e.patterns.length - 1].parts[0].muted).toBe(false);
+    // A zeigt auf B (Slot 4), B zurueck auf A (Slot 3), KICK auf nichts
+    expect(e.patterns[0].chainTo).toBe(4);
+    expect(e.patterns[1].chainTo).toBe(3);
+    expect(e.patterns[2].chainTo).toBe(0);
+    expect(e.patterns[0].parts[0].muted).toBe(false);
+    // KICK: Melodie und Vocal gemutet, Steps bleiben zum Entmuten
+    expect(e.patterns[2].parts[12].muted).toBe(true);
+    expect(e.patterns[2].parts[12].steps.some((s) => s.active)).toBe(true);
     const bank = parseElectribeAllPatBank(e.bytes);
-    expect(bank.patterns[2].parts[0].muted).toBe(true);
-    expect(bank.patterns[2].parts[0].steps.some((s) => s.active)).toBe(true);
-    expect(e.warumSo).toContain("Aufbau-Kette");
+    expect(bank.patterns[4].parts[12].muted).toBe(true);
+    expect(bank.patterns[4].parts[12].steps.some((s) => s.active)).toBe(true);
+    expect(e.warumSo).toContain("A ↔ B");
   });
   it("erzeuge promelo → ein Rezept je Melodie", () => {
     const e = erzeuge(projekt, { modus: "promelo", bpm: 180 });

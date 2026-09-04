@@ -1229,6 +1229,40 @@ Lied-Pipeline arbeitet.
 Lieds, der gewaehlte Hook als Drop, und ob eine gedehnte Schleife
 (Schlagzeug, Synth) ohne Flattern laeuft.
 
+## Vocal-Paare statt Alternate (2026-09-04)
+
+Nutzerbefund: Part 15 und 16 trugen je eine Vocal-Haelfte und spielten
+beide zugleich — das Alternate-Paar 15/16 tat am Geraet nicht, was es
+sollte. Neu (`patternGen.bauePaare`, Vorgabe fuer Lied-Sets, Generator-Tab
+und CLI):
+
+- **Kein Alternate mehr**, weder 13/14 noch 15/16. Das Vocal liegt NUR auf
+  Part 16, Part 15 bleibt leer; die Melodie liegt NUR auf Part 13, Part 14
+  bleibt leer.
+- **Je Vocal-Paar zwei Patterns, die aufeinander zeigen:** `V1A` traegt die
+  A-Haelfte auf Part 16 und zeigt auf `V1B`, das die B-Haelfte traegt und
+  zurueck auf `V1A` zeigt. So laeuft das Acht-Takt-Vocal so lange, wie man
+  will. Ein Acht-Takt-Melo triggert nur im A-Pattern und laeuft im B-Pattern
+  weiter (Part wach, kein Trigger); ein Vier-Takter triggert in beiden.
+- **Nach jedem Paar ein `KICK`-Pattern ohne Kette:** dieselben Drums, Bass,
+  Stab und Shots, Melodie und Vocal gemutet — die Steps bleiben zum
+  Entmuten. Zum freien Weiterspielen zwischen den Paaren.
+- `bauePaareProMelo` verteilt die Paare eines Lieds reihum auf dessen
+  Melodien, jedes Paar genau einmal. Jam-Patterns nutzen dasselbe Layout
+  (Vocal A auf 16, kein Alternate). Die alte Aufbau-Kette (`baueAufbau`)
+  bleibt im Code und in den Tests, ist aber nirgends mehr Vorgabe.
+
+**Tonhoehe in den letzten Durchgaengen falsch (Nutzerbefund):** Renderer
+und Vorhoer-Player beachten die Rate je Slot, ein 22 050-Hz-Slot klingt am
+Rechner richtig; das Geraet beachtet die Rate laut RATETEST ebenfalls. Das
+Einzige, was seit heute am Geraet an der Tonhoehe dreht, ist der Pitch-Fall
+im Drop ueber Motion-ParamID 2 — und die ist nur aus der Werksbank
+vermutet, nicht gemessen. Darum sind die **Motion-Sequenzen in erzeugten
+Sets jetzt AUS** (`motion: true` schaltet sie in `baueAufbau` wieder ein),
+bis `MOTTEST.e2spat` die IDs am Ohr belegt. Bleibt der Fehler auch ohne
+Motion, ist der naechste Verdaechtige die Bassline (Part 9, Noten 48…59 auf
+einem Bass-Sample, das auf C stehen muss).
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

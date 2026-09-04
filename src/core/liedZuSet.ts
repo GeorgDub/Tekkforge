@@ -23,7 +23,7 @@ import { rmsDb, peakVon, familie, type ScanEintrag } from "./sampleScan";
 import { schneideDrums, type DrumTreffer } from "./drumSchnitt";
 import { planeBank, type Projekt } from "./bankPlan";
 import { regelRezept } from "./rezept";
-import { baueAufbau, baueRezept } from "./patternGen";
+import { bauePaare, baueRezept } from "./patternGen";
 import type { E2PatternInput } from "./electribePatternBuilder";
 import { grooveFuerLied, mitSwing, type LiedGroove } from "./grooveAnschluss";
 import { bassNoten } from "./grundton";
@@ -234,7 +234,8 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
     sparsameVocals: opts.sparsameVocals,
   });
   const rezept = regelRezept(projekt, { modus: "jam", bpm });
-  const gebaut = opts.aufbau === false ? baueRezept(rezept, projekt) : baueAufbau(rezept, projekt);
+  // Paare: je Vocal-Paar A ↔ B plus KICK ohne Kette (Nutzerwunsch 2026-09-04)
+  const gebaut = opts.aufbau === false ? baueRezept(rezept, projekt) : bauePaare(rezept, projekt);
 
   // Groove: die Fenster sind auf `bpm` gedehnt, also passt das Raster genau.
   // Ohne Stems nimmt die Messung das Drop-Fenster aus dem Vollmix.

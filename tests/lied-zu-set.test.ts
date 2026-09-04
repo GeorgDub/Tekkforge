@@ -33,12 +33,13 @@ function stemsAttrappe(mitVox = true) {
 describe("liedZuSet", () => {
   const pcm = liedchen();
 
-  it("baut aus einem Lied eine Bank und eine Aufbau-Kette", () => {
+  it("baut aus einem Lied eine Bank und Vocal-Paare (A ↔ B plus KICK)", () => {
     const set = liedZuSet(pcm, 44100, { name: "Testlied", kanaele: 1, tekkDrums });
     expect(set.projekt.samples.length).toBeGreaterThan(0);
     expect(set.patterns.length).toBeGreaterThan(1);
     expect(set.bank.byteLength).toBeGreaterThan(1000);
-    expect(set.patterns.some((p) => p.name.endsWith("DROP"))).toBe(true);
+    expect(set.patterns.some((p) => /V1A$/.test(p.name))).toBe(true);
+    expect(set.patterns.some((p) => /KICK1$/.test(p.name))).toBe(true);
   });
 
   it("wählt die Tempo-Oktave und legt das Tekk-Tempo fest", () => {
@@ -88,9 +89,9 @@ describe("liedZuSet", () => {
     expect(aus.groove).toBeUndefined();
   });
 
-  it("mit tekk4 hat der Drop ein Schlagzeug", () => {
+  it("mit tekk4 hat das A-Pattern ein Schlagzeug", () => {
     const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, tekkDrums });
-    const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;
+    const drop = set.patterns.find((p) => /V1A$/.test(p.name))!;
     expect(drop.parts[0].muted).toBe(false);
     expect(drop.parts[0].steps.filter((s) => s.active).length).toBeGreaterThan(8);
   });
@@ -183,9 +184,9 @@ describe("liedZuSet: die Melodie darf nicht von den Vocals verdrängt werden", (
     expect(set.projekt.samples.some((s) => s.rolle === "vox")).toBe(true);
   });
 
-  it("das Drop-Pattern hat eine Melodie auf den Melo-Parts", () => {
+  it("das A-Pattern hat eine Melodie auf den Melo-Parts", () => {
     const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", kanaele: 1, tekkDrums, stems: vieleVox });
-    const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;
+    const drop = set.patterns.find((p) => /V1A$/.test(p.name))!;
     expect(drop.parts[12].muted, "Part 13 (Melo) stumm — keine Melodie im Set").toBe(false);
   });
 });

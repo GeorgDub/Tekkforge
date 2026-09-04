@@ -64,7 +64,7 @@ describe("liedZuSet: Bassline aus dem Bass-Stem", () => {
     expect(melo.bassLinie).toBeDefined();
     expect(melo.bassLinie!.slice(0, 8).every((n) => n === 33)).toBe(true);
     expect(melo.bassLinie!.slice(8, 16).every((n) => n === 40)).toBe(true);
-    const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;
+    const drop = set.patterns.find((p) => /V1A$/.test(p.name))!;
     const bass = drop.parts[8];
     const noten = bass.steps.map((s) => (s.active ? s.notes?.[0] : null));
     expect(noten.slice(0, 32).filter((n) => n !== null).every((n) => n === 57)).toBe(true); // A
@@ -74,7 +74,7 @@ describe("liedZuSet: Bassline aus dem Bass-Stem", () => {
 
   it("ohne Bass-Stem bleibt der Bass auf 60", () => {
     const set = liedZuSet(lied(), SR, { name: "B", kanaele: 1, tekkDrums, bpm: 180 });
-    const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;
+    const drop = set.patterns.find((p) => /V1A$/.test(p.name))!;
     expect(drop.parts[8].steps.filter((s) => s.active).every((s) => (s.notes?.[0] ?? 60) === 60 || (s.notes?.[0] ?? 60) === 55 || (s.notes?.[0] ?? 60) === 67)).toBe(true);
     expect(set.projekt.samples.find((s) => s.rolle === "melo")!.bassLinie).toBeUndefined();
   });

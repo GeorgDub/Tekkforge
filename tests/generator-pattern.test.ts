@@ -49,16 +49,18 @@ describe("patternGen", () => {
     }
     expect(p.parts.filter((x) => !x.muted).length).toBeGreaterThanOrEqual(8);
   });
-  it("jam: 4-Takt-Melo triggert 13 und 14; 8-Takt-Melo triggert nur 13, 14 schweigt", () => {
+  it("jam: Melo nur auf 13, 14 schweigt, kein Alternate (Paar-Layout seit 2026-09-04)", () => {
     const vier = baueRezept(regelRezept(projekt, { modus: "jam", melo: "BaReTT MeLo" }), projekt).patterns[0];
     expect(vier.parts[12].steps.filter((s) => s.active)).toHaveLength(1);
-    expect(vier.parts[13].steps.filter((s) => s.active)).toHaveLength(1);
+    expect(vier.parts[13].steps.filter((s) => s.active)).toHaveLength(0);
+    expect(vier.parts[13].muted).toBe(true);
     const lang = projekt.samples.find((s) => s.rolle === "melo" && s.takte === 8)!;
     expect(lang).toBeDefined();
     const p = baueRezept(regelRezept(projekt, { modus: "jam", melo: lang.name }), projekt).patterns[0];
     expect(p.parts[12].steps.filter((s) => s.active)).toHaveLength(1);
     expect(p.parts[13].muted).toBe(true);
-    expect(p.alternate13_14).toBe(true);
+    expect(p.alternate13_14).toBe(false);
+    expect(p.alternate15_16).toBe(false);
   });
   it("miniset: Kette ueber 6 Patterns, letztes ohne Ziel, Intensitaet steuert Mutes, Namen", () => {
     const { patterns } = baueRezept(regelRezept(projekt, { modus: "miniset" }), projekt, { startSlot: 10 });
