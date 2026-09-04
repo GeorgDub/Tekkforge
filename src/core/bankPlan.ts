@@ -13,6 +13,7 @@ import { RAM_BUDGET_BYTES, ramBytesSumme } from "./sampleRam";
 import { loopPunkteAufNull, wiederholtSich, taktFrames } from "./loopPunkte";
 import { slicesFuer, sliceAnzahl } from "./sliceMarker";
 import { LOOP_TYPE_FORWARD, LOOP_TYPE_ONESHOT } from "./constants";
+import { stretchAufLaenge } from "./timeStretch";
 import { tonartErkennen, TONART_SICHER, type TonartInfo } from "./keyAnalyse";
 import { polyPhaseResample, peakNormalize, rmsNormalize, downmixToMono } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
@@ -170,16 +171,21 @@ const LOOP_ROLLEN: Rolle[] = ["melo", "vox", "fx", "bass", "ton"];
  * Taktzahl am eigenen Raster. null, wenn der Loop auch sein eigenes Raster
  * verfehlt oder der noetige Varispeed zu weit weg von 1 laege (> ±23 %).
  */
-function eigentempoTakte(pcm: Float32Array, bpm: number): number | null {
+function eigentempoTakte(pcm: Float32Array, bpm: number): { takte: number; rate: number } | null {
   const dauer = pcm.length / SR;
   const b0 = tempoSchaetzen(pcm, SR);
   const k = [0.5, 1, 2].reduce((a, b) => (Math.abs(b0 * b - bpm) < Math.abs(b0 * a - bpm) ? b : a));
   const roh = dauer / (240 / (b0 * k));
   const takte = Math.min(16, Math.max(1, Math.round(roh)));
   if (Math.abs(roh - takte) / takte > 0.08) return null;
-  const rate = dauer / (takte * (240 / bpm));
-  return rate >= 0.77 && rate <= 1.3 ? takte : null;
+  return { takte, rate: dauer / (takte * (240 / bpm)) };
 }
+
+/** Bis hierhin zieht der Varispeed (Tonhoehe wandert mit, ±3,6 Halbtoene); darueber wird gedehnt. */
+export const VARISPEED_MIN = 0.77;
+export const VARISPEED_MAX = 1.3;
+/** Ab dieser Abweichung vom Bank-Raster wird das Eigentempo der Schleife ueberhaupt gemessen. */
+const EIGENTEMPO_AB = 0.03;
 
 /**
  * Zielpegel fuer Vocal-Schleifen (RMS in dBFS).
@@ -213,17 +219,27 @@ export function bereiteAuf(e: ScanEintrag, bpm: number): { teile: Teil[] } {
   // wuerde das 8-Takt-Raster verschieben und Segmente aus der Abdeckung kegeln
   let y = e.rolle === "melo" || e.rolle === "vox" ? e.pcm : trimme(e.pcm, 45);
   let { takte, abweichung } = taktPassung(y.length / SR, bpm);
-  if (abweichung > TAKT_TOLERANZ) {
+  let dehnen = false;
+  // Eigentempo der Schleife — nur wenn sie das Bank-Raster nicht ohnehin
+  // sauber trifft (Lied-Fenster sind schon gedehnt und liegen bei 0).
+  const eigen = abweichung > EIGENTEMPO_AB ? eigentempoTakte(y, bpm) : null;
+  if (eigen !== null && (eigen.rate < VARISPEED_MIN || eigen.rate > VARISPEED_MAX)) {
+    // Der noetige Varispeed laege jenseits ±23 %: die Taktzahl-Rundung wuerde
+    // die Schleife zwar irgendwie einpassen (ein 4-Takter bei 135 BPM als
+    // „5 Takte“ mit 7 % Varispeed), aber musikalisch falsch. Also dehnen —
+    // auf die eigene Taktzahl, in Originaltonhoehe.
+    takte = eigen.takte;
+    dehnen = true;
+  } else if (abweichung > TAKT_TOLERANZ) {
     // Melos, die das Bank-Raster verfehlen, laufen sonst als One-Shot asynchron —
-    // erst am Eigentempo festmachen und per Varispeed aufs Bank-Tempo ziehen
-    const eigen = eigentempoTakte(y, bpm);
-    if (eigen !== null) takte = eigen;
+    // am Eigentempo festmachen und per Varispeed aufs Bank-Tempo ziehen
+    if (eigen !== null) takte = eigen.takte;
     else if (y.length / SR / taktSek <= 8) {
       return { teile: [{ name: basis, pcm: pegel(fades(y, 0.002, 0.01)), kind: "oneshot", takte: 0 }] };
     }
   }
   const ziel = takte * taktSek;
-  y = aufLaenge(varispeed(y, y.length / SR / ziel), Math.round(ziel * SR));
+  y = dehnen ? stretchAufLaenge(y, Math.round(ziel * SR)) : aufLaenge(varispeed(y, y.length / SR / ziel), Math.round(ziel * SR));
   // Vocals ab 5 Takten als zwei Haelften: die Vers-Parts 15/16 spielen A/B per
   // Alternate hintereinander und sind am Geraet einzeln entmutbar
   const ganzBis = e.rolle === "vox" ? 4 : 8;

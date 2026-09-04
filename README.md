@@ -1197,6 +1197,38 @@ des Lieds.
 ⚠ Am Ohr zu pruefen: sitzt die Linie auf den richtigen Toenen, und passt
 die Oktave zum Bass-Sample?
 
+## Beat-Raster, Hook und Time-Stretch (2026-09-04, Hoerprobe offen)
+
+**Beat-Raster** (`core/beatRaster.ts`). Statt eines starren Lineals
+(Tempo plus Phase ueber vier Beats) folgt ein Beat-Tracker per dynamischer
+Programmierung (Ellis 2007) dem Lied: Onset-Kurve, Kostenterm gegen
+Tempowechsel, Rueckverfolgung. `analysiereLied` beginnt seine 8-Takt-Fenster
+auf den gefundenen Downbeats, sobald das Tracking mindestens die Haelfte
+der Beats auf Anschlaegen findet — ein treibendes Lied liegt nach zwei
+Minuten nicht mehr einen halben Beat daneben. `LiedAnalyse.drift` sagt, wie
+weit es getrieben ist. `beatRaster: false` schaltet auf das Lineal zurueck.
+
+**Hook** (`core/hookSuche.ts`). Je Takt ein Chroma-Vektor, je Fenster die
+Folge seiner Takt-Chromas, Fenster gegen Fenster per mittlerer
+Kosinus-Aehnlichkeit: das Fenster mit den meisten Nahezu-Wiederholungen
+(≥ 0,9) ist der Hook. Kehrt es mindestens zweimal wieder und liegt es
+hoerbar nah am lautesten (6 dB), wird es zum DROP — der Refrain landet im
+Drop, ohne dass etwas geschnitten wird. `LiedAnalyse.hook` traegt Index und
+Wiederholungen; `hook: false` schaltet ab.
+
+**Time-Stretch** (`core/timeStretch.ts`). WSOLA in TypeScript, kein Python:
+Hann-Fenster im Ausgaberaster, je Fenster die Quellstelle mit der besten
+Kreuzkorrelation zur letzten Ausgabe, Ueberblenden. Tonhoehe bleibt.
+`bereiteAuf` nutzt es, sobald der noetige Varispeed jenseits ±23 % laege
+(`VARISPEED_MIN`/`MAX`) — vorher wurde so eine Schleife zum asynchronen
+One-Shot, jetzt ist sie ein taktgenauer Loop in Originaltonhoehe.
+Innerhalb der Grenze bleibt es beim Varispeed, so wie die ganze
+Lied-Pipeline arbeitet.
+
+⚠ Am Ohr zu pruefen: Fensterschnitte auf den Downbeats eines treibenden
+Lieds, der gewaehlte Hook als Drop, und ob eine gedehnte Schleife
+(Schlagzeug, Synth) ohne Flattern laeuft.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

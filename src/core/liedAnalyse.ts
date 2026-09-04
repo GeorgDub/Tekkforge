@@ -10,6 +10,8 @@ import { tempoSchaetzen } from "./tempoAnalyse";
 import { polyPhaseResample, peakNormalize } from "./audioProcessor";
 import { bandEnergien, bassAnteil } from "./dsp";
 import { rmsDb } from "./sampleScan";
+import { beatRaster } from "./beatRaster";
+import { hookFenster } from "./hookSuche";
 
 export type FensterLabel = "DROP" | "BREAK" | "VAR" | "INTRO" | `PART${number}`;
 
@@ -37,6 +39,10 @@ export interface LiedAnalyse {
   offsetSek: number;
   fenster: LiedFenster[];
   segmente: LiedSegment[];
+  /** Tempo-Drift des Beat-Rasters in Prozent (0 = Lineal oder nicht gemessen). */
+  drift: number;
+  /** Hook: Segment-Index des am meisten wiederholten Fensters und wie oft es wiederkehrt; fehlt ohne Wiederholung. */
+  hook?: { index: number; wiederholungen: number };
 }
 
 const HOERBAR_DB = -35;
@@ -65,7 +71,7 @@ function abstand(a: Float32Array, b: Float32Array): number {
 export function analysiereLied(
   pcm: Float32Array,
   sr: number,
-  opts: { zielBpm: number; bpmHinweis?: number; fensterTakte?: number; anzahl?: number },
+  opts: { zielBpm: number; bpmHinweis?: number; fensterTakte?: number; anzahl?: number; beatRaster?: boolean; hook?: boolean },
 ): LiedAnalyse {
   const fensterTakte = opts.fensterTakte ?? 8;
   const anzahl = opts.anzahl ?? 3;
@@ -99,16 +105,43 @@ export function analysiereLied(
   // wurde aus 120 BPM 160 statt 180, und aus 240 BPM 320 statt 180.
   const y = Math.abs(rate - 1) < 0.002 ? y0 : polyPhaseResample(y0, sr, Math.round(sr * rate), 1);
   const beatSek = 60 / opts.zielBpm;
-  const offsetSek = downbeatPhase(y, sr, beatSek) * beatSek;
+  let offsetSek = downbeatPhase(y, sr, beatSek) * beatSek;
   const n = Math.round(fensterTakte * 4 * beatSek * sr);
-  const starts: number[] = [];
-  for (let s = Math.round(offsetSek * sr); s + n <= y.length; s += n) starts.push(s);
+  let starts: number[] = [];
+  let drift = 0;
+  // Beat-Raster statt Lineal: die Fenster beginnen auf den gefundenen
+  // Downbeats (jeder fensterTakte-te), nicht auf offset + k·n. Nur wenn das
+  // Tracking genug Beats auf Anschlaegen fand — sonst das Lineal wie bisher.
+  if (opts.beatRaster !== false) {
+    const r = beatRaster(y, sr, opts.zielBpm);
+    const noetig = 2 * fensterTakte;
+    if (r.belegt >= 0.5 && r.downbeats.length >= noetig) {
+      starts = r.downbeats.filter((_, i) => i % fensterTakte === 0).filter((s) => s + n <= y.length);
+      drift = r.drift;
+      if (starts.length) offsetSek = starts[0] / sr;
+    }
+  }
+  if (!starts.length) for (let s = Math.round(offsetSek * sr); s + n <= y.length; s += n) starts.push(s);
   const segs = starts.map((s) => y.subarray(s, s + n));
   const pegel = segs.map((s) => rmsDb(s));
   const hoerbar = pegel.map((p, i) => (p > HOERBAR_DB ? i : -1)).filter((i) => i >= 0);
   const gewaehlt = new Map<FensterLabel, number>();
+  let hook: LiedAnalyse["hook"];
   if (hoerbar.length) {
-    const drop = hoerbar.reduce((a, b) => (pegel[b] > pegel[a] ? b : a));
+    let drop = hoerbar.reduce((a, b) => (pegel[b] > pegel[a] ? b : a));
+    // Der Hook — das Fenster, das am oeftesten wiederkehrt — wird zum DROP,
+    // wenn es hoerbar nah am lautesten liegt (6 dB). Sonst bleibt der laute.
+    if (opts.hook !== false && hoerbar.length >= 3) {
+      const h = hookFenster(
+        hoerbar.map((i) => segs[i]),
+        sr,
+        opts.zielBpm,
+      );
+      if (h) {
+        hook = { index: hoerbar[h.index], wiederholungen: h.wiederholungen };
+        if (h.wiederholungen >= 2 && pegel[hook.index] > pegel[drop] - 6) drop = hook.index;
+      }
+    }
     gewaehlt.set("DROP", drop);
     if (anzahl >= 2) {
       const mitte = hoerbar.filter((i) => i >= 0.2 * segs.length && i <= 0.85 * segs.length && i !== drop);
@@ -153,5 +186,5 @@ export function analysiereLied(
     .sort((a, b) => a[1] - b[1])
     .map(([label, i]) => ({ label, startSek: starts[i] / sr, pcm: normFuer(i), pegelDb: pegel[i], index: i }));
   const segmente: LiedSegment[] = hoerbar.map((i) => ({ index: i, startSek: starts[i] / sr, pcm: normFuer(i), pegelDb: pegel[i] }));
-  return { bpm, k, rate, offsetSek, fenster, segmente };
+  return { bpm, k, rate, offsetSek, fenster, segmente, drift, ...(hook ? { hook } : {}) };
 }

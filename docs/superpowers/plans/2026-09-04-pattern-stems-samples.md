@@ -172,3 +172,13 @@ Steps: Test (Rezept mit bassLinie → Part-8-Steps tragen die Noten auf den Vier
 
 - Spec-Abdeckung: Groove ✓ (T1), Variation ✓ (T2), Motion ✓ (T3), Rate/Rolloff ✓ (T5), Budget ✓ (T6), Loop-Punkte ✓ (T7), Slices ✓ (T8), Bassline ✓ (T9/T10), Beat-Tracking ✓ (T11), Hook ✓ (T12), Time-Stretch ✓ (T13). Akkorde/Tonart, Drums aus dem Material, Drop-Metrik, Vocal-Aufbereitung, Modellwahl: nicht in der freigegebenen Reihenfolge 1–5 enthalten, bleiben Folgearbeit.
 - Typen: `Groove` aus e2Groove, `E2PatternInput`/`E2MotionSlot` aus electribePatternBuilder, `ProjektSample` aus bankPlan.
+
+## Stand 2026-09-04 abends
+
+Alle 14 Aufgaben umgesetzt und committet (Block 1 9f89c68, Block 2 8de8dab,
+Block 3 39c5774/7e81941, Block 4 f12bd86, Block 5 dieser Commit). Abweichung
+vom Plan: Time-Stretch als WSOLA in TypeScript (`core/timeStretch.ts`) statt
+Python-Bruecke — laeuft im Browser wie in der CLI und ist testbar; der
+Stretch-Pfad greift, sobald das Eigentempo der Schleife jenseits ±23 % liegt
+(vorher haette die Taktzahl-Rundung fast jede Schleife „eingepasst“).
+Hoerprobe am Geraet offen — Liste im README je Abschnitt und in MOTTEST.
