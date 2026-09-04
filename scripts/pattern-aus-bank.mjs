@@ -4,7 +4,7 @@
  *   npx tsx scripts/pattern-aus-bank.mjs --bank <BANK.all> --bpm <n> --ziel <out.e2sallpat>
  *        [--kick "<Name>"] [--melo "<Name>"] [--snare "<Name>"] [--clap "<Name>"]
  *        [--hat "<Name>" --hat2 "<Name>"] [--bass "<Name>"] [--stab "<Name>"]
- *        [--shot "<Name>" --shot2 "<Name>"] [--riser "<Name>"] [--jam] [--start <slot>]
+ *        [--shot "<Name>" --shot2 "<Name>"] [--riser "<Name>"] [--jam] [--start <slot>] [--raster-bpm <n>]
  *
  * Liest die Bank, gibt jedem Slot Rolle und Taktzahl (core/bankProjekt.ts),
  * erkennt Vocal-Haelften „… V01 A/B“ als Paare und baut je Paar A ↔ B plus
@@ -32,7 +32,10 @@ if (!bankPfad || !Number.isFinite(bpm) || !ziel) {
   process.exit(2);
 }
 const name = path.basename(bankPfad).replace(/\.[^.]+$/, "");
-const projekt = projektAusBank(new Uint8Array(fs.readFileSync(bankPfad)), { name, bpm });
+// --raster-bpm: Tempo, an dem die Schleifen der Bank vermessen werden (Vorgabe = --bpm).
+// Eine Bank, die bei 204 geschnitten wurde, soll auch bei 170 ihre Vier-Takter behalten.
+const rasterBpm = Number(opt("raster-bpm") ?? bpm);
+const projekt = projektAusBank(new Uint8Array(fs.readFileSync(bankPfad)), { name, bpm: rasterBpm });
 const finde = (wunsch, rolle) => {
   if (!wunsch) return undefined;
   const s = projekt.samples.find((x) => x.name.toLowerCase() === wunsch.toLowerCase()) ?? projekt.samples.find((x) => x.name.toLowerCase().includes(wunsch.toLowerCase()));

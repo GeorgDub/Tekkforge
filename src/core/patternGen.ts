@@ -246,7 +246,12 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   return steps.map((st, idx) => {
     const smp = sample[idx];
     const params: Record<string, number> = { voiceAssign: idx === 9 ? POLY2 : MONO1 };
-    if (idx <= 1) Object.assign(params, { ifxOn: 1, ifxType: 8, ifxEdit: 127 });
+    // Kick-IFX aus: Nutzerbefund 2026-09-04 „zu stark“. Typ bleibt eingestellt, nur ausgeschaltet.
+    if (idx <= 1) Object.assign(params, { ifxOn: 0, ifxType: 8, ifxEdit: 127 });
+    // Melodie und Vocal sind die aeltesten Stimmen im Pattern — ohne hohe
+    // Prioritaet klaut ihnen die Kick die Stimme (Nutzerbefund 2026-09-04:
+    // „Vocals laufen nur durch, wenn der Kick nicht laeuft“).
+    if (idx === 12 || idx === 15) params.priority = 1;
     if (smp?.kind === "loop" || (idx >= 10 && (smp?.sekunden ?? 0) >= 1)) params.ampEgOn = 0;
     if (idx === 8 && smp?.rolle === "kick") params.oscPitch = -12;
     if (idx === 5) params.egDecay = 60;

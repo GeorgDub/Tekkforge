@@ -314,6 +314,10 @@ export interface PartParam {
  */
 export const PART_PARAMS: PartParam[] = [
   { key: "voiceAssign", label: "Voice Assign", offset: 0x02, min: 0, max: 3, kind: "u8", group: "Osc" }, // ✔ geraetebestaetigt, s. Kommentar unten
+  // Part-Priority 0 normal / 1 high — ✔ geraetebestaetigt 2026-08-14 (+0x06, siehe e2sExport.PART_PRIORITY_OFF).
+  // Hohe Prioritaet schuetzt vor Stimmenklau: Nutzerbefund 2026-09-04, das Vocal (aelteste Stimme)
+  // lief nur durch, wenn die Kick nicht spielte.
+  { key: "priority", label: "Priorität", offset: 0x06, min: 0, max: 1, kind: "u8", group: "Osc" },
   { key: "filterType", label: "Filter-Typ", offset: 0x0c, min: 0, max: 255, kind: "u8", group: "Filter", namen: FILTER_TYPEN }, // ✔ geraetebestaetigt; Testpattern zeigte 1..16
   { key: "cutoff", label: "Cutoff", offset: 0x0d, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)
   { key: "resonance", label: "Resonanz", offset: 0x0e, min: 0, max: 127, kind: "u8", group: "Filter" }, // ✔ geraetebestaetigt (aufsteigende Rampe)

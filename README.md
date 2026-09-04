@@ -1292,6 +1292,17 @@ npx tsx scripts/pattern-aus-bank.mjs --bank "H:\0000\Gera_V1A-bank-samples.all" 
 Erster Lauf 2026-09-04 abends auf der Bank des Nutzers (131 Slots, eigene
 Bibliothek plus GERAET-Vocals): 11 Paare, 33 Patterns, Kick 604/605,
 Vocals 578 ff., Melo 563 — auf der Karte als `0000\Gera_HommO.e2sallpat`.
+`--raster-bpm 204 --bpm 170` vermisst die Schleifen am Tempo, an dem die
+Bank geschnitten wurde, und schreibt die Patterns mit 170 — die
+Forward-Loops halten das Vocal dann ohne Luecke am Laufen
+(`Gera_HommO_170.e2sallpat`).
+
+**Gehoert am Geraet (2026-09-04 spaet):** die Vocals liefen nur durch, wenn
+die Kick nicht spielte — Stimmenklau, das Vocal ist die aelteste Stimme im
+Pattern. Darum setzt `patternGen` jetzt die **Part-Prioritaet** (Byte +0x06,
+geraetebestaetigt 2026-08-14, neuer Part-Parameter `priority`) fuer
+Melodie (13) und Vocal (16) auf hoch. Ausserdem ist der **Kick-IFX aus**
+(„zu stark“; Typ 8 bleibt eingestellt, nur `ifxOn 0`).
 
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
