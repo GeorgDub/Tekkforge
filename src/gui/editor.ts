@@ -76,6 +76,10 @@ import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
 import { rendereKette } from "../core/patternRender";
+import { verdoppleSteps, kopierePart, fuegePartEin, haengePatternsAn, istUnberuehrt, type PartAblage } from "../core/patternWerkzeuge";
+
+/** Zwischenablage fuer „Part kopieren“ — lebt, solange der Editor offen ist. */
+let partAblage: PartAblage | null = null;
 import { encodeWav16 } from "../core/wavCodec";
 import { Verlauf } from "../core/verlauf";
 import {
@@ -213,6 +217,26 @@ export function loadProject(next: EditorProject, opts: { confirmDirty?: boolean 
   return true;
 }
 
+/**
+ * Patterns an das laufende Projekt anhaengen — fuer einen zweiten
+ * MIDI-Import in dieselbe Sitzung (Nutzerbefund 2026-09-04: `loadProject`
+ * ersetzte alles). Pool-Samples des Neuen werden eingemischt, das erste
+ * neue Pattern wird ausgewaehlt. Liefert, wie viele Patterns dazukamen.
+ */
+export function appendPatterns(next: EditorProject): number {
+  const erstes = haengePatternsAn(project, next.patterns);
+  mergeSamples(next.samples);
+  cur = Math.min(erstes, project.patterns.length - 1);
+  markDirty();
+  renderAll();
+  return next.patterns.length;
+}
+
+/** Ist der Editor noch unberuehrt (ein leeres Vorgabe-Pattern, kein Sample)? */
+export function istProjektLeer(): boolean {
+  return project.patterns.length <= 1 && project.samples.length === 0 && (project.patterns[0] ? istUnberuehrt(project.patterns[0]) : true);
+}
+
 /** Merged Pool-Samples ein (Nummern-Kollisionen werden übersprungen). */
 function mergeSamples(incoming: PoolSample[]): number {
   const known = new Set(project.samples.map((s) => s.number));
@@ -336,6 +360,34 @@ function renderGrid(): void {
       renderGrid();
     });
 
+    // Part kopieren / einfuegen — Steps wandern zwischen Parts und Patterns
+    // (Nutzerbefund 2026-09-04: MIDI-Noten liessen sich nicht kopieren).
+    const kopieBtn = document.createElement("button");
+    kopieBtn.className = "ghost";
+    kopieBtn.textContent = "⧉";
+    kopieBtn.title = "Steps dieses Parts merken (Zwischenablage) — dann in einem anderen Part oder Pattern ⇩ einfügen";
+    kopieBtn.style.cssText = "padding:2px 5px;font-size:11px;flex:none";
+    kopieBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      partAblage = kopierePart(part, p.stepLength);
+      renderGrid();
+    });
+    const einfBtn = document.createElement("button");
+    einfBtn.className = "ghost";
+    einfBtn.textContent = "⇩";
+    einfBtn.disabled = !partAblage;
+    einfBtn.title = partAblage
+      ? `Gemerkte Steps („${partAblage.label}“, ${partAblage.stepLength} Steps) hier einfügen — kürzere Quelle wird wiederholt. Shift-Klick nimmt Sample und Klang mit.`
+      : "Erst bei einem Part ⧉ drücken";
+    einfBtn.style.cssText = "padding:2px 5px;font-size:11px;flex:none";
+    einfBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!partAblage) return;
+      fuegePartEin(part, partAblage, p.stepLength, { mitKlang: e.shiftKey });
+      markDirty();
+      renderGrid();
+    });
+
     const label = document.createElement("input");
     label.className = "plabel";
     label.value = part.label;
@@ -403,7 +455,7 @@ function renderGrid(): void {
       openPartParams(fxBtn, pi);
     });
 
-    headEl.append(muteBtn, label, sampleSel, vol, pan, fxBtn);
+    headEl.append(muteBtn, kopieBtn, einfBtn, label, sampleSel, vol, pan, fxBtn);
     row.appendChild(headEl);
 
     const stepsEl = document.createElement("div");
@@ -2041,6 +2093,13 @@ export function initEditor(): void {
   $<HTMLSelectElement>("gLen").addEventListener("change", (e) => {
     project.patterns[cur].stepLength = Number((e.target as HTMLSelectElement).value) as 16 | 32 | 64;
     markDirty();
+    renderGrid();
+  });
+  // Laenge ×2: die vorhandenen Steps in die neue Haelfte kopieren, statt sie leer zu lassen
+  $("gLenDoppelt").addEventListener("click", () => {
+    if (!verdoppleSteps(project.patterns[cur])) return alert("Das Pattern hat schon 64 Steps.");
+    markDirty();
+    renderGlobals();
     renderGrid();
   });
 

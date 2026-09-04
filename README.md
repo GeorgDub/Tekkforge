@@ -1304,6 +1304,29 @@ geraetebestaetigt 2026-08-14, neuer Part-Parameter `priority`) fuer
 Melodie (13) und Vocal (16) auf hoch. Ausserdem ist der **Kick-IFX aus**
 („zu stark“; Typ 8 bleibt eingestellt, nur `ifxOn 0`).
 
+## Editor: zweiter MIDI-Import, Part kopieren, Laenge ×2 (2026-09-04)
+
+Nutzerbefund: nach „MIDI → Editor“ liess sich keine zweite MIDI in dieselbe
+Sitzung holen, MIDI-Noten liessen sich nicht kopieren, und 32 Steps wurden
+nicht zu 64 erweitert. Ursache fuer das Erste: die Uebergabe rief
+`loadProject`, das das ganze Projekt ersetzt (bei Aenderungen erst nach
+einem Dialog). Neu (`core/patternWerkzeuge.ts`, ohne DOM getestet):
+
+- **Anhaengen statt ersetzen.** Ist der Editor unberuehrt (ein leeres
+  Vorgabe-Pattern, kein Sample), ersetzt der MIDI-Import wie bisher; sonst
+  haengt `appendPatterns` die neuen Patterns hinten an, verschiebt ihre
+  Ketten um den Versatz und mischt Pool-Samples ein.
+- **⧉ / ⇩ je Part-Zeile.** ⧉ merkt die Steps des Parts (Zwischenablage,
+  lebt solange der Editor offen ist), ⇩ fuegt sie in einen anderen Part
+  oder ein anderes Pattern ein — eine kuerzere Quelle wird bis zur
+  Ziel-Laenge wiederholt, Shift-Klick nimmt Sample, Volume, Pan und
+  Klangparameter mit.
+- **×2 neben der Laenge.** 16 → 32 → 64, die vorhandenen Steps werden in
+  die neue Haelfte kopiert (die Laengen-Auswahl allein liess sie leer).
+
+Am Bildschirm gefahren (Treiber): ×2 auf Steps 1/5 ergibt 1/5/33/37; ⧉ auf
+Part 1 und ⇩ auf Part 4 eines neuen Patterns bringt die Steps dort an.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

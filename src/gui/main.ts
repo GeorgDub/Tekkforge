@@ -8,7 +8,7 @@ import { $ } from "./shared";
 import { initTheme } from "./theme";
 import { initStart, startWirdSichtbar } from "./start";
 import { initSettings, settingsWirdSichtbar } from "./settings";
-import { initEditor, loadProject, panelBridge, editorWirdSichtbar } from "./editor";
+import { initEditor, loadProject, panelBridge, editorWirdSichtbar, appendPatterns, istProjektLeer } from "./editor";
 import { initConverter } from "./converter";
 import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
@@ -108,11 +108,19 @@ initGenerator(
   },
 );
 // MIDI-Import-Handoff: gebaute Patterns in den Editor laden + Tab wechseln.
+// Ein leerer Editor wird ersetzt; ein Editor mit Inhalt bekommt die Patterns
+// ANGEHAENGT (Nutzerbefund 2026-09-04: ein zweiter MIDI-Import in dieselbe
+// Sitzung war vorher nicht moeglich, weil jede Uebergabe alles ersetzte).
 initMidiImport((project: EditorProject) => {
-  if (loadProject(project)) {
+  if (istProjektLeer()) {
+    if (!loadProject(project)) return;
     switchTab("editor");
     alert(`MIDI → Editor: ${project.patterns.length} Pattern(s) — jetzt Samples zuordnen.`);
+    return;
   }
+  const n = appendPatterns(project);
+  switchTab("editor");
+  alert(`MIDI → Editor: ${n} Pattern(s) hinten angehängt — die vorhandenen bleiben. Mit ⧉ / ⇩ lassen sich Parts zwischen Patterns kopieren.`);
 });
 initStart({
   oeffne: (tab) => switchTab(tab as Tab),
