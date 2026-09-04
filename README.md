@@ -1353,6 +1353,25 @@ Linie je Step (`ProjektSample.meloLinie`: Note, Anschlag, Velocity):
   „MIDI zu Korg“ legt (Piano Roll, Parts zuordnen, in den Editor — und von
   dort mit ⧉ / ⇩ in jedes Pattern).
 
+## Generator: Melodie-MIDI automatisch, eigener Ordner plus Lied (2026-09-05)
+
+Nutzerwunsch: beim „Alles aus dem Lied“ soll die MIDI direkt entstehen und
+beim Pattern-Bau die Steps setzen, und man will einen eigenen Sample-Ordner
+UND ein Lied als Grundlage nehmen.
+
+- **MIDI automatisch.** Die Melodie jedes Fensters wird beim Analysieren
+  transkribiert (`meloLinie` am Eintrag, `patternGen` setzt daraus Stab,
+  Bass und Kick). Nach „Alles aus dem Lied“ liegt die Melodie-MIDI schon im
+  Wizard „MIDI zu Korg“ (ohne Tabwechsel), „→ Datei“ und „Auf SD“ schreiben
+  `<Lied>-melo.mid` neben Bank und Patterns, die Lied-Zeile zeigt die
+  Notenzahl. „Melo → MIDI“ springt bei Bedarf in den Wizard.
+- **Ordner plus Lied.** Der Ordner-Scan ersetzte bisher ALLE Eintraege —
+  wer erst das Lied lud und dann seinen Ordner, verlor die Lied-Fenster.
+  Jetzt ersetzt der Scan nur seine eigenen Eintraege, das Lied ersetzt nur
+  seine: Schlagzeug aus dem Ordner, Melodie und Vocals aus dem Lied, in
+  jeder Reihenfolge. Mit „eigene Drums statt Lied-Drums“ kommen Kick, Snare
+  und Hat aus dem Ordner (sonst tekk4).
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

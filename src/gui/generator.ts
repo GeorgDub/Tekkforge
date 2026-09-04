@@ -31,6 +31,7 @@ import { klangProfil } from "../core/klangProfil";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, voxSegmentEintrag, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import { meloNoten, meloAlsSmf } from "../core/meloNoten";
+import { smfBytes } from "../core/smfSchreiben";
 import type { SmfLied } from "../core/midiImport";
 import { bassNoten } from "../core/grundton";
 import {
@@ -341,8 +342,8 @@ function render(): void {
     : `<div class="fortschritt">Noch nichts erzeugt.</div>`;
   host.innerHTML = `
     <div class="card">
-      <h3>1 · Quelle</h3>
-      <div class="zeile">
+      <h3>1 · Quelle — eigener Sample-Ordner, ein Lied, oder beides zusammen</h3>
+      <div class="zeile" title="Eigene Samples (Kicks, Snares, Hats, Bass, Stabs). Bleiben erhalten, wenn danach ein Lied dazukommt — und umgekehrt: Melodie und Vocals aus dem Lied, Schlagzeug aus dem Ordner.">
         <label for="genOrdner">Sample-Verzeichnis</label>
         <input id="genOrdner" type="file" multiple />
       </div>
@@ -605,7 +606,11 @@ async function scanneOrdner(files: FileList | null): Promise<void> {
     await new Promise((r) => setTimeout(r, 0));
   }
   const res = scanne(eingaben);
-  z.eintraege = res.eintraege;
+  // Der Ordner ersetzt nur seine eigenen Eintraege — was aus einem Lied kam,
+  // bleibt (Nutzerwunsch 2026-09-05: eigener Sample-Ordner PLUS ein Lied als
+  // Grundlage; vorher wischte der Ordner-Scan die Lied-Fenster weg).
+  const ausLied = new Set(z.lieder.flatMap((l) => l.dateien));
+  z.eintraege = z.eintraege.filter((e) => ausLied.has(e.datei)).concat(res.eintraege);
   z.uebersprungen = [...fehler, ...res.uebersprungen];
   z.zusammen = zusammenfassung(z.eintraege);
   z.fortschritt = "";
@@ -801,7 +806,7 @@ async function liedAnalysieren(): Promise<void> {
         dateien: neue.map((e) => e.datei),
         zeile: `${datei.name}: ${res.bpm.toFixed(1)} BPM ×${res.k} → ${zielBpm} BPM (Varispeed ${res.rate.toFixed(3)})${tonartText} · Fenster ${res.fenster
           .map((f) => `${f.label} @ ${f.startSek.toFixed(0)} s`)
-          .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocalspur in ${voxZahl} Segmenten${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"}`,
+          .join(", ")}${demucs ? ` · Stems: bass+other als Melo, Vocalspur in ${voxZahl} Segmenten${drumZahl ? `, ${drumZahl} Drum-Shots geschnitten` : ""}` : " · Vollmix (ohne Demucs)"}${meloMidiJeLied.has(liedName) ? ` · Melo-MIDI: ${meloMidiJeLied.get(liedName)!.spuren[0]?.noten.length ?? 0} Noten (Stab, Bass, Kick folgen ihr)` : ""}`,
       });
       alleNeuen.push(...neue);
     }
@@ -835,6 +840,9 @@ async function alleAusLied(): Promise<void> {
   if (z.liedLaeuft) return;
   await liedAnalysieren();
   if (!z.eintraege.length || !z.zusammen) return;
+  // Die Melodie-MIDI liegt danach schon im Wizard „MIDI zu Korg“ (ohne Tabwechsel)
+  // und geht mit „→ Datei“ als <Lied>-melo.mid mit hinaus.
+  for (const [name, lied] of meloMidiJeLied) onMeloMidi?.(lied, `${name}-melo.mid`, false);
   await bankBauen();
   if (!z.projekt) return;
   // Mehrere Lieder: "Pro Melo" baut je Melodie eine Kette — alles landet in
@@ -953,6 +961,8 @@ function projektDateien(): { name: string; bytes: Uint8Array }[] {
   return [
     { name: `${z.projekt.name}.all`, bytes: z.bank },
     { name: "projekt.json", bytes: new TextEncoder().encode(projektJson(z.projekt)) },
+    // Die transkribierte Melodie je Lied als MIDI — automatisch dabei, nichts anzuklicken
+    ...[...meloMidiJeLied].map(([lied, smf]) => ({ name: `${lied}-melo.mid`, bytes: smfBytes(smf) })),
   ];
 }
 
@@ -1173,7 +1183,7 @@ async function anGeraet(): Promise<void> {
 }
 
 /** Hook fuer „Melo → MIDI“: main.ts legt das Lied in den Wizard und wechselt den Tab. */
-let onMeloMidi: ((lied: SmfLied, name: string) => void) | null = null;
+let onMeloMidi: ((lied: SmfLied, name: string, wechseln: boolean) => void) | null = null;
 
 /** Die transkribierte Melodie des zuletzt geladenen Lieds (oder des einzigen) in den MIDI-Wizard geben. */
 function meloZumWizard(): void {
@@ -1185,10 +1195,10 @@ function meloZumWizard(): void {
   const wahl = namen.length === 1 ? namen[0] : (prompt(`Welches Lied? ${namen.join(", ")}`, namen[namen.length - 1]) ?? "");
   const lied = meloMidiJeLied.get(wahl) ?? meloMidiJeLied.get(namen[namen.length - 1]);
   if (!lied || !onMeloMidi) return;
-  onMeloMidi(lied, `${wahl || namen[namen.length - 1]}-melo.mid`);
+  onMeloMidi(lied, `${wahl || namen[namen.length - 1]}-melo.mid`, true);
 }
 
-export function initGenerator(cb: (p: EditorProject) => void, werkbank?: (dateien: File[]) => void, meloMidi?: (lied: SmfLied, name: string) => void): void {
+export function initGenerator(cb: (p: EditorProject) => void, werkbank?: (dateien: File[]) => void, meloMidi?: (lied: SmfLied, name: string, wechseln: boolean) => void): void {
   onEditor = cb;
   if (werkbank) onWerkbank = werkbank;
   if (meloMidi) onMeloMidi = meloMidi;

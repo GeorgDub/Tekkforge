@@ -107,9 +107,9 @@ initGenerator(
     void ladeAlsSpuren(dateien);
   },
   // Dritter Weg: die transkribierte Melodie als MIDI in den Wizard „MIDI zu Korg“.
-  (lied, name) => {
+  (lied, name, wechseln) => {
     midiImportLadeLied(lied, name, `${lied.spuren[0]?.noten.length ?? 0} Noten aus dem Generator (Drop-Fenster, 16tel-Raster) — im Piano Roll pruefen, Parts zuordnen, in den Editor.`);
-    switchTab("midi");
+    if (wechseln) switchTab("midi");
   },
 );
 // MIDI-Import-Handoff: gebaute Patterns in den Editor laden + Tab wechseln.
