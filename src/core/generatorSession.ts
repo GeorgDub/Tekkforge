@@ -5,6 +5,7 @@
  */
 import { type ScanEintrag, rmsDb, peakVon } from "./sampleScan";
 import { klangProfil } from "./klangProfil";
+import { ramBytesFuer } from "./sampleRam";
 import { tempoVorschlag } from "./tempoAnalyse";
 import { type Projekt, BUDGET_SEKUNDEN, waehleVolumes } from "./bankPlan";
 import { type Rezept, type Modus, regelRezept, regelRezeptProMelo } from "./rezept";
@@ -36,7 +37,9 @@ export function zusammenfassung(eintraege: ScanEintrag[], budgetSekunden = BUDGE
     anzahl: eintraege.length,
     rollen,
     sekunden,
-    megabyte: (sekunden * 2 * 44100) / 1048576,
+    // Bytes wie in der Bank: zwei je Bild bei der Rate des Eintrags — ein
+    // 22 050-Hz-Eintrag zaehlt halb, statt auf 44,1 kHz hochgerechnet zu werden.
+    megabyte: eintraege.reduce((b, e) => b + ramBytesFuer({ pcm: e.pcm, sampleRate: e.sampleRate }), 0) / 1048576,
     tempoVorschlag: bpm,
     volumesNoetig: Math.max(1, waehleVolumes(eintraege, bpm, budgetSekunden).length),
     tekkEmpfohlen: tekkDrumsEmpfohlen(eintraege),

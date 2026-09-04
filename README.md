@@ -1128,6 +1128,29 @@ es: P1 Cutoff-Rampe, P2 Pitch-Fall im letzten Takt, P3 Osc-Edit als
 gemessene Referenz, P4 ohne Motion, global MFX-Edit. Tut P1 nichts, ist 5
 nicht der Cutoff — was stattdessen passiert, sagt, welcher Parameter es ist.
 
+## Rate nach Rolloff und ein Budget in Bytes (2026-09-04)
+
+**Rate nach Rolloff** (`core/rateWahl.ts`). Das Geraet beachtet die Rate je
+Slot (RATETEST, 2026-08-30); ein Slot mit 22 050 Hz kostet den halben
+Speicher. Bisher nutzte das nur der Wunsch „sparsame Vocals“. Jetzt misst
+`planeBank` je Slot den **Rolloff** (Frequenz, unter der 95 % der Energie
+liegen): unter 9 kHz bekommt der Slot die halbe Rate — Bass, Sub, viele
+Kicks, dunkle Vocals verlieren dabei nichts Hoerbares. Hats, Snare und Clap
+bleiben ausdruecklich voll. Das Klangprofil wird am fertigen Slot gemessen,
+also bei der neuen Rate. `rateNachRolloff: false` schaltet die Messung ab,
+`sparsameVocals` gilt weiter als Wunsch.
+
+**Budget in Bytes.** `ramBytesFuer` war die einzige Wahrheit ueber den
+Speicher, aber die Zusammenfassung des Generator-Tabs rechnete fest mit
+44,1 kHz — sparsame Vocals zaehlten doppelt. Jetzt zaehlt sie Bytes wie in
+der Bank. Dazu ein **Waechter** in `planeBank`: liegt die Bank ueber
+`ramBytes` (Vorgabe 24 MB), setzt er erst Vocals, dann FX, dann Bass auf
+die halbe Rate und laesst zuletzt die hintersten Slots weg — mit ⚠ im
+Hinweis. `waehleVolumes` rechnet weiter in Sekunden und haelt das meist
+schon ein; der Waechter ist das Netz darunter. Hinweise (halbierte Slots,
+Budget-Eingriffe) kommen jetzt getrennt von den Warnungen des Bank-Bauers
+(`hinweise` neben `warnungen`).
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

@@ -208,9 +208,9 @@ describe("liedZuSet: fremde Abtastraten", () => {
       }
     });
 
-    it(`${rate} Hz: die Samples sind auf 44,1 kHz gebracht`, () => {
+    it(`${rate} Hz: die Samples sind auf 44,1 kHz gebracht (oder per Rolloff-Regel auf die Haelfte) — nie auf der fremden Rate`, () => {
       const set = liedZuSet(liedchen(60, 105, rate), rate, { name: "Fremd", kanaele: 1, tekkDrums });
-      for (const s of set.projekt.samples) expect(s.sampleRate ?? 44100).toBe(44100);
+      for (const s of set.projekt.samples) expect([44100, 22050], s.name).toContain(s.sampleRate ?? 44100);
     });
   }
 

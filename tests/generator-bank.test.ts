@@ -154,8 +154,8 @@ describe("bankPlan", () => {
     const vox = mach("GZUZ V01.wav");
     const melo = mach("HyPer MeLo.wav");
     expect([vox.rolle, melo.rolle]).toEqual(["vox", "melo"]);
-    const voll = planeBank([vox, melo], { name: "v", bpm: 180, bankZeit: "x" });
-    const sparsam = planeBank([vox, melo], { name: "s", bpm: 180, bankZeit: "x", sparsameVocals: true });
+    const voll = planeBank([vox, melo], { name: "v", bpm: 180, bankZeit: "x", rateNachRolloff: false });
+    const sparsam = planeBank([vox, melo], { name: "s", bpm: 180, bankZeit: "x", sparsameVocals: true, rateNachRolloff: false });
     const sek = (p: typeof voll.projekt, rolle: string) =>
       p.samples.filter((s) => s.rolle === rolle).reduce((a, b) => a + b.sekunden, 0);
     // Vocals: halbe Abtastrate -> halbe Datenmenge bei gleicher Spieldauer
@@ -166,7 +166,7 @@ describe("bankPlan", () => {
     expect(voll.projekt.samples.find((s) => s.rolle === "vox")!.sampleRate).toBe(44100);
     // Spieldauer bleibt gleich (Takte unveraendert), nur die Rate halbiert sich
     expect(sek(sparsam.projekt, "vox")).toBeCloseTo(sek(voll.projekt, "vox"), 2);
-    // Melos ruehrt das nicht an
+    // Melos ruehrt das nicht an (Rolloff-Regel hier aus, damit nur der Wunsch zaehlt)
     expect(sparsam.projekt.samples.find((s) => s.rolle === "melo")!.sampleRate).toBe(44100);
   });
 

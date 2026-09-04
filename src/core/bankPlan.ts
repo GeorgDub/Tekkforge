@@ -8,6 +8,8 @@ import { type ScanEintrag, type Rolle, sauberName, rmsDb, peakVon, LANG_AB } fro
 import { taktPassung, tempoSchaetzen } from "./tempoAnalyse";
 import { meloRaster, type MeloRaster } from "./meloRaster";
 import { klangProfil, type Klangprofil } from "./klangProfil";
+import { rateFuer } from "./rateWahl";
+import { RAM_BUDGET_BYTES, ramBytesSumme } from "./sampleRam";
 import { tonartErkennen, TONART_SICHER, type TonartInfo } from "./keyAnalyse";
 import { polyPhaseResample, peakNormalize, rmsNormalize, downmixToMono } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
@@ -98,6 +100,18 @@ export interface PlanOptionen {
    * Tut sie es nicht, klaengen betroffene Samples doppelt so schnell.
    */
   sparsameVocals?: boolean;
+  /**
+   * Rate nach Rolloff (Vorgabe an): Slots, deren Energie zu 95 % unter 9 kHz
+   * liegt, bekommen 22 050 Hz — halber Speicher, kein hoerbarer Verlust.
+   * Hats, Snare und Clap bleiben immer voll. Siehe `rateWahl.ts`.
+   */
+  rateNachRolloff?: boolean;
+  /**
+   * Byte-Grenze des Sample-RAM (Vorgabe RAM_BUDGET_BYTES). Liegt die Bank
+   * darueber, halbiert der Wächter erst Vocals, dann FX, dann Bass, und
+   * laesst zuletzt die hintersten Slots weg — mit Warnung.
+   */
+  ramBytes?: number;
 }
 export interface Teil {
   name: string;
@@ -330,7 +344,7 @@ function tonartFalls(rolle: Rolle, kind: "oneshot" | "loop", pcm: Float32Array, 
   return { tonart: { name: t.name, camelot: t.camelot, konfidenz: t.konfidenz } };
 }
 
-export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { projekt: Projekt; bank: ArrayBuffer; warnungen: string[] } {
+export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { projekt: Projekt; bank: ArrayBuffer; warnungen: string[]; hinweise: string[] } {
   const budget = opts.budgetSekunden ?? BUDGET_SEKUNDEN;
   const volumes = waehleVolumes(eintraege, opts.bpm, budget);
   const volume = opts.volume ?? 1;
@@ -366,15 +380,20 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
     tekk = genommen.size > 0;
   }
   let nr = tekk ? 601 : 501;
+  let halbiert = 0;
   const sortiert = auswahl.slice().sort((a, b) => REIHENFOLGE.indexOf(a.rolle) - REIHENFOLGE.indexOf(b.rolle) || a.datei.localeCompare(b.datei));
   for (const e of sortiert) {
     const { teile } = bereiteAuf(e, opts.bpm);
     for (const t of teile) {
       const name = eindeutig(t.name, vergeben);
-      // Sparsame Vocals: halbe Rate, halber Speicher, gleiche Spieldauer
-      const sparsam = opts.sparsameVocals && e.rolle === "vox" && t.kind === "loop";
-      const rate = sparsam ? SR / 2 : SR;
-      const pcm = sparsam ? polyPhaseResample(t.pcm, SR, rate, 1) : t.pcm;
+      // Rate je Slot: Wunsch (sparsame Vocal-Loops) oder Messung (Rolloff unter
+      // 9 kHz) — halbe Rate, halber Speicher, gleiche Spieldauer.
+      const rate = rateFuer(t.pcm, SR, e.rolle, {
+        sparsameVocals: !!opts.sparsameVocals && t.kind === "loop",
+        messen: opts.rateNachRolloff !== false,
+      });
+      if (rate !== SR) halbiert++;
+      const pcm = rate !== SR ? polyPhaseResample(t.pcm, SR, rate, 1) : t.pcm;
       slots.push({ slotIndex: displayNumberToSlotIndex(nr), sampleNumber: displayNumberToOsc(nr), name, category: KAT[e.rolle], pcmData: pcm, sampleRate: rate, channels: 1, loopType: 1 });
       samples.push({
         nr, name, rolle: e.rolle, familie: e.familie, kind: t.kind, takte: t.takte, sekunden: pcm.length / rate, rmsDb: rmsDb(pcm), quelle: e.datei, sampleRate: rate,
@@ -391,10 +410,39 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
       nr++;
     }
   }
+  const hinweise: string[] = [];
+  if (halbiert) hinweise.push(`${halbiert} Slot(s) mit 22 050 Hz (Rolloff unter 9 kHz oder sparsame Vocals) — halber Speicher`);
+  // Budget-Waechter: erst Vocals, dann FX, dann Bass auf halbe Rate, zuletzt
+  // die hintersten Slots weg. `waehleVolumes` rechnet in Sekunden bei voller
+  // Rate und haelt das meist schon ein; hier zaehlen die BYTES, die wirklich
+  // in der Bank liegen — die einzige Wahrheit ueber den Speicher.
+  const grenze = opts.ramBytes ?? RAM_BUDGET_BYTES;
+  const bytes = () => ramBytesSumme(slots.map((s) => ({ pcm: s.pcmData, sampleRate: s.sampleRate })));
+  for (const rolle of ["vox", "fx", "bass"] as const) {
+    if (bytes() <= grenze) break;
+    let n = 0;
+    samples.forEach((s, i) => {
+      if (bytes() <= grenze || s.rolle !== rolle || s.sampleRate !== SR || s.gruppe === "tekk") return;
+      const slot = slots[i];
+      slot.pcmData = polyPhaseResample(slot.pcmData, SR, SR / 2, 1);
+      slot.sampleRate = SR / 2;
+      s.sampleRate = SR / 2;
+      s.klang = klangProfil(slot.pcmData, SR / 2, { bpm: opts.bpm });
+      n++;
+    });
+    if (n) hinweise.push(`Budget: ${n} ${rolle}-Slot(s) auf 22 050 Hz gesetzt`);
+  }
+  let weg = 0;
+  while (bytes() > grenze && slots.length > (tekk ? 1 : 0) && samples.length && samples[samples.length - 1].gruppe !== "tekk") {
+    slots.pop();
+    samples.pop();
+    weg++;
+  }
+  if (weg) hinweise.push(`⚠ Budget: ${weg} Slot(s) am Ende weggelassen — ${(bytes() / 1048576).toFixed(1)} MB von ${(grenze / 1048576).toFixed(1)} MB belegt`);
   const bank = buildE2sBank(slots);
   const projekt: Projekt = {
     name: opts.name, bpm: opts.bpm, budgetSekunden: budget, volume, volumes: volumes.length, tekkDrums: tekk,
     samples, status: "gebaut", bankZeit: opts.bankZeit ?? new Date().toISOString(),
   };
-  return { projekt, bank: bank.buffer, warnungen: bank.warnings ?? [] };
+  return { projekt, bank: bank.buffer, warnungen: bank.warnings ?? [], hinweise };
 }

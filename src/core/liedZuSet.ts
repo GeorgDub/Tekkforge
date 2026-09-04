@@ -215,7 +215,7 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
     }
   }
 
-  const { projekt, bank, warnungen } = planeBank(eintraege, {
+  const { projekt, bank, warnungen, hinweise: bankHinweise } = planeBank(eintraege, {
     name: name.slice(0, 12),
     bpm,
     bankZeit: new Date(0).toISOString(),
@@ -235,7 +235,7 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
   const swing = grooveErgebnis?.swing ?? 0;
   const patterns = mitSwing(gebaut.patterns, swing);
 
-  const hinweise = [...warnungen, ...gebaut.hinweise];
+  const hinweise = [...warnungen, ...bankHinweise, ...gebaut.hinweise];
   if (grooveErgebnis) hinweise.push(swing ? `Swing ${swing > 0 ? "+" : ""}${swing} % aus dem Lied auf allen Patterns` : "Lied laeuft gerade — kein Swing gesetzt");
   if (!opts.stems && !opts.tekkDrums)
     hinweise.push("Ohne Stem-Trennung und ohne tekk4-Drums hat dieses Set kein Schlagzeug.");
