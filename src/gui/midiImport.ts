@@ -494,6 +494,21 @@ export function initMidiImport(cb: (p: EditorProject) => void): void {
   render();
 }
 
+/**
+ * Ein fertiges SMF-Lied in den Wizard legen — der Generator schickt so die
+ * transkribierte Melodie eines Lieds hierher (Piano Roll, Zuordnung, Editor).
+ */
+export function midiImportLadeLied(lied: SmfLied, dateiname: string, hinweis = ""): void {
+  z.lied = lied;
+  z.audio = null;
+  z.dateiname = dateiname;
+  z.fehler = "";
+  z.weg.clear();
+  z.hinweise = hinweis ? [hinweis] : [];
+  vorschlagZiel(lied);
+  render();
+}
+
 export function midiImportWirdSichtbar(): void {
   render();
 }

@@ -17,6 +17,7 @@ import { rolleFuer, familie, rmsDb, LANG_AB, type Rolle } from "./sampleScan";
 import { klangProfil } from "./klangProfil";
 import { taktPassung } from "./tempoAnalyse";
 import { meloRaster } from "./meloRaster";
+import { meloNoten } from "./meloNoten";
 import { downmixToMono } from "./audioProcessor";
 import type { Projekt, ProjektSample } from "./bankPlan";
 
@@ -70,7 +71,7 @@ export function projektAusBank(bytes: Uint8Array, opts: BankProjektOptionen): Pr
       gruppe: loop ? `${rolle}:${fam}` : rolle,
       sampleRate: rate,
       ...(haelfte && loop ? { chunk: (haelfte[3].toUpperCase() === "A" ? 0 : 1) as 0 | 1, chunks: 2 as const } : {}),
-      ...(rolle === "melo" && loop ? { raster: meloRaster(pcm, rate, takte) } : {}),
+      ...(rolle === "melo" && loop ? { raster: meloRaster(pcm, rate, takte), meloLinie: meloNoten(pcm, rate, opts.bpm).linie } : {}),
       ...(klang ? { klang } : {}),
     });
   }

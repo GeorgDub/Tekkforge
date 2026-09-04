@@ -46,6 +46,8 @@ export interface ScanEintrag {
    * bei Pause (`grundton.bassNoten`). Nur bei Melodie-Fenstern eines Lieds.
    */
   bassLinie?: (number | null)[];
+  /** Melodie des Fensters als Noten je 16tel (`meloNoten`), fuer Stab, Bass und Kick zur Melo. */
+  meloLinie?: import("./meloNoten").MeloLinie;
 }
 
 export const LANG_AB = 2.5;

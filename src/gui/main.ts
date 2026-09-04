@@ -13,7 +13,7 @@ import { initConverter } from "./converter";
 import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
 import { initGenerator, generatorWirdSichtbar } from "./generator";
-import { initMidiImport, midiImportWirdSichtbar } from "./midiImport";
+import { initMidiImport, midiImportWirdSichtbar, midiImportLadeLied } from "./midiImport";
 import { initSampleManager, sampleManagerWirdSichtbar } from "./sampleManager";
 import { initPatternBibliothek, bibliothekWirdSichtbar } from "./patternBibliothek";
 import { initStemWerkbank, stemWerkbankWirdSichtbar, ladeAlsSpuren, stemWerkbankVerlassen } from "./stemWerkbank";
@@ -105,6 +105,11 @@ initGenerator(
   (dateien: File[]) => {
     switchTab("stems");
     void ladeAlsSpuren(dateien);
+  },
+  // Dritter Weg: die transkribierte Melodie als MIDI in den Wizard „MIDI zu Korg“.
+  (lied, name) => {
+    midiImportLadeLied(lied, name, `${lied.spuren[0]?.noten.length ?? 0} Noten aus dem Generator (Drop-Fenster, 16tel-Raster) — im Piano Roll pruefen, Parts zuordnen, in den Editor.`);
+    switchTab("midi");
   },
 );
 // MIDI-Import-Handoff: gebaute Patterns in den Editor laden + Tab wechseln.

@@ -28,6 +28,7 @@ import { spawnSync } from "node:child_process";
 import { parseWav, encodeWav16 } from "./core/wavCodec";
 import { liedZuSet, type StemErgebnis } from "./core/liedZuSet";
 import { encodeGroove } from "./core/e2Groove";
+import { smfBytes } from "./core/smfSchreiben";
 import { alsAllPat } from "./core/patternGen";
 
 const CLI_VERSION = "0.2.0";
@@ -286,6 +287,8 @@ function cmdLied(args: string[]): void {
     fs.writeFileSync(path.join(ziel, `${stamm}.e2sallpat`), new Uint8Array(alsAllPat(set.patterns)));
     // Groove-Vorlage des Lieds (320-Byte-Block) — fuer Werkbank oder Firmware; der Swing steckt schon in den Patterns.
     if (set.groove) fs.writeFileSync(path.join(ziel, `${stamm}.e2gv`), encodeGroove(set.groove));
+    // Die transkribierte Melodie des Drops als MIDI — fuer den Wizard „MIDI zu Korg“ oder eine DAW.
+    if (set.meloMidi) fs.writeFileSync(path.join(ziel, `${stamm}-melo.mid`), smfBytes(set.meloMidi));
     process.stdout.write(
       `${stamm}: ${set.gemessen.toFixed(1)}×${set.oktave} = ${set.bpm} BPM · ` +
         `${set.projekt.samples.length} Samples (${set.zaehler.drums} Drums, ${set.zaehler.vox} Vocals) · ` +

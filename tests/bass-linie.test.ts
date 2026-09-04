@@ -72,10 +72,16 @@ describe("liedZuSet: Bassline aus dem Bass-Stem", () => {
     expect(noten.filter((n) => n !== null).length).toBeGreaterThan(4);
   });
 
-  it("ohne Bass-Stem bleibt der Bass auf 60", () => {
+  it("ohne Bass-Stem folgt der Bass der Melodie (Tonklasse in 48…59), bassLinie bleibt leer", () => {
+    // das Testlied traegt einen 220-Hz-Ton (A3) — die Melodie-Transkription liefert A, der Bass spielt A (57)
     const set = liedZuSet(lied(), SR, { name: "B", kanaele: 1, tekkDrums, bpm: 180 });
     const drop = set.patterns.find((p) => /V1A$/.test(p.name))!;
-    expect(drop.parts[8].steps.filter((s) => s.active).every((s) => (s.notes?.[0] ?? 60) === 60 || (s.notes?.[0] ?? 60) === 55 || (s.notes?.[0] ?? 60) === 67)).toBe(true);
-    expect(set.projekt.samples.find((s) => s.rolle === "melo")!.bassLinie).toBeUndefined();
+    const noten = drop.parts[8].steps.filter((s) => s.active).map((s) => s.notes?.[0] ?? 60);
+    expect(noten.length).toBeGreaterThan(0);
+    expect(noten.every((n) => n >= 48 && n <= 60)).toBe(true);
+    expect(noten.filter((n) => n === 57).length).toBeGreaterThan(noten.length / 2);
+    const melo = set.projekt.samples.find((s) => s.rolle === "melo")!;
+    expect(melo.bassLinie).toBeUndefined();
+    expect(melo.meloLinie).toBeDefined();
   });
 });

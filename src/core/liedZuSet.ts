@@ -27,6 +27,8 @@ import { bauePaare, baueRezept } from "./patternGen";
 import type { E2PatternInput } from "./electribePatternBuilder";
 import { grooveFuerLied, mitSwing, type LiedGroove } from "./grooveAnschluss";
 import { bassNoten } from "./grundton";
+import { meloNoten, meloAlsSmf } from "./meloNoten";
+import type { SmfLied } from "./midiImport";
 import type { Groove } from "./e2Groove";
 
 /** Kuerzel je Drum-Rolle, wie im Generator-Tab. */
@@ -97,6 +99,8 @@ export interface LiedSet {
   swing: number;
   /** Groove-Vorlage aus dem Lied (16 Steps) — fuer Werkbank oder Firmware; fehlt ohne Messung. */
   groove?: Groove;
+  /** Die transkribierte Melodie des Drop-Fensters als SMF-Lied — fuer den MIDI-Wizard oder als .mid neben dem Set. */
+  meloMidi?: SmfLied;
 }
 
 function eintrag(lied: string, label: string, pcm: Float32Array, rolle: ScanEintrag["rolle"]): ScanEintrag {
@@ -177,6 +181,7 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
   const eintraege: ScanEintrag[] = [];
   const zaehler = { fenster: 0, vox: 0, drums: 0 };
   let grooveQuelle: Float32Array | null = null;
+  let meloMidi: SmfLied | undefined;
 
   if (opts.stems) {
     // Genau wie die App: die drei Abschnitte liefern Melodie, Vocals UND den
@@ -193,6 +198,11 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
       if (r.drums && (!grooveQuelle || r.id === "DROP")) grooveQuelle = r.drums;
       if (r.melo) {
         const m = eintrag(name, r.id, r.melo, "melo");
+        // Melodie als Noten je 16tel: Stab spielt sie mit, Bass und Kick richten sich danach;
+        // die Noten des Drop-Fensters gehen als MIDI mit ins Set (Nutzerwunsch 2026-09-04)
+        const mn = meloNoten(r.melo, sr, bpm);
+        if (mn.linie.anschlag.some(Boolean)) m.meloLinie = mn.linie;
+        if (mn.noten.length && (!meloMidi || r.id === "DROP")) meloMidi = meloAlsSmf(mn.noten, bpm, `${name} ${r.id} Melo`);
         // Bassline aus dem Bass-Stem: Note je Viertel ueber die ersten vier
         // Takte (das Pattern hat 64 Steps; ein 8-Takter laeuft ueber Alternate).
         if (r.bass) {
@@ -221,7 +231,11 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
     // Vollmix-Weg: nur die Abschnitte als Melodie. Ohne tekkDrums hat das Set
     // hinterher keine einzige Kick — deshalb steht das auch im Hinweis.
     for (const f of analyse.fenster) {
-      eintraege.push(eintrag(name, f.label, f.pcm, "melo"));
+      const m = eintrag(name, f.label, f.pcm, "melo");
+      const mn = meloNoten(f.pcm, sr, bpm);
+      if (mn.linie.anschlag.some(Boolean)) m.meloLinie = mn.linie;
+      if (mn.noten.length && (!meloMidi || f.label === "DROP")) meloMidi = meloAlsSmf(mn.noten, bpm, `${name} ${f.label} Melo`);
+      eintraege.push(m);
       zaehler.fenster++;
     }
   }
@@ -266,5 +280,6 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
     zaehler,
     swing,
     groove: grooveErgebnis?.groove,
+    ...(meloMidi ? { meloMidi } : {}),
   };
 }

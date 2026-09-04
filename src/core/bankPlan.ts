@@ -14,6 +14,7 @@ import { loopPunkteAufNull, wiederholtSich, taktFrames } from "./loopPunkte";
 import { slicesFuer, sliceAnzahl } from "./sliceMarker";
 import { LOOP_TYPE_FORWARD, LOOP_TYPE_ONESHOT } from "./constants";
 import { stretchAufLaenge } from "./timeStretch";
+import type { MeloLinie } from "./meloNoten";
 import { tonartErkennen, TONART_SICHER, type TonartInfo } from "./keyAnalyse";
 import { polyPhaseResample, peakNormalize, rmsNormalize, downmixToMono } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
@@ -82,6 +83,8 @@ export interface ProjektSample {
   loop?: { start: number; ende: number; takte: number; gespeicherteTakte: number };
   /** Bassline des Fensters (Melodie-Loops aus einem Lied): MIDI-Note je Viertel, null = Pause. */
   bassLinie?: (number | null)[];
+  /** Melodie als Noten je 16tel (`meloNoten`) — Stab spielt sie mit, Bass und Kick richten sich danach. */
+  meloLinie?: MeloLinie;
 }
 export interface Projekt {
   name: string;
@@ -458,6 +461,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
         ...(t.chunk !== undefined ? { chunk: t.chunk, chunks: 2 as const } : {}),
         ...(e.rolle === "melo" && t.kind === "loop" ? { raster: meloRaster(t.pcm, SR, t.takte) } : {}),
         ...(e.bassLinie && t.kind === "loop" && t.chunk !== 1 ? { bassLinie: e.bassLinie } : {}),
+        ...(e.meloLinie && t.kind === "loop" && t.chunk !== 1 ? { meloLinie: e.meloLinie } : {}),
         // Am fertigen Slot gemessen: der Varispeed hat die Tonhoehe schon
         // verschoben, und bei sparsamen Vocals steht die halbe Rate. Ein Profil
         // von der Quelldatei beschriebe etwas, das so nicht in der Bank liegt.

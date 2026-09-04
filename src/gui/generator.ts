@@ -30,6 +30,8 @@ import { tonartErkennen } from "../core/keyAnalyse";
 import { klangProfil } from "../core/klangProfil";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, voxSegmentEintrag, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
+import { meloNoten, meloAlsSmf } from "../core/meloNoten";
+import type { SmfLied } from "../core/midiImport";
 import { bassNoten } from "../core/grundton";
 import {
   type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
@@ -323,7 +325,7 @@ function render(): void {
     : z.ergebnis
     ? `
       <div class="zeile"><b>${z.ergebnis.patterns.length} Pattern(s)</b> · ${escapeHtml(z.ergebnis.dateiname)}
-        <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button>
+        <button id="genDatei" class="primary">→ Datei</button><button id="genEditor">→ Editor</button><button id="genMeloMidi" title="Die transkribierte Melodie des Lieds (Drop-Fenster) als MIDI in den Wizard „MIDI zu Korg“ legen — Piano Roll, Parts zuordnen, in den Editor">Melo → MIDI</button>
         <button id="genWav" title="Die ganze Kette als WAV ausrechnen — zum Anhoeren auf Kopfhoerern oder unterwegs. Vereinfachte Vorschau ohne Filter und Effekte, also nicht der Klang des Geraets.">→ WAV</button>
         <button id="genGeraet" ${sperre || z.sendet ? "disabled" : ""} title="${escapeHtml(sperre ?? "0x4C-Slot-Dump, laufendes Pattern bleibt unberuehrt")}">→ Geraet ab Slot <span id="genGeraetSlot">${z.ergebnis.startSlot}</span></button>
         ${sperre ? `<span class="fortschritt">${escapeHtml(sperre)}</span>` : ""}</div>
@@ -501,6 +503,7 @@ function verdrahte(): void {
     if (z.ergebnis) download(z.ergebnis.bytes, z.ergebnis.dateiname, "application/octet-stream");
   });
   knopf("genEditor", inEditor);
+  knopf("genMeloMidi", meloZumWizard);
   knopf("genWav", alsWav);
   knopf("genGeraet", () => void anGeraet());
   for (const b of document.querySelectorAll<HTMLButtonElement>("#viewGenerator .genPlay")) {
@@ -610,13 +613,23 @@ async function scanneOrdner(files: FileList | null): Promise<void> {
 }
 
 /** Ein Fenster (mono 44,1 k) als Melo-Scan-Eintrag — 8 Takte, ein Sample. */
-function fensterEintrag(liedName: string, label: string, pcm: Float32Array): ScanEintrag {
+/** Transkribierte Melodie je Lied (Drop-Fenster, sonst das erste) — fuer „Melo → MIDI-Wizard“. */
+const meloMidiJeLied = new Map<string, SmfLied>();
+
+function fensterEintrag(liedName: string, label: string, pcm: Float32Array, bpm?: number): ScanEintrag {
   const kurz = liedName.slice(0, Math.max(3, 16 - label.length - 1));
   const stem = `${kurz} ${label}`;
-  return {
+  const e: ScanEintrag = {
     datei: `${stem}.wav`, stem, rolle: "melo", familie: familie(stem), sekunden: pcm.length / 44100,
     rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName, klang: klangProfil(pcm, 44100),
   };
+  // Melodie als Noten je 16tel: Stab spielt sie mit, Bass und Kick richten sich danach
+  if (bpm) {
+    const mn = meloNoten(pcm, 44100, bpm);
+    if (mn.linie.anschlag.some(Boolean)) e.meloLinie = mn.linie;
+    if (mn.noten.length && (!meloMidiJeLied.has(liedName) || label === "DROP")) meloMidiJeLied.set(liedName, meloAlsSmf(mn.noten, bpm, `${liedName} ${label} Melo`));
+  }
+  return e;
 }
 
 const DRUM_KURZ: Record<DrumRolle, string> = { kick: "KICK", snare: "SNR", hat: "HAT" };
@@ -743,7 +756,7 @@ async function liedAnalysieren(): Promise<void> {
         for (const f of res.fenster) {
           const r = je.get(f.label) as { melo?: Uint8Array | number[] | null; bass?: Uint8Array | number[] | null } | undefined;
           if (!r?.melo) continue;
-          const m = fensterEintrag(liedName, f.label, parseWav(Uint8Array.from(r.melo)).pcm);
+          const m = fensterEintrag(liedName, f.label, parseWav(Uint8Array.from(r.melo)).pcm, zielBpm);
           // Bassline aus dem Bass-Stem (Note je Viertel, vier Takte) — der
           // Synth-Bass spielt dann die Linie des Originals
           if (r.bass) {
@@ -777,7 +790,7 @@ async function liedAnalysieren(): Promise<void> {
           }
         }
       } else {
-        for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm));
+        for (const f of res.fenster as LiedFenster[]) neue.push(fensterEintrag(liedName, f.label, f.pcm, zielBpm));
       }
       const drumZahl = neue.filter((e) => e.rolle === "kick" || e.rolle === "snare" || e.rolle === "hat").length;
       const voxZahl = neue.filter((e) => e.rolle === "vox").length;
@@ -1159,9 +1172,26 @@ async function anGeraet(): Promise<void> {
   }
 }
 
-export function initGenerator(cb: (p: EditorProject) => void, werkbank?: (dateien: File[]) => void): void {
+/** Hook fuer „Melo → MIDI“: main.ts legt das Lied in den Wizard und wechselt den Tab. */
+let onMeloMidi: ((lied: SmfLied, name: string) => void) | null = null;
+
+/** Die transkribierte Melodie des zuletzt geladenen Lieds (oder des einzigen) in den MIDI-Wizard geben. */
+function meloZumWizard(): void {
+  if (!meloMidiJeLied.size) {
+    alert("Noch keine Melodie transkribiert — erst ein Lied in den Generator laden.");
+    return;
+  }
+  const namen = [...meloMidiJeLied.keys()];
+  const wahl = namen.length === 1 ? namen[0] : (prompt(`Welches Lied? ${namen.join(", ")}`, namen[namen.length - 1]) ?? "");
+  const lied = meloMidiJeLied.get(wahl) ?? meloMidiJeLied.get(namen[namen.length - 1]);
+  if (!lied || !onMeloMidi) return;
+  onMeloMidi(lied, `${wahl || namen[namen.length - 1]}-melo.mid`);
+}
+
+export function initGenerator(cb: (p: EditorProject) => void, werkbank?: (dateien: File[]) => void, meloMidi?: (lied: SmfLied, name: string) => void): void {
   onEditor = cb;
   if (werkbank) onWerkbank = werkbank;
+  if (meloMidi) onMeloMidi = meloMidi;
   const sp = speicher();
   z.marker = sp ? markerLesen(sp) : null;
   render();

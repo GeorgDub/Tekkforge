@@ -16,6 +16,7 @@ import { fillSchlaege } from "./patternVarianten";
 import { variierePattern } from "./kettenVariation";
 import { aufbauMotion, dropMotion } from "./motionGen";
 import { noteFuerBassSample } from "./grundton";
+import { kickAnMelo, bassLinieAusMelo, stabAusLinie } from "./meloNoten";
 
 /**
  * Die Bass-Figur mit den Noten der gemessenen Bassline: jeder Schlag der
@@ -197,13 +198,19 @@ function parts(rezept: Rezept, projekt: Projekt, a: Abschnitt, pos: number, zwei
   wach[7] = i >= 5;
   // Melo-Raster: Bass weicht Melo-Bass aus, Stab-Hits sitzen auf den staerksten Melo-Onsets
   const raster = melo?.raster;
+  const linie = melo?.meloLinie;
+  // Kick zur Melo: Viertel-Kicks auf Melodie-Anschlaegen akzentuiert, Zusatz-Kicks
+  // dort weg, wo die Melodie selbst neu ansetzt (Nutzerwunsch 2026-09-04)
+  if (linie) steps[0] = kickAnMelo(steps[0], linie);
   const bassFigur = raster ? bassAnMelo(BASS[rezept.figuren.bass](), raster) : BASS[rezept.figuren.bass]();
-  // Bassline aus dem Bass-Stem des Lieds: die Figur bleibt, die Noten kommen
-  // vom Original (Tonklasse eine Oktave unter der Sample-Tonhoehe)
-  steps[8] = melo?.bassLinie ? bassMitLinie(bassFigur, melo.bassLinie) : bassFigur;
+  // Bassline: vom Bass-Stem, sonst die tiefste Melodie-Note je Viertel;
+  // die Figur bleibt, die Noten kommen vom Original (Tonklasse eine Oktave unter der Sample-Tonhoehe)
+  const bassLinie = melo?.bassLinie ?? (linie ? bassLinieAusMelo(linie) : undefined);
+  steps[8] = bassLinie && bassLinie.some((n) => n !== null) ? bassMitLinie(bassFigur, bassLinie) : bassFigur;
   wach[8] = a.lagen.includes("bass") && !!bass;
   const stabFig: StabFigur | "phrase" = stab && (stab.kind === "loop" || stab.sekunden >= 2) ? "phrase" : rezept.figuren.stab;
-  steps[9] = raster && stabFig !== "phrase" ? stabAusRaster(raster) : STAB[stabFig]();
+  // Stab spielt die Melodie mit (Noten aus der Transkription), sonst die staerksten Onsets
+  steps[9] = linie && stabFig !== "phrase" && linie.anschlag.some(Boolean) ? stabAusLinie(linie, raster) : raster && stabFig !== "phrase" ? stabAusRaster(raster) : STAB[stabFig]();
   wach[9] = a.lagen.includes("stab") && !!stab;
   steps[10] = shotA?.kind === "loop" ? loopHit(shotA.takte, 118) : SHOT_A();
   wach[10] = a.lagen.includes("shot") && !!shotA;

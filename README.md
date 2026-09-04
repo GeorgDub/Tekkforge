@@ -1327,6 +1327,32 @@ einem Dialog). Neu (`core/patternWerkzeuge.ts`, ohne DOM getestet):
 Am Bildschirm gefahren (Treiber): ×2 auf Steps 1/5 ergibt 1/5/33/37; ⧉ auf
 Part 1 und ⇩ auf Part 4 eines neuen Patterns bringt die Steps dort an.
 
+## Die Melodie als MIDI im Generator — Stab, Bass und Kick zur Melo (2026-09-04)
+
+Nutzerwunsch: „die MIDI auch aus der Melo erstellen, damit der Kick und die
+anderen Samples passend zur Melo laufen“. Bisher kannte der Generator von
+der Melodie nur Onsets und Bassanteil (`meloRaster`). Neu
+(`core/meloNoten.ts`): die einstimmige Transkription (`transkribiereAudio`,
+Autokorrelation je 16tel, 55–1050 Hz) laeuft ueber jedes Melodie-Fenster
+(Lied-Pipeline, Generator-Tab, „Patterns zu einer Bank“) und wird zu einer
+Linie je Step (`ProjektSample.meloLinie`: Note, Anschlag, Velocity):
+
+- **Stab spielt die Melodie mit** (`stabAusLinie`): an jedem Notenanfang ein
+  Anschlag mit der Tonklasse in der Stab-Oktave 60…71, Gate nach
+  Notenlaenge, Velocity aus Transkription und Onset-Raster. Ein Stab-Sample
+  auf C spielt so die Hookline.
+- **Bass ohne Bass-Stem** (`bassLinieAusMelo`): tiefste Melodie-Note je
+  Viertel als Grundton, sonst wie gehabt aus dem Bass-Stem.
+- **Kick zur Melo** (`kickAnMelo`): die Tekk-Figur bleibt; Viertel-Kicks auf
+  Melodie-Anschlaegen bekommen 127, Zusatz-Kicks (Auftakt, Ghost, Roll)
+  entfallen dort, wo die Melodie selbst neu ansetzt — Kick und Melo treten
+  sich nicht.
+- **MIDI raus:** `LiedSet.meloMidi` (Drop-Fenster) — die CLI legt
+  `<Lied>-melo.mid` neben das Set (`core/smfSchreiben.ts`, Format 0), der
+  Generator-Tab hat den Knopf **Melo → MIDI**, der die Melodie in den Wizard
+  „MIDI zu Korg“ legt (Piano Roll, Parts zuordnen, in den Editor — und von
+  dort mit ⧉ / ⇩ in jedes Pattern).
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>
