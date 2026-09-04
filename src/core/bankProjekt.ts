@@ -33,9 +33,13 @@ export interface BankProjektOptionen {
   klang?: boolean;
 }
 
-/** Rolle aus dem Slot-Namen: Vocal-Kennungen zuerst, dann die Scan-Regeln. */
+/** „Geraet DROP“, „Geraet BREAK“, „Geraet VAR“ — die Melodie-Fenster eines Lied-Sets (BREAK traefe sonst die Kick-Regel). */
+const MELO_FENSTER = /^(.*?)\s+(DROP|BREAK|VAR|INTRO|PART\d+)$/i;
+
+/** Rolle aus dem Slot-Namen: Vocal- und Fenster-Kennungen zuerst, dann die Scan-Regeln. */
 export function slotRolle(name: string, sekunden: number, pegelDb: number, klang?: ReturnType<typeof klangProfil>): Rolle {
   if (VOX_HAELFTE.test(name) || VOX_GANZ.test(name)) return "vox";
+  if (MELO_FENSTER.test(name) && sekunden >= LANG_AB) return "melo";
   return rolleFuer(name, sekunden, pegelDb, klang);
 }
 
@@ -71,7 +75,9 @@ export function projektAusBank(bytes: Uint8Array, opts: BankProjektOptionen): Pr
       gruppe: loop ? `${rolle}:${fam}` : rolle,
       sampleRate: rate,
       ...(haelfte && loop ? { chunk: (haelfte[3].toUpperCase() === "A" ? 0 : 1) as 0 | 1, chunks: 2 as const } : {}),
-      ...(rolle === "melo" && loop ? { raster: meloRaster(pcm, rate, takte), meloLinie: meloNoten(pcm, rate, opts.bpm).linie } : {}),
+      // Raster und Melodie-Linie fuer jede tonale Schleife — der Nutzer waehlt
+      // spaeter per Name, was als Melodie dient, auch eine Vocal- oder FX-Schleife.
+      ...(loop && ["melo", "vox", "ton", "fx"].includes(rolle) ? { raster: meloRaster(pcm, rate, takte), meloLinie: meloNoten(pcm, rate, opts.bpm).linie } : {}),
       ...(klang ? { klang } : {}),
     });
   }

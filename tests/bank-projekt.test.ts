@@ -37,6 +37,17 @@ describe("bankProjekt", () => {
     expect(slotRolle("Geraet V01 A", 4.7, -12)).toBe("vox");
     expect(slotRolle("Geraet VDROP B", 4.7, -12)).toBe("vox");
     expect(slotRolle("HommO KicK 1", 0.34, -6)).toBe("kick");
+    // Fenster-Kennungen eines Lied-Sets sind Melodie — „BREAK“ traefe sonst die Kick-Regel
+    expect(slotRolle("Geraet BREAK", 9.4, -12)).toBe("melo");
+    expect(slotRolle("Geraet DROP", 9.4, -12)).toBe("melo");
+  });
+
+  it("jede tonale Schleife bekommt Raster und Melodie-Linie", () => {
+    const drop = projekt.samples.find((s) => s.name === "Geraet DROP")!;
+    expect(drop.meloLinie).toBeDefined();
+    expect(drop.meloLinie!.anschlag.some(Boolean)).toBe(true);
+    expect(projekt.samples.find((s) => s.name === "Geraet V01 A")!.meloLinie).toBeDefined();
+    expect(projekt.samples.find((s) => s.name === "HommO KicK 1")!.meloLinie).toBeUndefined();
   });
 
   it("Nummern bleiben die der Bank, Rollen und Takte stimmen, Haelften bilden Paare", () => {
