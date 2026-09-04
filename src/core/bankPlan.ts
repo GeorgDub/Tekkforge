@@ -352,7 +352,14 @@ export function waehleVolumes(eintraege: ScanEintrag[], bpm: number, budgetSekun
       if (e.rolle === "vox") voxSumme += e.sekunden;
     }
   };
-  packe([...erste, ...zweite], true);
+  // One-Shots zuerst: Kick, Snare, Hat, Bass-Shots kosten Zehntelsekunden,
+  // stehen aber nach Taktpassung ganz unten in der Rangliste — sobald Ordner
+  // UND Lied zusammen das Budget sprengen, fielen sie in die zweite Scheibe
+  // und das Set hatte kein Schlagzeug (Nutzerbefund 2026-09-05: „nur noch
+  // 3 Parts, laesst Kicks und alles weg“). Schleifen folgen nach Rang.
+  const kurz = (l: ScanEintrag[]) => l.filter((e) => e.sekunden < LANG_AB);
+  const lang = (l: ScanEintrag[]) => l.filter((e) => e.sekunden >= LANG_AB);
+  packe([...kurz(erste), ...kurz(zweite), ...lang(erste), ...lang(zweite)], true);
   schliesse();
   packe(warten, false);
   schliesse();

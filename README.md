@@ -1372,6 +1372,16 @@ UND ein Lied als Grundlage nehmen.
   jeder Reihenfolge. Mit „eigene Drums statt Lied-Drums“ kommen Kick, Snare
   und Hat aus dem Ordner (sonst tekk4).
 
+**Befund danach (2026-09-05): „nur noch 3 Parts, laesst Kicks und alles
+weg“.** Nachgebaut: sobald Ordner und Lied zusammen das Sekunden-Budget
+sprengen (eine Bibliothek mit zwanzig Melodie-Schleifen plus 14
+Vocal-Segmente), fielen die One-Shots in die zweite Scheibe — Kick, Snare,
+Hat stehen nach Taktpassung ganz unten in der Rangliste, kosten aber nur
+Zehntelsekunden. `waehleVolumes` packt jetzt alle One-Shots zuerst, dann
+die Schleifen nach Rang (Test `budget-drums`: rot mit alter Packung, gruen
+mit neuer). Der Pattern-Bau selbst ist unveraendert wie vorher — nur Stab,
+Bass und Kick-Akzente folgen der Melodie.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>
