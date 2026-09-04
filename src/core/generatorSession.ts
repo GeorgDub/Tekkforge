@@ -6,6 +6,7 @@
 import { type ScanEintrag, rmsDb, peakVon } from "./sampleScan";
 import { klangProfil } from "./klangProfil";
 import { ramBytesFuer } from "./sampleRam";
+import { wendeBesetzungAn, besetzungLeer, type Besetzung } from "./besetzung";
 import { tempoVorschlag } from "./tempoAnalyse";
 import { type Projekt, BUDGET_SEKUNDEN, waehleVolumes } from "./bankPlan";
 import { type Rezept, type Modus, regelRezept, regelRezeptProMelo } from "./rezept";
@@ -186,12 +187,16 @@ export function erzeuge(
     duennesIntro?: boolean;
     /** Alter, dichter Satz statt des schlanken (Vorgabe: aus, also schlank). */
     dichteVoll?: boolean;
+    /** Feste Sample-Wahl je Part fuer ALLE Patterns (leere Felder: Vorschlag des Planers). */
+    besetzung?: Besetzung;
   },
 ): Erzeugt {
+  // Besetzung: Nutzerwahlen ueber jedes Rezept legen — Regel-Planer wie KI-Rezept
+  const mitBesetzung = (r: Rezept): Rezept => (wunsch.besetzung && !besetzungLeer(wunsch.besetzung) ? wendeBesetzungAn(r, wunsch.besetzung, projekt).rezept : r);
   const basis = projekt.name.toUpperCase().replace(/[^A-Z0-9]+/g, "");
   if (wunsch.modus === "promelo") {
     const rezepte = (wunsch.rezepte?.length ? wunsch.rezepte.map((r) => ({ ...r, bpm: wunsch.bpm })) : regelRezeptProMelo(projekt, wunsch.bpm)).map(
-      (r) => mitDichte(r, wunsch.dichteVoll),
+      (r) => mitBesetzung(mitDichte(r, wunsch.dichteVoll)),
     );
     const { patterns, hinweise } = wunsch.aufbau ? bauePaareProMelo(rezepte, projekt) : baueProMelo(rezepte, projekt);
     return {
@@ -207,11 +212,13 @@ export function erzeuge(
         `Kick-Familien rotieren: ${rezepte.map((r) => `${r.thema.melo} → ${r.thema.kickFamilie}`).join(", ")}.`,
     };
   }
-  const rezept = mitDichte(
-    wunsch.rezept && wunsch.rezept.modus === wunsch.modus
-      ? wunsch.rezept
-      : regelRezept(projekt, { modus: wunsch.modus, bpm: wunsch.bpm, melo: wunsch.melo, beschreibung: wunsch.beschreibung }),
-    wunsch.dichteVoll,
+  const rezept = mitBesetzung(
+    mitDichte(
+      wunsch.rezept && wunsch.rezept.modus === wunsch.modus
+        ? wunsch.rezept
+        : regelRezept(projekt, { modus: wunsch.modus, bpm: wunsch.bpm, melo: wunsch.melo, beschreibung: wunsch.beschreibung }),
+      wunsch.dichteVoll,
+    ),
   );
   const start = wunsch.startSlot ?? 1;
   if (wunsch.aufbau) {

@@ -1382,6 +1382,21 @@ die Schleifen nach Rang (Test `budget-drums`: rot mit alter Packung, gruen
 mit neuer). Der Pattern-Bau selbst ist unveraendert wie vorher — nur Stab,
 Bass und Kick-Akzente folgen der Melodie.
 
+## Generator: Besetzung fuer alle Patterns (2026-09-05)
+
+Nutzerwunsch: nach dem Ordner-Scan eine Liste, in der man Kick, Snare, Hats
+usw. EINMAL fuer alle Patterns zuweist, statt hinterher in jedem Pattern
+einzeln. `core/besetzung.ts`: je Part-Rolle ein Feld (Kick-Familie, Snare,
+Clap, Hat geschlossen/offen, Perc 1/2, Bass, Stab, Shot A/B, Riser,
+Melodie, Vocal), `wendeBesetzungAn` legt die Wahl ueber jedes Rezept
+(Regel-Planer wie KI), unbekannte Namen werden gemeldet, leere Felder
+lassen den Vorschlag stehen. `erzeuge(..., { besetzung })` nimmt sie fuer
+Jam, Mini-Set und Pro Melo. Im Generator-Tab erscheint nach dem Bank-Bau die
+aufklappbare Karte **Besetzung** unter „2 · Was bauen“: je Feld ein
+Auswahlmenue ueber die Samples der Bank (passende Rollen zuerst, Vorschlag
+des Planers in Klammern), „Alles automatisch“ setzt zurueck. Danach
+„Patterns erzeugen“ — die Wahl gilt fuer jedes Pattern des Laufs.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

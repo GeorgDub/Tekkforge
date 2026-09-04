@@ -32,12 +32,13 @@ import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, voxSegmentEintrag, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import { meloNoten, meloAlsSmf } from "../core/meloNoten";
 import { smfBytes } from "../core/smfSchreiben";
+import { BESETZUNG_FELDER, besetzungKandidaten, besetzungAusThema, type Besetzung } from "../core/besetzung";
 import type { SmfLied } from "../core/midiImport";
 import { bassNoten } from "../core/grundton";
 import {
   type GeladenMarker, markerLesen, markerSchreiben, statusMit, geraetSperrgrund, sdZielpfad, patternFuerGeraet,
 } from "../core/projektStatus";
-import { meloKandidaten, pools, type Modus } from "../core/rezept";
+import { meloKandidaten, pools, type Modus, regelRezept } from "../core/rezept";
 import { alsAllPat } from "../core/patternGen";
 import { editorProjectFromE2Files, importSamplesFromAll, type EditorProject, type PoolSample } from "../core/editorModel";
 
@@ -87,6 +88,8 @@ interface Zustand {
   sparsameVocals: boolean;
   /** Stem-Trennung genauer statt schneller (mittelt ueber verschobene Durchlaeufe) */
   trennungGenau: boolean;
+  /** Feste Sample-Wahl je Part fuer alle Patterns (leer = Vorschlag des Planers). */
+  besetzung: Besetzung;
   /** yt-dlp/ffmpeg-Probe fuer den URL-Import (nur Electron) */
   url: { ok: boolean; meldung: string } | null;
   urlLaeuft: boolean;
@@ -108,7 +111,7 @@ interface Zustand {
 const z: Zustand = {
   ordner: "", ordnerPfad: "", eintraege: [], uebersprungen: [], zusammen: null, projekt: null, bank: null, pool: [],
   ergebnis: null, fortschritt: "", meldung: "", marker: null, sendeStatus: "", sendet: false, ki: null, kiLaeuft: false, kiHinweis: "",
-  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, stemAuswahl: { ...STEM_VORGABE }, hoertPattern: null, duennesIntro: false, dichteVoll: false, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false,
+  python: null, demucsGewuenscht: false, lieder: [], liedLaeuft: false, liedStatus: "", aufbau: true, stemAuswahl: { ...STEM_VORGABE }, hoertPattern: null, duennesIntro: false, dichteVoll: false, liedDrumsEigene: false, liedBpm: null, sparsameVocals: false, trennungGenau: false, besetzung: {},
   url: null, urlLaeuft: false, urlDatei: null, sets: [],
 };
 const player = new PreviewPlayer();
@@ -392,6 +395,7 @@ function render(): void {
     </div>
     <div class="card">
       <h3>2 · Was bauen</h3>
+      ${besetzungKarte()}
       ${bauen}
     </div>
     <div class="card" style="grid-column: 1 / -1">
@@ -406,8 +410,49 @@ function knopf(id: string, fn: () => void): void {
   document.getElementById(id)?.addEventListener("click", fn);
 }
 
+/**
+ * Besetzung fuer alle Patterns: je Part-Rolle ein Auswahlmenue ueber die
+ * Samples der Bank, vorbelegt mit dem Vorschlag des Planers. Was hier
+ * steht, gilt fuer jedes Pattern des Laufs — statt hinterher in jedem
+ * Pattern einzeln zuzuweisen (Nutzerwunsch 2026-09-05).
+ */
+function besetzungKarte(): string {
+  if (!z.projekt) return "";
+  const vorschlag = z.ergebnis?.rezepte[0] ? besetzungAusThema(z.ergebnis.rezepte[0].thema, z.projekt) : besetzungAusThema(regelRezept(z.projekt, { modus: "jam" }).thema, z.projekt);
+  const felder = BESETZUNG_FELDER.map((f) => {
+    const k = besetzungKandidaten(z.projekt!, f);
+    const wahl = z.besetzung[f.key] ?? "";
+    const opt = (s: { name: string; nr: number }) => `<option value="${escapeHtml(s.name)}" ${wahl === s.name ? "selected" : ""}>${s.nr} ${escapeHtml(s.name)}</option>`;
+    return `<label class="genBesetzungFeld" title="Part ${f.part}"><span>${f.label}</span>
+      <select class="genBesetzung" data-key="${f.key}">
+        <option value="">automatisch${vorschlag[f.key] ? ` (${escapeHtml(vorschlag[f.key]!)})` : ""}</option>
+        ${k.passend.length ? `<optgroup label="passend">${k.passend.map(opt).join("")}</optgroup>` : ""}
+        ${k.andere.length ? `<optgroup label="andere">${k.andere.map(opt).join("")}</optgroup>` : ""}
+      </select></label>`;
+  });
+  const gesetzt = Object.values(z.besetzung).filter(Boolean).length;
+  return `<details id="genBesetzungPanel" ${gesetzt ? "open" : ""} style="margin:6px 0 10px;border:1px solid var(--border);border-radius:6px;padding:6px">
+    <summary style="cursor:pointer;color:var(--accent2);font-weight:600;font-size:12px">Besetzung — welches Sample auf welchen Part, fuer alle Patterns${gesetzt ? ` (${gesetzt} fest)` : ""}</summary>
+    <p class="sub" style="font-size:10px;margin:6px 0">Leer heisst: der Planer waehlt (Vorschlag in Klammern). Was du hier festlegst, gilt fuer jedes Pattern dieses Laufs. Danach „Patterns erzeugen“.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 10px">${felder.join("")}</div>
+    <div style="margin-top:6px"><button id="genBesetzungAuto" class="ghost" style="padding:2px 8px;font-size:11px">Alles automatisch</button></div>
+  </details>`;
+}
+
 function verdrahte(): void {
   const ordner = $("genOrdner") as HTMLInputElement;
+  // Besetzung: Auswahl merken, ohne die ganze Karte neu zu bauen (sonst springt der Fokus)
+  document.getElementById("genBesetzungPanel")?.addEventListener("change", (e) => {
+    const sel = e.target as HTMLSelectElement;
+    const key = sel?.dataset?.key as keyof Besetzung | undefined;
+    if (!key) return;
+    if (sel.value) z.besetzung[key] = sel.value;
+    else delete z.besetzung[key];
+  });
+  knopf("genBesetzungAuto", () => {
+    z.besetzung = {};
+    render();
+  });
   ordner.addEventListener("change", () => void scanneOrdner(ordner.files));
   knopf("genBank", () => void bankBauen());
   knopf("genLiedLos", () => void liedAnalysieren());
@@ -906,7 +951,7 @@ async function setsBauen(gruppen: LiedGruppe[]): Promise<void> {
       const { projekt, bank } = planeBank(eintraege, {
         name, bpm, volume: 1, tekkDrumsBank: tekk ?? undefined, sparsameVocals: z.sparsameVocals,
       });
-      const ergebnis = erzeuge(projekt, { modus: "promelo", bpm, aufbau: z.aufbau, duennesIntro: z.duennesIntro, dichteVoll: z.dichteVoll, startSlot: 1 });
+      const ergebnis = erzeuge(projekt, { modus: "promelo", bpm, aufbau: z.aufbau, duennesIntro: z.duennesIntro, dichteVoll: z.dichteVoll, startSlot: 1, besetzung: z.besetzung });
       z.sets.push({
         name,
         lieder: lieder.map((l) => l.name),
@@ -1103,7 +1148,7 @@ async function generieren(): Promise<void> {
   // Beschreibung und Auswahl bleiben nach dem Rendern erhalten
   const text = beschreibung;
   vorschauStoppen();
-  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept, rezepte, aufbau: z.aufbau, duennesIntro: z.duennesIntro, dichteVoll: z.dichteVoll });
+  z.ergebnis = erzeuge(z.projekt, { modus, bpm, melo, beschreibung, startSlot, rezept, rezepte, aufbau: z.aufbau, duennesIntro: z.duennesIntro, dichteVoll: z.dichteVoll, besetzung: z.besetzung });
   z.sendeStatus = "";
   render();
   const ta = document.getElementById("genText") as HTMLTextAreaElement | null;
