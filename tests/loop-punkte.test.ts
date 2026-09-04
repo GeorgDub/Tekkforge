@@ -52,7 +52,7 @@ describe("loopPunkte", () => {
   it("nulldurchgang findet den naechsten Vorzeichenwechsel", () => {
     const pcm = new Float32Array(200).map((_, i) => Math.sin((2 * Math.PI * i) / 50));
     expect([25, 26]).toContain(nulldurchgang(pcm, 27)); // sin(π) ist in Float nicht exakt 0
-    expect(nulldurchgang(pcm, 49, 5)).toBe(50);
+    expect([50, 51]).toContain(nulldurchgang(pcm, 49, 5));
     const p = loopPunkteAufNull(takte(0, 1, 2, 3), 4, SR, BPM);
     expect(Math.abs(p.ende - Math.round(4 * takt))).toBeLessThanOrEqual(64);
     expect(pruefeLoop(p.start, p.ende, Math.round(4 * takt)).ok).toBe(true);
