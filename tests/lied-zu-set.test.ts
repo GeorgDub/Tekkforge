@@ -177,18 +177,18 @@ describe("liedZuSet: die Melodie darf nicht von den Vocals verdrängt werden", (
     const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", kanaele: 1, tekkDrums, stems: vieleVox });
     const melos = set.projekt.samples.filter((s) => s.rolle === "melo");
     expect(melos.length, `nur ${set.projekt.samples.map((s) => s.rolle).join(",")}`).toBeGreaterThan(0);
-  });
+  }, 20000); // 150-s-Lied mit vielen Vocal-Segmenten: unter Last der ganzen Suite ueber 5 s
 
   it("und die Vocals sind trotzdem noch dabei", () => {
     const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", kanaele: 1, tekkDrums, stems: vieleVox });
     expect(set.projekt.samples.some((s) => s.rolle === "vox")).toBe(true);
-  });
+  }, 20000); // 150-s-Lied mit vielen Vocal-Segmenten: unter Last der ganzen Suite ueber 5 s
 
   it("das A-Pattern hat eine Melodie auf den Melo-Parts", () => {
     const set = liedZuSet(liedchen(150, 105), 44100, { name: "Vokallastig", kanaele: 1, tekkDrums, stems: vieleVox });
     const drop = set.patterns.find((p) => /V1A$/.test(p.name))!;
     expect(drop.parts[12].muted, "Part 13 (Melo) stumm — keine Melodie im Set").toBe(false);
-  });
+  }, 20000); // 150-s-Lied mit vielen Vocal-Segmenten: unter Last der ganzen Suite ueber 5 s
 });
 
 describe("liedZuSet: fremde Abtastraten", () => {

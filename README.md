@@ -1271,6 +1271,28 @@ bis `MOTTEST.e2spat` die IDs am Ohr belegt. Bleibt der Fehler auch ohne
 Motion, ist der naechste Verdaechtige die Bassline (Part 9, Noten 48…59 auf
 einem Bass-Sample, das auf C stehen muss).
 
+## Patterns zu einer fertigen Bank (2026-09-04)
+
+`core/bankProjekt.ts` liest eine .all und macht daraus ein Projekt, ohne
+die Samples anzufassen: jeder Slot bekommt Rolle (Vocal-Kennungen
+„… V01 A/B“, „VDROP“, „VBREAK“ zuerst, dann die Scan-Regeln aus Name und
+Klang), Familie, Taktzahl am Bank-Tempo, Klangprofil und Melo-Raster; die
+Vocal-Haelften A/B werden als Paar erkannt. Die Nummern bleiben die der
+Bank. `scripts/pattern-aus-bank.mjs` baut daraus die Paare
+(`--kick`, `--melo`, `--snare`, `--clap`, `--hat/--hat2`, `--bass`, `--stab`,
+`--shot/--shot2`, `--riser` waehlen Slots per Name, `--jam` ein einzelnes
+Pattern):
+
+```
+npx tsx scripts/pattern-aus-bank.mjs --bank "H:\0000\Gera_V1A-bank-samples.all" --bpm 204 \
+  --ziel Gera_HommO.e2sallpat --kick "HommO KicK 1" --melo "Geraet DROP" \
+  --snare snarre-p --clap clydesna --hat "closed 8" --hat2 707_hho --bass Unison_Bass_C3 --stab ZaHnI_To
+```
+
+Erster Lauf 2026-09-04 abends auf der Bank des Nutzers (131 Slots, eigene
+Bibliothek plus GERAET-Vocals): 11 Paare, 33 Patterns, Kick 604/605,
+Vocals 578 ff., Melo 563 — auf der Karte als `0000\Gera_HommO.e2sallpat`.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>
