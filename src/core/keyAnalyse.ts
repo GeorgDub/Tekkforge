@@ -2,6 +2,12 @@
  * keyAnalyse.ts — Tonart-Erkennung (Chromagramm + Krumhansl-Profile) und
  * Camelot-Rad fuers Mixen (MKM-Angleich Paket 4). Rein und DOM-frei.
  *
+ * Seit v0.7 nicht mehr nur zur Anzeige: `tonartenPassen` entscheidet mit,
+ * welcher Bass und welcher Stab neben eine Melodie gelegt werden (siehe
+ * `klangWahl`). Zwei tonale Schleifen in unvertraeglichen Tonarten
+ * gleichzeitig sind der zweite Weg, ein Pattern unbrauchbar zu machen — der
+ * erste ist der Frequenzkonflikt.
+ *
  * Verfahren: Goertzel-Energie je Halbton C2..B6 in Fenstern, aufaddiert zu
  * 12 Pitch-Klassen; die Klassenverteilung wird gegen die 24 gedrehten
  * Krumhansl-Kessler-Profile korreliert. Konfidenz = Abstand des besten zum
@@ -94,6 +100,54 @@ function korrelation(a: readonly number[], b: readonly number[]): number {
   }
   const unten = Math.sqrt(na * nb);
   return unten > 0 ? oben / unten : 0;
+}
+
+/**
+ * Ab dieser Konfidenz wird die Tonart weiterverwendet.
+ *
+ * Darunter sagt die Analyse nicht „es ist a-Moll", sondern „es koennte
+ * a-Moll sein, oder d-Moll, oder C-Dur". Auf so etwas eine Auswahl zu stuetzen
+ * waere schlechter als gar keine: eine falsche Tonart sortiert genau die
+ * Samples aus, die gepasst haetten. Bei Tekk-Material ist das der Regelfall —
+ * verzerrte Kicks und Rauschen haben keine Tonart, und die Melodien oft nur
+ * eine schwach ausgepraegte.
+ */
+export const TONART_SICHER = 0.05;
+
+/** Kompakte Tonart-Angabe zum Mitspeichern — ohne das Chromagramm. */
+export interface TonartInfo {
+  name: string;
+  camelot: string;
+  konfidenz: number;
+}
+
+/** Camelot-Codes wie "8A" in Zahl und Seite zerlegen. */
+function camelotTeile(code: string): { zahl: number; seite: string } | null {
+  const m = /^(\d{1,2})([AB])$/.exec(code.trim().toUpperCase());
+  if (!m) return null;
+  const zahl = Number(m[1]);
+  return zahl >= 1 && zahl <= 12 ? { zahl, seite: m[2] } : null;
+}
+
+/**
+ * Passen zwei Tonarten zusammen? Die uebliche Regel des Camelot-Rads.
+ *
+ * Vertraeglich sind: dieselbe Tonart, der Nachbar links oder rechts
+ * (Quintverwandtschaft) und die Parallele auf derselben Zahl (Dur ↔ Moll).
+ * Alles andere beisst sich, wenn beide gleichzeitig klingen — und in einem
+ * Pattern klingen Melodie, Bass und Stab gleichzeitig.
+ *
+ * Fehlt eine der beiden Angaben oder ist sie zu unsicher, gilt „passt": ohne
+ * Wissen nicht aussortieren.
+ */
+export function tonartenPassen(a?: TonartInfo, b?: TonartInfo): boolean {
+  if (!a || !b || a.konfidenz < TONART_SICHER || b.konfidenz < TONART_SICHER) return true;
+  const x = camelotTeile(a.camelot);
+  const y = camelotTeile(b.camelot);
+  if (!x || !y) return true;
+  if (x.zahl === y.zahl) return true; // gleich oder Parallele
+  const abstand = Math.min(Math.abs(x.zahl - y.zahl), 12 - Math.abs(x.zahl - y.zahl));
+  return abstand === 1 && x.seite === y.seite;
 }
 
 export function tonartErkennen(pcm: Float32Array, sampleRate: number): Tonart {

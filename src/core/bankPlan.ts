@@ -7,6 +7,8 @@
 import { type ScanEintrag, type Rolle, sauberName, rmsDb, peakVon, LANG_AB } from "./sampleScan";
 import { taktPassung, tempoSchaetzen } from "./tempoAnalyse";
 import { meloRaster, type MeloRaster } from "./meloRaster";
+import { klangProfil, type Klangprofil } from "./klangProfil";
+import { tonartErkennen, TONART_SICHER, type TonartInfo } from "./keyAnalyse";
 import { polyPhaseResample, peakNormalize, rmsNormalize, downmixToMono } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { parseE2sBank } from "./e2sBankReader";
@@ -47,6 +49,25 @@ export interface ProjektSample {
    * gilt 44100.
    */
   sampleRate?: number;
+  /**
+   * Klangprofil des fertigen Slots — gemessen an dem, was WIRKLICH in der Bank
+   * liegt (nach Varispeed und Ratenwechsel), nicht an der Quelldatei.
+   *
+   * Damit entscheidet der Rezept-Planer, welche Samples nebeneinander liegen
+   * duerfen, ohne die Audiodaten noch einmal anzufassen — die sind zu diesem
+   * Zeitpunkt schon in der Bank und nicht mehr im Speicher. Optional, weil
+   * aeltere Projektdateien es nicht haben; dann faellt der Planer auf die
+   * bisherige Reihum-Auswahl zurueck.
+   */
+  klang?: Klangprofil;
+  /**
+   * Tonart des Slots — nur fuer tonale Schleifen (Melodie, Vocals, Bass, Ton).
+   *
+   * Nicht fuer alles, weil die Erkennung teuer ist (Goertzel ueber 60 Halbtoene
+   * je Fenster) und bei einem 0,3-s-Schlagzeugschlag ohnehin nichts liefert.
+   * Optional, weil aeltere Projektdateien es nicht haben.
+   */
+  tonart?: TonartInfo;
 }
 export interface Projekt {
   name: string;
@@ -299,6 +320,16 @@ function eindeutig(name: string, vergeben: Set<string>): string {
 
 const REIHENFOLGE: Rolle[] = ["kick", "snare", "clap", "hat", "perc", "ton", "bass", "fx", "vox", "melo", "track"];
 
+/** Nur tonale Schleifen bekommen eine Tonart — bei allem anderen waere es Rechenzeit fuer nichts. */
+const TONALE_ROLLEN: Rolle[] = ["melo", "vox", "bass", "ton"];
+
+function tonartFalls(rolle: Rolle, kind: "oneshot" | "loop", pcm: Float32Array, rate: number): { tonart?: TonartInfo } {
+  if (kind !== "loop" || !TONALE_ROLLEN.includes(rolle)) return {};
+  const t = tonartErkennen(pcm, rate);
+  if (t.konfidenz < TONART_SICHER) return {};
+  return { tonart: { name: t.name, camelot: t.camelot, konfidenz: t.konfidenz } };
+}
+
 export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { projekt: Projekt; bank: ArrayBuffer; warnungen: string[] } {
   const budget = opts.budgetSekunden ?? BUDGET_SEKUNDEN;
   const volumes = waehleVolumes(eintraege, opts.bpm, budget);
@@ -328,7 +359,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
       samples.push({
         nr, name: s.name.trim(), rolle: TEKK_ROLLE[praefix], familie: "tekk", kind: "oneshot", takte: 0,
         sekunden: pcm.length / s.sampleRate, rmsDb: rmsDb(pcm), quelle: `tekk4.all #${nr}`, gruppe: "tekk",
-        sampleRate: s.sampleRate,
+        sampleRate: s.sampleRate, klang: klangProfil(pcm, s.sampleRate, { bpm: opts.bpm }),
       });
       vergeben.add(s.name.trim().toLowerCase());
     }
@@ -350,6 +381,11 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
         gruppe: t.kind === "loop" ? `${e.rolle}:${e.familie}` : e.rolle,
         ...(t.chunk !== undefined ? { chunk: t.chunk, chunks: 2 as const } : {}),
         ...(e.rolle === "melo" && t.kind === "loop" ? { raster: meloRaster(t.pcm, SR, t.takte) } : {}),
+        // Am fertigen Slot gemessen: der Varispeed hat die Tonhoehe schon
+        // verschoben, und bei sparsamen Vocals steht die halbe Rate. Ein Profil
+        // von der Quelldatei beschriebe etwas, das so nicht in der Bank liegt.
+        klang: klangProfil(pcm, rate, { bpm: opts.bpm }),
+        ...tonartFalls(e.rolle, t.kind, pcm, rate),
         ...(e.lied ? { lied: e.lied } : {}),
       });
       nr++;

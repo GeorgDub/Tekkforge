@@ -4,6 +4,7 @@
  * erzeuge() = Modus → Rezept(e) → Patterns → Bytes + Dateiname.
  */
 import { type ScanEintrag, rmsDb, peakVon } from "./sampleScan";
+import { klangProfil } from "./klangProfil";
 import { tempoVorschlag } from "./tempoAnalyse";
 import { type Projekt, BUDGET_SEKUNDEN, waehleVolumes } from "./bankPlan";
 import { type Rezept, type Modus, regelRezept, regelRezeptProMelo } from "./rezept";
@@ -95,7 +96,7 @@ export function voxSegmentEintrag(liedName: string, nr: number, pcm: Float32Arra
   const stem = `${kurz} ${label}`;
   return {
     datei: `${stem}.wav`, stem, rolle: "vox", familie: stem.toLowerCase(), sekunden: pcm.length / 44100,
-    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName, klang: klangProfil(pcm, 44100),
   };
 }
 

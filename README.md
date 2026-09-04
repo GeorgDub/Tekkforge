@@ -1220,6 +1220,27 @@ Ordner, die das Sample-RAM sprengen (MeLo_PacK_2), nimmt `prep-folder.py --selec
 Budget-Scheiben: Rangliste nach Taktgenauigkeit, Pegel und „melo" im Namen, je Namensfamilie
 zuerst das beste Stück; `--volume N` baut die N-te Scheibe.
 
+### Klanganalyse: was gemessen wird, statt geraten
+
+Drei Entscheidungen hingen früher an Ersatzregeln, die den Klang nicht kannten.
+Seit v0.7 liest TekkForge stattdessen Wellenform und Spektrum — einmal beim
+Import, das Ergebnis wandert als kleiner Satz Zahlen (`Klangprofil`) mit dem
+Projekt mit und wird überall weiterverwendet.
+
+| Wo | Vorher | Jetzt |
+|---|---|---|
+| **Rolle eines Samples** (`sampleScan`) | Dateiname; sonst „kürzer als 0,9 s und lauter als −8,5 dB → Kick" | Dateiname bleibt zuerst; sonst Bassanteil, Helligkeit und Scheitelfaktor (`rolleAusKlang`) |
+| **Dubletten** (`sampleScan`) | Wellenform-Korrelation, verlangt gleiche Länge auf 50 ms | zusätzlich Klangfarben-Abstand — findet dieselbe Kick auch anders beschnitten oder ausgesteuert |
+| **Marken in der Stem-Werkbank** | Taktraster, egal was dort klingt | rollenabhängig: Vocals an den **Pausen**, Melodien am **Klangwechsel** (Novitätskurve), Drums auf dem **gespielten Anschlag** |
+| **Samples eines Patterns** (`rezept`) | Zähler reihum durch die Pools | derselbe Zähler, aber durch einen Topf ohne **Frequenzkonflikte** und (für Bass/Stab/Vers) ohne **Tonart-Konflikte** |
+| **Kick-Figur** (`rezept`) | immer „vier", solange nichts anderes gesagt wurde | aus der gemessenen **Dichte der Melodie**: ruhige Melodie → mehr Bewegung, dichte → Viertel |
+| **Schnipsel-Güte** (`stemWerkbank`) | nur „zu kurz" fiel raus | stille Abschnitte fallen raus; Übersteuerung, Gleichanteil und führende Stille werden gemeldet |
+
+Alle Schwellen sind an den 43 Beispiel-Samples in `examples/e2s/korg3` gemessen
+und in den Modul-Kommentaren mit Zahlen belegt. Fehlt ein Profil (altes
+Projekt, Samples aus einer alten Bank), fällt jede dieser Stellen auf das
+bisherige Verhalten zurück — ohne Wissen wird nicht gefiltert.
+
 ## Entwicklung
 
 ```bash
@@ -1247,6 +1268,10 @@ src/core/   reine Domain-Library (kein DOM, kein Node) — isomorph
   electribeImport.ts       .e2sallpat Parser + Format-Konstanten (Step-Layout)
   e2sExport.ts             250-Slot-Bank-Assembly (Template-Overlay, byte-exakt)
   audioProcessor.ts        Resampling + Float→i16 (defensive Sanitization)
+  dsp.ts                   FFT + gemitteltes Spektrum, Bandenergien, Schwerpunkt, Flachheit
+  klangProfil.ts           Klangprofil eines Ausschnitts (Bandenergie, Helligkeit, Tiefe,
+                           Dichte, Stille, Übersteuerung) + Konflikt/Ergänzung + Novitätskurve
+  klangWahl.ts             Auswahl ohne Frequenzkonflikt + Camelot-Verträglichkeit
   bankDetect.ts            Format-Erkennung (.esx vs .all)
 src/gui/    Browser/Electron-UI (Vanilla TS → Vite Single-File-Bundle)
   editor.ts    Pattern-Grid, Sample-Pool, Popover, Export

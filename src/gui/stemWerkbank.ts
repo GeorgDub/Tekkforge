@@ -8,6 +8,13 @@
  * stehen in `core/stemWerkbank` und `core/sampleEdit` — hier ist nur die
  * Bedienung.
  *
+ * Zwei Wege zu den Marken stehen nebeneinander und tun absichtlich
+ * Verschiedenes: **Raster** legt sie auf die Taktgrenzen (vorhersagbar, gut
+ * fuer Drum-Loops), **Vorschlagen** liest die Spur und legt sie dorthin, wo
+ * sich wirklich etwas aendert — bei Vocals in die Pausen, bei Melodien an den
+ * Klangwechsel. Was das Verfahren getan hat, steht danach in der Meldung; es
+ * bleibt eine Marke wie jede andere und laesst sich verschieben und loeschen.
+ *
  * Gehoert wird ueber EINEN AudioContext, in dem alle hoerbaren Spuren
  * gleichzeitig starten. Ein eigener Player je Spur waere einfacher zu
  * schreiben und innerhalb eines Taktes hoerbar auseinandergelaufen — bei
@@ -24,10 +31,13 @@ import { wellenform, schneide, blenden, normalisiere, umkehren, stilleGrenzen } 
 import {
   neueSpur,
   setzeMarke,
+  setzeMarken,
   entferneMarke,
   abschnitte,
   rasterMarken,
+  vorschlagMarken,
   schneideSpur,
+  spurText,
   zeitachse,
   hoerbareSpuren,
   type Spur,
@@ -213,6 +223,25 @@ function zeichneAlle(): void {
 
 const sek = (frames: number, sr: number): string => (frames / sr).toFixed(2);
 
+/**
+ * Gemessene Kennzahlen je Spur, gemerkt.
+ *
+ * Die Messung ist eine FFT ueber die halbe Spur und darf nicht bei jedem
+ * Neuzeichnen laufen — gerendert wird nach jedem Klick. Der Schluessel ist der
+ * PCM-Puffer selbst: jede Bearbeitung legt einen neuen an, damit veraltet der
+ * Eintrag von allein und niemand muss ans Aufraeumen denken.
+ */
+const profilCache = new WeakMap<Float32Array, string>();
+
+function profilZeile(s: Spur): string {
+  let t = profilCache.get(s.pcm);
+  if (t === undefined) {
+    t = spurText(s, z.bpm);
+    profilCache.set(s.pcm, t);
+  }
+  return t;
+}
+
 function spurZeile(s: Spur): string {
   const a = abschnitte(s).length;
   const aktiv = z.aktiv === s.id;
@@ -225,9 +254,11 @@ function spurZeile(s: Spur): string {
       <button class="swStumm" data-id="${s.id}">${s.stumm ? "stumm" : "an"}</button>
       <button class="swSolo" data-id="${s.id}">${s.solo ? "SOLO" : "solo"}</button>
       <label class="sub">Pegel <input class="swGain" data-id="${s.id}" type="range" min="0" max="150" value="${Math.round(s.gain * 100)}" style="width:80px;vertical-align:middle" /></label>
+      <button class="swVorschlag" data-id="${s.id}" title="Marken dorthin legen, wo sich der Klang ändert">Marken vorschlagen</button>
       <button class="swSchneiden" data-id="${s.id}">Abschnitte in den Pool</button>
       <button class="swWeg" data-id="${s.id}">Spur entfernen</button>
     </div>
+    <div class="sub" style="margin-top:4px">${escapeHtml(profilZeile(s))}</div>
     <canvas id="sw-${s.id}" width="${BREITE}" height="${HOEHE}" style="width:100%;height:${HOEHE}px;display:block;margin-top:6px;cursor:crosshair"></canvas>
   </div>`;
 }
@@ -264,8 +295,14 @@ function render(): void {
         <label class="sub">alle <input id="swTakte" type="number" min="1" max="64" value="${z.takte}" style="width:56px" /> Takte</label>
         <button id="swRasterAlle" ${z.spuren.length ? "" : "disabled"}>Raster auf alle Spuren</button>
         <button id="swRasterEine" ${z.aktiv ? "" : "disabled"}>Raster nur auf die aktive</button>
+        <button id="swVorschlagAlle" ${z.spuren.length ? "" : "disabled"} title="Jede Spur nach ihrer Rolle: Vocals an den Pausen, Melodien am Klangwechsel, Drums am Anschlag">Marken vorschlagen</button>
         <button id="swMarkenWeg" ${z.spuren.length ? "" : "disabled"}>Marken löschen</button>
       </div>
+      <p class="sub" style="margin:6px 0 0">
+        <b>Raster</b> legt Marken auf die Taktgrenzen — vorhersagbar, egal was dort klingt.
+        <b>Vorschlagen</b> liest die Spur: Vocals werden an ihren Pausen getrennt, Melodien
+        nur beim Klangwechsel, Drums auf dem gespielten Anschlag statt auf dem Rechenwert.
+      </p>
     </div>
 
     <div class="card">
@@ -320,6 +357,7 @@ function verdrahten(): void {
   });
   knopf("swRasterAlle", () => raster(z.spuren));
   knopf("swRasterEine", () => raster(z.spuren.filter((s) => s.id === z.aktiv)));
+  knopf("swVorschlagAlle", () => schlageVor(z.spuren));
   knopf("swMarkenWeg", () => {
     for (const s of z.spuren) s.marken = [];
     melde("Marken gelöscht.");
@@ -362,6 +400,11 @@ function verdrahten(): void {
       z.spuren = z.spuren.filter((x) => x.id !== s.id);
       if (z.aktiv === s.id) z.aktiv = z.spuren[0]?.id ?? null;
       render();
+    });
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#viewStems .swVorschlag"))
+    b.addEventListener("click", () => {
+      const s = spurVon(b);
+      if (s) schlageVor([s]);
     });
   for (const b of document.querySelectorAll<HTMLButtonElement>("#viewStems .swSchneiden"))
     b.addEventListener("click", () => {
@@ -424,6 +467,26 @@ function maus(c: HTMLCanvasElement, s: Spur): void {
     spieleAb(frameVon(c, ev));
     render();
   });
+}
+
+/**
+ * Marken vorschlagen lassen — je Spur nach ihrer Rolle.
+ *
+ * Die alten Marken bleiben stehen. Wer neu anfangen will, loescht vorher;
+ * ungefragt wegzuwerfen, was jemand von Hand gesetzt hat, waere die
+ * unangenehmere Ueberraschung.
+ */
+function schlageVor(spuren: readonly Spur[]): void {
+  if (!spuren.length) return;
+  const zeilen: string[] = [];
+  let n = 0;
+  for (const s of spuren) {
+    const v = vorschlagMarken(s, { bpm: z.bpm });
+    setzeMarken(s, v.frames);
+    n += v.frames.length;
+    zeilen.push(`„${s.name}" (${s.rolle}): ${v.hinweise.join(" ")}`);
+  }
+  melde(`${n} Marke(n) vorgeschlagen.\n${zeilen.join("\n")}`);
 }
 
 function raster(spuren: readonly Spur[]): void {

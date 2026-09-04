@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseWav } from "../src/core/wavCodec";
 import { scanne } from "../src/core/sampleScan";
+import { klangProfil } from "../src/core/klangProfil";
 import { bereiteAuf, waehleVolumes, planeBank } from "../src/core/bankPlan";
 import { parseE2sBank } from "../src/core/e2sBankReader";
 import { buildE2sBank } from "../src/core/e2sBankBuilder";
@@ -120,7 +121,7 @@ describe("bankPlan", () => {
     // 20 Vocal-Segmente (je ~10,7 s) + eine Melo + eine Kick bei knappem Budget
     const voxE = Array.from({ length: 20 }, (_, n) => {
       const pcm = new Float32Array(frames).map((_, i) => Math.sin(i / (15 + n)) * 0.5);
-      return { datei: `L V${n + 1}.wav`, stem: `L V${n + 1}`, rolle: "vox" as const, familie: `l v${n + 1}`, sekunden: frames / sr, rmsDb: -12, peak: 0.5, pcm, sampleRate: sr };
+      return { datei: `L V${n + 1}.wav`, stem: `L V${n + 1}`, rolle: "vox" as const, familie: `l v${n + 1}`, sekunden: frames / sr, rmsDb: -12, peak: 0.5, pcm, sampleRate: sr, klang: klangProfil(pcm, sr) };
     });
     const { eintraege } = scanne(eingaben(["BaReTT MeLo.wav", "Kick 4.wav"]));
     const budget = 60;
