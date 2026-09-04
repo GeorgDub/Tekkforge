@@ -10,6 +10,9 @@ import { meloRaster, type MeloRaster } from "./meloRaster";
 import { klangProfil, type Klangprofil } from "./klangProfil";
 import { rateFuer } from "./rateWahl";
 import { RAM_BUDGET_BYTES, ramBytesSumme } from "./sampleRam";
+import { loopPunkteAufNull, wiederholtSich, taktFrames } from "./loopPunkte";
+import { slicesFuer, sliceAnzahl } from "./sliceMarker";
+import { LOOP_TYPE_FORWARD, LOOP_TYPE_ONESHOT } from "./constants";
 import { tonartErkennen, TONART_SICHER, type TonartInfo } from "./keyAnalyse";
 import { polyPhaseResample, peakNormalize, rmsNormalize, downmixToMono } from "./audioProcessor";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
@@ -70,6 +73,12 @@ export interface ProjektSample {
    * Optional, weil aeltere Projektdateien es nicht haben.
    */
   tonart?: TonartInfo;
+  /**
+   * Loop-Punkte einer Schleife (Frames bei `sampleRate`), forward-Loop im
+   * Slot. `takte` ist die musikalische Laenge, `gespeicherteTakte` das, was
+   * wirklich in der Bank liegt — halb, wenn sich die Schleife wiederholt.
+   */
+  loop?: { start: number; ende: number; takte: number; gespeicherteTakte: number };
 }
 export interface Projekt {
   name: string;
@@ -381,6 +390,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
   }
   let nr = tekk ? 601 : 501;
   let halbiert = 0;
+  let wiederholt = 0;
   const sortiert = auswahl.slice().sort((a, b) => REIHENFOLGE.indexOf(a.rolle) - REIHENFOLGE.indexOf(b.rolle) || a.datei.localeCompare(b.datei));
   for (const e of sortiert) {
     const { teile } = bereiteAuf(e, opts.bpm);
@@ -393,10 +403,26 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
         messen: opts.rateNachRolloff !== false,
       });
       if (rate !== SR) halbiert++;
-      const pcm = rate !== SR ? polyPhaseResample(t.pcm, SR, rate, 1) : t.pcm;
-      slots.push({ slotIndex: displayNumberToSlotIndex(nr), sampleNumber: displayNumberToOsc(nr), name, category: KAT[e.rolle], pcmData: pcm, sampleRate: rate, channels: 1, loopType: 1 });
+      // Schleifen, die sich nach der Haelfte wiederholen, werden nur zur Haelfte
+      // gespeichert — der forward-Loop fuellt den Rest. Nicht bei Vocals.
+      const halbeTakte = t.kind === "loop" && e.rolle !== "vox" ? wiederholtSich(t.pcm, t.takte, SR, opts.bpm) : null;
+      const quelle = halbeTakte ? t.pcm.subarray(0, Math.round(halbeTakte * taktFrames(SR, opts.bpm))) : t.pcm;
+      if (halbeTakte) wiederholt++;
+      const pcm = rate !== SR ? polyPhaseResample(quelle, SR, rate, 1) : quelle;
+      // Loop-Punkte auf der Taktgrenze (Nulldurchgang) und 64 Slice-Marker —
+      // damit das Geraet die Schleife rund spielt und selbst choppen kann.
+      const gespeichert = halbeTakte ?? t.takte;
+      const loop = t.kind === "loop" ? loopPunkteAufNull(pcm, gespeichert, rate, opts.bpm) : null;
+      const slice = loop ? slicesFuer(pcm, sliceAnzahl(gespeichert)) : null;
+      slots.push({
+        slotIndex: displayNumberToSlotIndex(nr), sampleNumber: displayNumberToOsc(nr), name, category: KAT[e.rolle], pcmData: pcm, sampleRate: rate, channels: 1,
+        loopType: loop ? LOOP_TYPE_FORWARD : LOOP_TYPE_ONESHOT,
+        ...(loop ? { loopStartBytes: loop.start * 2, loopEndBytes: loop.ende * 2 } : {}),
+        ...(slice ?? {}),
+      });
       samples.push({
         nr, name, rolle: e.rolle, familie: e.familie, kind: t.kind, takte: t.takte, sekunden: pcm.length / rate, rmsDb: rmsDb(pcm), quelle: e.datei, sampleRate: rate,
+        ...(loop ? { loop: { start: loop.start, ende: loop.ende, takte: t.takte, gespeicherteTakte: gespeichert } } : {}),
         gruppe: t.kind === "loop" ? `${e.rolle}:${e.familie}` : e.rolle,
         ...(t.chunk !== undefined ? { chunk: t.chunk, chunks: 2 as const } : {}),
         ...(e.rolle === "melo" && t.kind === "loop" ? { raster: meloRaster(t.pcm, SR, t.takte) } : {}),
@@ -412,6 +438,7 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
   }
   const hinweise: string[] = [];
   if (halbiert) hinweise.push(`${halbiert} Slot(s) mit 22 050 Hz (Rolloff unter 9 kHz oder sparsame Vocals) — halber Speicher`);
+  if (wiederholt) hinweise.push(`${wiederholt} Schleife(n) wiederholt sich nach der Haelfte — nur die Haelfte gespeichert, der Loop fuellt den Rest`);
   // Budget-Waechter: erst Vocals, dann FX, dann Bass auf halbe Rate, zuletzt
   // die hintersten Slots weg. `waehleVolumes` rechnet in Sekunden bei voller
   // Rate und haelt das meist schon ein; hier zaehlen die BYTES, die wirklich
@@ -428,6 +455,14 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
       slot.sampleRate = SR / 2;
       s.sampleRate = SR / 2;
       s.klang = klangProfil(slot.pcmData, SR / 2, { bpm: opts.bpm });
+      // Loop-Punkte und Marker ziehen mit der halben Bildzahl mit
+      if (s.loop) {
+        const l = loopPunkteAufNull(slot.pcmData, s.loop.gespeicherteTakte, SR / 2, opts.bpm);
+        s.loop = { ...s.loop, start: l.start, ende: l.ende };
+        slot.loopStartBytes = l.start * 2;
+        slot.loopEndBytes = l.ende * 2;
+        Object.assign(slot, slicesFuer(slot.pcmData, slot.slicingNumActive ?? 0) ?? {});
+      }
       n++;
     });
     if (n) hinweise.push(`Budget: ${n} ${rolle}-Slot(s) auf 22 050 Hz gesetzt`);

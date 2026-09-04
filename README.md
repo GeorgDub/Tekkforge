@@ -1151,6 +1151,32 @@ schon ein; der Waechter ist das Netz darunter. Hinweise (halbierte Slots,
 Budget-Eingriffe) kommen jetzt getrennt von den Warnungen des Bank-Bauers
 (`hinweise` neben `warnungen`).
 
+## Loop-Punkte und Slices im Generator-Weg (2026-09-04, Hoerprobe offen)
+
+`planeBank` setzte fuer jeden Slot `loopType 1` (One-Shot) und nie einen
+Punkt; Slice-Marker schrieb nur `make-folder-bank.mjs`. Jetzt
+(`core/loopPunkte.ts`, `core/sliceMarker.ts`):
+
+- **Loop-Punkte.** Jede Schleife (melo, vox, fx, bass, ton als Loop)
+  bekommt Loop-Typ **forward** mit Start 0 und Ende auf der letzten vollen
+  Taktgrenze, auf den naechsten Nulldurchgang gezogen. `ProjektSample.loop`
+  traegt Start/Ende/Takte. One-Shots bleiben One-Shots.
+- **Wiederholung.** Klingt die zweite Haelfte eines geraden Loops wie die
+  erste (normierte Kreuzkorrelation ≥ 0,985), wird nur die Haelfte
+  gespeichert — der forward-Loop fuellt den Rest, `takte` bleibt die
+  musikalische Laenge, `loop.gespeicherteTakte` die gespeicherte. Nicht bei
+  Vocals. Das ist kein Zerstueckeln: dieselbe Musik, einmal statt zweimal.
+- **Slices.** 16 Marker je Takt, gedeckelt auf 64 (bei 8 Takten Achtel),
+  aus derselben Definition, die das Ordner-Skript jetzt importiert. Damit
+  kann das Geraet die Schleife selbst choppen (Slice-Sequenz), ohne dass
+  die Melodie in Dateien zerschnitten wird.
+- Der Budget-Waechter zieht Loop-Punkte und Marker mit, wenn er einen Slot
+  auf die halbe Rate setzt.
+
+⚠ Am Ohr zu pruefen: laeuft eine forward-Schleife mit Amp-EG aus und Tie im
+Pattern rund ueber die Taktgrenze, und fuellt ein halb gespeicherter
+Vier-Takter die vier Takte ohne Naht?
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

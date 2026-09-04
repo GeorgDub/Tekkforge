@@ -14,6 +14,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { buildE2sBank } from "../src/core/e2sBankBuilder.ts";
+import { slicesFuer as slicesAusKern } from "../src/core/sliceMarker.ts";
 import { parseE2sBank } from "../src/core/e2sBankReader.ts";
 import { parseWav } from "../src/core/wavCodec.ts";
 import {
@@ -36,21 +37,8 @@ const TEKK_BASIS = [
 const manifest = JSON.parse(fs.readFileSync(path.join(ORDNER, "manifest.json"), "utf8"));
 manifest.samples = manifest.samples.filter((m) => m.group !== "tekk"); // bei Neubau nicht doppeln
 
-function slicesFuer(pcm, anzahl) {
-  if (!anzahl) return {};
-  const frames = pcm.length;
-  const slices = [];
-  for (let i = 0; i < anzahl; i++) {
-    const start = Math.round((i * frames) / anzahl);
-    const ende = Math.round(((i + 1) * frames) / anzahl);
-    let peak = 0;
-    for (let f = start; f < ende; f++) peak = Math.max(peak, Math.abs(pcm[f]));
-    slices.push({ start, length: ende - start, attackLength: Math.round((ende - start) / 2), amplitude: Math.round(peak * 32767) });
-  }
-  const steps = new Uint8Array(64).fill(255);
-  for (let i = 0; i < anzahl; i++) steps[Math.round((i * 64) / anzahl)] = i;
-  return { slices, sliceSteps: steps, slicingNumSteps: 64, slicingBeat: 0, slicingNumActive: anzahl };
-}
+// Slice-Marker kommen aus dem Kern (core/sliceMarker.ts) — dieselbe Definition wie im Generator-Weg.
+const slicesFuer = (pcm, anzahl) => slicesAusKern(pcm, anzahl) ?? {};
 
 const slots = [];
 let sekunden = 0;
