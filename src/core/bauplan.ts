@@ -205,7 +205,7 @@ export function wendeBauplanAn(basis: Uint8Array, plan: Bauplan): BauplanErgebni
     const r = setzeModTabelle(bytes, plan.mod);
     if (!r.ok) return { ok: false, reason: r.reason };
     bytes = r.bytes;
-    zeilen.push(`Modulations-Typen: ${plan.mod.length} angehängt, Tabelle bis ${r.anzahlVorher} → bis ${r.anzahlNachher} (⚠ Menügrenze am Gerät offen)`);
+    zeilen.push(`Modulations-Typen: ${plan.mod.length} angehängt, Tabelle bis ${r.anzahlVorher} → bis ${r.anzahlNachher}${r.grenze ? `, Grenze im Code ${r.grenze.vorher + 1} → ${r.grenze.nachher + 1}, Feld je Part nach 0x${r.grenze.feldBasis.toString(16).toUpperCase()}` : ""} (⚠ Menügrenze am Gerät offen)`);
   }
   return { ok: true, bytes, bericht, zeilen };
 }

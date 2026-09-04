@@ -13,6 +13,11 @@ import {
   modKombinationen,
   setzeModTabelle,
   istModLeer,
+  MOD_GRENZE_VERGLEICHE,
+  MOD_GRENZE_SCHRITTE,
+  MOD_GRENZE_BLOECKE,
+  MOD_FELD_ZEIGER,
+  MOD_FELD_BASIS_NEU,
 } from "../src/core/modTabelle";
 import { MOD_TYPEN } from "../src/core/e2ModTypen";
 import { dateiOffset } from "../src/core/firmwareBau";
@@ -79,10 +84,15 @@ describe("modTabelle — Eintraege", () => {
     expect(r).toMatchObject({ anzahlVorher: 96, anzahlNachher: 132 });
     expect(liesModTabelle(r.bytes)).toHaveLength(132);
     expect(modName(liesModTabelle(r.bytes)[131])).toBe("RandomB IFX");
-    // ausserhalb der Tabelle aendert sich nichts
+    // ausserhalb der Tabelle aendert sich nur die Grenze im Code (25 Woerter) und das verlegte Feld je Part
+    expect(r.grenze).toMatchObject({ vorher: 71, nachher: 131, feldBasis: MOD_FELD_BASIS_NEU, feldBytes: 16 * 2 * 132 });
     const von = dateiOffset(MOD_TABELLE_ADDR_HACKTRIBE);
+    const erlaubt = new Set<number>();
+    for (const s of [...MOD_GRENZE_VERGLEICHE, ...MOD_GRENZE_SCHRITTE, ...MOD_GRENZE_BLOECKE]) for (let j = 0; j < 4; j++) erlaubt.add(dateiOffset(s.addr) + j);
+    for (const a of MOD_FELD_ZEIGER) for (let j = 0; j < 4; j++) erlaubt.add(dateiOffset(a) + j);
+    for (let j = 0; j < 16 * 2 * 132; j++) erlaubt.add(dateiOffset(MOD_FELD_BASIS_NEU) + j);
     let anders = 0;
-    for (let i = 0; i < fw.length; i++) if (fw[i] !== r.bytes[i] && (i < von + 96 * MOD_EINTRAG || i >= von + 132 * MOD_EINTRAG)) anders++;
+    for (let i = 0; i < fw.length; i++) if (fw[i] !== r.bytes[i] && (i < von + 96 * MOD_EINTRAG || i >= von + 132 * MOD_EINTRAG) && !erlaubt.has(i)) anders++;
     expect(anders).toBe(0);
     // Luecke wird abgelehnt
     expect(setzeModTabelle(fw, [{ platz: 98, bytes: k.eintraege[0].bytes }])).toMatchObject({ ok: false, reason: expect.stringMatching(/Lücke/) });

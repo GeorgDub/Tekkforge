@@ -44,8 +44,8 @@
  *     Dazu zwei Felder je Part von 72 × 2 Bytes (Basis 0xC06924DD/0xC069256D,
  *     Stride 0x90). Mehr als 72 Typen richtig freizuschalten heisst: alle
  *     Stellen auf N setzen, die Felder auf 16 × 2N Bytes verlegen (frei waere
- *     0xC01A3000+), Init-Kopierer 0xC0099458 anpassen — ein eigenes,
- *     hoerbar zu pruefendes Vorhaben, nicht Teil dieser Fassung.
+ *     0xC01A3000+), Init-Kopierer 0xC0099458 anpassen — umgesetzt am
+ *     2026-09-04 in `setzeModGrenze` (unten), Feld jetzt bei 0xC01B0000.
  *
  * Eigene Typen entstehen als KOMBINATIONEN vorhandener: Wellenform und
  * BPM-Flags sind getrennte Bytes, also gibt es zu jedem BPM-Typ (SawUpB,
@@ -206,6 +206,8 @@ export interface ModBauErgebnis {
   bytes: Uint8Array;
   anzahlVorher: number;
   anzahlNachher: number;
+  /** Grenze im Code nachgezogen (null: reichte schon). */
+  grenze: ModGrenzeBefund | null;
 }
 
 /** Eintraege hinter die belegten Plaetze der Tabelle schreiben (Datei-Abbild). */
@@ -229,5 +231,199 @@ export function setzeModTabelle(fw: Uint8Array, neu: readonly ModEintragMitPlatz
     out.set(e.bytes, dateiOffset(addr) + e.platz * MOD_EINTRAG);
     erwartet++;
   }
-  return { ok: true, bytes: out, anzahlVorher: vorhanden, anzahlNachher: erwartet };
+  // Die Grenze 72 im Code muss die Tabelle abdecken — sonst setzt das Geraet
+  // jeden Typ darueber beim Laden auf 1 zurueck (Befund 2026-09-04).
+  const g = addr === MOD_TABELLE_ADDR_HACKTRIBE && erwartet > 72 ? setzeModGrenze(out, erwartet - 1) : { ok: true as const, befund: null };
+  if (!g.ok) return { ok: false, reason: g.reason };
+  return { ok: true, bytes: out, anzahlVorher: vorhanden, anzahlNachher: erwartet, grenze: g.befund };
+}
+
+// ─── Die Grenze 72 der Modulationstypen im Code ─────────────────────────────
+//
+// Befund 2026-09-04 (Disassembly ALLES2 = Hacktribe = Stock an allen Stellen):
+// die Grenze steckt in neun `cmp rX, #71`, fuenf `mov rX, #72` (Typen je
+// Part), vier `#144` (Bytes je Part) und sieben Literal-Pools mit der Basis
+// eines Feldes von 16 Parts × 72 × 2 Bytes (Speed/Depth-Vorgabe je Typ,
+// 0xC069256D im BSS). Die uebrigen `cmp #0x47` der Nacht-Liste (0xC000B6B0,
+// 0xC000C380, 0xC000C52C/5A0/620, 0xC00402F8, 0xC0072068, 0xC00A1954/19E4)
+// sind Zeichenvergleiche (Buchstabe G) und Parameter-Schalter — keine Typgrenze.
+// 0xC06924DD ist KEIN Typfeld, sondern 16 × 9 Bytes Rechenwerte je Part.
+// ⚠ Wo das Menue seine Obergrenze hernimmt, ist weiterhin offen — SysEx und
+// Pattern-Datei halten Typen ueber 72 mit diesem Patch, der Regler vielleicht nicht.
+
+/** Ein Wort im Code: Adresse und was dort in Hacktribe (und Stock) steht. */
+export interface ModGrenzeStelle {
+  addr: number;
+  wort: number;
+}
+
+/** `cmp rX, #71` — Typen ueber 71 werden auf 0 gesetzt oder abgewiesen. */
+export const MOD_GRENZE_VERGLEICHE: readonly ModGrenzeStelle[] = [
+  { addr: 0xc0048e80, wort: 0xe3500047 }, // Getter: Typ aus dem Part-Block (+0x814), movhi r0,#0
+  { addr: 0xc0049ba0, wort: 0xe3520047 }, // Setter: movhi r5,#0 vor dem strb
+  { addr: 0xc004a0d8, wort: 0xe3520047 }, // Pattern-Lader: Typ aus der Datei vor dem Setter
+  { addr: 0xc0098d14, wort: 0xe3500047 }, // Zeiger auf den Tabelleneintrag: Typ > 71 → Eintrag 0
+  { addr: 0xc00994dc, wort: 0xe3550047 }, // Speed/Depth je (Part, Typ) setzen
+  { addr: 0xc0099558, wort: 0xd3510047 }, // Speed lesen (cmple)
+  { addr: 0xc0099584, wort: 0xd3510047 }, // Depth lesen (cmple)
+  { addr: 0xc00995d0, wort: 0xe3530047 }, // Depth aus dem Part merken
+  { addr: 0xc0099614, wort: 0xe3530047 }, // Speed aus dem Part merken
+];
+/** `mov rX, #72` — Typen je Part im Feld (Schrittweite der mla). */
+export const MOD_GRENZE_SCHRITTE: readonly ModGrenzeStelle[] = [
+  { addr: 0xc00994e4, wort: 0xe3a03048 },
+  { addr: 0xc0099564, wort: 0xd3a03048 },
+  { addr: 0xc0099590, wort: 0xd3a03048 },
+  { addr: 0xc00995d4, wort: 0xe3a02048 },
+  { addr: 0xc0099604, wort: 0xe3a01048 },
+];
+/** `#144` — Bytes je Part im Feld (72 × 2): Init-Kopierer und Part-Kopie. */
+export const MOD_GRENZE_BLOECKE: readonly ModGrenzeStelle[] = [
+  { addr: 0xc0099460, wort: 0xe3a01090 },
+  { addr: 0xc0099480, wort: 0xe3520090 },
+  { addr: 0xc0099520, wort: 0xe3a02090 },
+  { addr: 0xc0099544, wort: 0xe3540090 },
+];
+/** Literal-Pools mit der Basis des Feldes. */
+export const MOD_FELD_ZEIGER: readonly number[] = [0xc0099494, 0xc0099500, 0xc0099550, 0xc009957c, 0xc00995ac, 0xc00995ec, 0xc0099630];
+export const MOD_FELD_BASIS_STOCK = 0xc069256d;
+/** Neue Basis im freien 0xFF-Bereich hinter der Tabelle (MOD_MAX endet bei 0xC01AFEB8, Abbild bei 0xC0200000). */
+export const MOD_FELD_BASIS_NEU = 0xc01b0000;
+export const MOD_FELD_PARTS = 16;
+/** Ein Typ ist ein Byte im Part-Block — mehr geht nicht. */
+export const MOD_TYPEN_MAX = 256;
+
+const u32 = (b: Uint8Array, off: number): number => (b[off] | (b[off + 1] << 8) | (b[off + 2] << 16) | (b[off + 3] << 24)) >>> 0;
+const setU32 = (b: Uint8Array, off: number, w: number): void => {
+  b[off] = w & 0xff;
+  b[off + 1] = (w >>> 8) & 0xff;
+  b[off + 2] = (w >>> 16) & 0xff;
+  b[off + 3] = (w >>> 24) & 0xff;
+};
+
+/** ARM-Immediate (imm8 ror 2·rot) exakt kodieren — null, wenn es die Zahl nicht gibt. */
+export function armImmediateKodieren(v: number): number | null {
+  v >>>= 0;
+  for (let rot = 0; rot < 16; rot++) {
+    const s = rot * 2;
+    const imm = s === 0 ? v : ((v << s) | (v >>> (32 - s))) >>> 0;
+    if (imm <= 0xff) return (rot << 8) | imm;
+  }
+  return null;
+}
+
+/** Immediate eines Datenverarbeitungs-Worts (cmp/mov/… rX, #imm) — null, wenn es keins ist. */
+export function armImmediateWert(wort: number): number | null {
+  if (((wort >>> 25) & 7) !== 1) return null;
+  const imm = wort & 0xff;
+  const rot = ((wort >>> 8) & 0xf) * 2;
+  return rot === 0 ? imm : ((imm >>> rot) | (imm << (32 - rot))) >>> 0;
+}
+
+const mitImmediate = (wort: number, kodiert: number): number => ((wort & 0xfffff000) | kodiert) >>> 0;
+
+/** Kleinstes N ≥ maxIndex+1 (mindestens 72), bei dem N−1, N und 2N als Immediate kodierbar sind. */
+export function modGrenzeWert(maxIndex: number): { n: number; vergleich: number; schritt: number; block: number } | null {
+  for (let n = Math.max(72, maxIndex + 1); n <= MOD_TYPEN_MAX; n++) {
+    const a = armImmediateKodieren(n - 1);
+    const b = armImmediateKodieren(n);
+    const c = armImmediateKodieren(2 * n);
+    if (a !== null && b !== null && c !== null) return { n, vergleich: a, schritt: b, block: c };
+  }
+  return null;
+}
+
+export interface ModGrenzeStand {
+  /** Hoechster erlaubter 0-basierter Typ (Stock/Hacktribe: 71). */
+  maxIndex: number;
+  feldBasis: number;
+}
+
+/** Die Grenze aus dem Abbild lesen — alle 25 Stellen muessen zusammenpassen. */
+export function liesModGrenze(fw: Uint8Array): { ok: true; stand: ModGrenzeStand } | { ok: false; reason: string } {
+  const lies = (stellen: readonly ModGrenzeStelle[], was: string): number | { reason: string } => {
+    const werte: number[] = [];
+    for (const s of stellen) {
+      const w = u32(fw, dateiOffset(s.addr));
+      const v = armImmediateWert(w);
+      if (v === null || (w & 0xfffff000) >>> 0 !== (s.wort & 0xfffff000) >>> 0) return { reason: `Mod-Grenze: bei ${s.addr.toString(16)} steht nicht das erwartete ${was} — fremde Firmware?` };
+      werte.push(v);
+    }
+    if (new Set(werte).size !== 1) return { reason: `Mod-Grenze: die ${was}-Stellen sind uneinheitlich (${werte.join(", ")})` };
+    return werte[0];
+  };
+  const v = lies(MOD_GRENZE_VERGLEICHE, "cmp");
+  if (typeof v !== "number") return { ok: false, reason: v.reason };
+  const s = lies(MOD_GRENZE_SCHRITTE, "mov");
+  if (typeof s !== "number") return { ok: false, reason: s.reason };
+  const b = lies(MOD_GRENZE_BLOECKE, "Blockmass");
+  if (typeof b !== "number") return { ok: false, reason: b.reason };
+  if (s !== v + 1 || b !== 2 * s) return { ok: false, reason: `Mod-Grenze: cmp ${v}, Schritt ${s}, Block ${b} passen nicht zusammen` };
+  const zeiger = MOD_FELD_ZEIGER.map((a) => u32(fw, dateiOffset(a)));
+  if (new Set(zeiger).size !== 1) return { ok: false, reason: `Mod-Grenze: die Feld-Zeiger sind uneinheitlich (${zeiger.map((z) => z.toString(16)).join(", ")})` };
+  if (zeiger[0] !== MOD_FELD_BASIS_STOCK && zeiger[0] !== MOD_FELD_BASIS_NEU) return { ok: false, reason: `Mod-Grenze: Feld-Basis ${zeiger[0].toString(16)} ist weder Stock noch TekkForge` };
+  return { ok: true, stand: { maxIndex: v, feldBasis: zeiger[0] } };
+}
+
+/** Inhalt des Feldes: je Part die Regler-Vorgaben (+0x16 Speed, +0x17 Depth) jedes Typs — so, wie es der Init-Kopierer fuellt. */
+export function modFeldInhalt(tabelle: readonly Uint8Array[], n: number): Uint8Array {
+  const part = new Uint8Array(2 * n);
+  for (let i = 0; i < n && i < tabelle.length; i++) {
+    part[2 * i] = tabelle[i][0x16];
+    part[2 * i + 1] = tabelle[i][0x17];
+  }
+  const out = new Uint8Array(MOD_FELD_PARTS * 2 * n);
+  for (let p = 0; p < MOD_FELD_PARTS; p++) out.set(part, p * 2 * n);
+  return out;
+}
+
+export interface ModGrenzeSchreibliste {
+  /** Code-Woerter und Zeiger (4 Bytes je Eintrag). */
+  woerter: { addr: number; wert: number }[];
+  /** Das verlegte Feld — null, wenn nichts zu tun ist. */
+  feld: { addr: number; bytes: Uint8Array } | null;
+  nachher: number;
+}
+
+/** Was zu schreiben ist, damit Index `maxIndex` gilt — leer, wenn die Grenze schon reicht. */
+export function modGrenzeSchreibliste(stand: ModGrenzeStand, maxIndex: number, tabelle: readonly Uint8Array[]): ModGrenzeSchreibliste | { ok: false; reason: string } {
+  if (stand.maxIndex >= maxIndex) return { woerter: [], feld: null, nachher: stand.maxIndex };
+  const g = modGrenzeWert(maxIndex);
+  if (!g) return { ok: false, reason: `Mod-Grenze: fuer Typ ${maxIndex + 1} gibt es keine kodierbare Grenze unter ${MOD_TYPEN_MAX}` };
+  const bytes = MOD_FELD_PARTS * 2 * g.n;
+  if (MOD_FELD_BASIS_NEU + bytes > 0xc0200000) return { ok: false, reason: `Mod-Grenze: das Feld fuer ${g.n} Typen passt nicht mehr ins Abbild` };
+  const woerter: { addr: number; wert: number }[] = [];
+  for (const s of MOD_GRENZE_VERGLEICHE) woerter.push({ addr: s.addr, wert: mitImmediate(s.wort, g.vergleich) });
+  for (const s of MOD_GRENZE_SCHRITTE) woerter.push({ addr: s.addr, wert: mitImmediate(s.wort, g.schritt) });
+  for (const s of MOD_GRENZE_BLOECKE) woerter.push({ addr: s.addr, wert: mitImmediate(s.wort, g.block) });
+  for (const a of MOD_FELD_ZEIGER) woerter.push({ addr: a, wert: MOD_FELD_BASIS_NEU });
+  return { woerter, feld: { addr: MOD_FELD_BASIS_NEU, bytes: modFeldInhalt(tabelle, g.n) }, nachher: g.n - 1 };
+}
+
+export interface ModGrenzeBefund {
+  vorher: number;
+  nachher: number;
+  feldBasis: number;
+  feldBytes: number;
+}
+
+/**
+ * Die Grenze im Abbild so setzen, dass Typ-Index `maxIndex` noch gilt: alle
+ * Vergleiche, Schrittweiten und Blockmasse nachziehen, das Feld je Part in
+ * den freien Bereich verlegen und mit den Tabellen-Vorgaben fuellen.
+ * Unveraendert, wenn die vorhandene Grenze schon reicht.
+ */
+export function setzeModGrenze(fw: Uint8Array, maxIndex: number): { ok: true; befund: ModGrenzeBefund | null } | { ok: false; reason: string } {
+  const st = liesModGrenze(fw);
+  if (!st.ok) return st;
+  const l = modGrenzeSchreibliste(st.stand, maxIndex, liesModTabelle(fw));
+  if ("ok" in l) return l;
+  if (!l.woerter.length) return { ok: true, befund: null };
+  if (l.feld && st.stand.feldBasis !== MOD_FELD_BASIS_NEU) {
+    const off = dateiOffset(l.feld.addr);
+    for (let i = 0; i < l.feld.bytes.length; i++) if (fw[off + i] !== 0xff) return { ok: false, reason: `Mod-Grenze: der Bereich ${l.feld.addr.toString(16)} fuer das Feld ist nicht frei` };
+  }
+  for (const w of l.woerter) setU32(fw, dateiOffset(w.addr), w.wert);
+  if (l.feld) fw.set(l.feld.bytes, dateiOffset(l.feld.addr));
+  return { ok: true, befund: { vorher: st.stand.maxIndex, nachher: l.nachher, feldBasis: MOD_FELD_BASIS_NEU, feldBytes: l.feld ? l.feld.bytes.length : 0 } };
 }

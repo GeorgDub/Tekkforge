@@ -113,7 +113,7 @@ import {
   pbmZuPixel,
 } from "../core/splash";
 import { legeAb } from "./ablage";
-import { liesModTabelle, modKombinationen, modName, decodeMod, setzeModTabelle, istModLeer, MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG, MOD_MAX, MOD_WELLEN, MOD_ZIEL_NAMEN, type ModEintragMitPlatz } from "../core/modTabelle";
+import { liesModTabelle, modKombinationen, modName, decodeMod, setzeModTabelle, istModLeer, MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG, MOD_MAX, MOD_WELLEN, MOD_ZIEL_NAMEN, type ModEintragMitPlatz, modGrenzeSchreibliste, armImmediateWert, MOD_GRENZE_VERGLEICHE, MOD_FELD_ZEIGER, MOD_FELD_BASIS_STOCK, MOD_FELD_BASIS_NEU } from "../core/modTabelle";
 
 const FIRMWARE_ORDNER = "Firmware";
 const SKALA = 4;
@@ -532,7 +532,36 @@ async function modFluechtig(): Promise<void> {
       return;
     }
   }
-  setStatus(`${modNeu.length} Modulations-Typen flüchtig geschrieben (${modBasisAnzahl + 1}…${modBasisAnzahl + modNeu.length}). Am Gerät den Mod-Typ eines Parts über ${modBasisAnzahl} hinausdrehen — zeigt er „${modName(modNeu[0].bytes)}“? Gilt bis zum Ausschalten.`);
+  // Die Grenze 72 im Code (25 Stellen + Feld je Part) muss die Tabelle abdecken,
+  // sonst setzt das Geraet jeden Typ darueber beim Laden auf 1 zurueck.
+  const ziel = modNeu[modNeu.length - 1].platz;
+  const cmp = await hooks.lesen(MOD_GRENZE_VERGLEICHE[0].addr, 4);
+  const zeiger = await hooks.lesen(MOD_FELD_ZEIGER[0], 4);
+  const w32 = (b: Uint8Array): number => (b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)) >>> 0;
+  const aktuell = cmp.ok ? armImmediateWert(w32(cmp.bytes)) : null;
+  const basisFeld = zeiger.ok ? w32(zeiger.bytes) : null;
+  let grenzeText = "";
+  if (aktuell === null || basisFeld === null || (basisFeld !== MOD_FELD_BASIS_STOCK && basisFeld !== MOD_FELD_BASIS_NEU)) {
+    grenzeText = ` ⚠ Grenze im Code am Gerät nicht lesbar/erkannt — Typen über ${aktuell === null ? 72 : aktuell + 1} setzt das Gerät beim Laden auf 1 zurück.`;
+  } else {
+    const liste = modGrenzeSchreibliste({ maxIndex: aktuell, feldBasis: basisFeld }, ziel, [...b, ...modNeu.map((m) => m.bytes)]);
+    if ("ok" in liste) grenzeText = ` ⚠ ${liste.reason}`;
+    else {
+      if (liste.feld && !(await hooks.schreiben(liste.feld.addr, liste.feld.bytes, "Mod-Feld je Part"))) {
+        setStatus(`Mod-Feld bei ${liste.feld.addr.toString(16)} nicht geschrieben — Grenze im Code unverändert (${aktuell + 1}); aus- und einschalten stellt alles zurück.`);
+        return;
+      }
+      for (const z of liste.woerter) {
+        const bytes = new Uint8Array([z.wert & 0xff, (z.wert >>> 8) & 0xff, (z.wert >>> 16) & 0xff, (z.wert >>> 24) & 0xff]);
+        if (!(await hooks.schreiben(z.addr, bytes, "Mod-Grenze"))) {
+          setStatus(`Mod-Grenze bei ${z.addr.toString(16)} nicht geschrieben — Code am Gerät möglicherweise uneinheitlich; aus- und einschalten stellt alles zurück.`);
+          return;
+        }
+      }
+      if (liste.woerter.length) grenzeText = ` Grenze im Code ${aktuell + 1} → ${liste.nachher + 1}, Feld je Part nach 0x${MOD_FELD_BASIS_NEU.toString(16).toUpperCase()}.`;
+    }
+  }
+  setStatus(`${modNeu.length} Modulations-Typen flüchtig geschrieben (${modBasisAnzahl + 1}…${modBasisAnzahl + modNeu.length}).${grenzeText} Am Gerät den Mod-Typ eines Parts über ${modBasisAnzahl} hinausdrehen — zeigt er „${modName(modNeu[0].bytes)}“? Gilt bis zum Ausschalten.`);
 }
 
 /** Fluechtig: Eintraege und Beschreiber ins Geraete-RAM — bis zum Ausschalten. */
@@ -730,7 +759,7 @@ export function fwBaueAbbild(): { ok: true; bytes: Uint8Array; zeilen: string[] 
     const r = setzeModTabelle(bytes, plan.mod);
     if (!r.ok) return { ok: false, reason: r.reason };
     bytes = r.bytes;
-    zeilen.push(`Modulations-Tabelle: bis ${r.anzahlVorher} → bis ${r.anzahlNachher}`);
+    zeilen.push(`Modulations-Tabelle: bis ${r.anzahlVorher} → bis ${r.anzahlNachher}${r.grenze ? `, Grenze im Code ${r.grenze.vorher + 1} → ${r.grenze.nachher + 1}` : ""}`);
   }
   if (!eintraege.length && !plan.init && !plan.global && !plan.splash && !plan.dsp.length && !plan.osz.length && !plan.mod.length) return { ok: false, reason: "Kein Baustein angehakt — es gäbe nichts zu bauen" };
   return { ok: true, bytes, zeilen };
@@ -866,7 +895,19 @@ export async function fwGeraetVergleich(): Promise<string[]> {
   }
   const modAnders = geraetMod.filter((b, i) => !modBasis[i] || modName(b) !== modName(modBasis[i])).length;
   zeilen.push(`Modulationstypen am Gerät: ${geraetMod.length} (Basis ${modBasis.length})${geraetMod.length ? `, letzter „${modName(geraetMod[geraetMod.length - 1])}“` : ""}${modAnders ? ` — ${modAnders} Name(n) anders als die Basis` : ""}`);
-  return fertig(`Gerät gelesen: ${n} Oszillatoren (${anders ? `${anders} anders` : "wie die Basis"}), Grenze ${grenze ?? "?"}, ${geraetMod.length} Modulationstypen.`);
+  // 5) Mod-Grenze im Code (25 Stellen; hier der erste Vergleich und der erste Feld-Zeiger)
+  const mg = await hooks.lesen(MOD_GRENZE_VERGLEICHE[0].addr, 4);
+  const mz = await hooks.lesen(MOD_FELD_ZEIGER[0], 4);
+  const w32 = (b: Uint8Array): number => (b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)) >>> 0;
+  const modGrenze = mg.ok ? armImmediateWert(w32(mg.bytes)) : null;
+  const modFeld = mz.ok ? w32(mz.bytes) : null;
+  const feldText = modFeld === MOD_FELD_BASIS_NEU ? "Feld je Part verlegt (TekkForge)" : modFeld === MOD_FELD_BASIS_STOCK ? "Feld je Part im BSS (Stock)" : `Feld-Zeiger ${modFeld === null ? "?" : "0x" + modFeld.toString(16).toUpperCase()}`;
+  zeilen.push(
+    modGrenze === null
+      ? "Mod-Grenze im Code: nicht lesbar/erkannt"
+      : `Mod-Grenze im Code: Typen bis ${modGrenze + 1}, ${feldText}${modGrenze + 1 < geraetMod.length ? ` ⚠ unter der Tabelle (${geraetMod.length}) — Typen darüber setzt das Gerät beim Laden auf 1` : " ✓"}`,
+  );
+  return fertig(`Gerät gelesen: ${n} Oszillatoren (${anders ? `${anders} anders` : "wie die Basis"}), Grenze ${grenze ?? "?"}, ${geraetMod.length} Modulationstypen, Mod-Grenze ${modGrenze === null ? "?" : modGrenze + 1}.`);
 }
 
 async function sicherungEinbrennen(f: File): Promise<void> {

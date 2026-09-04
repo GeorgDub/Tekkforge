@@ -223,8 +223,9 @@ if (flag("mod-serie")) {
     process.exit(1);
   }
   r = { ...r, bytes: m.bytes };
-  modBericht = { n: k.eintraege.length, von: m.anzahlVorher + 1, bis: m.anzahlNachher, fehlend: k.fehlend };
-  console.log(`Modulations-Typen: ${k.eintraege.length} angehängt (${modBericht.von}–${modBericht.bis})${k.fehlend.length ? `, ohne Vorlage: ${k.fehlend.join(", ")}` : ""} ⚠ Menügrenze am Gerät offen`);
+  modBericht = { n: k.eintraege.length, von: m.anzahlVorher + 1, bis: m.anzahlNachher, fehlend: k.fehlend, grenze: m.grenze };
+  const grenzeText = m.grenze ? `, Grenze im Code ${m.grenze.vorher + 1} → ${m.grenze.nachher + 1} (Feld je Part nach 0x${m.grenze.feldBasis.toString(16).toUpperCase()})` : "";
+  console.log(`Modulations-Typen: ${k.eintraege.length} angehängt (${modBericht.von}–${modBericht.bis})${k.fehlend.length ? `, ohne Vorlage: ${k.fehlend.join(", ")}` : ""}${grenzeText} ⚠ Menügrenze am Gerät offen`);
 }
 if (!eintraege.length && !initPfad && !splashPfad && !dspPatches.length && !oszBericht && !oszSortierung && !modBericht) {
   console.error("Nichts zu tun: die Sammlung ist leer und weder --init-pattern, --splash, --dsp, --osz-serie noch --osz-sortieren angegeben.");

@@ -1037,6 +1037,52 @@ noch offen. `MODTEST.e2spat` (`scripts/make-modtest.mjs`, zehn Parts mit
 neuen Typen und ihren Hacktribe-Gegenstuecken) taugt deshalb erst, wenn
 der Lader gefunden ist; bis dahin: Typ am Geraet drehen.
 
+## Die Grenze 72 der Modulationstypen freigeschaltet (2026-09-04, Hoerprobe offen)
+
+Der Lader ist gefunden, und er ist nicht allein. Disassembly (capstone,
+ALLES2 = Hacktribe = Stock an allen Stellen) zeigt **25 Stellen**, die
+zusammen die 72 bilden — `setzeModGrenze` in `core/modTabelle.ts` zieht
+sie in einem Zug nach:
+
+- neun `cmp rX, #71`: Getter des Typs aus dem Part-Block (0xC0048E70,
+  Byte +0x814, Typ > 71 → 0), Setter (0xC0049B94), Pattern-Lader vor dem
+  Setter (0xC004A0D8), der **Zeiger auf den Tabelleneintrag**
+  (0xC0098D10: Typ > 71 → Eintrag 0, „EG+ Filter") und fuenf Funktionen
+  um das Reglerfeld (0xC00994DC, 0xC0099558/584 als `cmple`, 0xC00995D0,
+  0xC0099614);
+- fuenf `mov rX, #72` (Typen je Part als Schrittweite der `mla`) und vier
+  `#144` (Bytes je Part im Init-Kopierer 0xC0099458 und in der Part-Kopie
+  0xC0099504);
+- sieben Literal-Pools mit der Basis des Feldes 0xC069256D (16 Parts ×
+  72 × 2 Bytes Speed/Depth-Vorgabe je Typ, im BSS — dahinter liegt sofort
+  die naechste Variable, also **verlegen**: nach 0xC01B0000 in den freien
+  0xFF-Bereich hinter der Tabelle, vorgefuellt wie der Init-Kopierer es
+  taete).
+
+Die uebrigen `cmp #0x47` der Nachtliste (0xC000B6B0, 0xC000C380,
+0xC000C52C/5A0/620, 0xC00402F8, 0xC0072068, 0xC00A1954/19E4) sind
+Zeichenvergleiche (Buchstabe G im Zahlenformatierer) und
+Parameter-Schalter — keine Typgrenze. 0xC06924DD ist kein Typfeld,
+sondern 16 × 9 Bytes Rechenwerte je Part.
+
+Die neue Grenze N muss als ARM-Immediate mit N−1, N und 2N kodierbar
+sein (`modGrenzeWert`): fuer 132 Typen passt 132 genau (264 = 0x42 ≪ 2),
+fuer 200 wird es 202. `setzeModTabelle` zieht die Grenze automatisch nach,
+sobald die Tabelle ueber 72 hinausgeht — **auch fuer die nackte
+Hacktribe-Datei**, denn deren 24 Sinus-Typen (73–96) unterliegen derselben
+Klemme: der Eintragszeiger liefert fuer sie Eintrag 0. Die Werkbank
+schreibt beim fluechtigen Weg dieselben 25 Woerter und das Feld ins RAM;
+Bauplan, Werkbank-Bericht und `--mod-serie` melden „Grenze im Code
+72 → N“.
+
+⚠ Offen bleibt die **Menuegrenze**: wo der Regler seine Obergrenze
+hernimmt, ist weiter nicht gefunden. Mit dem Patch halten SysEx und
+Pattern-Datei Typen ueber 72 (MODPROBE muesste 71/72/80/95/96/131
+unveraendert zurueckbringen), der Regler geht vielleicht trotzdem nur bis
+96 — oder bis 72. Firmware zum Hoeren:
+`G:\Downloads\TekkForge\Firmware\TekkForge-ALLES2-MOD132-SYSTEM.VSB`
+(ALLES2 + 36 Typen + Grenze 132).
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>
