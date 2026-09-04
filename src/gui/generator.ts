@@ -27,6 +27,7 @@ import { scanne, type ScanEintrag, type ScanEingabe } from "../core/sampleScan";
 import { merkeLetzteDatei } from "./start";
 import { tekkUrl } from "./tekkUrl";
 import { tonartErkennen } from "../core/keyAnalyse";
+import { klangProfil } from "../core/klangProfil";
 import { planeBank, type Projekt } from "../core/bankPlan";
 import { zusammenfassung, erzeuge, projektJson, dateiRelevant, eindeutigeKuerzel, teileLieder, voxSegmentEintrag, type LiedGruppe, type Erzeugt, type Zusammenfassung } from "../core/generatorSession";
 import {
@@ -613,7 +614,7 @@ function fensterEintrag(liedName: string, label: string, pcm: Float32Array): Sca
   const stem = `${kurz} ${label}`;
   return {
     datei: `${stem}.wav`, stem, rolle: "melo", familie: familie(stem), sekunden: pcm.length / 44100,
-    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName, klang: klangProfil(pcm, 44100),
   };
 }
 
@@ -625,7 +626,7 @@ function bassEintrag(liedName: string, label: string, pcm: Float32Array): ScanEi
   const stem = `${liedName.slice(0, 10)} B${label.slice(0, 4)}`;
   return {
     datei: `${stem}.wav`, stem, rolle: "ton", familie: familie(stem), sekunden: pcm.length / 44100,
-    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName,
+    rmsDb: rmsDb(pcm), peak: peakVon(pcm), pcm, sampleRate: 44100, lied: liedName, klang: klangProfil(pcm, 44100),
   };
 }
 
@@ -635,7 +636,7 @@ function drumEintrag(liedName: string, t: DrumTreffer, nr: number): ScanEintrag 
   const stem = `${kurz} ${label}`;
   return {
     datei: `${stem}.wav`, stem, rolle: t.rolle, familie: familie(stem), sekunden: t.pcm.length / 44100,
-    rmsDb: t.rmsDb, peak: peakVon(t.pcm), pcm: t.pcm, sampleRate: 44100, lied: liedName,
+    rmsDb: t.rmsDb, peak: peakVon(t.pcm), pcm: t.pcm, sampleRate: 44100, lied: liedName, klang: klangProfil(t.pcm, 44100),
   };
 }
 

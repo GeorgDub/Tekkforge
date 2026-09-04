@@ -4,6 +4,7 @@
  * jeder Antwort ein gueltiges Rezept (feldweise Ersatz + Korrekturliste).
  */
 import type { Projekt, ProjektSample } from "./bankPlan";
+import { klangWaehler, figurAusDichte, dichteText } from "./klangWahl";
 
 export type Modus = "jam" | "miniset" | "promelo";
 export type KickFigur = "vier" | "hart" | "roll" | "galopp";
@@ -151,10 +152,46 @@ function ausLied(topf: ProjektSample[], melo?: ProjektSample): ProjektSample[] {
   return eigene.length ? eigene : topf;
 }
 
+/**
+ * Die Besetzung eines Themas — welche Kick, welche Snare, welche Hats.
+ *
+ * Der Zaehler `i` sorgt fuer Abwechslung von Pattern zu Pattern und bleibt das
+ * Auswahlprinzip. NEU ist, dass er durch einen gefilterten Topf laeuft: was
+ * dem schon Gesetzten klanglich im Weg steht, wird vorher aussortiert (siehe
+ * `klangWahl`). Ohne Klangprofile — alte Projekte, Samples aus einer alten
+ * Bank — filtert nichts, und es kommt genau dasselbe heraus wie vorher.
+ *
+ * Die Reihenfolge ist der Vorrang: die Melodie ist vorgegeben und schraenkt
+ * alles ein, die Kick ist der Anker, der Bass teilt sich mit ihr den Keller
+ * (dort entsteht der meiste Matsch), das Schlagzeug ordnet sich darueber ein.
+ */
 function themaFuer(pl: Pools, i: number, melo?: ProjektSample): Thema {
-  const fam = rot(pl.familien, i);
-  const vers = rot(ausLied(pl.voxLoops.filter((v) => v.chunk === undefined || v.chunk === 0), melo), i);
+  const w = klangWaehler([melo?.klang], melo?.tonart);
+  const nimm = <T extends ProjektSample>(topf: readonly T[], n: number): T | undefined => {
+    const gewaehlt = rot(w.topf(topf), n);
+    w.merke(gewaehlt);
+    return gewaehlt;
+  };
+  /** Fuer Lagen, die gleichzeitig mit der Melodie KLINGEN: auch die Tonart muss passen. */
+  const nimmTonal = <T extends ProjektSample>(topf: readonly T[], n: number): T | undefined => {
+    const gewaehlt = rot(w.tonalerTopf(topf), n);
+    w.merke(gewaehlt);
+    return gewaehlt;
+  };
+  const vers = nimmTonal(ausLied(pl.voxLoops.filter((v) => v.chunk === undefined || v.chunk === 0), melo), i);
+  // Die Kick-Familie wird als Ganzes gewaehlt (die Patterns brauchen zwei aus
+  // derselben), darum wird sie ueber ihre lauteste Kick bewertet.
+  const familien = pl.familien.map((f) => ({ ...f, klang: f.kicks[0]?.klang }));
+  const fam = rot(w.topf(familien), i);
+  w.merke(fam?.kicks[0]);
   const bassFallback = pl.kicks.filter((k) => k.sekunden >= 0.6).concat(pl.kicks);
+  const bass = nimmTonal(pl.basses, i) ?? nimm(bassFallback, i);
+  const snare = nimm(pl.snares, i);
+  const clap = nimm(pl.claps, i + 1);
+  const hatZu = nimm(pl.hatsClosed, i);
+  const hatAuf = nimm(pl.hatsOpen, i + 1);
+  const percs = pl.percs.length ? ([nimm(pl.percs, 2 * i), nimm(pl.percs, 2 * i + 1)] as const) : undefined;
+  const stab = nimmTonal(pl.stabs, i);
   const voxShots = ausLied(pl.voxShots, melo);
   const shotPool = voxShots.length ? voxShots : pl.fxShots;
   const shotPoolB = pl.fxShots.length ? pl.fxShots : voxShots;
@@ -162,21 +199,36 @@ function themaFuer(pl: Pools, i: number, melo?: ProjektSample): Thema {
     melo: nm(melo),
     vers: nm(vers),
     kickFamilie: fam?.name ?? "",
-    snare: nm(rot(pl.snares, i)) ?? "",
-    clap: nm(rot(pl.claps, i + 1)),
-    hats: [nm(rot(pl.hatsClosed, i)) ?? "", nm(rot(pl.hatsOpen, i + 1)) ?? ""],
-    percs: pl.percs.length ? [nm(rot(pl.percs, 2 * i))!, nm(rot(pl.percs, 2 * i + 1))!] : undefined,
-    bass: nm(rot(pl.basses, i)) ?? nm(rot(bassFallback, i)),
-    stab: nm(rot(pl.stabs, i)),
+    snare: nm(snare) ?? "",
+    clap: nm(clap),
+    hats: [nm(hatZu) ?? "", nm(hatAuf) ?? ""],
+    percs: percs ? [nm(percs[0])!, nm(percs[1])!] : undefined,
+    bass: nm(bass),
+    stab: nm(stab),
     shots: shotPool.length ? [nm(rot(shotPool, 2 * i))!, nm(rot(shotPoolB, i))!] : undefined,
     riser: nm(rot(pl.fxLoops, i)),
   };
 }
 
+/**
+ * Die Kick-Figur aus der Beschreibung — oder `undefined`, wenn keine drinsteht.
+ *
+ * Der Unterschied zu „gibt sonst 'vier' zurueck" ist der ganze Zweck: nur wenn
+ * hier nichts gesagt wurde, darf die gemessene Melodie-Dichte entscheiden
+ * (siehe `regelRezept`). Ein ausgesprochener Wunsch schlaegt jede Messung.
+ */
+export function kickAusBeschreibung(beschreibung = ""): KickFigur | undefined {
+  const b = beschreibung.toLowerCase();
+  if (/kicks?\W{0,3}(roll|wirbel)|(roll\w*|wirbel)\W{0,3}kick|wirbel/.test(b)) return "roll";
+  if (/galopp|gallop|offbeat kick/.test(b)) return "galopp";
+  if (/hart|hard|brett|druck/.test(b)) return "hart";
+  return undefined;
+}
+
 function figurenAus(beschreibung = ""): { kick: KickFigur; bass: BassFigur; stab: StabFigur; hatsOffbeat: boolean; dichte: Dichte } {
   const b = beschreibung.toLowerCase();
   return {
-    kick: /kicks?\W{0,3}(roll|wirbel)|(roll\w*|wirbel)\W{0,3}kick|wirbel/.test(b) ? "roll" : /galopp|gallop|offbeat kick/.test(b) ? "galopp" : /hart|hard|brett|druck/.test(b) ? "hart" : "vier",
+    kick: kickAusBeschreibung(beschreibung) ?? "vier",
     bass: /bass\W{0,3}roll|roll\w*\W{0,3}bass/.test(b) ? "roll" : /bass\W{0,3}(acht|8tel|achtel)|(acht\w*|8tel)\W{0,3}bass|schnell/.test(b) ? "acht" : "off",
     stab: /arp/.test(b) ? "arp" : /frage|call/.test(b) ? "frage" : /ruhig|soft|weich|chill/.test(b) ? "ruhig" : "stab",
     hatsOffbeat: !/keine hats|ohne hats/.test(b),
@@ -198,20 +250,27 @@ export function regelRezept(projekt: Projekt, wunsch: { modus: Modus; bpm?: numb
   const idx = melo ? Math.max(0, kand.indexOf(melo)) : 0;
   const thema = themaFuer(pl, idx, melo);
   const fig = figurenAus(wunsch.beschreibung);
+  // Sagt die Beschreibung nichts ueber die Kick, entscheidet die gemessene
+  // Dichte der Melodie: eine dichte Melodie bekommt eine Kick, die Platz
+  // laesst, eine ruhige eine, die Bewegung bringt. Ohne Profil (altes Projekt)
+  // bleibt es bei der bisherigen Vorgabe.
+  const meloDichte = melo?.klang && melo.takte >= 1 ? melo.klang.dichte : undefined;
+  const kickFigur = kickAusBeschreibung(wunsch.beschreibung) ?? (meloDichte !== undefined ? figurAusDichte(meloDichte) : fig.kick);
   const bpm = wunsch.bpm ?? projekt.bpm;
   const lagenAlle = lagenFuer(thema);
   const abschnitte: Abschnitt[] =
     wunsch.modus === "miniset"
       ? MINISET.map((a) => ({
           ...a,
-          kick: a.intensitaet >= 5 ? fig.kick : a.kick,
+          kick: a.intensitaet >= 5 ? kickFigur : a.kick,
           lagen: a.lagen.filter((l) => lagenAlle.includes(l) || (l === "riser" && !!thema.riser)),
         }))
-      : [{ name: "JAM", wiederholungen: 1, intensitaet: 5, kick: fig.kick, lagen: lagenAlle }];
+      : [{ name: "JAM", wiederholungen: 1, intensitaet: 5, kick: kickFigur, lagen: lagenAlle }];
   const begruendung =
-    `${melo ? `Melodie "${melo.name}" (${melo.takte} Takte)` : "keine Melodie"} mit Kick-Familie "${thema.kickFamilie}"` +
+    `${melo ? `Melodie "${melo.name}" (${melo.takte} Takte${melo.tonart ? `, ${melo.tonart.name} / ${melo.tonart.camelot}` : ""})` : "keine Melodie"} mit Kick-Familie "${thema.kickFamilie}"` +
     `${thema.vers ? `, Vocal-Loop "${thema.vers}"` : ""}; Tempo ${bpm} BPM${wunsch.bpm ? " (gewaehlt)" : " (Vorschlag aus der Taktanalyse)"}; ` +
-    `Kick ${fig.kick}, Bass ${fig.bass}, Stab ${fig.stab}.`;
+    `Kick ${kickFigur}, Bass ${fig.bass}, Stab ${fig.stab}.` +
+    (meloDichte !== undefined && !kickAusBeschreibung(wunsch.beschreibung) ? ` ${dichteText(meloDichte)}.` : "");
   return { modus: wunsch.modus, bpm, begruendung, thema, abschnitte, figuren: { bass: fig.bass, stab: fig.stab, hatsOffbeat: fig.hatsOffbeat, dichte: fig.dichte } };
 }
 
