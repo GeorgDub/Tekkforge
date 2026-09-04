@@ -25,6 +25,8 @@ import { planeBank, type Projekt } from "./bankPlan";
 import { regelRezept } from "./rezept";
 import { baueAufbau, baueRezept } from "./patternGen";
 import type { E2PatternInput } from "./electribePatternBuilder";
+import { grooveFuerLied, mitSwing, type LiedGroove } from "./grooveAnschluss";
+import type { Groove } from "./e2Groove";
 
 /** Kuerzel je Drum-Rolle, wie im Generator-Tab. */
 const DRUM_KURZ: Record<string, string> = { kick: "K", snare: "S", hat: "H" };
@@ -60,6 +62,11 @@ export interface LiedZuSetOptionen {
   /** Vocals mit halber Abtastrate ablegen — doppelte Abdeckung je Megabyte. */
   sparsameVocals?: boolean;
   /**
+   * Das Timing des Lieds messen und als Swing auf alle Patterns legen
+   * (Vorgabe an). Gemessen wird auf dem Drums-Stem, sonst auf dem Drop-Fenster.
+   */
+  groove?: boolean;
+  /**
    * Stem-Trennung. Bekommt die geschnittenen Fenster und gibt Melodie, Vocals
    * und Drums zurueck. Fehlt sie, laeuft der Vollmix-Weg.
    */
@@ -83,6 +90,10 @@ export interface LiedSet {
   hinweise: string[];
   /** Was tatsaechlich hineingeflossen ist — fuer den Bericht. */
   zaehler: { fenster: number; vox: number; drums: number };
+  /** Gemessener Swing in Prozent (0 = gerade), liegt auf allen Patterns. */
+  swing: number;
+  /** Groove-Vorlage aus dem Lied (16 Steps) — fuer Werkbank oder Firmware; fehlt ohne Messung. */
+  groove?: Groove;
 }
 
 function eintrag(lied: string, label: string, pcm: Float32Array, rolle: ScanEintrag["rolle"]): ScanEintrag {
@@ -161,6 +172,7 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
 
   const eintraege: ScanEintrag[] = [];
   const zaehler = { fenster: 0, vox: 0, drums: 0 };
+  let grooveQuelle: Float32Array | null = null;
 
   if (opts.stems) {
     // Genau wie die App: die drei Abschnitte liefern Melodie, Vocals UND den
@@ -172,6 +184,9 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
     const raus = opts.stems(anfrage);
     let drumNr = { kick: 0, snare: 0, hat: 0 } as Record<string, number>;
     for (const r of raus) {
+      // Das Timing kommt vom Schlagzeug des Drops — der Abschnitt, den die
+      // Patterns nachbauen. Sonst vom ersten Stem, das Drums hat.
+      if (r.drums && (!grooveQuelle || r.id === "DROP")) grooveQuelle = r.drums;
       if (r.melo) {
         eintraege.push(eintrag(name, r.id, r.melo, "melo"));
         zaehler.fenster++;
@@ -210,7 +225,18 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
   const rezept = regelRezept(projekt, { modus: "jam", bpm });
   const gebaut = opts.aufbau === false ? baueRezept(rezept, projekt) : baueAufbau(rezept, projekt);
 
+  // Groove: die Fenster sind auf `bpm` gedehnt, also passt das Raster genau.
+  // Ohne Stems nimmt die Messung das Drop-Fenster aus dem Vollmix.
+  let grooveErgebnis: LiedGroove | null = null;
+  if (opts.groove !== false) {
+    const quelle = grooveQuelle ?? (analyse.fenster.find((f) => f.label === "DROP") ?? analyse.fenster[0])?.pcm ?? null;
+    if (quelle) grooveErgebnis = grooveFuerLied(quelle, sr, bpm, name);
+  }
+  const swing = grooveErgebnis?.swing ?? 0;
+  const patterns = mitSwing(gebaut.patterns, swing);
+
   const hinweise = [...warnungen, ...gebaut.hinweise];
+  if (grooveErgebnis) hinweise.push(swing ? `Swing ${swing > 0 ? "+" : ""}${swing} % aus dem Lied auf allen Patterns` : "Lied laeuft gerade — kein Swing gesetzt");
   if (!opts.stems && !opts.tekkDrums)
     hinweise.push("Ohne Stem-Trennung und ohne tekk4-Drums hat dieses Set kein Schlagzeug.");
   if (!zaehler.vox) hinweise.push("Keine getrennten Vocals — die Vocalspur kann nicht ueber die Kette verteilt werden.");
@@ -223,8 +249,10 @@ export function liedZuSet(pcmRoh: Float32Array, srRoh: number, opts: LiedZuSetOp
     zielBpm: bpm,
     projekt,
     bank,
-    patterns: gebaut.patterns,
+    patterns,
     hinweise,
     zaehler,
+    swing,
+    groove: grooveErgebnis?.groove,
   };
 }

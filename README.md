@@ -1083,6 +1083,51 @@ unveraendert zurueckbringen), der Regler geht vielleicht trotzdem nur bis
 `G:\Downloads\TekkForge\Firmware\TekkForge-ALLES2-MOD132-SYSTEM.VSB`
 (ALLES2 + 36 Typen + Grenze 132).
 
+## Groove, Variation und Motion im Generator (2026-09-04, Hoerprobe offen)
+
+Drei Dinge, die der Generator bisher nicht tat, obwohl das Format sie
+kennt — und die zusammen die Antwort auf „monoton“ sind:
+
+**Groove aus dem Lied** (`core/grooveAnschluss.ts`). `grooveAusLied` mass
+das Timing eines Stuecks schon lange, aber kein Generator rief es auf.
+Jetzt misst `liedZuSet` auf dem Drums-Stem des Drops (ohne Stems: auf dem
+Drop-Fenster) eine 16-Step-Vorlage und legt den mittleren Versatz der
+Offbeats als **Swing** (−50…+50 %, Pattern-Byte 0x24, geraetebestaetigt)
+auf alle Patterns; unter 3 % bleibt es gerade. Die Vorlage selbst liegt
+dem Set als `<Lied>.e2gv` bei (CLI) — fuer Werkbank oder Firmware, wenn
+ein Part per grooveType darauf zeigen soll. `groove: false` schaltet ab.
+
+**Ketten-Variation** (`core/kettenVariation.ts`). Alle Patterns einer
+Aufbau-Kette trugen dieselben Steps. Jetzt bekommt Pattern k eine eigene
+Handschrift: Velocity-Streuung ±10 auf Parts 1–9 aus einem festen
+Zufallsgeber (reproduzierbar), bei ungeradem k rotiert die Hat-Figur um
+zwei Steps mit Akzentwechsel 82/70 und ein Ghost-Kick (70, Gate 8) sitzt
+auf Step 59, bei k % 4 = 3 endet der Takt mit dem Snare-Fill aus der
+Editor-Definition. Im Aufbau greift das VOR dem Snare-Fill der letzten
+Stufe (der bleibt exakt), in den VRS-Patterns NACH dem Punch. Der Drop
+bleibt byteweise, wie er war; Parts 13–16 (Melodie, Vocals) ueberall.
+`variation: false` schaltet ab.
+
+**Motion-Sequenzen** (`core/motionGen.ts`). Acht Slots je Pattern,
+`writeMotionTable` schrieb sie seit langem, gesetzt hat sie niemand. Jetzt:
+Filter-Cutoff-Sweep 30 → 127 auf den Melo-Parts 13/14, ueber die
+Aufbau-Stufen verteilt (Stufe i deckt Abschnitt i/n der Strecke, die Kette
+spielt einen durchgehenden Anstieg); im Drop faehrt der Master-FX-Edit
+global 0 → 80 und die Kick faellt ab Step 57 in der Tonhoehe 64 → 40.
+`motion: false` schaltet ab.
+
+⚠ **ParamIDs.** Gemessen ist nur 4 = Osc Edit. Der Rest kommt aus der
+Werksbank e2s-2016 (248 belegte Slots, ausgewertet 2026-09-04): **5** ist
+mit 45 Slots die haeufigste Automation, 31 davon Rampen 0…106 auf Drum-
+und Synth-Parts — so sieht ein Cutoff-Sweep aus. **2** (4 Slots, Werte
+43…65 um 64) ist als Pitch vermutet. **16** zielt global (Ziel 0), 23 von 29
+Slots Rampen 0…69: Master-FX-Edit; **15** global binaer: MFX an/aus; **17**
+binaer auf Synth-Parts: IFX an/aus. `MOTTEST.e2spat`
+(`scripts/make-mottest.mjs`, liegt in G:\Downloads\TekkForge\AMTTEST) prueft
+es: P1 Cutoff-Rampe, P2 Pitch-Fall im letzten Takt, P3 Osc-Edit als
+gemessene Referenz, P4 ohne Motion, global MFX-Edit. Tut P1 nichts, ist 5
+nicht der Cutoff — was stattdessen passiert, sagt, welcher Parameter es ist.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

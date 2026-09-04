@@ -87,8 +87,24 @@ describe("patternGen", () => {
     expect(p.bpm).toBe(180);
     expect(p.name.trim()).toBe(patterns[0].name);
   });
+  it("aufbau mit Variation: Drop wie ohne Variation, Melodie/Vocals ueberall positionsgleich, Schlagzeug lebt", () => {
+    const rezept = regelRezept(projekt, { modus: "jam" });
+    const mit = baueAufbau(rezept, projekt, { startSlot: 5 }).patterns;
+    const ohne = baueAufbau(rezept, projekt, { startSlot: 5, variation: false }).patterns;
+    expect(mit.length).toBe(ohne.length);
+    const dropIdx = mit.findIndex((p) => p.name.endsWith("DROP"));
+    expect(JSON.stringify(mit[dropIdx])).toBe(JSON.stringify(ohne[dropIdx]));
+    const aktivMuster = (p: (typeof mit)[0], idx: number) => p.parts[idx].steps.map((s) => !!s.active).join("");
+    mit.forEach((p, i) => {
+      for (let idx = 12; idx < 16; idx++) expect(aktivMuster(p, idx)).toBe(aktivMuster(ohne[i], idx));
+      for (let idx = 0; idx < 16; idx++) expect(p.parts[idx].muted).toBe(ohne[i].parts[idx].muted);
+    });
+    // mindestens ein Aufbau-Pattern hat andere Kick-Velocities als ohne Variation
+    const vel = (p: (typeof mit)[0]) => p.parts[0].steps.map((s) => (s.active ? s.velocity : -1)).join(",");
+    expect(mit.slice(0, dropIdx).some((p, i) => vel(p) !== vel(ohne[i]))).toBe(true);
+  });
   it("aufbau: Steps ueberall positionsgleich, Mutes wachsen monoton, Kick erst im Drop, Kette verbunden", () => {
-    const { patterns } = baueAufbau(regelRezept(projekt, { modus: "jam" }), projekt, { startSlot: 5 });
+    const { patterns } = baueAufbau(regelRezept(projekt, { modus: "jam" }), projekt, { startSlot: 5, variation: false });
     expect(patterns.length).toBeGreaterThanOrEqual(3);
     const dropIdx = patterns.findIndex((p) => p.name.endsWith("DROP"));
     const drop = patterns[dropIdx];

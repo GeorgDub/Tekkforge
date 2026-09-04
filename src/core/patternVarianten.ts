@@ -262,7 +262,8 @@ function duenn(p: EditorPattern, raster: number): void {
  * Zweimal dieselbe Variante soll zweimal dasselbe ergeben, sonst laesst sich
  * ein Ergebnis weder pruefen noch wiederholen.
  */
-function zufall(startwert: number): () => number {
+/** Linearer Kongruenzgenerator — reproduzierbar, fuer Varianten und Ketten-Variation. */
+export function zufall(startwert: number): () => number {
   let z = (startwert >>> 0) || 1;
   return () => {
     z = (z * 1664525 + 1013904223) >>> 0;

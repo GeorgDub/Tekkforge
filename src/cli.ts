@@ -27,6 +27,7 @@ import * as os from "node:os";
 import { spawnSync } from "node:child_process";
 import { parseWav, encodeWav16 } from "./core/wavCodec";
 import { liedZuSet, type StemErgebnis } from "./core/liedZuSet";
+import { encodeGroove } from "./core/e2Groove";
 import { alsAllPat } from "./core/patternGen";
 
 const CLI_VERSION = "0.2.0";
@@ -283,10 +284,12 @@ function cmdLied(args: string[]): void {
     const stamm = name.replace(/_\d+.*$/, "").replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 40) || "set";
     fs.writeFileSync(path.join(ziel, `${stamm}.all`), new Uint8Array(set.bank));
     fs.writeFileSync(path.join(ziel, `${stamm}.e2sallpat`), new Uint8Array(alsAllPat(set.patterns)));
+    // Groove-Vorlage des Lieds (320-Byte-Block) — fuer Werkbank oder Firmware; der Swing steckt schon in den Patterns.
+    if (set.groove) fs.writeFileSync(path.join(ziel, `${stamm}.e2gv`), encodeGroove(set.groove));
     process.stdout.write(
       `${stamm}: ${set.gemessen.toFixed(1)}×${set.oktave} = ${set.bpm} BPM · ` +
         `${set.projekt.samples.length} Samples (${set.zaehler.drums} Drums, ${set.zaehler.vox} Vocals) · ` +
-        `${set.patterns.length} Patterns
+        `${set.patterns.length} Patterns · Swing ${set.swing > 0 ? "+" : ""}${set.swing} %
 `,
     );
     for (const h of set.hinweise) process.stdout.write(`   ! ${h}

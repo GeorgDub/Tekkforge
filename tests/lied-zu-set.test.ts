@@ -62,6 +62,32 @@ describe("liedZuSet", () => {
     expect(set.zaehler.vox).toBe(0);
   });
 
+  it("misst den Groove: gerades Lied bleibt gerade, spaete Offbeats geben Swing auf jedes Pattern", () => {
+    const gerade = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, tekkDrums, bpm: 180 });
+    expect(gerade.swing).toBe(0);
+    expect(gerade.patterns.every((p) => !p.swing)).toBe(true);
+    expect(gerade.hinweise.join(" ")).toMatch(/gerade/);
+    // Lied mit Offbeat-Schlaegen, die ein Viertel Step spaet kommen
+    const sr = 44100;
+    const bpm = 180;
+    const step = (60 / bpm / 4) * sr;
+    const y = new Float32Array(Math.round(40 * sr));
+    for (let i = 0; i < y.length; i++) y[i] = Math.sin((2 * Math.PI * 220 * i) / sr) * 0.2;
+    for (let s = 0; s * step < y.length; s++) {
+      if (s % 2 === 1 && s % 4 !== 3) continue; // Viertel und jeder zweite Offbeat
+      const start = Math.round(s * step + (s % 2 === 1 ? step * 0.25 : 0));
+      for (let i = 0; i < 1500 && start + i < y.length; i++) y[start + i] += Math.sin((2 * Math.PI * 60 * i) / sr) * 0.8 * (1 - i / 1500);
+    }
+    const schwingt = liedZuSet(y, sr, { name: "S", kanaele: 1, tekkDrums, bpm, stems: stemsAttrappe(false) });
+    expect(schwingt.swing).toBeGreaterThan(5);
+    expect(schwingt.patterns.every((p) => p.swing === schwingt.swing)).toBe(true);
+    expect(schwingt.groove?.laenge).toBe(16);
+    // abschaltbar
+    const aus = liedZuSet(y, sr, { name: "S", kanaele: 1, tekkDrums, bpm, groove: false });
+    expect(aus.swing).toBe(0);
+    expect(aus.groove).toBeUndefined();
+  });
+
   it("mit tekk4 hat der Drop ein Schlagzeug", () => {
     const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, tekkDrums });
     const drop = set.patterns.find((p) => p.name.endsWith("DROP"))!;

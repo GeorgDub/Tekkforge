@@ -13,6 +13,8 @@ import type { Projekt, ProjektSample } from "./bankPlan";
 import { type Rezept, type Abschnitt, type Thema, type KickFigur, type BassFigur, type StabFigur, type Lage, pools } from "./rezept";
 import { stabAusRaster, bassAnMelo } from "./meloRaster";
 import { fillSchlaege } from "./patternVarianten";
+import { variierePattern } from "./kettenVariation";
+import { aufbauMotion, dropMotion } from "./motionGen";
 
 const N = 64;
 const MONO1 = 0;
@@ -303,6 +305,10 @@ export function baueAufbau(
      * Wer ausduennt, gibt das bewusst auf.
      */
     intro?: "duenn" | "voll";
+    /** Ketten-Variation (Vorgabe an): jedes Pattern ausser dem Drop bekommt eine eigene Handschrift. */
+    variation?: boolean;
+    /** Motion-Sequenzen (Vorgabe an): Filter-Sweep ueber den Aufbau, MFX-Rampe und Kick-Fall im Drop. */
+    motion?: boolean;
   } = {},
 ): { patterns: E2PatternInput[]; hinweise: string[] } {
   const start = opts.startSlot ?? 1;
@@ -393,12 +399,20 @@ export function baueAufbau(
     });
   const basis = { bpm: rezept.bpm, mfxType: opts.mfxType ?? 11, stepLength: 64 as const, alternate13_14: true, alternate15_16: true };
   const duennesIntro = opts.intro === "duenn";
+  // Ketten-Variation: jedes Pattern ausser dem Drop bekommt eine eigene
+  // Handschrift (Velocity-Streuung, Hat-Rotation, Ghost-Kick, Fill). Im
+  // Aufbau VOR dem Snare-Fill, damit der Fill exakt die Editor-Definition
+  // traegt; in den VRS-Patterns NACH dem Punch, damit die Kicks leben.
+  const variiere = (ps: E2PartInput[], k: number): E2PartInput[] =>
+    opts.variation === false ? ps : variierePattern({ ...basis, name: "", parts: ps }, k).parts;
   const patterns: E2PatternInput[] = stufen.map((an, i) => ({
     ...basis,
     name: `${tag} AUF${i + 1}`.slice(0, 16),
     parts: (i === stufen.length - 1 ? fill : i === 0 && duennesIntro ? ausduennen : (x: E2PartInput[]) => x)(
-      stufenPegel(mitMutes(dropParts, an), i, stufen.length),
+      variiere(stufenPegel(mitMutes(dropParts, an), i, stufen.length), i),
     ),
+    // Filter-Sweep ueber die Melo-Parts: die Kette spielt einen durchgehenden Anstieg
+    motionSlots: opts.motion === false ? undefined : aufbauMotion(i, stufen.length),
     chainTo: start + i + 1,
     // EINMAL je Stufe, nicht zweimal.
     //
@@ -414,6 +428,8 @@ export function baueAufbau(
     ...basis,
     name: `${tag} DROP`.slice(0, 16),
     parts: punch(mitMutes(partsFuer(versFuer(1)), null)),
+    // Master-FX faehrt hoch, die Kick faellt im letzten halben Takt
+    motionSlots: opts.motion === false ? undefined : dropMotion(),
     chainTo: extras ? start + patterns.length + 1 : 0,
     chainRepeat: 4,
   });
@@ -423,7 +439,7 @@ export function baueAufbau(
     patterns.push({
       ...basis,
       name: `${tag} VRS${ab + k + 3}`.slice(0, 16),
-      parts: punch(mitMutes(partsFuer(versFuer(2 + k)), null)),
+      parts: variiere(punch(mitMutes(partsFuer(versFuer(2 + k)), null)), stufen.length + 1 + k),
       chainTo: k < extras - 1 ? start + patterns.length + 1 : 0,
       // Je Durchgang ein Vocal-Segment weiter — sonst dauert die Kette doppelt
       // so lang wie das Lied, das sie abdecken soll.
