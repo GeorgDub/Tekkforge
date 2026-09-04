@@ -1805,7 +1805,9 @@ function togglePreview(): void {
     player.stop();
     btn.textContent = "▶ Vorhören";
   } else {
-    player.start(project.patterns[cur], project.samples);
+    // Getter statt Schnappschuss: Aenderungen im Raster und der Pattern-Wechsel
+    // (cur) kommen beim naechsten Step an, ohne Stop und Play.
+    player.start(() => project.patterns[cur], () => project.samples);
     btn.textContent = "■ Stop";
   }
 }
