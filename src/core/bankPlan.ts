@@ -124,6 +124,14 @@ export interface PlanOptionen {
    * laesst zuletzt die hintersten Slots weg — mit Warnung.
    */
   ramBytes?: number;
+  /** Loop-Punkte auf Taktgrenzen und forward-Loop fuer Schleifen (Vorgabe an); aus = One-Shot wie frueher. */
+  loopPunkte?: boolean;
+  /**
+   * 64 Slice-Marker je Schleife (Vorgabe AUS). Am Geraet gehoert (2026-09-04):
+   * mit Markern spielt es die Vocals kurz und abgehackt — Slice-Modus.
+   * Nur setzen, wenn die Schleife als Slice-Sequenz gespielt werden soll.
+   */
+  slices?: boolean;
 }
 export interface Teil {
   name: string;
@@ -423,15 +431,20 @@ export function planeBank(eintraege: ScanEintrag[], opts: PlanOptionen): { proje
       if (rate !== SR) halbiert++;
       // Schleifen, die sich nach der Haelfte wiederholen, werden nur zur Haelfte
       // gespeichert — der forward-Loop fuellt den Rest. Nicht bei Vocals.
-      const halbeTakte = t.kind === "loop" && e.rolle !== "vox" ? wiederholtSich(t.pcm, t.takte, SR, opts.bpm) : null;
+      // Nur mit forward-Loop darf die Haelfte gespeichert werden — als One-Shot spielte sie sonst nur halb.
+      const mitLoop = opts.loopPunkte !== false;
+      const halbeTakte = mitLoop && t.kind === "loop" && e.rolle !== "vox" ? wiederholtSich(t.pcm, t.takte, SR, opts.bpm) : null;
       const quelle = halbeTakte ? t.pcm.subarray(0, Math.round(halbeTakte * taktFrames(SR, opts.bpm))) : t.pcm;
       if (halbeTakte) wiederholt++;
       const pcm = rate !== SR ? polyPhaseResample(quelle, SR, rate, 1) : quelle;
       // Loop-Punkte auf der Taktgrenze (Nulldurchgang) und 64 Slice-Marker —
       // damit das Geraet die Schleife rund spielt und selbst choppen kann.
       const gespeichert = halbeTakte ?? t.takte;
-      const loop = t.kind === "loop" ? loopPunkteAufNull(pcm, gespeichert, rate, opts.bpm) : null;
-      const slice = loop ? slicesFuer(pcm, sliceAnzahl(gespeichert)) : null;
+      const loop = mitLoop && t.kind === "loop" ? loopPunkteAufNull(pcm, gespeichert, rate, opts.bpm) : null;
+      // Slice-Marker nur auf Wunsch: am Geraet gehoert (2026-09-04) spielt ein
+      // Slot mit Markern die Vocals „ganz kurz und abgehackt“ — das Geraet
+      // nimmt die Marker als Slice-Modus, nicht als Beigabe.
+      const slice = opts.slices === true && t.kind === "loop" ? slicesFuer(pcm, sliceAnzahl(gespeichert)) : null;
       slots.push({
         slotIndex: displayNumberToSlotIndex(nr), sampleNumber: displayNumberToOsc(nr), name, category: KAT[e.rolle], pcmData: pcm, sampleRate: rate, channels: 1,
         loopType: loop ? LOOP_TYPE_FORWARD : LOOP_TYPE_ONESHOT,

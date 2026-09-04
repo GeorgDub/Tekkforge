@@ -91,7 +91,7 @@ describe("planeBank: Loop-Punkte und Slices im Generator-Weg", () => {
   it("Loops bekommen forward-Loop auf der Taktgrenze und 64 Marker, One-Shots nicht", () => {
     const melo = eintrag("Melo Loop", "melo", takte(0, 1, 2, 3));
     const kick = eintrag("Kick", "kick", takte(0).subarray(0, 4000));
-    const r = planeBank([melo, kick], { name: "t", bpm: BPM, bankZeit: "x", rateNachRolloff: false });
+    const r = planeBank([melo, kick], { name: "t", bpm: BPM, bankZeit: "x", rateNachRolloff: false, slices: true });
     const bank = parseE2sBank(new Uint8Array(r.bank), "t.all");
     const m = bank.slots.find((s) => s?.name.trim().startsWith("Melo"))!;
     const k = bank.slots.find((s) => s?.name.trim().startsWith("Kick"))!;
@@ -107,7 +107,7 @@ describe("planeBank: Loop-Punkte und Slices im Generator-Weg", () => {
 
   it("ein Vier-Takter aus zwei gleichen Haelften wird als zwei Takte gespeichert — aber nicht bei Vocals", () => {
     const abab = takte(0, 1, 0, 1);
-    const r = planeBank([eintrag("Melo AB", "melo", abab), eintrag("Vox AB", "vox", abab)], { name: "t", bpm: BPM, bankZeit: "x", rateNachRolloff: false });
+    const r = planeBank([eintrag("Melo AB", "melo", abab), eintrag("Vox AB", "vox", abab)], { name: "t", bpm: BPM, bankZeit: "x", rateNachRolloff: false, slices: true });
     const melo = r.projekt.samples.find((s) => s.rolle === "melo")!;
     const vox = r.projekt.samples.find((s) => s.rolle === "vox")!;
     expect(melo.takte).toBe(4);

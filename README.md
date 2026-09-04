@@ -1177,6 +1177,14 @@ Punkt; Slice-Marker schrieb nur `make-folder-bank.mjs`. Jetzt
 Pattern rund ueber die Taktgrenze, und fuellt ein halb gespeicherter
 Vier-Takter die vier Takte ohne Naht?
 
+**Gehoert (2026-09-04 abends, Set GERAET):** im Editor richtig, am Geraet
+„die Vocal-Samples ganz kurz und abgehackt“ — der Nutzer sah es am Geraet:
+die Samples waren geslicet. Das Geraet nimmt 64 Marker als Slice-Modus,
+nicht als Beigabe. **Slices sind darum aus** (`PlanOptionen.slices: true`
+setzt sie fuer eine Slice-Sequenz bewusst); Loop-Punkte bleiben an
+(`loopPunkte: false` schaltet auf One-Shot zurueck), das Halbieren
+wiederholter Schleifen haengt an den Loop-Punkten.
+
 ## Bassline aus dem Bass-Stem als Noten (2026-09-04, Hoerprobe offen)
 
 Der Bass-Stem von Demucs war bisher nur ein weiteres Sample. Jetzt
