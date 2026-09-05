@@ -1397,6 +1397,16 @@ Auswahlmenue ueber die Samples der Bank (passende Rollen zuerst, Vorschlag
 des Planers in Klammern), „Alles automatisch“ setzt zurueck. Danach
 „Patterns erzeugen“ — die Wahl gilt fuer jedes Pattern des Laufs.
 
+## Sample-Pool: +12 dB fuer alle auf einmal (2026-09-05)
+
+Nutzerwunsch: nicht jedes Sample einzeln auf +12 dB stellen. Im Sample-Pool
+des Editors stehen neben Filter und Suche die Knoepfe **+12 alle** und
+**+12 keine** — sie setzen bzw. entfernen das Gain-Flag bei allen gerade
+ANGEZEIGTEN Samples (Filter Alle/Factory/User und Suchtext gelten, so
+lassen sich etwa nur die User-Samples anheben). `setzeGain12` in
+`core/patternWerkzeuge.ts` zaehlt die Aenderungen; am Bildschirm ueber den
+Treiber gefahren: Klatsch.wav laden, +12 alle → gesetzt, +12 keine → weg.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

@@ -101,3 +101,21 @@ export function haengePatternsAn(project: EditorProject, neue: readonly EditorPa
 export function istUnberuehrt(p: EditorPattern): boolean {
   return p.parts.every((part) => part.sampleNumber === null && part.steps.every((s) => !s.on));
 }
+
+/**
+ * +12-dB-Flag fuer viele Samples auf einmal (Nutzerwunsch 2026-09-05: nicht
+ * jedes einzeln). Liefert, wie viele sich geaendert haben.
+ */
+export function setzeGain12(samples: readonly { gain12db?: boolean }[], an: boolean): number {
+  let n = 0;
+  for (const s of samples) {
+    if (an && !s.gain12db) {
+      s.gain12db = true;
+      n++;
+    } else if (!an && s.gain12db) {
+      delete s.gain12db;
+      n++;
+    }
+  }
+  return n;
+}

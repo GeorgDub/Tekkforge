@@ -76,7 +76,7 @@ import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
 import { rendereKette } from "../core/patternRender";
-import { verdoppleSteps, kopierePart, fuegePartEin, haengePatternsAn, istUnberuehrt, type PartAblage } from "../core/patternWerkzeuge";
+import { verdoppleSteps, kopierePart, fuegePartEin, haengePatternsAn, istUnberuehrt, setzeGain12, type PartAblage } from "../core/patternWerkzeuge";
 
 /** Zwischenablage fuer „Part kopieren“ — lebt, solange der Editor offen ist. */
 let partAblage: PartAblage | null = null;
@@ -2106,6 +2106,15 @@ export function initEditor(): void {
   const poolDrop = $("poolDrop");
   const poolFile = $<HTMLInputElement>("poolFile");
   poolDrop.addEventListener("click", () => poolFile.click());
+  // +12 dB fuer alle angezeigten Samples auf einmal (Filter und Suche gelten)
+  const gainAlle = (an: boolean) => {
+    const sichtbar = filterePool(project.samples, poolFilterWahl, poolSucheText);
+    const n = setzeGain12(sichtbar, an);
+    if (n) markDirty();
+    renderPool();
+  };
+  $("poolGainAlle").addEventListener("click", () => gainAlle(true));
+  $("poolGainKeine").addEventListener("click", () => gainAlle(false));
   poolFile.addEventListener("change", () => {
     if (poolFile.files?.length) void importWavFiles(poolFile.files);
     poolFile.value = "";
