@@ -1491,6 +1491,17 @@ Reaktionen mit Uhrzeit, `tekkforge.paddeck.midimixLog` im localStorage,
 ueberlebt den Neustart) — SysEx vom Geraet bleibt draussen. Damit laesst
 sich „geht nicht richtig“ am Controller ohne Messfassung nachlesen.
 
+**Nachtrag 5 (2026-09-05): Das Layout hoert nur noch auf den Controller.**
+Das Controller-Log der ersten 0.6.20-Sitzung zeigte statt Tastendruecken
+nur Electribe-Noten: `9x 3c` auf Kanal 1–16, 60 Zeilen in zwei Sekunden.
+Der Pad-Deck-Empfaenger war auf BEIDE Eingaenge registriert (Learn soll ja
+auch vom Geraet lernen), und `midimixVerarbeite` nahm jede Nachricht als
+MIDImix-Taste — die Geraete-Noten verdraengten jeden echten Tastendruck aus
+dem Log, und Part-Noten mit Nummer ≤ 27 (Bank links = 25, Mute = 1/4/7/10)
+haetten sogar das Layout ausgeloest. Jetzt bekommt der Empfaenger die Quelle
+mit: Layout und Log sehen nur den Controller-Eingang, das Geraet erreicht
+weiterhin Learn und die gelernten Pads.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

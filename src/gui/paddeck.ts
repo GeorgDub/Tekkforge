@@ -972,14 +972,19 @@ export function initPadDeck(istOffen: () => boolean): void {
   richteMidimixEin();
 
   // MIDI: Learn oder Trigger (aktive Seite) — vom Controller-Eingang UND vom Gerät.
-  const verarbeiteTrigger = (bytes: number[]) => {
+  // Das MIDImix-Layout sieht aber NUR den Controller-Eingang: die Electribe
+  // schickt beim Spielen ihre Part-Noten (Note 60 auf Kanal 1–16) zurueck, und
+  // die landeten im Controller-Log (60 Zeilen in 2 s, jeder Tastendruck sofort
+  // verdraengt) und als Noten <= 27 sogar in den Layout-Tasten (Nutzerlog
+  // 2026-09-05 16:00). Geraete-Nachrichten gehen deshalb nur an Learn und Pads.
+  const verarbeiteTrigger = (bytes: number[], quelle: "geraet" | "controller") => {
     const st = bytes[0] & 0xf0;
     const kanal = bytes[0] & 0x0f;
     // Live-FX zuerst: ein belegter Regler geht als FX-Parameter ans Gerät und
     // nicht mehr an die Pad-Erkennung. Lernen hat trotzdem Vorrang, sonst
     // liesse sich ein Regler nie einem Pad zuweisen.
     // MIDImix-Layout zuerst: ein belegter Regler/Fader/Taster geht ans Geraet und nicht an Live-FX oder Pads
-    if (lernePad === null && midimixVerarbeite(bytes)) return;
+    if (lernePad === null && quelle === "controller" && midimixVerarbeite(bytes)) return;
     if (lernePad === null && st === 0xb0 && bytes.length >= 3 && fxLiveVerarbeite(bytes[1], bytes[2])) return;
     const istNote = st === 0x90 && bytes.length >= 3 && bytes[2] > 0;
     const istCc = st === 0xb0 && bytes.length >= 3 && bytes[2] >= 64 && bytes[1] !== 0x20 && bytes[1] !== 0x00;
@@ -1000,6 +1005,6 @@ export function initPadDeck(istOffen: () => boolean): void {
     );
     if (i >= 0) void fuehrePadAus(i);
   };
-  registriereEmpfaenger(verarbeiteTrigger);
-  panelBridge.midi.onController = verarbeiteTrigger;
+  registriereEmpfaenger((bytes) => verarbeiteTrigger(bytes, "geraet"));
+  panelBridge.midi.onController = (bytes) => verarbeiteTrigger(bytes, "controller");
 }
