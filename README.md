@@ -1451,6 +1451,16 @@ gespeichert) — die Mute-LEDs des MIDImix folgen den Part-Mutes des
 aktuellen Patterns (`ledNachrichten`: Note-On 127 = an, 0 = aus, Rec-LEDs
 aus), nach jedem Mute und jedem Bank-Wechsel.
 
+**Nachtrag 2 (2026-09-05): Tasten fallen nicht mehr durch, IFX-Tasten im
+FX-Layout.** Nutzerbefund: die Mute-Tasten wechselten Patterns — Pads
+waren per Learn auf dieselben Noten belegt, und Tasten ohne Ziel liefen
+weiter zu den Pads. Bei aktivem Layout gehoert jetzt JEDE MIDImix-Taste
+(Noten 1–27) dem Layout. In den FX-Vorgaben schaltet die Mute-Taste den
+**IFX des Parts** an/aus (Ziel „ifx“, Schalter-CC 104 auf dem Part-Kanal,
+lokal in den Part-Parametern gemerkt), und die LED zeigt den IFX-Zustand;
+in Mixer und Klang mutet sie den Part wie gehabt. Im Auswahlmenue der
+Tasten steht „Part N IFX an/aus“ auch fuer eigene Layouts.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

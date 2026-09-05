@@ -119,3 +119,32 @@ describe("midimixLayout — Bank-Tasten und LEDs", () => {
     expect([...ledNachrichten(l9, [...muted, true])[0]]).toEqual([0x90, 1, 127]);
   });
 });
+
+import { ifxSchalterNachricht } from "../src/core/midimixLayout";
+
+describe("midimixLayout — IFX-Tasten im FX-Layout", () => {
+  it("FX-Layout: Mute-Taste schaltet den IFX des Parts, Mixer-Layout mutet den Part", () => {
+    expect(layoutFx(1).spalten[0].mute).toEqual({ art: "ifx", part: 1 });
+    expect(layoutFx(9).spalten[7].mute).toEqual({ art: "ifx", part: 16 });
+    expect(layoutMixer(1).spalten[0].mute).toEqual({ art: "mute", part: 1 });
+    expect(tastenZielAus(zielWert({ art: "ifx", part: 5 }))).toEqual({ art: "ifx", part: 5 });
+    expect(beschreibeZiel({ art: "ifx", part: 5 })).toBe("Part 5 IFX an/aus");
+    expect(deserialisiereLayout(serialisiereLayout(layoutFx(1))).spalten[2].mute).toEqual({ art: "ifx", part: 3 });
+  });
+
+  it("ifxSchalterNachricht: Schalter-CC 104 auf dem Part-Kanal, 127 = an, 0 = aus", () => {
+    expect([...ifxSchalterNachricht({ art: "ifx", part: 4 }, true)!]).toEqual([0xb3, 104, 127]);
+    expect([...ifxSchalterNachricht({ art: "ifx", part: 4 }, false)!]).toEqual([0xb3, 104, 0]);
+    expect(ifxSchalterNachricht({ art: "mute", part: 4 }, true)).toBeNull();
+  });
+
+  it("LEDs im FX-Layout folgen dem IFX-Zustand", () => {
+    const l = layoutFx(1);
+    const msgs = ledNachrichten(l, { muted: [true, true, true, true, true, true, true, true], ifxOn: [true, false, false, false, false, false, false, true] });
+    expect([...msgs[0]]).toEqual([0x90, 1, 127]);
+    expect([...msgs[2]]).toEqual([0x90, 4, 0]);
+    expect([...msgs[14]]).toEqual([0x90, 22, 127]);
+    // alte Aufrufform (nur Mutes) bleibt gueltig
+    expect([...ledNachrichten(layoutMixer(1), [true])[0]]).toEqual([0x90, 1, 127]);
+  });
+});

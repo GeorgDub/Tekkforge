@@ -21,7 +21,7 @@
  * Part-Mute und die Edit-Buffer-Uebertragung (siehe Pad-Deck).
  */
 import { buildKnobCc, ccValueToParam, KNOB_CCS } from "./e2KnobCc";
-import { buildMfxCc, buildNoteOn, buildNoteOff } from "./e2Remote";
+import { buildMfxCc, buildNoteOn, buildNoteOff, buildSchalterCc } from "./e2Remote";
 import { buildSetFxParam, fxSlotForPart, MFX_SLOT } from "./hacktribeNrpn";
 
 export const MIDIMIX = {
@@ -53,7 +53,7 @@ export type ReglerZiel =
   | null;
 
 /** Was eine Taste tut. */
-export type TastenZiel = { art: "trigger"; part: number } | { art: "mute"; part: number } | null;
+export type TastenZiel = { art: "trigger"; part: number } | { art: "mute"; part: number } | { art: "ifx"; part: number } | null;
 
 export interface MidimixSpalte {
   knobs: [ReglerZiel, ReglerZiel, ReglerZiel];
@@ -114,6 +114,8 @@ export function layoutFx(vonPart = 1): MidimixLayout {
     ];
   });
   l.master = { art: "mfxParam", param: 0 };
+  // Im FX-Layout schaltet die Mute-Taste den IFX des Parts, nicht den Part (Nutzerwunsch 2026-09-05)
+  l.spalten.forEach((s, i) => (s.mute = { art: "ifx", part: vonPart + i }));
   return l;
 }
 
@@ -195,6 +197,12 @@ export function tastenNachrichten(ziel: TastenZiel, an: boolean): Uint8Array[] {
   return [an ? buildNoteOn(ziel.part - 1, 60, 110) : buildNoteOff(ziel.part - 1, 60)];
 }
 
+/** IFX an/aus als Stock-CC auf dem Part-Kanal (Schalter-CC, geraetebestaetigt). */
+export function ifxSchalterNachricht(ziel: TastenZiel, an: boolean): Uint8Array | null {
+  if (!ziel || ziel.art !== "ifx") return null;
+  return buildSchalterCc(ziel.part - 1, "ifxOn", an);
+}
+
 export function beschreibeZiel(z: ReglerZiel | TastenZiel): string {
   if (!z) return "—";
   switch (z.art) {
@@ -210,6 +218,8 @@ export function beschreibeZiel(z: ReglerZiel | TastenZiel): string {
       return `Part ${z.part} anspielen`;
     case "mute":
       return `Part ${z.part} stumm`;
+    case "ifx":
+      return `Part ${z.part} IFX an/aus`;
   }
 }
 
@@ -229,6 +239,8 @@ export function zielWert(z: ReglerZiel | TastenZiel): string {
       return `trig:${z.part}`;
     case "mute":
       return `mute:${z.part}`;
+    case "ifx":
+      return `ifx:${z.part}`;
   }
 }
 
@@ -245,6 +257,7 @@ export function tastenZielAus(wert: string): TastenZiel {
   let m: RegExpExecArray | null;
   if ((m = /^trig:(\d+)$/.exec(wert))) return { art: "trigger", part: Number(m[1]) };
   if ((m = /^mute:(\d+)$/.exec(wert))) return { art: "mute", part: Number(m[1]) };
+  if ((m = /^ifx:(\d+)$/.exec(wert))) return { art: "ifx", part: Number(m[1]) };
   return null;
 }
 
@@ -291,16 +304,24 @@ export function vorgabeIdVon(layout: MidimixLayout): string | null {
   return LAYOUT_VORGABEN.find((v) => v.name === layout.name)?.id ?? null;
 }
 
+/** Zustand je Part (Index = Part−1) fuer die LEDs. */
+export interface LedZustand {
+  muted: readonly boolean[];
+  /** IFX an je Part — fuer Tasten mit Ziel „ifx“. */
+  ifxOn?: readonly boolean[];
+}
+
 /**
  * LED-Nachrichten an den MIDImix: Mute-LED an, wenn der zugeordnete Part
- * stumm ist (Note-On 127), sonst aus (Note-On 0); Rec-LEDs aus. `muted[i]`
- * ist der Mute-Zustand von Part i+1 im aktuellen Pattern.
+ * stumm ist (bzw. sein IFX an ist, bei Ziel „ifx“) — Note-On 127, sonst
+ * Note-On 0; Rec-LEDs aus.
  */
-export function ledNachrichten(layout: MidimixLayout, muted: readonly boolean[]): Uint8Array[] {
+export function ledNachrichten(layout: MidimixLayout, zustand: LedZustand | readonly boolean[]): Uint8Array[] {
+  const z: LedZustand = Array.isArray(zustand) ? { muted: zustand as readonly boolean[] } : (zustand as LedZustand);
   const out: Uint8Array[] = [];
   layout.spalten.forEach((sp, s) => {
     const m = sp.mute;
-    const an = !!m && m.art === "mute" && !!muted[m.part - 1];
+    const an = !!m && (m.art === "mute" ? !!z.muted[m.part - 1] : m.art === "ifx" ? !!z.ifxOn?.[m.part - 1] : false);
     out.push(new Uint8Array([0x90 | MIDIMIX.kanal0, MIDIMIX.mute[s], an ? 127 : 0]));
     out.push(new Uint8Array([0x90 | MIDIMIX.kanal0, MIDIMIX.rec[s], 0]));
   });

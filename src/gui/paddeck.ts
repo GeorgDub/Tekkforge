@@ -66,6 +66,7 @@ import {
   naechsteVorgabeId,
   vorgabeIdVon,
   ledNachrichten,
+  ifxSchalterNachricht,
   type MidimixLayout,
   type ReglerZiel,
   type TastenZiel,
@@ -628,6 +629,7 @@ function mmTastenOptionen(gewaehlt: TastenZiel): string {
   const teile = [o("", "—")];
   for (let p = 1; p <= 16; p++) teile.push(o(`trig:${p}`, `Part ${p} anspielen`));
   for (let p = 1; p <= 16; p++) teile.push(o(`mute:${p}`, `Part ${p} stumm`));
+  for (let p = 1; p <= 16; p++) teile.push(o(`ifx:${p}`, `Part ${p} IFX an/aus`));
   return teile.join("");
 }
 
@@ -705,7 +707,11 @@ function midimixVerarbeite(bytes: number[]): boolean {
       return true;
     }
     const ort = tastenOrt(bytes[1]);
-    if (!ort || ort.was === "solo") return false;
+    // Bei aktivem Layout gehoert JEDE MIDImix-Taste dem Layout — nichts faellt
+    // mehr zu den Pads durch (Nutzerbefund 2026-09-05: Mute-Tasten wechselten
+    // Patterns, weil Pads auf dieselben Noten gelernt waren).
+    if (!ort) return bytes[1] <= 27;
+    if (ort.was === "solo") return true;
     const ziel = midimix.layout.spalten[ort.spalte]?.[ort.was] ?? null;
     if (!ziel) return true;
     if (ziel.art === "trigger") {
@@ -713,18 +719,27 @@ function midimixVerarbeite(bytes: number[]): boolean {
       if (an) mmInfo(beschreibeZiel(ziel));
       return true;
     }
+    if (!an) return true;
+    const p = panelBridge.project.patterns[panelBridge.patternIndex];
+    const part = p?.parts[ziel.part - 1];
+    if (!part) return true;
+    if (ziel.art === "ifx") {
+      // IFX an/aus: lokal im Part merken und als Schalter-CC ans Geraet
+      const neu = (part.params?.ifxOn ?? 0) ? 0 : 1;
+      part.params = { ...(part.params ?? {}), ifxOn: neu };
+      const cc = ifxSchalterNachricht(ziel, neu === 1);
+      if (cc) panelBridge.midi.send(cc);
+      panelBridge.markDirty();
+      mmInfo(`${beschreibeZiel(ziel)}: ${neu ? "an" : "aus"}`);
+      mmLeds();
+      return true;
+    }
     // Mute: lokal im aktuellen Pattern kippen und SOFORT in den Edit-Buffer —
     // wie die Pads im Spiegel-Modus; Panel-NRPN nimmt das Geraet nicht an.
-    if (an) {
-      const p = panelBridge.project.patterns[panelBridge.patternIndex];
-      const part = p?.parts[ziel.part - 1];
-      if (part) {
-        const stumm = !part.muted;
-        setzeMutes([ziel.part - 1], stumm, true);
-        mmInfo(`${beschreibeZiel(ziel)}: ${stumm ? "stumm" : "an"}`);
-        mmLeds();
-      }
-    }
+    const stumm = !part.muted;
+    setzeMutes([ziel.part - 1], stumm, true);
+    mmInfo(`${beschreibeZiel(ziel)}: ${stumm ? "stumm" : "an"}`);
+    mmLeds();
     return true;
   }
   return false;
@@ -735,7 +750,8 @@ function mmLeds(): void {
   if (!panelBridge.midi.controllerOutputId) return;
   const p = panelBridge.project.patterns[panelBridge.patternIndex];
   const muted = p ? p.parts.map((x) => !!x.muted) : [];
-  for (const m of ledNachrichten(midimix.layout, muted)) panelBridge.midi.sendController(m);
+  const ifxOn = p ? p.parts.map((x) => (x.params?.ifxOn ?? 0) === 1) : [];
+  for (const m of ledNachrichten(midimix.layout, { muted, ifxOn })) panelBridge.midi.sendController(m);
 }
 
 function richteMidimixEin(): void {
