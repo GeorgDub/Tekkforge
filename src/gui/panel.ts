@@ -548,6 +548,25 @@ export function setzeMutes(parts: number[], muted: boolean, sofort = false): voi
   renderPanel();
 }
 
+/**
+ * Mute von einem Controller (MIDImix): wirkt auf das GERAETE-Pattern im
+ * Spiegel-Modus. Ohne Spiegel wird es erst vom Geraet geholt — sonst ginge
+ * das Editor-Pattern in den Edit-Buffer, und das ist meist ein leeres
+ * Vorgabe-Pattern (Nutzerbefund 2026-09-05: „wechselt auf ein leeres
+ * Pattern“). null, wenn kein Geraete-Pattern zu bekommen war.
+ */
+export async function muteVomController(part0: number): Promise<{ stumm: boolean; name: string } | null> {
+  if (modus !== "live" || !livePattern) {
+    await syncVomGeraet();
+    if (modus !== "live" || !livePattern) return null;
+  }
+  const part = livePattern.parts[part0];
+  if (!part) return null;
+  const stumm = !part.muted;
+  setzeMutes([part0], stumm, true);
+  return { stumm, name: livePattern.name };
+}
+
 export async function transportStart(mitClock: boolean): Promise<void> {
   const bpm = aktuellesPattern().bpm;
   try {

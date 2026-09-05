@@ -25,6 +25,7 @@ import {
   transportStart,
   transportStop,
   wechslePattern,
+  muteVomController,
 } from "./panel";
 import {
   PAD_FARBEN,
@@ -720,7 +721,16 @@ function midimixVerarbeite(bytes: number[]): boolean {
       return true;
     }
     if (!an) return true;
-    const p = panelBridge.project.patterns[panelBridge.patternIndex];
+    if (ziel.art === "mute") {
+      // Mute wirkt auf das GERAETE-Pattern (Spiegel) — ohne Spiegel holt es das Panel erst vom Geraet
+      mmInfo(`${beschreibeZiel(ziel)} …`);
+      void muteVomController(ziel.part - 1).then((r) => {
+        mmInfo(r ? `${beschreibeZiel(ziel)}: ${r.stumm ? "stumm" : "an"} („${r.name}“)` : `${beschreibeZiel(ziel)}: kein Geraete-Pattern — im Panel „Sync vom Gerät“ drücken`);
+        mmLeds();
+      });
+      return true;
+    }
+    const p = aktuellesPanelPattern();
     const part = p?.parts[ziel.part - 1];
     if (!part) return true;
     if (ziel.art === "ifx") {
@@ -734,12 +744,6 @@ function midimixVerarbeite(bytes: number[]): boolean {
       mmLeds();
       return true;
     }
-    // Mute: lokal im aktuellen Pattern kippen und SOFORT in den Edit-Buffer —
-    // wie die Pads im Spiegel-Modus; Panel-NRPN nimmt das Geraet nicht an.
-    const stumm = !part.muted;
-    setzeMutes([ziel.part - 1], stumm, true);
-    mmInfo(`${beschreibeZiel(ziel)}: ${stumm ? "stumm" : "an"}`);
-    mmLeds();
     return true;
   }
   return false;
@@ -748,7 +752,7 @@ function midimixVerarbeite(bytes: number[]): boolean {
 /** Mute-LEDs am MIDImix nach dem aktuellen Pattern setzen (nur mit offenem Controller-Ausgang). */
 function mmLeds(): void {
   if (!panelBridge.midi.controllerOutputId) return;
-  const p = panelBridge.project.patterns[panelBridge.patternIndex];
+  const p = aktuellesPanelPattern();
   const muted = p ? p.parts.map((x) => !!x.muted) : [];
   const ifxOn = p ? p.parts.map((x) => (x.params?.ifxOn ?? 0) === 1) : [];
   for (const m of ledNachrichten(midimix.layout, { muted, ifxOn })) panelBridge.midi.sendController(m);

@@ -1461,6 +1461,20 @@ lokal in den Part-Parametern gemerkt), und die LED zeigt den IFX-Zustand;
 in Mixer und Klang mutet sie den Part wie gehabt. Im Auswahlmenue der
 Tasten steht „Part N IFX an/aus“ auch fuer eigene Layouts.
 
+**Nachtrag 3 (2026-09-05): Mute nimmt das GERAETE-Pattern.** Nutzerbefund:
+„es wechselt immer noch auf ein Pattern, das leer ist, wenn ich mute“.
+Ursache: `setzeMutes(…, sofort)` schickte das AKTUELLE Pattern des Panels
+in den Edit-Buffer — im Prepare-Modus ist das das Editor-Pattern, und
+das ist meist das leere Vorgabe-Pattern; der Edit-Buffer wurde damit
+ueberschrieben, das Geraet spielte „leer“. Die Pads im Spiegel-Modus
+traf das nie, weil dort `livePattern` (die Kopie vom Geraet) gilt. Der
+Controller-Mute laeuft jetzt ueber `muteVomController` (panel.ts): ohne
+Spiegel wird erst `syncVomGeraet` gefahren (laufend: angewaehlter Slot
+per 0x1C, sonst Edit-Buffer-Dump), dann der Part in der Geraete-Kopie
+gekippt und die Kopie uebertragen. IFX-Tasten und LEDs lesen denselben
+Stand (`aktuellesPanelPattern`). Kommt kein Geraete-Pattern, passiert
+nichts und die Info sagt „im Panel Sync vom Geraet druecken“.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>
