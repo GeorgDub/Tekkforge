@@ -453,9 +453,9 @@ was ihn beim ersten echten Versuch belegt oder widerlegt.
 
 ### Beispiel-Presets zum Ausprobieren
 
-`examples/fx-presets/` enthaelt 216 fertig eingestellte FX-Presets als rohe
-524-B-Bloecke, plus zwoelf `.tfsam`-Sammlungen, die sie gruppenweise laden — in
-sechs Sets:
+`examples/fx-presets/` enthaelt 288 fertig eingestellte FX-Presets als rohe
+524-B-Bloecke, plus sechzehn `.tfsam`-Sammlungen, die sie gruppenweise laden —
+in acht Sets:
 
 | Set | Art | Inhalt |
 |---|---|---|
@@ -465,11 +465,21 @@ sechs Sets:
 | **Raum & Bewegung** | Master (`.mfx`) | Hall, Wah, Modulation, Looper |
 | **Bewegung** | Insert (`.e2fxp`) | alles im Takt: LFO-Ringmod, Rechteck-Tremolo, die drei Level-Mod-Spielarten der Werks-Presets, synchrone Flanger/Phaser, Roller |
 | **Tekk-Modulation** | Master (`.mfx`) | kein Hall: Wobble-Filter, LFO auf der Zerre, Slicer, LFO-Wah, LFO-Bitcrusher, wobbelnde Delays, Grain im Takt |
+| **Ketten** | Insert (`.e2fxp`) | neun Zwei-Insert-Paare, die es vorher nicht gab (Doppelfilter, Doppelzerre, Filter→EQ/Comp/Punch, Comp→EQ/Punch, Punch→EQ, Zerre→EQ), dazu Dist Scoop, Lo-Fi Radio, Snare Snap |
+| **Charakter** | Master (`.mfx`) | zwoelf Presets, zwoelf Algorithmen: vier Raeume (Hall Tekk, Pad Wash, Snare Plate, Early Only), Tube Crunch, Master Fuzz/Squash/Notch, Ping Pong, Dub Tape, Master Lo-Fi, Vinyl Pad |
 
 Je zwoelf Basis-Presets, dazu **zwei Variationen pro Basis** (`01a-…`/`01b-…`
 zu `01-…`): derselbe Algorithmus, in eine Richtung verschoben — zum
-Vergleichen am Geraet. Zusammen decken die sechs Sets **alle 20 Insert- und 24
-der 25 Master-Algorithmen** ab. Die beiden Bewegungs-Sets stuetzen sich auf die
+Vergleichen am Geraet. Zusammen decken die acht Sets **alle 20 Insert- und 24
+der 25 Master-Algorithmen** ab. Die Sets 7 und 8 (2026-09-05) fuellen die
+Luecken der ersten sechs: von den erlaubten Zwei-Insert-Paaren fehlten neun,
+und weil die Kettenfolge hoerbar ist, sind auch die umgekehrten Reihenfolgen
+(Filter Comp zu Comp Filter, Drive EQ zu EQ Drive) eigene Presets; auf der
+Master-Seite bekamen die vier Hallen, Tube Pre, Looper-Nachbarn und Vinyl je
+einen eigenen Charakter statt nur Variationen. Die Gesamtsammlung `IFX-Alle`
+haelt jetzt 144 Presets, die ersten 96 mit Platz — die 48 Ketten-Presets
+verteilt man von Hand oder per ▲ auf freie Plaetze. Master bleibt bei 32
+Plaetzen: jedes Charakter-Preset ersetzt beim Schreiben ein vorhandenes. Die beiden Bewegungs-Sets stuetzen sich auf die
 dekodierten **Werks-Presets des Geraets** (Level-Mod-Quellen 3/4/0, Sync-Noten
 6–8, Play/Start als LFO-Reset) statt auf Vermutungen; drei neue Sonden darin
 fragen nach der LFO-Wellenform-Tabelle und dem `mod_src` von Wah und Decimator.

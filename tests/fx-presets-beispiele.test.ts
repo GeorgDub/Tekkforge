@@ -231,6 +231,8 @@ describe("Sammlungen der Beispiel-Presets", () => {
         "TekkForge-IFX-Farben-Variationen.tfsam",
         "TekkForge-IFX-Bewegung.tfsam",
         "TekkForge-IFX-Bewegung-Variationen.tfsam",
+        "TekkForge-IFX-Ketten.tfsam",
+        "TekkForge-IFX-Ketten-Variationen.tfsam",
       ],
     },
     {
@@ -243,6 +245,8 @@ describe("Sammlungen der Beispiel-Presets", () => {
         "TekkForge-MFX-Raum-Variationen.tfsam",
         "TekkForge-MFX-Tekk.tfsam",
         "TekkForge-MFX-Tekk-Variationen.tfsam",
+        "TekkForge-MFX-Charakter.tfsam",
+        "TekkForge-MFX-Charakter-Variationen.tfsam",
       ],
     },
   ];
@@ -286,5 +290,46 @@ describe("Sammlungen der Beispiel-Presets", () => {
       .map((e) => Buffer.from(e.bytes).toString("base64"))
       .sort();
     expect(inSammlungen).toEqual(aufPlatte);
+  });
+});
+
+describe("Set 7 „Ketten“ und Set 8 „Charakter“ (2026-09-05)", () => {
+  /**
+   * Die beiden Sets sollen die Auswahl VERGROESSERN, nicht wiederholen: Ketten
+   * bringt nur Zwei-Insert-Paare, die in den aelteren Insert-Sets nicht
+   * vorkommen; Charakter gibt jedem seiner zwoelf Presets einen anderen
+   * Master-Algorithmus. Beides laesst sich aus den Sammlungen ablesen.
+   */
+  const eintraegeVon = (datei: string) =>
+    leseSammlung(fs.readFileSync(path.join(ORDNER, datei), "utf8")).eintraege;
+  const kette = (bytes: Uint8Array) => {
+    const p = decodeFxPreset(bytes, false);
+    return `${p.ifx1.device}>${p.ifx2.device}`;
+  };
+
+  it("Ketten: zwoelf Basis-Presets, neun davon Zwei-Insert-Paare, die es vorher nicht gab", () => {
+    const ketten = eintraegeVon("TekkForge-IFX-Ketten.tfsam");
+    expect(ketten).toHaveLength(12);
+    const paare = ketten.map((e) => kette(e.bytes)).filter((k) => !k.endsWith(">0"));
+    expect(paare).toHaveLength(9);
+    expect(new Set(paare).size).toBe(9);
+    const alt = new Set(
+      ["TekkForge-IFX-Starter.tfsam", "TekkForge-IFX-Farben.tfsam", "TekkForge-IFX-Bewegung.tfsam"]
+        .flatMap((d) => eintraegeVon(d))
+        .map((e) => kette(e.bytes)),
+    );
+    for (const k of paare) expect(alt, `Paar ${k} gibt es schon`).not.toContain(k);
+  });
+
+  it("Charakter: zwoelf Basis-Presets mit zwoelf verschiedenen Master-Algorithmen", () => {
+    const charakter = eintraegeVon("TekkForge-MFX-Charakter.tfsam");
+    expect(charakter).toHaveLength(12);
+    const geraete = charakter.map((e) => decodeFxPreset(e.bytes, true).mfx.device);
+    expect(new Set(geraete).size).toBe(12);
+  });
+
+  it("beide Variationen-Sammlungen tragen je 24 Presets", () => {
+    expect(eintraegeVon("TekkForge-IFX-Ketten-Variationen.tfsam")).toHaveLength(24);
+    expect(eintraegeVon("TekkForge-MFX-Charakter-Variationen.tfsam")).toHaveLength(24);
   });
 });

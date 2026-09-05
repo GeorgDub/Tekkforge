@@ -1,8 +1,8 @@
 # Beispiel-Presets für Insert- und Master-Effekte
 
-216 fertig eingestellte FX-Presets für die Electribe 2 mit Hacktribe-Firmware
-— je eine Datei mit dem rohen 524-Byte-Block, dazu zwölf Sammlungen, die sie
-gruppenweise auf einmal laden.
+288 fertig eingestellte FX-Presets für die Electribe 2 mit Hacktribe-Firmware
+— je eine Datei mit dem rohen 524-Byte-Block, dazu sechzehn Sammlungen, die
+sie gruppenweise auf einmal laden.
 
 | Set | Art | Endung | Ziel im RAM | Plätze | Sammlungen |
 |---|---|---|---|---|---|
@@ -12,19 +12,21 @@ gruppenweise auf einmal laden.
 | **Raum & Bewegung** | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Raum` (12) · `MFX-Raum-Variationen` (24) |
 | **Bewegung** — alles im Takt | Insert | `.e2fxp` | `0xC00A80F0` | 0–95 | `IFX-Bewegung` (12) · `IFX-Bewegung-Variationen` (24) |
 | **Tekk-Modulation** — kein Hall | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Tekk` (12) · `MFX-Tekk-Variationen` (24) |
+| **Ketten** — Paare, die fehlten | Insert | `.e2fxp` | `0xC00A80F0` | 0–95 | `IFX-Ketten` (12) · `IFX-Ketten-Variationen` (24) |
+| **Charakter** — zwölf Algorithmen | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Charakter` (12) · `MFX-Charakter-Variationen` (24) |
 
-Zusammen decken die sechs Sets **alle 20 Insert-Algorithmen und 24 der 25
+Zusammen decken die acht Sets **alle 20 Insert-Algorithmen und 24 der 25
 Master-Algorithmen** der Hacktribe-Firmware ab. Übrig bleibt nur der
 Master-`Mute` — ein gespeichertes Preset, das nichts tut, ist keins.
 
-Zu jedem der 72 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
+Zu jedem der 96 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
 zu `01-…`): derselbe Algorithmus, in genau eine Richtung verschoben. Nur so
 ist der Vergleich einer — wer drei Dateien nacheinander in denselben Platz
 schreibt und dieselbe Sequenz laufen lässt, hört den Unterschied und sonst
 nichts.
 
-Mehr Presets als Plätze: 108 Insert-Presets auf 96 Plätze (davon im Menü nur
-die belegten, siehe unten), 108 Master-Presets auf 32. Das ist Absicht — es
+Mehr Presets als Plätze: 144 Insert-Presets auf 96 Plätze (davon im Menü nur
+die belegten, siehe unten), 144 Master-Presets auf 32. Das ist Absicht — es
 soll ausgewählt werden, nicht alles gleichzeitig draufpassen.
 
 ---
@@ -296,6 +298,92 @@ er ausgelenkt. Die Grain-Werte kommen vom Werks-„Step Shifter“.
 | Wobble Delay | Wobble Dly Slow | Wobble Dly Sq | Rate 15 · Wellenform 2 |
 | Tape Wobble | Tape Wobble Slw | Tape Wobble Sat | Rate 8 · Sättigung 127, Gain 90 |
 | Grain Sync | Grain Sync Slow | Grain Sync Lag | Sync-Note 6, Schnipsel 30 · Lag 90 |
+
+---
+
+## Set „Ketten“ — Insert
+
+Die Zwei-Insert-Regel erlaubt sieben leichte Algorithmen (Thru, Cheap Comp,
+Punch, EQ 2-Band, Filter, Acid Driver, Mute) in beiden Slots. Die ersten
+sechs Sets nutzten davon acht Paare; hier kommen neun dazu, die fehlten —
+und weil die Kettenfolge hörbar ist (Filter→Zerre aggressiver als
+Zerre→Filter, Ohr 2026-09-01), sind auch die umgekehrten Reihenfolgen eigene
+Presets. Drei Einzel-Presets holen Algorithmen nach, die bisher nur einmal
+vorkamen: Distortion, Decimator (als Kofferradio) und MKP2 (als Snap).
+
+| Datei | Name im Menü | Kette | IFX-Regler |
+|---|---|---|---|
+| `37-dual-filter` | Dual Filter | Filter → Filter (beide 80/80) | beide `frequency` 5 → 127 |
+| `38-filter-eq` | Filter EQ | Filter (70/90) → EQ 2-Band (Tiefen 44, Höhen 30) | `frequency` 5 → 127 |
+| `39-filter-comp` | Filter Comp | Filter (60/90) → Cheap Comp (`sens` 90) | `frequency` 5 → 127 |
+| `40-filter-punch` | Filter Punch | Filter (90/70) → Punch | `frequency` 5 → 127 |
+| `41-double-drive` | Double Drive | Acid Driver (70) → Acid Driver (70) | IFX 2 `drive` 0 → 127 |
+| `42-drive-eq` | Drive EQ | Acid Driver (90) → EQ 2-Band (Tiefen 42, Höhen 28 bei 70) | `drive` 20 → 127 |
+| `43-comp-eq` | Comp EQ | Cheap Comp (`sens` 90) → EQ 2-Band (44 / 40) | IFX 2 `b1_gain` 24 → 52 |
+| `44-comp-punch` | Comp Punch | Cheap Comp (`sens` 100) → Punch | `sens` 20 → 127 |
+| `45-punch-eq` | Punch EQ | Punch → EQ 2-Band (Tiefen 46, Höhen 30) | IFX 2 `b1_gain` 24 → 52 |
+| `46-dist-scoop` | Dist Scoop | Distortion (Pre-EQ-Kerbe 40/Q 20/Gain 20, Post-Tiefen 44) | `gain` 30 → 127 |
+| `47-lofi-radio` | Lo-Fi Radio | Decimator (Vorfilter an, 50; Rate 45; Maske 1) | `pre_lpf` 10 → 127 |
+| `48-snare-snap` | Snare Snap | MKP2 Comp (Attack 40, Höhen 44 bei 50) | `attack` 0 → 127 |
+
+### Variationen
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| Dual Filter | Dual Filt Lo | Dual Filt Res | beide Frequenzen 40 · beide Resonanzen 120 |
+| Filter EQ | Filter EQ Lo | Filter EQ Hi | Filter 45, Tiefen 50 · Filter 110, statt Tiefen die Höhen (46) |
+| Filter Comp | Filter Comp Lo | Filter Comp Hd | Filter 40 · `sens` 127, Ausgang 30 |
+| Filter Punch | Filt Punch Lo | Filt Punch Res | Filter 50 · Resonanz 115 |
+| Double Drive | Dbl Drive Soft | Dbl Drive Max | beide 40 · beide 127, Ausgang 30 |
+| Drive EQ | Drive EQ Dark | Drive EQ Fat | Höhen 18 · Zerre 127, Tiefen 52 |
+| Comp EQ | Comp EQ Soft | Comp EQ Bright | `sens` 60, Höhen neutral · Tiefen neutral, Höhen 50 |
+| Comp Punch | Comp Punch Sft | Comp Punch Ld | `sens` 60 · Ausgang 40 |
+| Punch EQ | Punch EQ Sub | Punch EQ Air | Tiefen-Band bei 6 mit 52 · Höhen 46 statt Tiefen |
+| Dist Scoop | Dist Scoop Deep | Dist Scoop Hi | Kerbe 8 · Kerbe bei 60, Gain 127 |
+| Lo-Fi Radio | Lo-Fi Dark | Lo-Fi Mask 2 | Vorfilter 30, Rate 30 · Maske 2 |
+| Snare Snap | Snare Snap Slw | Snare Snap Fst | Attack 80 · Attack 5, Ansprache 127 |
+
+---
+
+## Set „Charakter“ — Master
+
+Zwölf Presets, zwölf verschiedene Master-Algorithmen — je einer, der bisher
+nur ein Preset oder nur Variationen hatte, als eigener Klangcharakter. Die
+Hall-Werte bauen auf dem Hall-Vergleich auf, damit die vier Räume
+gegeneinander hörbar bleiben. Beim Ping Pong ist offen, welche Zahl welchem
+Notenwert entspricht; die beiden Seiten sind nur verschieden.
+
+| Datei | Name im Menü | Algorithmus | X-Achse | Y-Achse |
+|---|---|---|---|---|
+| `m37-hall-tekk` | Hall Tekk | Hall Reverb (kurz 18, dunkel 120, kein Pre-Delay) | `dry_wet` 0 → 127 | `time` 5 → 60 |
+| `m38-pad-wash` | Pad Wash | Smooth Hall (lang 120, hell 30, Pre-Delay 40) | `dry_wet` 0 → 127 | `hi_damp` 0 → 127 |
+| `m39-snare-plate` | Snare Plate | Wet Plate (35, Pre-Delay 15, Höhen-EQ 40) | `dry_wet` 0 → 127 | `time` 10 → 90 |
+| `m40-early-only` | Early Only | Room Reverb (`rev_level` 0, `er_level` 127) | `er_level` 0 → 127 | `rev_level` 0 → 64 |
+| `m41-tube-crunch` | Tube Crunch | Tube Pre (Gain 100/90, Sättigung 120/100) | `tube1_gain` 30 → 127 | `tube2_gain` 30 → 127 |
+| `m42-master-fuzz` | Master Fuzz | Distortion (Gain 127, Pre-EQ 50) | `gain` 60 → 127 | `output_level` 10 → 60 |
+| `m43-master-squash` | Master Squash | SR1 Comp (Schwelle 20, Verhältnis 12, Attack 2) | `threshold` 5 → 60 | `ratio` 1 → 20 |
+| `m44-master-notch` | Master Notch | EQ 4-Band (Band 2: 40, Q 20, Gain 16) | `b2_frequency` 10 → 90 | `b2_gain` 10 → 36 |
+| `m45-ping-pong` | Ping Pong | Mod Delay (Noten L 12 / R 18, keine Modulation) | `fb_depth` 0 → 115 | `dry_wet` 0 → 127 |
+| `m46-dub-tape` | Dub Tape | Tape Echo (Rückkopplung 115, Sättigung 110, dumpf) | `feedback` 60 → 127 | `hi_damp` 0 → 127 |
+| `m47-master-lofi` | Master Lo-Fi | Decimator (Vorfilter an, 60; Rate 50; Maske 1) | `sample_freq` 10 → 127 | `pre_lpf` 10 → 127 |
+| `m48-vinyl-pad` | Vinyl Pad | Vinyl Break (Platte gedrückt, Tonhöhe 30) | `delta_pitch` 0 → 127 | `pad_on` 0 → 1 |
+
+### Variationen
+
+| Basis | a | b | Was sich unterscheidet |
+|---|---|---|---|
+| Hall Tekk | Hall Tekk Brt | Hall Tekk Pre | Dämpfung 60 · Pre-Delay 40 |
+| Pad Wash | Pad Wash Dark | Pad Wash Full | Dämpfung 110 · Anteil 127 |
+| Snare Plate | Snare Plate Sh | Snare Plate Lg | Zeit 15 · Zeit 80, Dämpfung 50 |
+| Early Only | Early Big | Early Tail | Zeit 70 · Fahne 40 |
+| Tube Crunch | Tube Crunch Sft | Tube Crunch Max | Gain 70/60 · alles 127, Ausgang 25 |
+| Master Fuzz | Fuzz Mid | Fuzz Dark | Gain 80 · Post-EQ oben 10, Mitte 28 |
+| Master Squash | Squash Soft | Squash Tube | Schwelle 45, Verhältnis 4 · Röhre 127 |
+| Master Notch | Notch Low | Notch Wide | Kerbe bei 20 · Q 3 |
+| Ping Pong | Ping Pong Sh | Ping Pong Mod | Noten 6 / 9 · Modulation 60 |
+| Dub Tape | Dub Tape Clean | Dub Tape Osc | Sättigung 40, hell · Rückkopplung 127 |
+| Master Lo-Fi | Master 8 Bit | Master Mask 2 | Rate 100, 5 Bit · Maske 2 |
+| Vinyl Pad | Vinyl Pad Deep | Vinyl Pad Scr | Tonhöhe 80 · Scratch 60, Breite 40 |
 
 ---
 

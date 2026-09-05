@@ -903,6 +903,123 @@ const INSERT_BEWEGUNG = [
  * zurueck. Zwei Sonden: `Wah Src 0/1/2` und `Crush LFO` klaeren `mod_src`,
  * dessen Zahlen in keiner Tabelle stehen.
  */
+/**
+ * Set 7 „Ketten" (Insert, 2026-09-05): nur Zwei-Insert-Paare, die es in den
+ * aelteren Sets nicht gibt, plus drei Algorithmen, die bisher nur ein einziges
+ * Preset hatten (Distortion, Decimator, MKP2). Die Kettenfolge ist hoerbar
+ * (Ohr, 2026-09-01: Filter→Zerre aggressiver als Zerre→Filter) — deshalb sind
+ * auch umgekehrte Reihenfolgen eigene Presets. Die Zwei-Insert-Regel gilt wie
+ * ueberall: beide Slots aus der Whitelist (Thru, Cheap Comp, Punch, EQ 2-Band,
+ * Filter, Acid Driver, Mute).
+ */
+const INSERT_KETTEN = [
+  {
+    datei: "37-dual-filter",
+    name: "Dual Filter",
+    zweck: "Zwei Filter hintereinander auf derselben Frequenz — steilere Flanke, doppelte Resonanz. Regler = beide Frequenzen zugleich.",
+    ifx1: { device: A.filter, werte: { dry_wet: 127, frequency: 80, resonance: 80 } },
+    ifx2: { device: A.filter, werte: { dry_wet: 127, frequency: 80, resonance: 80 } },
+    regler: [
+      { kette: KETTE.ifx1, param: "frequency", min: 5, max: 127 },
+      { kette: KETTE.ifx2, param: "frequency", min: 5, max: 127 },
+    ],
+  },
+  {
+    datei: "38-filter-eq",
+    name: "Filter EQ",
+    zweck: "Filter, danach ein 2-Band-EQ, der die Tiefen wieder anhebt (Gain 36 = neutral). Regler = Filterfrequenz.",
+    ifx1: { device: A.filter, werte: { dry_wet: 127, frequency: 70, resonance: 90 } },
+    ifx2: { device: A.eq2, werte: { b1_gain: 44, b2_gain: 30 } },
+    regler: [{ kette: KETTE.ifx1, param: "frequency", min: 5, max: 127 }],
+  },
+  {
+    datei: "39-filter-comp",
+    name: "Filter Comp",
+    zweck: "„Comp Filter“ umgedreht: erst das Filter, dann verdichtet Cheap Comp, was uebrig ist. Regler = Filterfrequenz.",
+    ifx1: { device: A.filter, werte: { dry_wet: 127, frequency: 60, resonance: 90 } },
+    ifx2: { device: A.cheapComp, werte: { sens: 90, output_level: 24 } },
+    regler: [{ kette: KETTE.ifx1, param: "frequency", min: 5, max: 127 }],
+  },
+  {
+    datei: "40-filter-punch",
+    name: "Filter Punch",
+    zweck: "„Punch Filter“ umgedreht: Filter zuerst, Punch schiebt danach den Anschlag nach vorn. Regler = Filterfrequenz.",
+    ifx1: { device: A.filter, werte: { dry_wet: 127, frequency: 90, resonance: 70 } },
+    ifx2: { device: A.punch, werte: {} },
+    regler: [{ kette: KETTE.ifx1, param: "frequency", min: 5, max: 127 }],
+  },
+  {
+    datei: "41-double-drive",
+    name: "Double Drive",
+    zweck: "Zwei Acid Driver in Reihe — die zweite Stufe zerrt, was die erste schon gesaettigt hat. Regler = zweite Zerre.",
+    ifx1: { device: A.acidDriver, werte: { drive: 70, output_level: 40 } },
+    ifx2: { device: A.acidDriver, werte: { drive: 70, output_level: 40 } },
+    regler: [{ kette: KETTE.ifx2, param: "drive", min: 0, max: 127 }],
+  },
+  {
+    datei: "42-drive-eq",
+    name: "Drive EQ",
+    zweck: "„EQ Drive“ umgedreht: erst die Zerre, dann formt der EQ das Ergebnis — Tiefen an, Hoehen ab. Regler = Zerre.",
+    ifx1: { device: A.acidDriver, werte: { drive: 90, output_level: 45 } },
+    ifx2: { device: A.eq2, werte: { b1_gain: 42, b2_frequency: 70, b2_gain: 28 } },
+    regler: [{ kette: KETTE.ifx1, param: "drive", min: 20, max: 127 }],
+  },
+  {
+    datei: "43-comp-eq",
+    name: "Comp EQ",
+    zweck: "Cheap Comp verdichtet, der EQ dahinter gibt Tiefen und Hoehen zurueck. Regler = Tiefen-Gain.",
+    ifx1: { device: A.cheapComp, werte: { sens: 90, output_level: 24 } },
+    ifx2: { device: A.eq2, werte: { b1_gain: 44, b2_gain: 40 } },
+    regler: [{ kette: KETTE.ifx2, param: "b1_gain", min: 24, max: 52 }],
+  },
+  {
+    datei: "44-comp-punch",
+    name: "Comp Punch",
+    zweck: "Kompression und danach Punch: dicht UND vorn. Regler = Ansprache des Kompressors.",
+    ifx1: { device: A.cheapComp, werte: { sens: 100, output_level: 24 } },
+    ifx2: { device: A.punch, werte: {} },
+    regler: [{ kette: KETTE.ifx1, param: "sens", min: 20, max: 127 }],
+  },
+  {
+    datei: "45-punch-eq",
+    name: "Punch EQ",
+    zweck: "Punch zuerst, dann ein EQ mit angehobenen Tiefen — fuer Kicks, die vorn UND unten sitzen sollen. Regler = Tiefen-Gain.",
+    ifx1: { device: A.punch, werte: {} },
+    ifx2: { device: A.eq2, werte: { b1_gain: 46, b2_gain: 30 } },
+    regler: [{ kette: KETTE.ifx2, param: "b1_gain", min: 24, max: 52 }],
+  },
+  {
+    datei: "46-dist-scoop",
+    name: "Dist Scoop",
+    zweck: "Distortion mit Kerbe im Pre-EQ (Mitten raus, bevor es zerrt) und Tiefen im Post-EQ. Regler = Gain.",
+    ifx1: {
+      device: A.distortion,
+      werte: { dry_wet: 127, gain: 90, pre_eq_frequency: 40, pre_eq_q: 20, pre_eq_gain: 20, post_eq1_gain: 44, output_level: 40 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "gain", min: 30, max: 127 }],
+  },
+  {
+    datei: "47-lofi-radio",
+    name: "Lo-Fi Radio",
+    zweck: "Decimator mit Vorfilter zu und anderer Maske — eher Kofferradio als Bitcrusher. Regler = Vorfilter.",
+    ifx1: {
+      device: A.decimator,
+      werte: { dry_wet: 127, pre_lpf_sw: 1, pre_lpf: 50, hi_damp: 60, sample_freq: 45, bit_depth: 8, output_level: 120, mask_type: 1 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "pre_lpf", min: 10, max: 127 }],
+  },
+  {
+    datei: "48-snare-snap",
+    name: "Snare Snap",
+    zweck: "MKP2 mit langsamerem Attack: der Anschlag rutscht durch, der Rest wird gehalten, Hoehen leicht an. Regler = Attack.",
+    ifx1: {
+      device: A.mkp2Comp,
+      werte: { dry_wet: 127, sensitivity: 110, attack: 40, output_level: 24, pre_heq_gain: 44, pre_heq_frequency: 50 },
+    },
+    regler: [{ kette: KETTE.ifx1, param: "attack", min: 0, max: 127 }],
+  },
+].map((p) => ({ ...p, art: "ifx" }));
+
 const PLAY_RESET_MFX = { quelle: Q.play, param: "lfo_reset", min: 0, max: 1 };
 
 const MASTER_TEKK = [
@@ -1062,6 +1179,152 @@ const MASTER_TEKK = [
       { quelle: Q.reglerX, param: "on_duration", min: 4, max: 40 },
       { quelle: Q.achseY, param: "on_sync_note", min: 5, max: 10 },
       PLAY_RESET_MFX,
+    ],
+  },
+].map((p) => ({ ...p, art: "mfx" }));
+
+/**
+ * Set 8 „Charakter" (Master, 2026-09-05): die Master-Algorithmen, die bisher
+ * nur ein Preset oder nur Variationen hatten, je als eigener Klangcharakter —
+ * zwoelf Presets, zwoelf verschiedene Algorithmen. Hall-Werte bauen auf dem
+ * Hall-Vergleich (`HALL_VERGLEICH`) auf, damit die vier Raeume gegeneinander
+ * hoerbar bleiben (Ohr, 2026-09-01: Hall Reverb am groessten, die Plates kaum
+ * auseinanderzuhalten).
+ */
+const MASTER_CHARAKTER = [
+  {
+    datei: "m37-hall-tekk",
+    name: "Hall Tekk",
+    zweck: "Kurzer, dunkler Hall — Raum um die Snare, ohne dass die Kick verschwimmt. X = Anteil, Y = Laenge.",
+    mfx: { device: M.hallReverb, werte: { ...HALL_VERGLEICH, dry_wet: 60, time: 18, hi_damp: 120, pre_delay: 0 } },
+    regler: [
+      { quelle: Q.reglerX, param: "dry_wet", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "time", min: 5, max: 60 },
+    ],
+  },
+  {
+    datei: "m38-pad-wash",
+    name: "Pad Wash",
+    zweck: "Smooth Hall, lang und offen — die Flaeche unter einem Break. X = Anteil, Y = Hoehendaempfung.",
+    mfx: { device: M.smoothHall, werte: { ...HALL_VERGLEICH, dry_wet: 90, time: 120, hi_damp: 30, pre_delay: 40 } },
+    regler: [
+      { quelle: Q.reglerX, param: "dry_wet", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "hi_damp", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m39-snare-plate",
+    name: "Snare Plate",
+    zweck: "Wet Plate, mittellang, mit Vorverzoegerung — die klassische Snare-Platte. X = Anteil, Y = Laenge.",
+    mfx: { device: M.wetPlate, werte: { ...HALL_VERGLEICH, dry_wet: 70, time: 35, hi_damp: 100, pre_delay: 15, hi_eq: 40 } },
+    regler: [
+      { quelle: Q.reglerX, param: "dry_wet", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "time", min: 10, max: 90 },
+    ],
+  },
+  {
+    datei: "m40-early-only",
+    name: "Early Only",
+    zweck: "Room Reverb nur mit Erstreflexionen, die Hallfahne ist aus — Raumgefuehl ohne Nachklang. X = Reflexionen, Y = Fahne dazu.",
+    mfx: { device: M.roomReverb, werte: { dry_wet: 90, time: 30, hi_damp: 80, pre_delay: 5, rev_level: 0, er_level: 127 } },
+    regler: [
+      { quelle: Q.reglerX, param: "er_level", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "rev_level", min: 0, max: 64 },
+    ],
+  },
+  {
+    datei: "m41-tube-crunch",
+    name: "Tube Crunch",
+    zweck: "Tube Pre mit beiden Stufen heiss gefahren: nicht mehr warm, sondern angezerrt. X = Gain Stufe 1, Y = Gain Stufe 2.",
+    mfx: {
+      device: M.tubePre,
+      werte: { dry_wet: 127, tube1_gain: 100, tube1_sat: 120, tube2_gain: 90, tube2_sat: 100, output_level: 40 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "tube1_gain", min: 30, max: 127 },
+      { quelle: Q.achseY, param: "tube2_gain", min: 30, max: 127 },
+    ],
+  },
+  {
+    datei: "m42-master-fuzz",
+    name: "Master Fuzz",
+    zweck: "Distortion auf der Summe mit vollem Gain und Pre-EQ-Anhebung — der Fuzz-Moment im Drop. X = Gain, Y = Ausgang.",
+    mfx: { device: M.distortion, werte: { dry_wet: 127, gain: 127, pre_eq_gain: 50, post_eq3_gain: 20, output_level: 30 } },
+    regler: [
+      { quelle: Q.reglerX, param: "gain", min: 60, max: 127 },
+      { quelle: Q.achseY, param: "output_level", min: 10, max: 60 },
+    ],
+  },
+  {
+    datei: "m43-master-squash",
+    name: "Master Squash",
+    zweck: "SR1 Comp als Brett: tiefe Schwelle, hohes Verhaeltnis, schnell — die Summe wird flach und laut. X = Schwelle, Y = Verhaeltnis.",
+    mfx: {
+      device: M.sr1Comp,
+      werte: { dry_wet: 127, threshold: 20, ratio: 12, attack: 2, release: 8, tube_sat: 60, output_gain: 70 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "threshold", min: 5, max: 60 },
+      { quelle: Q.achseY, param: "ratio", min: 1, max: 20 },
+    ],
+  },
+  {
+    datei: "m44-master-notch",
+    name: "Master Notch",
+    zweck: "4-Band-EQ mit einer schmalen Kerbe in Band 2 (Gain 36 = neutral, darunter Absenkung). X = Kerbfrequenz, Y = Kerbtiefe.",
+    mfx: { device: M.eq4, werte: { dry_wet: 127, b2_frequency: 40, b2_q: 20, b2_gain: 16 } },
+    regler: [
+      { quelle: Q.reglerX, param: "b2_frequency", min: 10, max: 90 },
+      { quelle: Q.achseY, param: "b2_gain", min: 10, max: 36 },
+    ],
+  },
+  {
+    datei: "m45-ping-pong",
+    name: "Ping Pong",
+    zweck: "Mod Delay mit ungleichen Notenwerten links und rechts, ohne Modulation — Echos wandern. Welche Note welcher Zahl entspricht, ist unvermessen. X = Rueckkopplung, Y = Anteil.",
+    mfx: {
+      device: M.modDelay,
+      werte: { wet_spread: 127, on_l_syncnote: 12, on_r_syncnote: 18, fb_depth: 80, mod_depth: 0, high_damp: 30 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "fb_depth", min: 0, max: 115 },
+      { quelle: Q.achseY, param: "dry_wet", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m46-dub-tape",
+    name: "Dub Tape",
+    zweck: "Tape Echo an der Grenze zur Selbstoszillation, gesaettigt und dumpf — der Dub-Wurf. X = Rueckkopplung, Y = Hoehendaempfung.",
+    mfx: {
+      device: M.tapeEcho,
+      werte: { dry_wet: 90, feedback: 115, saturation: 110, hi_damp: 110, lo_damp: 60, lfo_depth: 20 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "feedback", min: 60, max: 127 },
+      { quelle: Q.achseY, param: "hi_damp", min: 0, max: 127 },
+    ],
+  },
+  {
+    datei: "m47-master-lofi",
+    name: "Master Lo-Fi",
+    zweck: "Decimator auf der Summe mit Vorfilter zu und anderer Maske — die ganze Spur klingt nach altem Sampler. X = Sample-Rate, Y = Vorfilter.",
+    mfx: {
+      device: M.decimator,
+      werte: { dry_wet: 127, pre_lpf_sw: 1, pre_lpf: 60, sample_freq: 50, bit_depth: 8, output_level: 120, mask_type: 1 },
+    },
+    regler: [
+      { quelle: Q.reglerX, param: "sample_freq", min: 10, max: 127 },
+      { quelle: Q.achseY, param: "pre_lpf", min: 10, max: 127 },
+    ],
+  },
+  {
+    datei: "m48-vinyl-pad",
+    name: "Vinyl Pad",
+    zweck: "Vinyl Break mit gedrueckter Platte und nur leichter Tonhoehenaenderung — Andruck statt Stopp. X = Tonhoehe, Y = Platte los/gedrueckt.",
+    mfx: { device: M.vinylBreak, werte: { dry_wet: 127, pad_on: 1, delta_pitch: 30, scratch: 0 } },
+    regler: [
+      { quelle: Q.reglerX, param: "delta_pitch", min: 0, max: 127 },
+      { quelle: Q.achseY, param: "pad_on", min: 0, max: 1 },
     ],
   },
 ].map((p) => ({ ...p, art: "mfx" }));
@@ -2092,6 +2355,104 @@ const VARIATIONEN = {
       mfx: { werte: { loop_length: 60, step: 40, fine: 100 } },
     },
   ],
+  // ── Set „Ketten" (Insert) ──────────────────────────────────────────────────
+  "37-dual-filter": [
+    { datei: "37a-dual-filt-lo", name: "Dual Filt Lo", zweck: "Beide Filter tief — nur noch der Bauch.", ifx1: { werte: { frequency: 40 } }, ifx2: { werte: { frequency: 40 } } },
+    { datei: "37b-dual-filt-res", name: "Dual Filt Res", zweck: "Resonanz an beiden Stufen am Anschlag.", ifx1: { werte: { resonance: 120 } }, ifx2: { werte: { resonance: 120 } } },
+  ],
+  "38-filter-eq": [
+    { datei: "38a-filter-eq-lo", name: "Filter EQ Lo", zweck: "Filter tiefer zu, EQ hebt noch mehr Tiefen an.", ifx1: { werte: { frequency: 45 } }, ifx2: { werte: { b1_gain: 50 } } },
+    { datei: "38b-filter-eq-hi", name: "Filter EQ Hi", zweck: "Filter offen, EQ gibt statt Tiefen die Hoehen zurueck.", ifx1: { werte: { frequency: 110 } }, ifx2: { werte: { b1_gain: 36, b2_gain: 46 } } },
+  ],
+  "39-filter-comp": [
+    { datei: "39a-filter-comp-lo", name: "Filter Comp Lo", zweck: "Filter tiefer, Kompressor haelt den Bass.", ifx1: { werte: { frequency: 40 } } },
+    { datei: "39b-filter-comp-hard", name: "Filter Comp Hd", zweck: "Kompressor auf voller Ansprache.", ifx2: { werte: { sens: 127, output_level: 30 } } },
+  ],
+  "40-filter-punch": [
+    { datei: "40a-filter-punch-lo", name: "Filt Punch Lo", zweck: "Filter tiefer — der Punch trifft nur noch die Kick.", ifx1: { werte: { frequency: 50 } } },
+    { datei: "40b-filter-punch-res", name: "Filt Punch Res", zweck: "Resonanz hoch, Punch dahinter betont die Spitze.", ifx1: { werte: { resonance: 115 } } },
+  ],
+  "41-double-drive": [
+    { datei: "41a-double-drive-soft", name: "Dbl Drive Soft", zweck: "Beide Stufen halb — dicht, nicht kaputt.", ifx1: { werte: { drive: 40 } }, ifx2: { werte: { drive: 40 } } },
+    { datei: "41b-double-drive-max", name: "Dbl Drive Max", zweck: "Beide Stufen voll, Ausgang runter.", ifx1: { werte: { drive: 127, output_level: 30 } }, ifx2: { werte: { drive: 127, output_level: 30 } } },
+  ],
+  "42-drive-eq": [
+    { datei: "42a-drive-eq-dark", name: "Drive EQ Dark", zweck: "EQ nimmt oben noch mehr weg.", ifx2: { werte: { b2_gain: 18 } } },
+    { datei: "42b-drive-eq-fat", name: "Drive EQ Fat", zweck: "Zerre hoch, Tiefen im EQ voll.", ifx1: { werte: { drive: 127 } }, ifx2: { werte: { b1_gain: 52 } } },
+  ],
+  "43-comp-eq": [
+    { datei: "43a-comp-eq-soft", name: "Comp EQ Soft", zweck: "Kompressor sanfter, EQ neutral in den Hoehen.", ifx1: { werte: { sens: 60 } }, ifx2: { werte: { b2_gain: 36 } } },
+    { datei: "43b-comp-eq-bright", name: "Comp EQ Bright", zweck: "Hoehen deutlich an, Tiefen neutral.", ifx2: { werte: { b1_gain: 36, b2_gain: 50 } } },
+  ],
+  "44-comp-punch": [
+    { datei: "44a-comp-punch-soft", name: "Comp Punch Sft", zweck: "Kompressor halbe Ansprache.", ifx1: { werte: { sens: 60 } } },
+    { datei: "44b-comp-punch-loud", name: "Comp Punch Ld", zweck: "Ausgang des Kompressors hoeher — lauter in den Punch.", ifx1: { werte: { output_level: 40 } } },
+  ],
+  "45-punch-eq": [
+    { datei: "45a-punch-eq-sub", name: "Punch EQ Sub", zweck: "Tiefen-Band tiefer angesetzt und staerker.", ifx2: { werte: { b1_frequency: 6, b1_gain: 52 } } },
+    { datei: "45b-punch-eq-air", name: "Punch EQ Air", zweck: "Statt Tiefen die Hoehen an.", ifx2: { werte: { b1_gain: 36, b2_gain: 46 } } },
+  ],
+  "46-dist-scoop": [
+    { datei: "46a-dist-scoop-deep", name: "Dist Scoop Deep", zweck: "Kerbe tiefer (Pre-EQ-Gain am Anschlag).", ifx1: { werte: { pre_eq_gain: 8 } } },
+    { datei: "46b-dist-scoop-hi", name: "Dist Scoop Hi", zweck: "Kerbe hoeher angesetzt, Gain voll.", ifx1: { werte: { pre_eq_frequency: 60, gain: 127 } } },
+  ],
+  "47-lofi-radio": [
+    { datei: "47a-lofi-radio-dark", name: "Lo-Fi Dark", zweck: "Vorfilter weiter zu, Rate tiefer.", ifx1: { werte: { pre_lpf: 30, sample_freq: 30 } } },
+    { datei: "47b-lofi-radio-mask", name: "Lo-Fi Mask 2", zweck: "Maskentyp 2 — die dritte Spielart der Kruemel.", ifx1: { werte: { mask_type: 2 } } },
+  ],
+  "48-snare-snap": [
+    { datei: "48a-snare-snap-slow", name: "Snare Snap Slw", zweck: "Attack noch langsamer — mehr Anschlag rutscht durch.", ifx1: { werte: { attack: 80 } } },
+    { datei: "48b-snare-snap-fast", name: "Snare Snap Fst", zweck: "Attack schnell — eher Press als Snap.", ifx1: { werte: { attack: 5, sensitivity: 127 } } },
+  ],
+  // ── Set „Charakter" (Master) ─────────────────────────────────────────────
+  "m37-hall-tekk": [
+    { datei: "m37a-hall-tekk-bright", name: "Hall Tekk Brt", zweck: "Weniger Hoehendaempfung — heller.", mfx: { werte: { hi_damp: 60 } } },
+    { datei: "m37b-hall-tekk-pre", name: "Hall Tekk Pre", zweck: "Mit Vorverzoegerung — Raum setzt nach dem Schlag ein.", mfx: { werte: { pre_delay: 40 } } },
+  ],
+  "m38-pad-wash": [
+    { datei: "m38a-pad-wash-dark", name: "Pad Wash Dark", zweck: "Hoehen stark gedaempft.", mfx: { werte: { hi_damp: 110 } } },
+    { datei: "m38b-pad-wash-full", name: "Pad Wash Full", zweck: "Anteil voll — nur noch Fahne.", mfx: { werte: { dry_wet: 127 } } },
+  ],
+  "m39-snare-plate": [
+    { datei: "m39a-snare-plate-short", name: "Snare Plate Sh", zweck: "Kurz — nur ein Hauch Platte.", mfx: { werte: { time: 15 } } },
+    { datei: "m39b-snare-plate-long", name: "Snare Plate Lg", zweck: "Lang und hell.", mfx: { werte: { time: 80, hi_damp: 50 } } },
+  ],
+  "m40-early-only": [
+    { datei: "m40a-early-big", name: "Early Big", zweck: "Groesserer Raum fuer die Reflexionen.", mfx: { werte: { time: 70 } } },
+    { datei: "m40b-early-tail", name: "Early Tail", zweck: "Ein Rest Hallfahne dazu.", mfx: { werte: { rev_level: 40 } } },
+  ],
+  "m41-tube-crunch": [
+    { datei: "m41a-tube-crunch-soft", name: "Tube Crunch Sft", zweck: "Beide Stufen zurueck — knapp vor der Zerre.", mfx: { werte: { tube1_gain: 70, tube2_gain: 60 } } },
+    { datei: "m41b-tube-crunch-max", name: "Tube Crunch Max", zweck: "Alles voll, Ausgang runter.", mfx: { werte: { tube1_gain: 127, tube1_sat: 127, tube2_gain: 127, tube2_sat: 127, output_level: 25 } } },
+  ],
+  "m42-master-fuzz": [
+    { datei: "m42a-master-fuzz-mid", name: "Fuzz Mid", zweck: "Gain halb — Zerre statt Fuzz.", mfx: { werte: { gain: 80 } } },
+    { datei: "m42b-master-fuzz-dark", name: "Fuzz Dark", zweck: "Post-EQ nimmt oben weg.", mfx: { werte: { post_eq3_gain: 10, post_eq2_gain: 28 } } },
+  ],
+  "m43-master-squash": [
+    { datei: "m43a-squash-soft", name: "Squash Soft", zweck: "Schwelle hoeher, Verhaeltnis kleiner.", mfx: { werte: { threshold: 45, ratio: 4 } } },
+    { datei: "m43b-squash-tube", name: "Squash Tube", zweck: "Roehrensaettigung voll.", mfx: { werte: { tube_sat: 127 } } },
+  ],
+  "m44-master-notch": [
+    { datei: "m44a-notch-low", name: "Notch Low", zweck: "Kerbe tiefer angesetzt.", mfx: { werte: { b2_frequency: 20 } } },
+    { datei: "m44b-notch-wide", name: "Notch Wide", zweck: "Breite Kerbe (kleines Q).", mfx: { werte: { b2_q: 3 } } },
+  ],
+  "m45-ping-pong": [
+    { datei: "m45a-ping-pong-short", name: "Ping Pong Sh", zweck: "Kuerzere Notenwerte beiderseits.", mfx: { werte: { on_l_syncnote: 6, on_r_syncnote: 9 } } },
+    { datei: "m45b-ping-pong-mod", name: "Ping Pong Mod", zweck: "Mit Modulation — die Echos eiern.", mfx: { werte: { mod_depth: 60 } } },
+  ],
+  "m46-dub-tape": [
+    { datei: "m46a-dub-tape-clean", name: "Dub Tape Clean", zweck: "Weniger Saettigung, hell.", mfx: { werte: { saturation: 40, hi_damp: 50 } } },
+    { datei: "m46b-dub-tape-osc", name: "Dub Tape Osc", zweck: "Rueckkopplung voll — selbstschwingend.", mfx: { werte: { feedback: 127 } } },
+  ],
+  "m47-master-lofi": [
+    { datei: "m47a-lofi-8bit", name: "Master 8 Bit", zweck: "Rate hoch, Aufloesung runter — Kruemel statt Dumpfheit.", mfx: { werte: { sample_freq: 100, bit_depth: 5 } } },
+    { datei: "m47b-lofi-mask2", name: "Master Mask 2", zweck: "Maskentyp 2.", mfx: { werte: { mask_type: 2 } } },
+  ],
+  "m48-vinyl-pad": [
+    { datei: "m48a-vinyl-pad-deep", name: "Vinyl Pad Deep", zweck: "Tonhoehe deutlich tiefer.", mfx: { werte: { delta_pitch: 80 } } },
+    { datei: "m48b-vinyl-pad-scratch", name: "Vinyl Pad Scr", zweck: "Mit Scratch-Anteil.", mfx: { werte: { scratch: 60, scratch_width: 40 } } },
+  ],
 };
 
 // ─── Bauen ───────────────────────────────────────────────────────────────────
@@ -2260,4 +2621,8 @@ schreibeGruppe(INSERT_BEWEGUNG, "e2fxp", "TekkForge-IFX-Bewegung.tfsam", "TekkFo
 schreibeGruppe(variationen(INSERT_BEWEGUNG), "e2fxp", "TekkForge-IFX-Bewegung-Variationen.tfsam", "TekkForge IFX Bewegung Variationen");
 schreibeGruppe(MASTER_TEKK, "mfx", "TekkForge-MFX-Tekk.tfsam", "TekkForge MFX Tekk-Modulation");
 schreibeGruppe(variationen(MASTER_TEKK), "mfx", "TekkForge-MFX-Tekk-Variationen.tfsam", "TekkForge MFX Tekk-Modulation Variationen");
-schreibeGesamt([INSERT_PRESETS, INSERT_FARBEN, INSERT_BEWEGUNG], "e2fxp", "TekkForge-IFX-Alle.tfsam", "TekkForge IFX Alle", 96);
+schreibeGruppe(INSERT_KETTEN, "e2fxp", "TekkForge-IFX-Ketten.tfsam", "TekkForge IFX Ketten");
+schreibeGruppe(variationen(INSERT_KETTEN), "e2fxp", "TekkForge-IFX-Ketten-Variationen.tfsam", "TekkForge IFX Ketten Variationen");
+schreibeGruppe(MASTER_CHARAKTER, "mfx", "TekkForge-MFX-Charakter.tfsam", "TekkForge MFX Charakter");
+schreibeGruppe(variationen(MASTER_CHARAKTER), "mfx", "TekkForge-MFX-Charakter-Variationen.tfsam", "TekkForge MFX Charakter Variationen");
+schreibeGesamt([INSERT_PRESETS, INSERT_FARBEN, INSERT_BEWEGUNG, INSERT_KETTEN], "e2fxp", "TekkForge-IFX-Alle.tfsam", "TekkForge IFX Alle", 96);
