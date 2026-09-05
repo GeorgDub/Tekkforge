@@ -1500,7 +1500,10 @@ MIDImix-Taste — die Geraete-Noten verdraengten jeden echten Tastendruck aus
 dem Log, und Part-Noten mit Nummer ≤ 27 (Bank links = 25, Mute = 1/4/7/10)
 haetten sogar das Layout ausgeloest. Jetzt bekommt der Empfaenger die Quelle
 mit: Layout und Log sehen nur den Controller-Eingang, das Geraet erreicht
-weiterhin Learn und die gelernten Pads.
+weiterhin Learn und die gelernten Pads. Am Geraet bestaetigt (18:34): Bank
+rechts laeuft alle sechs Vorgaben vorwaerts, Bank links exakt rueckwaerts,
+Mutes toggeln auf dem Geraete-Pattern, und in 105 Log-Zeilen steht keine
+einzige Geraete-Note mehr.
 
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
