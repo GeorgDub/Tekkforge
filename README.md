@@ -1407,6 +1407,38 @@ lassen sich etwa nur die User-Samples anheben). `setzeGain12` in
 `core/patternWerkzeuge.ts` zaehlt die Aenderungen; am Bildschirm ueber den
 Treiber gefahren: Klatsch.wav laden, +12 alle → gesetzt, +12 keine → weg.
 
+## MIDImix-Layout — Regler und Fader auf Parts und Effekte (2026-09-05)
+
+Nutzerwunsch: den Akai MIDImix so belegen, dass jeder Regler auf einen
+Part und Parameter oder einen Effekt zeigt — statt nur der Live-FX-Belegung
+(24 Regler auf die FX-Parameter EINES Ziels). `core/midimixLayout.ts`:
+
+- **Werkseinstellung des MIDImix** (Kanal 1): Regler-Zeilen 16/17/18 …
+  58/59/60, Fader 19 … 61, Master 62, Mute-Tasten Noten 1, 4 … 22,
+  Rec-Arm 3, 6 … 24. `reglerOrt`/`tastenOrt` ordnen CC und Note dem
+  Bedienelement zu.
+- **Ziele je Regler:** Part × Parameter (alle geraetegemessenen Stock-CCs
+  aus `e2KnobCc`: Cutoff, Resonance, EG Int, Pitch, Glide, Osc Edit, Mod
+  Depth/Speed, Attack, Decay, Level, Pan, IFX Edit — als CC auf dem
+  Part-Kanal), Master-FX X/Y (CC 102/103 auf dem Global-Kanal), FX-Parameter
+  je Part und IFX-Slot sowie Master-FX-Parameter (Hacktribe-NRPN). Tasten:
+  Part anspielen (Note 60 auf dem Part-Kanal) oder Part stumm (lokal, ueber
+  die Edit-Buffer-Uebertragung wie im Pad-Deck — Panel-NRPN nimmt das
+  Geraet nicht an).
+- **Vorgaben:** Mixer 1–8 / 9–16 (Cutoff, Resonance, IFX Edit, Fader Level,
+  Master = MFX X), Klang 1–8 / 9–16 (Cutoff, Mod Depth, Decay), FX 1–8 /
+  9–16 (IFX-1-Parameter 0/1/2, Master = MFX-Parameter 0).
+- **Im Pad-Deck** die aufklappbare Karte „MIDImix-Layout“: je Spalte drei
+  Regler, Fader, Mute- und Rec-Taste als Auswahlmenue, dazu der
+  Master-Fader; „Layout aktiv“ hat Vorrang vor Live-FX und Pad-Learn;
+  Layout und Schalter bleiben im Browserspeicher. Die Meldung zeigt bei
+  jedem Dreh das Ziel und den Wert.
+
+Am Bildschirm gefahren (Treiber): 33 Regler-Felder, 16 Tasten-Felder,
+sechs Vorgaben; „FX Parts 1–8“ laden setzt Regler 1 auf Part 1 · IFX 1 ·
+Param 0. Am Geraet gehoert ist die Belegung noch nicht — Regler 1 der
+Mixer-Vorgabe muss Part 1 den Cutoff ziehen.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

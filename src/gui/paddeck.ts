@@ -47,6 +47,26 @@ import {
 } from "../core/padDeck";
 import { buildMfxCc, buildPanic, buildSchalterCc } from "../core/e2Remote";
 import { baueFxLiveNachricht, paramFuerCc, standardControllerMap, type FxLiveZiel } from "../core/fxLive";
+import {
+  layoutMixer,
+  LAYOUT_VORGABEN,
+  PART_KEYS,
+  reglerOrt,
+  tastenOrt,
+  zielAnOrt,
+  setzeZiel,
+  reglerNachrichten,
+  tastenNachrichten,
+  beschreibeZiel,
+  zielWert,
+  reglerZielAus,
+  tastenZielAus,
+  deserialisiereLayout,
+  type MidimixLayout,
+  type ReglerZiel,
+  type TastenZiel,
+  type ReglerOrt,
+} from "../core/midimixLayout";
 import { buildKnobCc, KNOB_CCS } from "../core/e2KnobCc";
 import { buildCurrentPatternDump, buildPatternRequest, decodeDump } from "../core/e2sysex";
 import { buildPatternFile, editorPatternFromBody, type EditorPattern } from "../core/editorModel";
@@ -443,6 +463,16 @@ function baueDom(): void {
       <label>Ziel <select id="pdFxZiel"></select></label>
       <span class="sub" id="pdFxLiveInfo" style="margin:0"></span>
     </div>
+    <details id="pdMidimix" style="margin:6px 0;border:1px solid var(--border);border-radius:6px;padding:6px">
+      <summary style="cursor:pointer;color:var(--accent2);font-weight:600;font-size:12px">MIDImix-Layout — Regler und Fader auf Parts und Effekte</summary>
+      <div class="pd-toolbar" style="margin-top:6px">
+        <label><input type="checkbox" id="pdMmAn" /> Layout aktiv (hat Vorrang vor Live-FX und Pad-Learn)</label>
+        <label>Vorgabe <select id="pdMmVorgabe"></select></label>
+        <button id="pdMmLaden" class="ghost">laden</button>
+        <span class="sub" id="pdMmInfo" style="margin:0"></span>
+      </div>
+      <div id="pdMmGrid" style="display:grid;grid-template-columns:repeat(9,minmax(120px,1fr));gap:4px;font-size:11px;overflow-x:auto"></div>
+    </details>
     <div class="pd-status" id="pdStatus">Pad-Deck — Klick führt aus.</div>
     <div class="pd-wrap">
       <div class="pd-grid" id="pdGrid"></div>
@@ -553,6 +583,157 @@ function richteFxLiveEin(): void {
     fxLiveInfo();
   });
   fxLiveInfo();
+}
+
+// ─── MIDImix-Layout: Regler/Fader → Parts und Effekte ───────────────────────
+
+const MIDIMIX_KEY = "tekkforge.paddeck.midimix";
+const midimix: { an: boolean; layout: MidimixLayout } = { an: false, layout: layoutMixer(1) };
+
+function mmInfo(text?: string): void {
+  const el = document.getElementById("pdMmInfo");
+  if (el) el.textContent = text ?? (midimix.an ? `${midimix.layout.name} aktiv — Regler drehen, die Meldung zeigt das Ziel` : "aus");
+}
+
+function mmMerken(): void {
+  try {
+    localStorage.setItem(MIDIMIX_KEY, JSON.stringify({ an: midimix.an, layout: midimix.layout }));
+  } catch {
+    /* ohne Speicher eben nur fuer diese Sitzung */
+  }
+}
+
+/** Auswahlliste fuer einen Regler: Part × Parameter, Master-FX, FX-Parameter (Hacktribe). */
+function mmReglerOptionen(gewaehlt: ReglerZiel): string {
+  const w = zielWert(gewaehlt);
+  const o = (wert: string, name: string) => `<option value="${wert}"${wert === w ? " selected" : ""}>${escapeHtml(name)}</option>`;
+  const teile: string[] = [o("", "—")];
+  for (let p = 1; p <= 16; p++) teile.push(`<optgroup label="Part ${p}">${PART_KEYS.map((k) => o(`p${p}:${k.key}`, `${p} · ${k.label}`)).join("")}</optgroup>`);
+  teile.push(`<optgroup label="Master-FX">${o("mfx:x", "MFX X")}${o("mfx:y", "MFX Y")}${[0, 1, 2, 3].map((i) => o(`mfxp:${i}`, `MFX Param ${i}`)).join("")}</optgroup>`);
+  const fx: string[] = [];
+  for (let p = 1; p <= 16; p++) for (const s of [0, 1] as const) for (let i = 0; i < 4; i++) fx.push(o(`fx${p}:${s}:${i}`, `${p} · IFX ${s + 1} · Param ${i}`));
+  teile.push(`<optgroup label="FX-Parameter (Hacktribe)">${fx.join("")}</optgroup>`);
+  return teile.join("");
+}
+
+function mmTastenOptionen(gewaehlt: TastenZiel): string {
+  const w = zielWert(gewaehlt);
+  const o = (wert: string, name: string) => `<option value="${wert}"${wert === w ? " selected" : ""}>${escapeHtml(name)}</option>`;
+  const teile = [o("", "—")];
+  for (let p = 1; p <= 16; p++) teile.push(o(`trig:${p}`, `Part ${p} anspielen`));
+  for (let p = 1; p <= 16; p++) teile.push(o(`mute:${p}`, `Part ${p} stumm`));
+  return teile.join("");
+}
+
+function renderMidimix(): void {
+  const grid = document.getElementById("pdMmGrid");
+  if (!grid) return;
+  const l = midimix.layout;
+  const zeilen: { was: ReglerOrt["was"] | "mute" | "rec"; label: string }[] = [
+    { was: "knob1", label: "Regler 1" },
+    { was: "knob2", label: "Regler 2" },
+    { was: "knob3", label: "Regler 3" },
+    { was: "fader", label: "Fader" },
+    { was: "mute", label: "Mute-Taste" },
+    { was: "rec", label: "Rec-Taste" },
+  ];
+  let html = `<div></div>${l.spalten.map((_, s) => `<div style="text-align:center;color:var(--dim)">Spalte ${s + 1}</div>`).join("")}`;
+  for (const z of zeilen) {
+    html += `<div style="color:var(--dim);align-self:center">${z.label}</div>`;
+    for (let s = 0; s < l.spalten.length; s++) {
+      const sp = l.spalten[s];
+      if (z.was === "mute" || z.was === "rec") html += `<select class="pdMmTaste" data-spalte="${s}" data-was="${z.was}" style="font-size:11px">${mmTastenOptionen(sp[z.was])}</select>`;
+      else html += `<select class="pdMmRegler" data-spalte="${s}" data-was="${z.was}" style="font-size:11px">${mmReglerOptionen(zielAnOrt(l, { spalte: s, was: z.was }))}</select>`;
+    }
+  }
+  html += `<div style="color:var(--dim);align-self:center">Master-Fader</div><select class="pdMmRegler" data-spalte="-1" data-was="master" style="font-size:11px;grid-column:span 3">${mmReglerOptionen(l.master)}</select>`;
+  grid.innerHTML = html;
+  grid.querySelectorAll<HTMLSelectElement>("select.pdMmRegler").forEach((sel) =>
+    sel.addEventListener("change", () => {
+      setzeZiel(midimix.layout, { spalte: Number(sel.dataset.spalte), was: sel.dataset.was as ReglerOrt["was"] }, reglerZielAus(sel.value));
+      midimix.layout.name = "eigenes Layout";
+      mmMerken();
+      mmInfo();
+    }),
+  );
+  grid.querySelectorAll<HTMLSelectElement>("select.pdMmTaste").forEach((sel) =>
+    sel.addEventListener("change", () => {
+      const sp = midimix.layout.spalten[Number(sel.dataset.spalte)];
+      if (!sp) return;
+      sp[sel.dataset.was as "mute" | "rec"] = tastenZielAus(sel.value);
+      mmMerken();
+    }),
+  );
+}
+
+/** Note (Taste) oder CC (Regler) vom Controller ueber das Layout ans Geraet — true = verbraucht. */
+function midimixVerarbeite(bytes: number[]): boolean {
+  if (!midimix.an || bytes.length < 3) return false;
+  const st = bytes[0] & 0xf0;
+  if (st === 0xb0) {
+    const ort = reglerOrt(bytes[1]);
+    if (!ort) return false;
+    const ziel = zielAnOrt(midimix.layout, ort);
+    const msgs = reglerNachrichten(ziel, bytes[2], panelBridge.midiChannel);
+    for (const m of msgs) panelBridge.midi.send(m);
+    mmInfo(ziel ? `${beschreibeZiel(ziel)} = ${bytes[2]}` : `Regler ${ort.was}${ort.spalte >= 0 ? ` Spalte ${ort.spalte + 1}` : ""}: kein Ziel`);
+    return true;
+  }
+  if (st === 0x90 || st === 0x80) {
+    const ort = tastenOrt(bytes[1]);
+    if (!ort || ort.was === "solo") return false;
+    const ziel = midimix.layout.spalten[ort.spalte]?.[ort.was] ?? null;
+    if (!ziel) return true;
+    const an = st === 0x90 && bytes[2] > 0;
+    if (ziel.art === "trigger") {
+      for (const m of tastenNachrichten(ziel, an)) panelBridge.midi.send(m);
+      if (an) mmInfo(beschreibeZiel(ziel));
+      return true;
+    }
+    // Mute: lokal im aktuellen Pattern kippen — das Geraet nimmt Panel-NRPN nicht an,
+    // der Mute geht wie im Pad-Deck ueber die Edit-Buffer-Uebertragung
+    if (an) {
+      const p = panelBridge.project.patterns[panelBridge.patternIndex];
+      const part = p?.parts[ziel.part - 1];
+      if (part) {
+        const stumm = !part.muted;
+        setzeMutes([ziel.part - 1], stumm);
+        mmInfo(`${beschreibeZiel(ziel)}: ${stumm ? "stumm" : "an"}`);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+function richteMidimixEin(): void {
+  const box = document.getElementById("pdMmAn") as HTMLInputElement | null;
+  const vorgabe = document.getElementById("pdMmVorgabe") as HTMLSelectElement | null;
+  if (!box || !vorgabe) return;
+  try {
+    const g = JSON.parse(localStorage.getItem(MIDIMIX_KEY) ?? "null") as { an?: boolean; layout?: unknown } | null;
+    if (g?.layout) midimix.layout = deserialisiereLayout(g.layout);
+    if (typeof g?.an === "boolean") midimix.an = g.an;
+  } catch {
+    /* Standard */
+  }
+  vorgabe.innerHTML = LAYOUT_VORGABEN.map((v) => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join("");
+  box.checked = midimix.an;
+  box.addEventListener("change", () => {
+    midimix.an = box.checked;
+    mmMerken();
+    mmInfo();
+  });
+  document.getElementById("pdMmLaden")?.addEventListener("click", () => {
+    const v = LAYOUT_VORGABEN.find((x) => x.id === vorgabe.value);
+    if (!v) return;
+    midimix.layout = v.bau();
+    mmMerken();
+    renderMidimix();
+    mmInfo();
+  });
+  renderMidimix();
+  mmInfo();
 }
 
 /** Controller-Auswahl füllen (Ports sind erst nach „MIDI aktivieren" bekannt). */
@@ -680,6 +861,7 @@ export function initPadDeck(istOffen: () => boolean): void {
   $("pdController").addEventListener("change", (e) => void waehleController((e.target as HTMLSelectElement).value).then(renderController));
 
   richteFxLiveEin();
+  richteMidimixEin();
 
   // MIDI: Learn oder Trigger (aktive Seite) — vom Controller-Eingang UND vom Gerät.
   const verarbeiteTrigger = (bytes: number[]) => {
@@ -688,6 +870,8 @@ export function initPadDeck(istOffen: () => boolean): void {
     // Live-FX zuerst: ein belegter Regler geht als FX-Parameter ans Gerät und
     // nicht mehr an die Pad-Erkennung. Lernen hat trotzdem Vorrang, sonst
     // liesse sich ein Regler nie einem Pad zuweisen.
+    // MIDImix-Layout zuerst: ein belegter Regler/Fader/Taster geht ans Geraet und nicht an Live-FX oder Pads
+    if (lernePad === null && midimixVerarbeite(bytes)) return;
     if (lernePad === null && st === 0xb0 && bytes.length >= 3 && fxLiveVerarbeite(bytes[1], bytes[2])) return;
     const istNote = st === 0x90 && bytes.length >= 3 && bytes[2] > 0;
     const istCc = st === 0xb0 && bytes.length >= 3 && bytes[2] >= 64 && bytes[1] !== 0x20 && bytes[1] !== 0x00;
