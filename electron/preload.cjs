@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld("tekkMidi", {
   selectIn: (id) => ipcRenderer.invoke("midi:selectIn", id),
   /** Zweiter Eingang (Controller, z. B. MIDImix); null schließt ihn. Nachrichten kommen mit quelle "controller". */
   selectIn2: (id) => ipcRenderer.invoke("midi:selectIn2", id),
+  /** Zweiter Ausgang (Controller-LEDs, z. B. MIDImix); null schließt ihn. */
+  selectOut2: (id) => ipcRenderer.invoke("midi:selectOut2", id),
+  /** Sendet rohe Bytes an den Controller-Ausgang. */
+  send2: (bytes) => ipcRenderer.invoke("midi:send2", bytes),
   /** Sendet rohe Bytes (kompletter SysEx-Frame). */
   send: (bytes) => ipcRenderer.invoke("midi:send", bytes),
   /** MIDI-Clock (0xF8, 24 ppqn) im Worker: { action: "start"|"stop"|"bpm", bpm? }. */

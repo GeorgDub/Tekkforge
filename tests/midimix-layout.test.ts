@@ -89,3 +89,33 @@ describe("midimixLayout", () => {
     expect(deserialisiereLayout({ version: 2 }).spalten).toHaveLength(8);
   });
 });
+
+import { MIDIMIX_BANK, naechsteVorgabeId, vorgabeIdVon, ledNachrichten } from "../src/core/midimixLayout";
+
+describe("midimixLayout — Bank-Tasten und LEDs", () => {
+  it("Bank rechts/links blaettert zyklisch durch die Vorgaben, eigenes Layout beginnt vorn", () => {
+    expect(MIDIMIX_BANK).toEqual({ links: 25, rechts: 26 });
+    expect(naechsteVorgabeId("mixer1", 1)).toBe("mixer9");
+    expect(naechsteVorgabeId("fx9", 1)).toBe("mixer1");
+    expect(naechsteVorgabeId("mixer1", -1)).toBe("fx9");
+    expect(naechsteVorgabeId(null, 1)).toBe("mixer1");
+    expect(naechsteVorgabeId("eigenes", -1)).toBe("fx9");
+    expect(vorgabeIdVon(layoutMixer(9))).toBe("mixer9");
+    const eigen = layoutMixer(1);
+    eigen.name = "eigenes Layout";
+    expect(vorgabeIdVon(eigen)).toBeNull();
+  });
+
+  it("ledNachrichten: Mute-LED folgt dem Part-Mute, Rec-LEDs aus", () => {
+    const l = layoutMixer(1);
+    const muted = [true, false, false, true, false, false, false, false];
+    const msgs = ledNachrichten(l, muted);
+    expect(msgs).toHaveLength(16);
+    expect([...msgs[0]]).toEqual([0x90, 1, 127]);
+    expect([...msgs[2]]).toEqual([0x90, 4, 0]);
+    expect([...msgs[6]]).toEqual([0x90, 10, 127]);
+    expect(msgs.filter((m, i) => i % 2 === 1).every((m) => m[2] === 0)).toBe(true);
+    const l9 = layoutMixer(9);
+    expect([...ledNachrichten(l9, [...muted, true])[0]]).toEqual([0x90, 1, 127]);
+  });
+});

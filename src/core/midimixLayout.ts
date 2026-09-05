@@ -274,3 +274,35 @@ export function deserialisiereLayout(quelle: string | unknown): MidimixLayout {
     return layoutMixer(1);
   }
 }
+
+/** Bank-Tasten des MIDImix (Noten): links 25, rechts 26 — sie blaettern durch die Vorgaben. */
+export const MIDIMIX_BANK = { links: 25, rechts: 26 } as const;
+
+/** Naechste bzw. vorige Vorgabe (zyklisch) — unbekannte oder eigene Layouts beginnen bei der ersten. */
+export function naechsteVorgabeId(aktuell: string | null, richtung: 1 | -1): string {
+  const ids = LAYOUT_VORGABEN.map((v) => v.id);
+  const i = aktuell ? ids.indexOf(aktuell) : -1;
+  if (i < 0) return richtung === 1 ? ids[0] : ids[ids.length - 1];
+  return ids[(i + richtung + ids.length) % ids.length];
+}
+
+/** Vorgabe-ID zu einem Layout-Namen (fuer Bank-Tasten und Anzeige), null bei eigenem Layout. */
+export function vorgabeIdVon(layout: MidimixLayout): string | null {
+  return LAYOUT_VORGABEN.find((v) => v.name === layout.name)?.id ?? null;
+}
+
+/**
+ * LED-Nachrichten an den MIDImix: Mute-LED an, wenn der zugeordnete Part
+ * stumm ist (Note-On 127), sonst aus (Note-On 0); Rec-LEDs aus. `muted[i]`
+ * ist der Mute-Zustand von Part i+1 im aktuellen Pattern.
+ */
+export function ledNachrichten(layout: MidimixLayout, muted: readonly boolean[]): Uint8Array[] {
+  const out: Uint8Array[] = [];
+  layout.spalten.forEach((sp, s) => {
+    const m = sp.mute;
+    const an = !!m && m.art === "mute" && !!muted[m.part - 1];
+    out.push(new Uint8Array([0x90 | MIDIMIX.kanal0, MIDIMIX.mute[s], an ? 127 : 0]));
+    out.push(new Uint8Array([0x90 | MIDIMIX.kanal0, MIDIMIX.rec[s], 0]));
+  });
+  return out;
+}

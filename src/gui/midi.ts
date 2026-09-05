@@ -14,6 +14,9 @@ interface TekkMidiBridge {
   selectIn(id: string): Promise<boolean>;
   /** Zweiter Eingang (Controller); null schließt ihn. Optional — ältere Bridges haben ihn nicht. */
   selectIn2?(id: string | null): Promise<boolean>;
+  /** Zweiter Ausgang (Controller-LEDs); null schließt ihn. Optional. */
+  selectOut2?(id: string | null): Promise<boolean>;
+  send2?(bytes: number[]): Promise<boolean>;
   send(bytes: number[]): Promise<boolean>;
   /** MIDI-Clock-Generator im Main-Prozess (optional — ältere Bridges haben ihn nicht). */
   clock?(opts: { action: "start" | "stop" | "bpm"; bpm?: number }): Promise<{ laeuft: boolean; bpm: number }>;
@@ -63,6 +66,27 @@ export class MidiIO {
   private controllerId: string | null = null;
 
   /** Kann diese Bridge einen zweiten Eingang öffnen? */
+  private controllerOutId: string | null = null;
+  /** Gibt es einen Controller-Ausgang (LEDs)? Nur die aktuelle Desktop-App hat ihn. */
+  get controllerOutputAvailable(): boolean {
+    return typeof bridge()?.selectOut2 === "function";
+  }
+  get controllerOutputId(): string | null {
+    return this.controllerOutId;
+  }
+  /** Öffnet (oder schließt mit null) den Controller-Ausgang — fuer LED-Rueckmeldung am MIDImix. */
+  async selectControllerOutput(id: string | null): Promise<void> {
+    const b = bridge();
+    if (!b?.selectOut2) throw new Error("Controller-Ausgang braucht die aktuelle Desktop-App.");
+    await b.selectOut2(id);
+    this.controllerOutId = id;
+  }
+  /** Rohe Bytes an den Controller (LEDs); ohne offenen Ausgang still ignoriert. */
+  sendController(bytes: Uint8Array | number[]): void {
+    const b = bridge();
+    if (!b?.send2 || !this.controllerOutId) return;
+    void b.send2(Array.from(bytes)).catch(() => {});
+  }
   get controllerAvailable(): boolean {
     return typeof bridge()?.selectIn2 === "function";
   }

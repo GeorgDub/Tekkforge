@@ -87,7 +87,7 @@ describe("liedZuSet", () => {
     const aus = liedZuSet(y, sr, { name: "S", kanaele: 1, tekkDrums, bpm, groove: false });
     expect(aus.swing).toBe(0);
     expect(aus.groove).toBeUndefined();
-  });
+  }, 20000); // drei Lied-Laeufe — unter Last der ganzen Suite ueber 5 s
 
   it("mit tekk4 hat das A-Pattern ein Schlagzeug", () => {
     const set = liedZuSet(pcm, 44100, { name: "T", kanaele: 1, tekkDrums });

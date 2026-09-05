@@ -529,7 +529,7 @@ export function aktuellesPanelPattern(): EditorPattern {
  * Mutes setzen wie ein Pad-Klick im Part-Mute-Modus: Live per NRPN (Hacktribe)
  * oder Edit-Buffer-Übertragung (Stock), Prepare nur lokal.
  */
-export function setzeMutes(parts: number[], muted: boolean): void {
+export function setzeMutes(parts: number[], muted: boolean, sofort = false): void {
   const p = aktuellesPattern();
   // Kein NRPN: Panel-NRPN-Mutes nimmt das Gerät nicht an (widerlegt
   // 2026-08-30, siehe hacktribeNrpn.ts). Es wirkt allein die
@@ -539,7 +539,11 @@ export function setzeMutes(parts: number[], muted: boolean): void {
     if (!part) continue;
     part.muted = muted;
   }
-  if (modus === "live") planeAutoUebertragung();
+  // sofort: der Mute kommt von einem Controller (MIDImix) — dann geht der
+  // Edit-Buffer auch ausserhalb des Live-Modus sofort zum Geraet, sonst
+  // "geht Mute nicht" (Nutzerbefund 2026-09-05).
+  if (sofort) void anhoeren();
+  else if (modus === "live") planeAutoUebertragung();
   else panelBridge.markDirty();
   renderPanel();
 }

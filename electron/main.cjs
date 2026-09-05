@@ -855,6 +855,9 @@ function registerMidiIpc(win) {
   ipcMain.handle("midi:selectIn", (_e, id) => midiCall("openIn", { port: id }, 2500));
   // Zweiter Eingang fuer einen Controller (Pad-Deck); null/"" schliesst ihn.
   ipcMain.handle("midi:selectIn2", (_e, id) => midiCall("openIn2", { port: id ?? null }, 2500));
+  // Zweiter Ausgang fuer den Controller (LEDs, z. B. MIDImix); null/"" schliesst ihn.
+  ipcMain.handle("midi:selectOut2", (_e, id) => midiCall("openOut2", { port: id ?? null }, 2500));
+  ipcMain.handle("midi:send2", (_e, bytes) => midiCall("send2", { bytes: Array.isArray(bytes) ? bytes : Array.from(bytes) }, 2500));
   ipcMain.handle("midi:send", (_e, bytes) =>
     midiCall("send", { bytes: Array.isArray(bytes) ? bytes : Array.from(bytes) }, 2500),
   );

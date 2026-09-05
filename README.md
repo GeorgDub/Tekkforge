@@ -1439,6 +1439,18 @@ sechs Vorgaben; „FX Parts 1–8“ laden setzt Regler 1 auf Part 1 · IFX 1 ·
 Param 0. Am Geraet gehoert ist die Belegung noch nicht — Regler 1 der
 Mixer-Vorgabe muss Part 1 den Cutoff ziehen.
 
+**Nachtrag (2026-09-05): Bank-Tasten, Mute, LEDs.** Nutzerbefund: „Mute
+geht nicht“ — `setzeMutes` uebertrug den Edit-Buffer nur im Live-Modus
+des Panels, sonst nur lokal. Vom Controller geht der Mute jetzt SOFORT in
+den Edit-Buffer (`setzeMutes(…, sofort)`), wie die Pads im Spiegel-Modus.
+**Bank links/rechts** (Noten 25/26) blaettern durch die Vorgaben Mixer
+1–8 → Mixer 9–16 → Klang 1–8 → Klang 9–16 → FX 1–8 → FX 9–16 und zurueck.
+**LEDs:** ein zweiter MIDI-Ausgang zum Controller (Worker `openOut2`/`send2`,
+Preload `selectOut2`/`send2`, Pad-Deck-Auswahl „LEDs“, Wahl bleibt
+gespeichert) — die Mute-LEDs des MIDImix folgen den Part-Mutes des
+aktuellen Patterns (`ledNachrichten`: Note-On 127 = an, 0 = aus, Rec-LEDs
+aus), nach jedem Mute und jedem Bank-Wechsel.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

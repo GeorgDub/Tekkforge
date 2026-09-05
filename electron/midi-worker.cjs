@@ -50,6 +50,8 @@ let inputPort = null;
 let inputName = null;
 /** Zweiter Eingang (Controller, z. B. MIDImix) — Nachrichten werden mit quelle:"controller" markiert. */
 let input2 = null;
+/** Zweiter Ausgang: LEDs und Rueckmeldung an den Controller (z. B. MIDImix). */
+let out2 = null;
 
 function oeffneGeraeteEingang(port) {
   input = new midi.Input();
@@ -165,6 +167,18 @@ parentPort.on("message", (msg) => {
         input2.openPort(Number(msg.port));
         if (geraetWarOffen && inputPort !== null) oeffneGeraeteEingang(inputPort);
       }
+      parentPort.postMessage({ id, ok: true });
+    } else if (cmd === "openOut2") {
+      if (out2) out2.closePort();
+      out2 = null;
+      if (msg.port !== null && msg.port !== undefined && msg.port !== "") {
+        out2 = new midi.Output();
+        out2.openPort(Number(msg.port));
+      }
+      parentPort.postMessage({ id, ok: true });
+    } else if (cmd === "send2") {
+      if (!out2) throw new Error("Kein Controller-Ausgang geöffnet");
+      out2.sendMessage(msg.bytes);
       parentPort.postMessage({ id, ok: true });
     } else if (cmd === "send") {
       if (!out) throw new Error("Kein MIDI-Ausgang geöffnet");

@@ -62,6 +62,10 @@ import {
   reglerZielAus,
   tastenZielAus,
   deserialisiereLayout,
+  MIDIMIX_BANK,
+  naechsteVorgabeId,
+  vorgabeIdVon,
+  ledNachrichten,
   type MidimixLayout,
   type ReglerZiel,
   type TastenZiel,
@@ -452,6 +456,7 @@ function baueDom(): void {
       <span style="flex:1"></span>
       <label>Raster <select id="pdCols">${achsen}</select> × <select id="pdRows">${achsen}</select></label>
       <label title="Zweiter MIDI-Eingang nur fürs Pad-Deck (z. B. MIDImix) — Nachrichten gehen nicht in die Gerätelogik">Controller <select id="pdController"><option value="">— keiner —</option></select></label>
+      <label title="Ausgang zum Controller für LED-Rückmeldung (MIDImix: Mute-LEDs zeigen den Part-Mute)">LEDs <select id="pdControllerOut"><option value="">— keiner —</option></select></label>
       <button id="pdBearbeiten" class="ghost">✎ Bearbeiten</button>
       <button id="pdBeispiel" class="ghost" title="Start-Deck aus den Projekt-Patterns (ersetzt das aktuelle Deck)">Beispiel-Deck</button>
       <button id="pdExport" class="ghost">⇩ JSON</button>
@@ -588,6 +593,7 @@ function richteFxLiveEin(): void {
 // ─── MIDImix-Layout: Regler/Fader → Parts und Effekte ───────────────────────
 
 const MIDIMIX_KEY = "tekkforge.paddeck.midimix";
+const CONTROLLER_OUT_KEY = "tekkforge.paddeck.controllerOut";
 const midimix: { an: boolean; layout: MidimixLayout } = { an: false, layout: layoutMixer(1) };
 
 function mmInfo(text?: string): void {
@@ -680,30 +686,56 @@ function midimixVerarbeite(bytes: number[]): boolean {
     return true;
   }
   if (st === 0x90 || st === 0x80) {
+    const an = st === 0x90 && bytes[2] > 0;
+    // Bank links/rechts: durch die Vorgaben blaettern (Mixer 1–8 … FX 9–16)
+    if (bytes[1] === MIDIMIX_BANK.links || bytes[1] === MIDIMIX_BANK.rechts) {
+      if (an) {
+        const id = naechsteVorgabeId(vorgabeIdVon(midimix.layout), bytes[1] === MIDIMIX_BANK.rechts ? 1 : -1);
+        const v = LAYOUT_VORGABEN.find((x) => x.id === id);
+        if (v) {
+          midimix.layout = v.bau();
+          const sel = document.getElementById("pdMmVorgabe") as HTMLSelectElement | null;
+          if (sel) sel.value = id;
+          mmMerken();
+          renderMidimix();
+          mmInfo(`Bank ${bytes[1] === MIDIMIX_BANK.rechts ? "rechts" : "links"} → ${v.name}`);
+          mmLeds();
+        }
+      }
+      return true;
+    }
     const ort = tastenOrt(bytes[1]);
     if (!ort || ort.was === "solo") return false;
     const ziel = midimix.layout.spalten[ort.spalte]?.[ort.was] ?? null;
     if (!ziel) return true;
-    const an = st === 0x90 && bytes[2] > 0;
     if (ziel.art === "trigger") {
       for (const m of tastenNachrichten(ziel, an)) panelBridge.midi.send(m);
       if (an) mmInfo(beschreibeZiel(ziel));
       return true;
     }
-    // Mute: lokal im aktuellen Pattern kippen — das Geraet nimmt Panel-NRPN nicht an,
-    // der Mute geht wie im Pad-Deck ueber die Edit-Buffer-Uebertragung
+    // Mute: lokal im aktuellen Pattern kippen und SOFORT in den Edit-Buffer —
+    // wie die Pads im Spiegel-Modus; Panel-NRPN nimmt das Geraet nicht an.
     if (an) {
       const p = panelBridge.project.patterns[panelBridge.patternIndex];
       const part = p?.parts[ziel.part - 1];
       if (part) {
         const stumm = !part.muted;
-        setzeMutes([ziel.part - 1], stumm);
+        setzeMutes([ziel.part - 1], stumm, true);
         mmInfo(`${beschreibeZiel(ziel)}: ${stumm ? "stumm" : "an"}`);
+        mmLeds();
       }
     }
     return true;
   }
   return false;
+}
+
+/** Mute-LEDs am MIDImix nach dem aktuellen Pattern setzen (nur mit offenem Controller-Ausgang). */
+function mmLeds(): void {
+  if (!panelBridge.midi.controllerOutputId) return;
+  const p = panelBridge.project.patterns[panelBridge.patternIndex];
+  const muted = p ? p.parts.map((x) => !!x.muted) : [];
+  for (const m of ledNachrichten(midimix.layout, muted)) panelBridge.midi.sendController(m);
 }
 
 function richteMidimixEin(): void {
@@ -751,6 +783,40 @@ function renderController(): void {
       ? "Zweiter MIDI-Eingang nur fürs Pad-Deck"
       : `Erst im Editor-Tab „MIDI aktivieren"`
     : "Controller-Eingang braucht die aktuelle Desktop-App";
+  // Ausgang zum Controller (LEDs) — dieselben Ports wie fuer das Geraet, nur ein anderer davon
+  const out = document.getElementById("pdControllerOut") as HTMLSelectElement | null;
+  if (out) {
+    const outs = midi.available ? midi.outputs() : [];
+    const aktOut = midi.controllerOutputId ?? "";
+    out.innerHTML =
+      `<option value="">— keiner —</option>` +
+      outs.map((p) => `<option value="${escapeHtml(p.id)}"${p.id === aktOut ? " selected" : ""}>${escapeHtml(p.name ?? p.label ?? p.id)}</option>`).join("");
+    out.disabled = !midi.controllerOutputAvailable || outs.length === 0;
+    // gemerkten Ausgang wieder oeffnen, sobald die Ports bekannt sind
+    let gemerkt = "";
+    try {
+      gemerkt = localStorage.getItem(CONTROLLER_OUT_KEY) ?? "";
+    } catch {
+      /* egal */
+    }
+    if (!aktOut && gemerkt && outs.some((p) => p.id === gemerkt)) void waehleControllerAusgang(gemerkt).then(renderController);
+  }
+}
+
+/** Controller-Ausgang waehlen (LEDs); Wahl bleibt im Browserspeicher. */
+async function waehleControllerAusgang(id: string): Promise<void> {
+  try {
+    await panelBridge.midi.selectControllerOutput(id || null);
+    try {
+      localStorage.setItem(CONTROLLER_OUT_KEY, id);
+    } catch {
+      /* egal */
+    }
+    setStatus(id ? "Controller-Ausgang offen — Mute-LEDs folgen den Part-Mutes." : "Controller-Ausgang geschlossen.");
+    mmLeds();
+  } catch (err) {
+    setStatus(`Controller-Ausgang fehlgeschlagen: ${err instanceof Error ? err.message : err}`);
+  }
 }
 
 async function waehleController(id: string): Promise<void> {
@@ -859,6 +925,7 @@ export function initPadDeck(istOffen: () => boolean): void {
   });
 
   $("pdController").addEventListener("change", (e) => void waehleController((e.target as HTMLSelectElement).value).then(renderController));
+  $("pdControllerOut").addEventListener("change", (e) => void waehleControllerAusgang((e.target as HTMLSelectElement).value).then(renderController));
 
   richteFxLiveEin();
   richteMidimixEin();
