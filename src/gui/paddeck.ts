@@ -477,8 +477,10 @@ function baueDom(): void {
         <label>Vorgabe <select id="pdMmVorgabe"></select></label>
         <button id="pdMmLaden" class="ghost">laden</button>
         <span class="sub" id="pdMmInfo" style="margin:0"></span>
+        <span class="sub" id="pdMmRoh" style="margin:0;color:#888" title="zuletzt vom Controller empfangen"></span>
       </div>
       <div id="pdMmGrid" style="display:grid;grid-template-columns:repeat(9,minmax(120px,1fr));gap:4px;font-size:11px;overflow-x:auto"></div>
+      <details><summary class="sub">Controller-Log (letzte 60 Nachrichten, bleibt gespeichert)</summary><pre id="pdMmLog" style="font-size:10px;max-height:220px;overflow:auto;margin:4px 0"></pre></details>
     </details>
     <div class="pd-status" id="pdStatus">Pad-Deck — Klick führt aus.</div>
     <div class="pd-wrap">
@@ -598,7 +600,25 @@ const MIDIMIX_KEY = "tekkforge.paddeck.midimix";
 const CONTROLLER_OUT_KEY = "tekkforge.paddeck.controllerOut";
 const midimix: { an: boolean; layout: MidimixLayout } = { an: false, layout: layoutMixer(1) };
 
+const MIDIMIX_LOG_KEY = "tekkforge.paddeck.midimixLog";
+let mmLog: string[] = (() => { try { const r = JSON.parse(localStorage.getItem(MIDIMIX_LOG_KEY) ?? "[]"); return Array.isArray(r) ? r.map(String) : []; } catch { return []; } })();
+/** Diagnose: jede Controller-Nachricht und jede Reaktion mit Uhrzeit; ueberlebt den Neustart (localStorage). */
+function mmLogEintrag(text: string): void {
+  mmLog.push(`${new Date().toISOString().slice(11, 23)} ${text}`);
+  if (mmLog.length > 60) mmLog = mmLog.slice(-60);
+  try { localStorage.setItem(MIDIMIX_LOG_KEY, JSON.stringify(mmLog)); } catch { /* Speicher voll oder gesperrt — Anzeige reicht */ }
+  const pre = document.getElementById("pdMmLog");
+  if (pre) { pre.textContent = mmLog.slice(-25).join("\n"); pre.scrollTop = pre.scrollHeight; }
+}
+
+function mmRoh(bytes: number[]): void {
+  mmLogEintrag(`IN ${bytes.map((x) => x.toString(16).padStart(2, "0")).join(" ")}`);
+  const el = document.getElementById("pdMmRoh");
+  if (el) el.textContent = `zuletzt: ${bytes.map((x) => x.toString(16).padStart(2, "0")).join(" ")}`;
+}
+
 function mmInfo(text?: string): void {
+  if (text) mmLogEintrag(`→ ${text}`);
   const el = document.getElementById("pdMmInfo");
   if (el) el.textContent = text ?? (midimix.an ? `${midimix.layout.name} aktiv — Regler drehen, die Meldung zeigt das Ziel` : "aus");
 }
@@ -677,7 +697,8 @@ function renderMidimix(): void {
 
 /** Note (Taste) oder CC (Regler) vom Controller ueber das Layout ans Geraet — true = verbraucht. */
 function midimixVerarbeite(bytes: number[]): boolean {
-  if (!midimix.an || bytes.length < 3) return false;
+  if (!midimix.an || bytes.length < 3 || bytes[0] >= 0xf0) return false;
+  mmRoh(bytes);
   const st = bytes[0] & 0xf0;
   if (st === 0xb0) {
     const ort = reglerOrt(bytes[1]);

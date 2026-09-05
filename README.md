@@ -1475,6 +1475,22 @@ gekippt und die Kopie uebertragen. IFX-Tasten und LEDs lesen denselben
 Stand (`aktuellesPanelPattern`). Kommt kein Geraete-Pattern, passiert
 nichts und die Info sagt „im Panel Sync vom Geraet druecken“.
 
+**Nachtrag 4 (2026-09-05): Bank links haengt nicht mehr, Controller-Log.**
+Nutzerbefund: „Bank left geht noch nicht ganz richtig“. Erst ein
+Controller-Log brachte es ans Licht (Rohbytes `90 19 7f` kamen sauber an):
+Bank links landete immer wieder auf „FX Parts 9–16“, Bank rechts sprang
+danach an den Listenanfang. `vorgabeIdVon` verglich den Layout-NAMEN mit
+der Vorgabenliste, und die FX-Vorgaben hiessen dort „… (Hacktribe)“, das
+gebaute Layout aber nicht — ein aktives FX-Layout galt damit als „eigenes
+Layout“, und von dort geht links immer ans Listenende. Jetzt vergleicht
+`vorgabeIdVon` die STRUKTUR (Spalten und Master), die Vorgabennamen kommen
+aus den gebauten Layouts, und der Test laeuft einmal rueckwaerts durch
+alle sechs Vorgaben. Neu in der MIDImix-Karte: eine Zeile „zuletzt: …“
+mit den Rohbytes und ein **Controller-Log** (letzte 60 Nachrichten und
+Reaktionen mit Uhrzeit, `tekkforge.paddeck.midimixLog` im localStorage,
+ueberlebt den Neustart) — SysEx vom Geraet bleibt draussen. Damit laesst
+sich „geht nicht richtig“ am Controller ohne Messfassung nachlesen.
+
 ## Audio → KORG auf der Kommandozeile (2026-09-03)
 
 `npx tsx scripts/audio-zu-korg.mjs <datei|ordner> … --ziel <BANK.all>

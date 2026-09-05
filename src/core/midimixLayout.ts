@@ -124,8 +124,8 @@ export const LAYOUT_VORGABEN: readonly { id: string; name: string; bau: () => Mi
   { id: "mixer9", name: "Mixer Parts 9–16", bau: () => layoutMixer(9) },
   { id: "klang1", name: "Klang Parts 1–8", bau: () => layoutKlang(1) },
   { id: "klang9", name: "Klang Parts 9–16", bau: () => layoutKlang(9) },
-  { id: "fx1", name: "FX Parts 1–8 (Hacktribe)", bau: () => layoutFx(1) },
-  { id: "fx9", name: "FX Parts 9–16 (Hacktribe)", bau: () => layoutFx(9) },
+  { id: "fx1", name: layoutFx(1).name, bau: () => layoutFx(1) },
+  { id: "fx9", name: layoutFx(9).name, bau: () => layoutFx(9) },
 ];
 
 export interface ReglerOrt {
@@ -299,9 +299,17 @@ export function naechsteVorgabeId(aktuell: string | null, richtung: 1 | -1): str
   return ids[(i + richtung + ids.length) % ids.length];
 }
 
-/** Vorgabe-ID zu einem Layout-Namen (fuer Bank-Tasten und Anzeige), null bei eigenem Layout. */
+/**
+ * Vorgabe-ID zu einem Layout (fuer Bank-Tasten und Anzeige), null bei eigenem Layout.
+ * Verglichen wird die STRUKTUR (Ziele), nicht der Name: der Name ist frei
+ * editierbar, und ein Namensunterschied liess Bank links am Geraet immer
+ * wieder auf derselben Vorgabe landen (Controller-Log 2026-09-05: die
+ * FX-Vorgaben hiessen in der Liste „… (Hacktribe)“, das gebaute Layout nicht).
+ */
 export function vorgabeIdVon(layout: MidimixLayout): string | null {
-  return LAYOUT_VORGABEN.find((v) => v.name === layout.name)?.id ?? null;
+  const kern = (l: MidimixLayout) => JSON.stringify({ spalten: l.spalten, master: l.master });
+  const mein = kern(layout);
+  return LAYOUT_VORGABEN.find((v) => v.name === layout.name || kern(v.bau()) === mein)?.id ?? null;
 }
 
 /** Zustand je Part (Index = Part−1) fuer die LEDs. */

@@ -103,6 +103,8 @@ describe("midimixLayout — Bank-Tasten und LEDs", () => {
     expect(vorgabeIdVon(layoutMixer(9))).toBe("mixer9");
     const eigen = layoutMixer(1);
     eigen.name = "eigenes Layout";
+    expect(vorgabeIdVon(eigen)).toBe("mixer1"); // Name ist egal, die Struktur zaehlt
+    setzeZiel(eigen, reglerOrt(16)!, { art: "part", part: 12, key: "pan" });
     expect(vorgabeIdVon(eigen)).toBeNull();
   });
 
@@ -146,5 +148,27 @@ describe("midimixLayout — IFX-Tasten im FX-Layout", () => {
     expect([...msgs[14]]).toEqual([0x90, 22, 127]);
     // alte Aufrufform (nur Mutes) bleibt gueltig
     expect([...ledNachrichten(layoutMixer(1), [true])[0]]).toEqual([0x90, 1, 127]);
+  });
+});
+
+describe("midimixLayout — Bank-Tasten erkennen jede Vorgabe (Regression 2026-09-05)", () => {
+  it("vorgabeIdVon findet jede gebaute Vorgabe, auch mit anderem Namen", () => {
+    for (const v of LAYOUT_VORGABEN) {
+      const l = v.bau();
+      expect(vorgabeIdVon(l)).toBe(v.id);
+      expect(v.name).toBe(l.name);
+      l.name = "umbenannt";
+      expect(vorgabeIdVon(l)).toBe(v.id);
+    }
+  });
+  it("Bank links laeuft einmal rueckwaerts durch alle Vorgaben und kommt zurueck", () => {
+    let l = layoutMixer(1);
+    const weg: string[] = [];
+    for (let i = 0; i < LAYOUT_VORGABEN.length; i++) {
+      const id = naechsteVorgabeId(vorgabeIdVon(l), -1);
+      weg.push(id);
+      l = LAYOUT_VORGABEN.find((v) => v.id === id)!.bau();
+    }
+    expect(weg).toEqual(["fx9", "fx1", "klang9", "klang1", "mixer9", "mixer1"]);
   });
 });
