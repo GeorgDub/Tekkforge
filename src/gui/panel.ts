@@ -62,6 +62,9 @@ import {
   type EditorPattern,
 } from "../core/editorModel";
 import { displayInfo, partLeds, stepStates, taktAnzahl } from "../core/panelState";
+import { setzeFxWert, fxStandNachrichten, fxStandBeschreibung, type FxStandZiel } from "../core/fxStand";
+import { msBisNaechsterTakt } from "../core/padDeck";
+import { registriereFxStandQuelle } from "./presetManager";
 import { buildKnobCc, ccValueToParam, decodeKnobCc } from "../core/e2KnobCc";
 
 let modus: "live" | "prepare" = "prepare";
@@ -492,6 +495,8 @@ export function wechslePattern(idx: number): void {
       // der alte Stand stehen — kein Rückfall aufs Editor-Pattern.
       void zeigeSlotVomGeraet(idx, `Pattern ${idx + 1}`);
       planeAutoSync(600);
+      // Live-FX-Werte des Ziel-Patterns nach dem Taktende nachschicken (fxStand.ts).
+      sendeFxStand(panelBridge.project.patterns[idx], `Pattern ${idx + 1}`, msBisNachTaktende());
       // Gemessen 2026-08-22: das Gerät nimmt den Program Change nur bei
       // LAUFENDEM Sequencer an (Wechsel am Taktende); gestoppt ignoriert es ihn.
       setStatus(
@@ -565,6 +570,84 @@ export async function muteVomController(part0: number): Promise<{ stumm: boolean
   const stumm = !part.muted;
   setzeMutes([part0], stumm, true);
   return { stumm, name: livePattern.name };
+}
+
+/**
+ * IFX an/aus von einem Controller (MIDImix): wie der Mute ueber das
+ * GERAETE-Pattern und den Edit-Buffer — NICHT per CC 104. Der CC wirkt am
+ * Geraet nur auf den dort gewaehlten Part, egal auf welchem Kanal er kommt
+ * (Nutzerbefund 2026-09-06: „Taste fuer Part 2 schaltet am Geraet Part 1“).
+ * null, wenn kein Geraete-Pattern zu bekommen war.
+ */
+export async function ifxVomController(part0: number): Promise<{ an: boolean; name: string } | null> {
+  if (modus !== "live" || !livePattern) {
+    await syncVomGeraet();
+    if (modus !== "live" || !livePattern) return null;
+  }
+  const part = livePattern.parts[part0];
+  if (!part) return null;
+  const an = (part.params?.ifxOn ?? 0) !== 1;
+  part.params = { ...(part.params ?? {}), ifxOn: an ? 1 : 0 };
+  letzteLokaleAenderungUm = Date.now();
+  void anhoeren();
+  renderPanel();
+  return { an, name: livePattern.name };
+}
+
+// ─── FX-Stand (Live-FX-Werte je Pattern, fxStand.ts) ─────────────────────────
+
+/**
+ * Das Projekt-Pattern, das zum Geraete-Stand gehoert: im Live-Modus der
+ * zuletzt am Geraet gewaehlte Slot, sonst das Editor-Pattern.
+ */
+function projektPatternZumStand(): EditorPattern | undefined {
+  const idx = modus === "live" && zielPatternIdx !== null ? zielPatternIdx : panelBridge.patternIndex;
+  return panelBridge.project.patterns[idx];
+}
+
+/**
+ * Einen Live-FX-Wert (Hacktribe-NRPN) merken — im angezeigten Pattern und im
+ * zugehoerigen Projekt-Pattern, damit er mit dem Projekt gespeichert wird
+ * und beim naechsten Wechsel auf dieses Pattern wieder ans Geraet geht.
+ */
+export function merkeFxWert(ziel: FxStandZiel, wert: number): void {
+  const p = aktuellesPattern();
+  p.fxStand = setzeFxWert(p.fxStand, ziel, wert);
+  const proj = projektPatternZumStand();
+  if (proj && proj !== p) proj.fxStand = setzeFxWert(proj.fxStand, ziel, wert);
+  letzteLokaleAenderungUm = Date.now();
+  panelBridge.markDirty();
+}
+
+let fxStandTimer: number | null = null;
+
+/**
+ * Die gemerkten Live-FX-Werte eines Patterns ans Geraet schicken. Das Geraet
+ * zieht beim Laden eines Patterns die Presets frisch in die FX-Slots — die
+ * Werte muessen also NACH dem Wechsel kommen. `verzoegerungMs` wartet ab, bis
+ * der Wechsel am Taktende durch ist (bei eigenem Program Change).
+ */
+export function sendeFxStand(pattern: EditorPattern | undefined, woher: string, verzoegerungMs = 0): number {
+  const liste = pattern?.fxStand;
+  if (fxStandTimer !== null) {
+    window.clearTimeout(fxStandTimer);
+    fxStandTimer = null;
+  }
+  if (!liste?.length) return 0;
+  const senden = () => {
+    fxStandTimer = null;
+    for (const m of fxStandNachrichten(liste, panelBridge.midiChannel)) panelBridge.midi.send(m);
+    setStatus(`${woher}: ${liste.length} Live-FX-Wert(e) nachgeschickt — ${fxStandBeschreibung(liste)}.`);
+  };
+  if (verzoegerungMs > 0) fxStandTimer = window.setTimeout(senden, verzoegerungMs);
+  else senden();
+  return liste.length;
+}
+
+/** Wartezeit bis nach dem naechsten Taktende — der Patternwechsel greift dort. */
+function msBisNachTaktende(): number {
+  if (!spieltGerade || transportStartMs === null) return 0;
+  return msBisNaechsterTakt(performance.now() - transportStartMs, aktuellesPattern().bpm) + 150;
 }
 
 export async function transportStart(mitClock: boolean): Promise<void> {
@@ -875,6 +958,8 @@ function empfangeVomGeraet(bytes: number[]): void {
     if (kandidat) {
       livePattern = clonePattern(kandidat);
       setStatus(`Patternwechsel am Gerät: #${nr + 1} „${kandidat.name}" — aus dem Projekt übernommen.`);
+      // Das Geraet hat gewechselt und die FX-Slots frisch geladen — jetzt die gemerkten Live-FX-Werte hinterher.
+      sendeFxStand(kandidat, `Patternwechsel #${nr + 1}`);
     } else {
       setStatus(`Patternwechsel am Gerät: #${nr + 1} — nicht im Projekt, Sync beim nächsten Stopp.`);
     }
@@ -1253,6 +1338,11 @@ export function registriereEmpfaenger(cb: (bytes: number[]) => void): () => void
 
 export function initPanel(): void {
   baueDom();
+  // Der Preset-Manager holt sich hierueber das Pattern mit den Live-FX-Werten (fxStand.ts).
+  registriereFxStandQuelle(() => {
+    const p = aktuellesPattern();
+    return p ? { pattern: p, name: p.name } : null;
+  });
   panelBridge.onIncoming = (bytes) => {
     empfangeVomGeraet(bytes);
     for (const cb of zusatzEmpfaenger) {

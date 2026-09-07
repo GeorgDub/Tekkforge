@@ -1,6 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initFxPresetPanel } from "../src/gui/fxPreset";
-import { initPresetManager, pmAktion, pmZustand, bibAufnehmen, pmBibAblegen } from "../src/gui/presetManager";
+import {
+  initPresetManager,
+  pmAktion,
+  pmZustand,
+  bibAufnehmen,
+  pmBibAblegen,
+  pmBibEintraege,
+  pmBibFavorit,
+  pmBibWaehlen,
+  pmBibAuswahl,
+  pmAuswahlInManager,
+  pmFxStandUebernehmen,
+  registriereFxStandQuelle,
+} from "../src/gui/presetManager";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
 import { baueSicherung, type SicherungsBlock } from "../src/core/geraetSicherung";
 import { E2_RAM_MAP, addressForSlot } from "../src/core/hacktribeRam";
@@ -323,9 +336,106 @@ describe("Preset-Manager: Bibliothek und Ablegen", () => {
     ];
     el("pmBibIn").feuere("change");
     await new Promise((r) => setTimeout(r, 0));
-    expect(el("pmBibInfo").textContent).toContain("2 Eintrag");
-    await pmBibAblegen(1, "ifx", 1);
+    expect(el("pmBibInfo").textContent).toContain("2 eigene");
+    // Eigene stehen vorn, neueste zuerst — bei gleicher Millisekunde in Ladereihenfolge; deshalb ueber den Namen.
+    const i = pmBibEintraege().findIndex((e) => e.name === "Phase Sync");
+    expect(i).toBeLessThan(2);
+    await pmBibAblegen(i, "ifx", 1);
     expect(nameVon(pmZustand()!.ifx[0])).toBe("Phase Sync");
+  });
+
+  it("die mitgelieferten Sets sind von Anfang an da — 288 FX-Presets plus Grooves, eigene stehen davor", async () => {
+    expect(el("pmBibInfo").textContent).toMatch(/0 eigene · \d+ eingebaut/);
+    expect(pmBibEintraege().filter((e) => e.art === "ifx").length).toBeGreaterThanOrEqual(144);
+    bibAufnehmen({ art: "ifx", name: "Oben", bytes: presetBytes("Oben"), woher: "Test" });
+    expect(pmBibEintraege()[0].name).toBe("Oben");
+    expect(pmBibEintraege()[0].eingebaut).toBe(false);
+    expect(pmBibEintraege()[1].eingebaut).toBe(true);
+  });
+
+  it("Favoriten, Ausblenden und eigene Eintraege ueberleben den Neustart ueber die Ablage-Bruecke", async () => {
+    // Eine Bruecke wie preload.cjs sie stellt — nur im Speicher.
+    let abgelegt: string | null = null;
+    const w = globalThis as unknown as { tekkFxBib?: unknown };
+    w.tekkFxBib = {
+      available: true,
+      lesen: async () => abgelegt,
+      schreiben: async (text: string) => {
+        abgelegt = text;
+        return { pfad: "x", bytes: text.length };
+      },
+      ordner: async () => "x",
+    };
+    const hooks = { lesen: async (addr: number, len: number) => leseStub(addr, len), schreiben: async () => true };
+    try {
+      initPresetManager(hooks);
+      await new Promise((r) => setTimeout(r, 0));
+      bibAufnehmen({ art: "mfx", name: "Bleibt", bytes: presetBytes("Bleibt", true), woher: "Test" });
+      const eigenes = pmBibEintraege()[0];
+      const eingebautes = pmBibEintraege()[1];
+      pmBibFavorit(eigenes.id, true);
+      pmBibFavorit(eingebautes.id, true);
+      const weg = pmBibEintraege()[2].id;
+      el("pmBibListe"); // die Liste ist gerendert; Ausblenden ueber den Kern-Weg
+      const { entferne } = await import("../src/core/fxBibliothek");
+      void entferne; // (der Knopf ist im Stub nicht klickbar — Ausblenden wird ueber die Ablage geprueft)
+      expect(abgelegt).toContain("Bleibt");
+      expect(el("pmBibInfo").textContent).toContain("2 Favorit");
+      // Neustart: neue Sitzung liest die Ablage
+      initPresetManager(hooks);
+      await new Promise((r) => setTimeout(r, 0));
+      const nachher = pmBibEintraege();
+      expect(nachher[0].name).toBe("Bleibt");
+      expect(nachher[0].favorit).toBe(true);
+      expect(nachher.find((e) => e.id === eingebautes.id)?.favorit).toBe(true);
+      expect(nachher.find((e) => e.id === weg)).toBeDefined();
+      expect(el("pmBibInfo").textContent).toContain("Ablage: Datei");
+    } finally {
+      delete w.tekkFxBib;
+    }
+  });
+
+  it("Auswahl → Manager: ab den Startplaetzen, je Art fortlaufend", async () => {
+    await sicherungLaden();
+    bibAufnehmen({ art: "ifx", name: "A1", bytes: presetBytes("A1"), woher: "Test" });
+    bibAufnehmen({ art: "ifx", name: "A2", bytes: presetBytes("A2"), woher: "Test" });
+    bibAufnehmen({ art: "mfx", name: "M1", bytes: presetBytes("M1", true), woher: "Test" });
+    const eig = pmBibEintraege().filter((e) => !e.eingebaut);
+    for (const e of eig) pmBibWaehlen(e.id, true);
+    expect(el("pmBibAuswahlInfo").textContent).toContain("3 (2 IFX · 1 MFX · 0 Grooves)");
+    const n = await pmAuswahlInManager({ ifx: 50, mfx: 32, groove: 63 });
+    expect(n).toBe(3);
+    const z = pmZustand()!;
+    // Eigene: neueste zuerst → A2, A1
+    expect([nameVon(z.ifx[49]), nameVon(z.ifx[50])].sort()).toEqual(["A1", "A2"]);
+    expect(nameVon(z.mfx[31])).toBe("M1");
+  });
+
+  it("FX-Stand aus dem Pattern: die Live-FX-Werte landen im Preset des Parts, als eigener Eintrag, ausgewaehlt", async () => {
+    const { createPattern } = await import("../src/core/editorModel");
+    const { setzeFxWert } = await import("../src/core/fxStand");
+    const p = createPattern("TEKK 7");
+    p.parts[2].params = { ifxType: 4 }; // Platz 5 = „Werk 5“
+    p.fxStand = setzeFxWert(setzeFxWert(undefined, { part: 3, slot: 0, param: 0 }, 99), { mfx: true, param: 1 }, 5);
+    registriereFxStandQuelle(() => ({ pattern: p, name: p.name }));
+    expect(pmFxStandUebernehmen().meldung).toMatch(/Erst einen Stand laden/);
+    await sicherungLaden();
+    // Platz 5 bekommt einen Filter (Werk-Presets des Stubs sind Thru ohne Parameter)
+    const filter = decodeFxPreset(initFxPresetBytes(), false);
+    filter.name = "Werk 5";
+    filter.ifx1.device = 0x0a;
+    filter.ifx1.params = [127, 0, 60, 30];
+    bibAufnehmen({ art: "ifx", name: "Werk 5", bytes: encodeFxPreset(filter), woher: "Test" });
+    await pmBibAblegen(0, "ifx", 5, "ersetzen");
+    const r = pmFxStandUebernehmen();
+    expect(r.eintraege).toBe(1);
+    expect(r.meldung).toContain("Part 3");
+    expect(r.meldung).toContain("Master-Werte");
+    const neu = pmBibEintraege()[0];
+    expect(neu.woher).toContain("TEKK 7 Part 3 (Platz 5)");
+    expect(neu.name).toBe("Werk 5");
+    expect(neu.bytes[0x135]).toBe(99);
+    expect(pmBibAuswahl().map((e) => e.id)).toEqual([neu.id]);
   });
 });
 

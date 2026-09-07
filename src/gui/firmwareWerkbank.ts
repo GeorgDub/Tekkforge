@@ -14,7 +14,7 @@
  * rechte radiert, ein Bild laesst sich einpassen (Schwelle, Invertieren), und
  * das Bild aus der Basis laesst sich als Ausgang holen.
  */
-import { $, escapeHtml, frageText, download, sha256Hex, dateiKnopf } from "./shared";
+import { $, escapeHtml, frageText, download, sha256Hex, dateiKnopf, dateiKnopfMehrere } from "./shared";
 import { pmZustand, pmGeladen, pmEintraegeUebernehmen } from "./presetManager";
 import { baueBauplan, leseBauplan } from "../core/bauplan";
 
@@ -49,13 +49,19 @@ import {
   liesInitPattern,
   liesInitGlobal,
   setzeInitGlobal,
+  patternAlsDatei,
   INIT_GLOBAL_GROESSE,
   firmwareAusSicherung,
   HACKTRIBE_SHA256,
   E2SPAT_GROESSE,
   type BasisBefund,
 } from "../core/firmwareBau";
-import { E2_RAM_MAP } from "../core/hacktribeRam";
+import { erkenneKarte, karteLabel, KARTEN, KARTE_HACKTRIBE, dateiOffset, SAMPLER_STOCK_SHA256, SYNTH_STOCK_SHA256, type FirmwareKarte, type KartenId } from "../core/firmwareKarte";
+import { ordneDateiEin, ablageStand, basisMoeglich, BASIS_WAHL_LABEL, type AblageStand, type BasisWahl } from "../core/firmwareAblage";
+import { hacktribeAusStock, HACKTRIBE_PATCH_SHA256 } from "../core/bspatch";
+import { analysiereFirmware, uebernehmeErweiterungen, type FirmwareAnalyse, type Erweiterung } from "../core/firmwareAnalyse";
+import { freigabe, LAUFENDE_FIRMWARE, type LaufendeFirmware, type Freigabe } from "../core/firmwareFreigabe";
+import { firmwareAblageZugang, sitzungsAblageAufnehmen, type AblageEintrag } from "./tekkFirmware";
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
@@ -113,6 +119,7 @@ import {
   pbmZuPixel,
 } from "../core/splash";
 import { legeAb } from "./ablage";
+import { analysiere, crossgrade, VARIANTEN, BEKANNTE_HASHES, type Variante } from "../core/crossgrade";
 import { liesModTabelle, modKombinationen, modName, decodeMod, setzeModTabelle, istModLeer, MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG, MOD_MAX, MOD_WELLEN, MOD_ZIEL_NAMEN, type ModEintragMitPlatz, modGrenzeSchreibliste, armImmediateWert, MOD_GRENZE_VERGLEICHE, MOD_FELD_ZEIGER, MOD_FELD_BASIS_STOCK, MOD_FELD_BASIS_NEU } from "../core/modTabelle";
 
 const FIRMWARE_ORDNER = "Firmware";
@@ -122,6 +129,15 @@ let basis: Uint8Array | null = null;
 let basisName = "";
 let basisBefund: BasisBefund | null = null;
 let basisHash: string | null = null;
+/** Die Karte der Basis — Hacktribe, Sampler-Stock oder Synth-Stock (firmwareKarte.ts). */
+let karte: FirmwareKarte = KARTE_HACKTRIBE;
+/** Die Firmware-Ablage (userData/firmware bzw. Sitzung) und ihr eingeordneter Stand. */
+let ablageDateien: AblageEintrag[] = [];
+let ablage: AblageStand | null = null;
+/** Die zuletzt analysierte Firmware und die Auswahl ihrer Erweiterungen. */
+let analyse: FirmwareAnalyse | null = null;
+let analyseName = "";
+const analyseAuswahl = new Set<string>();
 let grooves: SammlungsEintrag[] = [];
 let initDatei: { name: string; bytes: Uint8Array } | null = null;
 /** Der Init-Global-Block (256 B) — vom Geraet gelesen oder aus einer Datei. */
@@ -208,38 +224,95 @@ async function bildLaden(f: File): Promise<void> {
 
 // ─── Basis ───────────────────────────────────────────────────────────────────
 
+/**
+ * Laufende Nummer des letzten Ladevorgangs: wer zweimal schnell hintereinander
+ * eine Basis waehlt, bekommt nur das Ergebnis des letzten Vorgangs — ein
+ * aelterer, noch am Hashen, darf Anzeige, Status und die Oszillator-
+ * Vormerkliste nicht mehr ueberschreiben.
+ */
+let basisLauf = 0;
+
 async function basisLaden(f: File): Promise<void> {
-  const bytes = new Uint8Array(await f.arrayBuffer());
-  const befund = pruefeBasis(bytes);
-  if (!befund.ok) {
+  await basisSetzen(new Uint8Array(await f.arrayBuffer()), f.name);
+}
+
+/**
+ * Ein Abbild als Basis uebernehmen — Karte erkennen (Hacktribe, Sampler-
+ * Stock, Synth-Stock; auch umgekoepft), pruefen, Bausteine passend
+ * freischalten. Fuer Tests direkt aufrufbar.
+ */
+export async function basisSetzen(bytes: Uint8Array, name: string): Promise<boolean> {
+  const lauf = ++basisLauf;
+  const erk = erkenneKarte(bytes);
+  const k = erk.ok ? erk.karte : KARTE_HACKTRIBE;
+  const befund = pruefeBasis(bytes, k);
+  if (!erk.ok || !befund.ok) {
     basis = null;
     basisBefund = null;
-    ($("fwBasisInfo") as HTMLElement).textContent = `${f.name}: abgelehnt — ${befund.reason}`;
-    setStatus(`Basis abgelehnt: ${befund.reason}`);
-    return;
+    const grund = erk.ok ? befund.reason : erk.reason;
+    ($("fwBasisInfo") as HTMLElement).textContent = `${name}: abgelehnt — ${grund}`;
+    setStatus(`Basis abgelehnt: ${grund}`);
+    return false;
   }
   basis = bytes;
-  basisName = f.name;
+  basisName = name;
   basisBefund = befund;
-  basisHash = await sha256Hex(bytes);
-  const herkunft = basisHash === HACKTRIBE_SHA256 ? "unveränderte Hacktribe-Firmware" : "nicht die Hacktribe-Datei, Struktur stimmig (schon gepatcht?)";
+  karte = k;
+  const hash = await sha256Hex(bytes);
+  if (lauf !== basisLauf) return false;
+  basisHash = hash;
+  const herkunft =
+    basisHash === HACKTRIBE_SHA256
+      ? "unveränderte Hacktribe-Firmware"
+      : basisHash === SAMPLER_STOCK_SHA256 || basisHash === SYNTH_STOCK_SHA256
+        ? "unveränderte Korg-Firmware v2.02"
+        : k.id === "hacktribe"
+          ? "Hacktribe-Bauart, nicht die Hacktribe-Datei (schon gepatcht?)"
+          : "Stock-Bauart mit fremdem Hash (verändert?)";
   ($("fwBasisInfo") as HTMLElement).textContent =
-    `${f.name} — ${herkunft}; IFX-Menü bis ${befund.ifxMaxIndex + 1}, Grooves bis ${befund.grooveMaxIndex + 1}, Init-Pattern „${befund.initPatternName || "?"}“`;
-  setStatus(`Basis geladen. Startbild mit „aus Firmware“ holen, Bausteine anhaken, bauen.`);
-  const osz = leseOszStandAusFirmware(bytes);
+    `${name} — ${karteLabel(erk)}, ${herkunft}; IFX-Menü bis ${befund.ifxMaxIndex + 1}${k.grooveBank ? `, Grooves bis ${befund.grooveMaxIndex + 1}` : ", keine Groove-Bank"}, Init-Pattern „${befund.initPatternName || "?"}“`;
+  setStatus(k.id === "hacktribe" ? `Basis geladen. Startbild mit „aus Firmware“ holen, Bausteine anhaken, bauen.` : `Basis geladen (${k.label}): Presets ersetzen, Init-Pattern und Init-Global${k.splash !== undefined ? " und Startbild" : ""} gehen; Grooves, Oszillator- und Modulations-Anhang nur mit Hacktribe.`);
+  const osz = k.oszTabelle?.erweiterbar ? leseOszStandAusFirmware(bytes) : { ok: false as const, reason: `${k.label}: Tabelle nicht erweiterbar` };
   oszBasisAnzahl = osz.ok ? osz.anzahl : 0;
   oszNeu = [];
   oszListe();
   oszVorlagenFuellen();
   modNeu = [];
-  modBasisAnzahl = basis ? liesModTabelle(basis).length : 0;
+  modBasisAnzahl = k.modTabelle?.erweiterbar ? liesModTabelle(basis).length : 0;
   modListe();
   const modInfo = document.getElementById("fwModInfo");
-  if (modInfo) modInfo.textContent = basis ? (modBasisAnzahl ? `${modBasisAnzahl} in der Basis` : "keine Tabelle bei 0xC01A0000 — Stock-Firmware?") : "";
+  if (modInfo) modInfo.textContent = basis ? (modBasisAnzahl ? `${modBasisAnzahl} in der Basis` : k.modTabelle?.erweiterbar ? "keine Tabelle bei 0xC01A0000 — Stock-Firmware?" : `${k.label}: nur mit Hacktribe`) : "";
   oszVorlageHinweis();
-  if (!osz.ok) ($("fwOszInfo") as HTMLElement).textContent = `Tabelle nicht lesbar: ${osz.reason}`;
+  if (!osz.ok) ($("fwOszInfo") as HTMLElement).textContent = k.oszTabelle?.erweiterbar ? `Tabelle nicht lesbar: ${osz.reason}` : `${k.label}: nur mit Hacktribe`;
   dspListe();
+  bausteineFreischalten();
+  zielVorbelegen();
   vorschau();
+  return true;
+}
+
+/** Bausteine, die die Karte nicht hat, abhaken und ausgrauen. */
+function bausteineFreischalten(): void {
+  const setze = (id: string, an: boolean, grund: string) => {
+    const el = document.getElementById(id) as (HTMLInputElement & { disabled?: boolean; title?: string }) | null;
+    if (!el) return;
+    el.disabled = !an;
+    if (!an) {
+      el.checked = false;
+      el.title = grund;
+    }
+  };
+  const k = karte;
+  setze("fwGrooves", !!k.grooveBank, `${k.label} hat keine Groove-Bank`);
+  setze("fwSplash", k.splash !== undefined, `${k.label}: Lage des Startbilds unbekannt`);
+  setze("fwOsz", !!k.oszTabelle?.erweiterbar, `${k.label}: Oszillator-Tabelle nicht erweiterbar`);
+  setze("fwMod", !!k.modTabelle?.erweiterbar, `${k.label}: Modulations-Tabelle nicht erweiterbar`);
+  const info = document.getElementById("fwKarteInfo");
+  if (info) {
+    info.textContent = basis
+      ? `${k.label}: ${k.ifxErweiterbar ? `IFX bis Platz ${k.ifxSchreibMax + 1} (Menü wächst mit)` : `${k.ifxSchreibMax + 1} feste IFX-Plätze (ersetzen)`}, ${k.mfxSchreibMax + 1} MFX${k.grooveBank ? `, ${k.grooveBank.count} Grooves` : ", keine Grooves"}${k.splash !== undefined ? ", Startbild" : ", kein Startbild"}${k.oszTabelle?.erweiterbar ? ", Osz-Anhang" : ""}${k.modTabelle?.erweiterbar ? ", Mod-Anhang" : ""}${k.ldrStart !== undefined ? ", DSP-Kette" : ""}`
+      : "";
+  }
 }
 
 async function groovesLaden(f: File): Promise<void> {
@@ -258,7 +331,7 @@ async function groovesLaden(f: File): Promise<void> {
 async function initLaden(f: File): Promise<void> {
   const bytes = new Uint8Array(await f.arrayBuffer());
   if (bytes.length !== E2SPAT_GROESSE) {
-    setStatus(`${f.name}: ${bytes.length} Bytes — eine .e2spat hat ${E2SPAT_GROESSE}.`);
+    setStatus(`${f.name}: ${bytes.length} Bytes — eine ${karte.patternEndung} hat ${E2SPAT_GROESSE}.`);
     return;
   }
   initDatei = { name: f.name, bytes };
@@ -289,9 +362,8 @@ async function globalVomGeraet(): Promise<void> {
     setStatus("Ohne MIDI-Verbindung nicht möglich.");
     return;
   }
-  const map = E2_RAM_MAP.find((e) => e.key === "initGlobal")!;
   setStatus("Lese Global-Block aus dem Gerät …");
-  const r = await hooks.lesen(map.base, map.size);
+  const r = await hooks.lesen(karte.initGlobal, INIT_GLOBAL_GROESSE);
   if (!r.ok) {
     setStatus(`Global-Block nicht lesbar: ${r.reason}`);
     return;
@@ -333,6 +405,7 @@ function dspListe(): void {
   if (!el) return;
   const stand = (p: DspPatch): string => {
     if (!basis) return "";
+    if (karte.familie !== "sampler") return " · <b>nur Sampler-Bauart</b>";
     const s = dspPatchStand(basis, p);
     return s === "original" ? "" : s === "gepatcht" ? " · <b>in der Basis schon drin</b>" : " · <b>passt nicht zur Basis</b>";
   };
@@ -374,7 +447,7 @@ function oszVorlagenFuellen(): void {
   }
   sel.innerHTML = opts.join("");
   const info = document.getElementById("fwOszInfo");
-  if (info) info.textContent = basis ? `${oszBasisAnzahl} belegt, ${OSZ_MAX - oszBasisAnzahl} frei (275…${OSZ_MAX})` : "";
+  if (info && (basis === null || karte.oszTabelle?.erweiterbar)) info.textContent = basis ? `${oszBasisAnzahl} belegt, ${OSZ_MAX - oszBasisAnzahl} frei (${oszBasisAnzahl + 1}…${OSZ_MAX})` : "";
 }
 
 function oszListe(): void {
@@ -393,6 +466,7 @@ function oszListe(): void {
 /** Eine Variante der Vorlage (Platz in der Basis) anhaengen — fuer Tests direkt aufrufbar. */
 export function fwOszAnhaengen(vorlagePlatz: number, name: string, parameter?: number, pegel?: number): { ok: true; platz: number } | { ok: false; reason: string } {
   if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
+  if (!karte.oszTabelle?.erweiterbar) return { ok: false, reason: `${karte.label}: Oszillator-Varianten lassen sich nur an die Hacktribe-Firmware anhängen.` };
   if (vorlagePlatz < 1 || vorlagePlatz > oszBasisAnzahl) return { ok: false, reason: `Vorlage ${vorlagePlatz}: die Basis hat Plätze 1…${oszBasisAnzahl}` };
   if (!name.trim()) return { ok: false, reason: "Ein Name fehlt." };
   const platz = oszNaechsterPlatz();
@@ -477,6 +551,7 @@ function modListe(): void {
 /** Die 36 Kombinationen der Basis vormerken — fuer Tests direkt aufrufbar. */
 export function fwModKombinationen(): { ok: true; anzahl: number; fehlend: string[] } | { ok: false; reason: string } {
   if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
+  if (!karte.modTabelle?.erweiterbar) return { ok: false, reason: `${karte.label}: Modulations-Typen lassen sich nur an die Hacktribe-Firmware anhängen.` };
   const tabelle = liesModTabelle(basis);
   if (!tabelle.length) return { ok: false, reason: "Die Basis hat keine Modulationstabelle bei 0xC01A0000 (Stock-Firmware?)." };
   const k = modKombinationen([...tabelle, ...modNeu.map((m) => m.bytes)]);
@@ -502,6 +577,10 @@ export function fwModNeu(): readonly ModEintragMitPlatz[] {
 async function modFluechtig(): Promise<void> {
   if (!hooks?.schreiben || !hooks.lesen) {
     setStatus("Kein Geräte-Schreibweg (MIDI aus).");
+    return;
+  }
+  if (karte.id !== "hacktribe") {
+    setStatus(`${karte.label}: der Geräteweg (RAM-SysEx) gibt es nur mit Hacktribe.`);
     return;
   }
   if (!modNeu.length) {
@@ -568,6 +647,10 @@ async function modFluechtig(): Promise<void> {
 async function oszFluechtig(): Promise<void> {
   if (!hooks?.schreiben || !hooks.lesen) {
     setStatus("Kein Geräte-Schreibweg (MIDI aus).");
+    return;
+  }
+  if (karte.id !== "hacktribe") {
+    setStatus(`${karte.label}: der Geräteweg (RAM-SysEx) gibt es nur mit Hacktribe.`);
     return;
   }
   if (!oszNeu.length) {
@@ -669,14 +752,18 @@ function bauplan(): Bauplan | null {
     return null;
   }
   const an = (id: string): boolean => (document.getElementById(id) as HTMLInputElement | null)?.checked === true;
-  const zeilen: string[] = [`Basis: ${basisName} (IFX bis ${basisBefund.ifxMaxIndex + 1}, Grooves bis ${basisBefund.grooveMaxIndex + 1})`];
+  const zeilen: string[] = [`Basis: ${basisName} — ${karte.label} (IFX bis ${basisBefund.ifxMaxIndex + 1}${karte.grooveBank ? `, Grooves bis ${basisBefund.grooveMaxIndex + 1}` : ""})`];
   let presets: SammlungsEintrag[] = [];
   if (an("fwPresets")) {
     const z = pmZustand();
     // Ohne geladenen Stand ist die leere Bank des Managers nur die Vorschau —
     // sie als Wunsch zu nehmen hiesse, alle 128 Plaetze der Firmware zu leeren.
     if (z && pmGeladen()) {
-      presets = unterschiede(z, zustandAusFirmware(basis));
+      presets = unterschiede(z, zustandAusFirmware(basis, karte)).filter((e) => {
+        // Plaetze, die die Karte nicht hat, kann der Manager nicht schreiben — sie fallen leise raus (Stock: IFX > 38, alle Grooves).
+        const max = e.art === "groove" ? (karte.grooveBank?.count ?? 0) : e.art === "mfx" ? karte.mfxSchreibMax + 1 : karte.ifxSchreibMax + 1;
+        return (e.platz ?? 0) <= max;
+      });
       const ifx = presets.filter((e) => e.art === "ifx").length;
       const mfx = presets.filter((e) => e.art === "mfx").length;
       zeilen.push(`Presets: ${presets.length} Platz/Plätze anders als in der Datei (${ifx} IFX, ${mfx} MFX); IFX belegt bis ${hoechsterBelegter(z, "ifx")}`);
@@ -707,8 +794,9 @@ function bauplan(): Bauplan | null {
     global = globalBlock;
     zeilen.push(global ? `Init-Global: ${global.name} (Chain ${global.bytes[E2_GLOBAL_CHAIN_MODE_OFF]}, Clock ${global.bytes[E2_GLOBAL_CLOCK_SOURCE_OFF]})` : "Init-Global: kein Block geladen");
   }
-  const dsp = fwDspPatches().filter((p) => dspGewaehlt.has(p.id));
+  const dsp = karte.familie === "sampler" ? fwDspPatches().filter((p) => dspGewaehlt.has(p.id)) : [];
   if (dsp.length) zeilen.push(`DSP-Patches (⚠ experimentell): ${dsp.map((p) => p.titel).join(", ")}`);
+  else if (karte.familie !== "sampler" && dspGewaehlt.size) zeilen.push(`DSP-Patches: ${dspGewaehlt.size} angehakt, aber ${karte.label} hat eine andere DSP-Kette — übergangen`);
   const osz = an("fwOsz") ? oszNeu : [];
   if (an("fwOsz")) zeilen.push(osz.length ? `Oszillatoren: ${osz.length} Variante(n) auf ${osz[0].platz}–${osz[osz.length - 1].platz}` : "Oszillatoren: nichts vorgemerkt");
   const mod = an("fwMod") ? modNeu : [];
@@ -730,16 +818,16 @@ export function fwBaueAbbild(): { ok: true; bytes: Uint8Array; zeilen: string[] 
   let bytes = basis;
   const eintraege = [...plan.presets, ...plan.grooves];
   if (eintraege.length) {
-    const r = baueFirmware(basis, eintraege);
+    const r = baueFirmware(basis, eintraege, karte);
     if (!r.ok) return { ok: false, reason: r.reason };
     bytes = r.bytes;
     if (r.bericht.zaehler.length) zeilen.push(`IFX-Menü: bis ${r.bericht.ifxMaxVorher + 1} → bis ${r.bericht.ifxMaxNachher + 1}`);
     if (r.bericht.grooveZaehler.length) zeilen.push(`Groove-Menü: bis ${r.bericht.grooveMaxVorher + 1} → bis ${r.bericht.grooveMaxNachher + 1}`);
   }
   try {
-    if (plan.init) bytes = setzeInitPattern(bytes, plan.init.bytes);
-    if (plan.global) bytes = setzeInitGlobal(bytes, plan.global.bytes);
-    if (plan.splash) bytes = setzeSplash(bytes, pixelZuSplash(pixel));
+    if (plan.init) bytes = setzeInitPattern(bytes, plan.init.bytes, karte);
+    if (plan.global) bytes = setzeInitGlobal(bytes, plan.global.bytes, karte);
+    if (plan.splash) bytes = setzeSplash(bytes, pixelZuSplash(pixel), karte);
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
@@ -765,26 +853,73 @@ export function fwBaueAbbild(): { ok: true; bytes: Uint8Array; zeilen: string[] 
   return { ok: true, bytes, zeilen };
 }
 
-async function bauen(): Promise<void> {
+/** Zielgeraet + laufende Firmware aus der Oberflaeche. */
+function zielWahl(): { geraet: Variante; laufend: LaufendeFirmware } {
+  const g = (document.getElementById("fwZielGeraet") as HTMLSelectElement | null)?.value;
+  const l = (document.getElementById("fwZielFirmware") as HTMLSelectElement | null)?.value;
+  const geraet: Variante = g === "synth" ? "synth" : "sampler";
+  const laufend: LaufendeFirmware = l && l in LAUFENDE_FIRMWARE ? (l as LaufendeFirmware) : karte.id === "hacktribe" ? "hacktribe" : karte.id === "synth-stock" ? "synth-stock" : "sampler-stock";
+  return { geraet, laufend };
+}
+
+/** Nach dem Laden einer Basis das Ziel auf das Naheliegende stellen: das Geraet der Karte, darauf diese Firmware. */
+function zielVorbelegen(): void {
+  const g = document.getElementById("fwZielGeraet") as HTMLSelectElement | null;
+  const l = document.getElementById("fwZielFirmware") as HTMLSelectElement | null;
+  if (g) g.value = karte.variante;
+  if (l) l.value = karte.id === "hacktribe" ? "hacktribe" : karte.id === "synth-stock" ? "synth-stock" : "sampler-stock";
+  zielInfo();
+}
+
+function zielInfo(): void {
+  const el = document.getElementById("fwZielInfo");
+  if (!el) return;
+  const z = zielWahl();
+  const lf = LAUFENDE_FIRMWARE[z.laufend];
+  el.textContent = `→ Kopf ${VARIANTEN[lf.kopf].label} (Device-ID 0x${VARIANTEN[lf.kopf].deviceId.toString(16).toUpperCase().padStart(4, "0")}), Pfad ${VARIANTEN[lf.kopf].sdOrdner}/SYSTEM.VSB${lf.geraet !== z.geraet ? " ⚠ ungewöhnliche Kombination" : ""}`;
+}
+
+/** Die Referenz derselben Bauart aus der Ablage (Stock) — fuer Freigabe und Analyse. */
+function referenzFuer(k: FirmwareKarte, bevorzugt?: "stock" | "hacktribe"): Uint8Array | undefined {
+  if (!ablage) return undefined;
+  const wahl = bevorzugt ?? "stock";
+  if (k.familie === "sampler" && wahl === "hacktribe") return ablageDateien.find((d) => d.name === ablage?.hacktribe?.name)?.bytes;
+  const d = k.familie === "synth" ? ablage.synthStock : ablage.samplerStock;
+  return d ? ablageDateien.find((x) => x.name === d.name)?.bytes : undefined;
+}
+
+/** Das gebaute Abbild durch die Freigabe fuehren — fuer Tests direkt aufrufbar. */
+export function fwFreigabe(): { ok: true; freigabe: Freigabe; zeilen: string[] } | { ok: false; reason: string } {
   const r = fwBaueAbbild();
+  if (!r.ok) return r;
+  const f = freigabe(r.bytes, zielWahl(), referenzFuer(karte));
+  return { ok: true, freigabe: f, zeilen: [...r.zeilen, "", ...f.zeilen] };
+}
+
+async function bauen(): Promise<void> {
+  const r = fwFreigabe();
   if (!r.ok) {
     setStatus(`Nicht gebaut: ${r.reason}`);
     return;
   }
-  const hash = await sha256Hex(r.bytes);
-  const name = (await frageText("Dateiname (im Ordner Firmware/):", "SYSTEM.VSB")) ?? "SYSTEM.VSB";
-  const ab = await legeAb(name.trim() || "SYSTEM.VSB", r.bytes, FIRMWARE_ORDNER);
   const el = document.getElementById("fwBericht");
+  if (!r.freigabe.ok) {
+    if (el) el.textContent = r.zeilen.join("\n");
+    setStatus("NICHT FREIGEGEBEN — siehe Bericht. Es wurde keine Datei abgelegt.");
+    return;
+  }
+  const bytes = r.freigabe.bytes;
+  const hash = await sha256Hex(bytes);
+  const name = (await frageText("Dateiname (im Ordner Firmware/):", "SYSTEM.VSB")) ?? "SYSTEM.VSB";
+  const ab = await legeAb(name.trim() || "SYSTEM.VSB", bytes, FIRMWARE_ORDNER);
   // Nach dem Bau die Gegenprobe: was hat sich gegenueber der Basis wirklich geaendert?
-  const gegenprobe = basis ? vergleicheFirmware(basis, r.bytes).zeilen.map((z) => `  ${z}`) : [];
+  const gegenprobe = basis && karte.id === "hacktribe" ? vergleicheFirmware(basis, bytes).zeilen.map((z) => `  ${z}`) : [];
   if (el) {
-    el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download", "Gegenprobe Basis ↔ Ergebnis:", ...gegenprobe]
+    el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download", ...(gegenprobe.length ? ["Gegenprobe Basis ↔ Ergebnis:", ...gegenprobe] : [])]
       .filter(Boolean)
       .join("\n");
   }
-  setStatus(
-    `Firmware gebaut${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Installieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ auf die SD-Karte, dann am Gerät die Update-Funktion.`,
-  );
+  setStatus(`Firmware gebaut und freigegeben${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Installieren: als ${r.freigabe.sdPfad} auf die SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.`);
 }
 
 /** Fuer Tests: den ganzen Geraetestand einer Sicherung in die Basis legen, ohne abzulegen. */
@@ -796,7 +931,7 @@ export function fwBaueAusSicherung(text: string): { ok: true; bytes: Uint8Array;
   } catch (e) {
     return { ok: false, reason: `Sicherung nicht lesbar: ${e instanceof Error ? e.message : String(e)}` };
   }
-  const r = firmwareAusSicherung(basis, s.bloecke);
+  const r = firmwareAusSicherung(basis, s.bloecke, karte);
   if (!r.ok) return r;
   const zeilen = [
     `Basis: ${basisName}`,
@@ -815,6 +950,14 @@ async function vergleichen(f: File): Promise<void> {
   }
   try {
     const andere = new Uint8Array(await f.arrayBuffer());
+    if (karte.id !== "hacktribe") {
+      // Stock-Karten: der Vergleich laeuft ueber die Analyse (platzweise ueber die Zeigertabellen)
+      const a = analysiereFirmware(andere, basis);
+      const el = document.getElementById("fwBericht");
+      if (el) el.textContent = a.ok ? [`Vergleich: ${f.name} gegen die Basis ${basisName}`, ...a.zeilen, ...a.erweiterungen.map((e) => `  ${e.name} — ${e.beschreibung}`)].join("\n") : a.reason;
+      setStatus(a.ok ? `${a.erweiterungen.length} Unterschied(e) gegenüber der Basis.` : a.reason);
+      return;
+    }
     const v = vergleicheFirmware(basis, andere);
     const el = document.getElementById("fwBericht");
     if (el) el.textContent = [`Vergleich: ${basisName} (links) ↔ ${f.name} (rechts)`, ...v.zeilen].join("\n");
@@ -851,6 +994,7 @@ export async function fwGeraetVergleich(): Promise<string[]> {
   };
   if (!basis) return fertig("Erst eine Basis laden.");
   if (!hooks?.lesen) return fertig("Kein Geräte-Leseweg (MIDI aus).");
+  if (karte.id !== "hacktribe") return fertig(`${karte.label}: den Geräteweg (RAM-SysEx) gibt es nur mit Hacktribe.`);
   zeilen.push(`Gerät ↔ Basis (${basisName})`);
   // 1) Oszillator-Beschreiber
   const zellen = [];
@@ -1017,15 +1161,9 @@ export function fwBauplanLaden(text: string, woher: string): { ok: true; zeilen:
   return { ok: true, zeilen };
 }
 
-/** Einen nackten Init-Block als .e2spat verpacken — so, wie die Werkbank Dateien erwartet. */
+/** Einen nackten Init-Block als .e2spat/.e2pat der Karte verpacken — so, wie die Werkbank Dateien erwartet. */
 function liesInitPatternAlsDatei(block: Uint8Array): Uint8Array {
-  const out = new Uint8Array(E2SPAT_GROESSE);
-  out.fill(0xff, 0x24, 0x100);
-  out.set(new TextEncoder().encode("KORG"), 0);
-  out.set(new TextEncoder().encode("e2sampler"), 0x10);
-  out[0x20] = 1;
-  out.set(block, 0x100);
-  return out;
+  return patternAlsDatei(block, karte);
 }
 
 async function bauplanLaden(f: File): Promise<void> {
@@ -1039,7 +1177,320 @@ async function bauplanLaden(f: File): Promise<void> {
   setStatus(`Bauplan geladen — Haken prüfen, dann „Firmware bauen“.`);
 }
 
+// ─── Firmware-Ablage und Basis-Wahl ──────────────────────────────────────────
+//
+// Die offiziellen Abbilder (Synth/Sampler v2.02) und hacktribe-2.patch legt
+// der Nutzer in userData/firmware (Desktop) — oder waehlt sie im Browser fuer
+// die Sitzung. Jede Datei wird am SHA-256 eingeordnet (firmwareAblage.ts);
+// die Basis-Wahl nimmt dann die richtige Datei, ohne dass jemand suchen muss.
+
+function ablageAnzeigen(): void {
+  const liste = document.getElementById("fwAblageListe");
+  const info = document.getElementById("fwAblageInfo");
+  if (liste) liste.innerHTML = ablage ? ablage.zeilen.map((z) => `<div>${escapeHtml(z)}</div>`).join("") : "";
+  if (info) info.textContent = ablage ? (ablage.fehlend.length ? `Es fehlt: ${ablage.fehlend.join("; ")}` : "Synth, Sampler und Hacktribe(-Patch) sind da.") : "noch nicht eingelesen";
+  const eig = document.getElementById("fwBasisEigene") as HTMLSelectElement | null;
+  if (eig) eig.innerHTML = (ablage?.eigene ?? []).map((d) => `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)} — ${escapeHtml(d.rolle === "beschaedigt" ? "⚠ " + d.hinweis.split(" — ")[0] : d.befund ? karteLabel(d.befund) : d.rolle)}</option>`).join("");
+  const erz = document.getElementById("fwHacktribeErzeugen") as (HTMLElement & { disabled?: boolean }) | null;
+  if (erz) erz.disabled = !(ablage?.samplerStock && ablage?.patch);
+}
+
+/** Den Ablage-Ordner (bzw. die Sitzung) einlesen und einordnen — fuer Tests direkt aufrufbar. */
+export async function fwAblageLesen(): Promise<AblageStand> {
+  const zugang = firmwareAblageZugang();
+  const pfadEl = document.getElementById("fwAblagePfad");
+  if (pfadEl) pfadEl.textContent = zugang.wo === "ordner" ? await zugang.pfad() : "nur für diese Sitzung (Browser) — Dateien über „Datei hinzufügen…“";
+  ablageDateien = await zugang.lesen();
+  ablage = ablageStand(ablageDateien.map((d) => ordneDateiEin(d.name, d.sha256, d.bytes)));
+  ablageAnzeigen();
+  return ablage;
+}
+
+/** Dateien aus einem Datei-Feld in die Ablage nehmen (Desktop: in den Ordner kopieren; Browser: Sitzung). */
+async function ablageDateienAufnehmen(dateien: File[]): Promise<void> {
+  const zugang = firmwareAblageZugang();
+  let n = 0;
+  for (const f of dateien) {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const hash = (await sha256Hex(bytes)) ?? "";
+    const name = f.name.replace(/[^A-Za-z0-9._ -]/g, "_");
+    if (zugang.wo === "sitzung") sitzungsAblageAufnehmen({ name, groesse: bytes.length, sha256: hash, bytes });
+    else await zugang.ablegen(name, bytes, hash);
+    n++;
+  }
+  await fwAblageLesen();
+  setStatus(`${n} Datei(en) in die Ablage genommen.`);
+}
+
+/** Aus Sampler-Stock + hacktribe-2.patch die Hacktribe-Firmware erzeugen und ablegen — fuer Tests direkt aufrufbar. */
+export async function fwHacktribeErzeugen(): Promise<{ ok: true; name: string } | { ok: false; reason: string }> {
+  if (!ablage) await fwAblageLesen();
+  const stock = ablage?.samplerStock && ablageDateien.find((d) => d.name === ablage?.samplerStock?.name);
+  const patch = ablage?.patch && ablageDateien.find((d) => d.name === ablage?.patch?.name);
+  if (!stock || !patch) {
+    const r = { ok: false as const, reason: "Dafür braucht es die offizielle Sampler-Firmware v2.02 und hacktribe-2.patch in der Ablage." };
+    setStatus(r.reason);
+    return r;
+  }
+  setStatus("Hacktribe wird erzeugt (bspatch) …");
+  const r = await hacktribeAusStock(stock.bytes, patch.bytes, sha256Hex, { stock: SAMPLER_STOCK_SHA256, patch: HACKTRIBE_PATCH_SHA256, ziel: HACKTRIBE_SHA256 });
+  if (!r.ok) {
+    setStatus(`Hacktribe nicht erzeugt: ${r.reason}`);
+    return r;
+  }
+  const name = "hacktribe-2_SYSTEM.VSB";
+  const zugang = firmwareAblageZugang();
+  if (zugang.wo === "sitzung") sitzungsAblageAufnehmen({ name, groesse: r.bytes.length, sha256: HACKTRIBE_SHA256, bytes: r.bytes });
+  else await zugang.ablegen(name, r.bytes, HACKTRIBE_SHA256);
+  await fwAblageLesen();
+  setStatus(`Hacktribe erzeugt und abgelegt (${name}, SHA-256 ${HACKTRIBE_SHA256.slice(0, 16)}… geprüft).`);
+  return { ok: true, name };
+}
+
+/** Die gewaehlte Basis aus der Ablage nehmen — fuer Tests direkt aufrufbar. */
+export async function fwBasisWaehlen(wahl: BasisWahl, eigeneName?: string): Promise<boolean> {
+  if (!ablage) await fwAblageLesen();
+  const st = ablage!;
+  const m = basisMoeglich(st, wahl);
+  if (!m.ok) {
+    setStatus(`${BASIS_WAHL_LABEL[wahl]}: ${m.grund}`);
+    return false;
+  }
+  let datei: AblageEintrag | undefined;
+  if (wahl === "eigene") {
+    const name = eigeneName ?? (document.getElementById("fwBasisEigene") as HTMLSelectElement | null)?.value;
+    datei = ablageDateien.find((d) => d.name === name);
+    if (!datei) {
+      setStatus("Keine eigene Firmware in der Ablage gewählt — oder „Firmware laden…“ für eine Datei von anderswo.");
+      return false;
+    }
+  } else if (wahl === "hacktribe") {
+    if (!st.hacktribe) {
+      const e = await fwHacktribeErzeugen();
+      if (!e.ok) return false;
+    }
+    datei = ablageDateien.find((d) => d.name === ablage?.hacktribe?.name);
+  } else {
+    const rolle = wahl === "synth-stock" ? st.synthStock : st.samplerStock;
+    datei = rolle && ablageDateien.find((d) => d.name === rolle.name);
+  }
+  if (!datei) {
+    setStatus(`${BASIS_WAHL_LABEL[wahl]}: Datei nicht in der Ablage.`);
+    return false;
+  }
+  return basisSetzen(datei.bytes, datei.name);
+}
+
+// ─── Analyse einer modifizierten Firmware ────────────────────────────────────
+
+function analyseAnzeigen(): void {
+  const bericht = document.getElementById("fwAnalyseBericht");
+  const liste = document.getElementById("fwAnalyseListe");
+  const inhalt = document.getElementById("fwInhaltListe");
+  const info = document.getElementById("fwAnalyseInfo");
+  if (!analyse) {
+    if (bericht) bericht.textContent = "";
+    if (liste) liste.innerHTML = "";
+    if (inhalt) inhalt.innerHTML = "";
+    if (info) info.textContent = "";
+    return;
+  }
+  const a = analyse;
+  if (bericht) bericht.textContent = [`${analyseName}`, ...a.zeilen].join("\n");
+  const zielId: KartenId = karte.id;
+  if (liste) {
+    liste.innerHTML = a.erweiterungen.length
+      ? a.erweiterungen
+          .map((e) => {
+            const u = e.nach[zielId];
+            const an = analyseAuswahl.has(e.id);
+            return `<label class="sub" style="margin:1px 0;display:flex;align-items:flex-start;gap:4px${u.ok ? "" : ";opacity:.55"}" title="${escapeHtml(u.ok ? (u.hinweis ?? "übertragbar in die Basis") : u.grund)}"><input type="checkbox" data-erw="${escapeHtml(e.id)}"${an ? " checked" : ""}${u.ok ? "" : " disabled"} /><span><b>${escapeHtml(e.name)}</b> <span style="opacity:.7">— ${escapeHtml(e.beschreibung)}${u.ok ? (u.hinweis ? ` · ${escapeHtml(u.hinweis)}` : "") : ` · ✗ ${escapeHtml(u.grund)}`}</span></span></label>`;
+          })
+          .join("")
+      : `<div class="sub">${a.referenz ? "keine Erweiterungen gegenüber der Referenz" : "keine Referenz (Stock derselben Bauart) in der Ablage — nur der Inhalt wird gelistet"}</div>`;
+  }
+  if (inhalt) {
+    const block = (titel: string, eintraege: { platz: number; name: string; info: string; leer: boolean }[]) =>
+      eintraege.length
+        ? `<details><summary style="cursor:pointer">${escapeHtml(titel)} (${eintraege.filter((e) => !e.leer).length})</summary><div style="max-height:160px;overflow:auto">${eintraege
+            .filter((e) => !e.leer)
+            .map((e) => `<div class="sub" style="margin:0"><span style="display:inline-block;min-width:34px">${e.platz}</span><b>${escapeHtml(e.name || "(ohne Namen)")}</b> <span style="opacity:.7">${escapeHtml(e.info)}</span></div>`)
+            .join("")}</div></details>`
+        : "";
+    inhalt.innerHTML = [block("IFX", a.ifx), block("MFX", a.mfx), block("Grooves", a.grooves), block("Oszillatoren", a.osz), block("Modulations-Typen", a.mod)].join("");
+  }
+  if (info) {
+    const uebertragbar = a.erweiterungen.filter((e) => e.nach[zielId].ok).length;
+    info.textContent = `${analyseAuswahl.size} von ${uebertragbar} übertragbaren Erweiterungen gewählt (Ziel: ${basis ? karte.label : "keine Basis geladen"})`;
+  }
+}
+
+/** Ein Abbild analysieren — Referenz: Stock derselben Bauart aus der Ablage (oder Hacktribe, wenn gewaehlt). Fuer Tests direkt aufrufbar. */
+export function fwAnalysieren(bytes: Uint8Array, name: string, referenz: "stock" | "hacktribe" | "basis" = "stock"): FirmwareAnalyse | { ok: false; reason: string } {
+  const e = erkenneKarte(bytes);
+  const ref = e.ok ? (referenz === "basis" ? (basis ?? undefined) : referenzFuer(e.karte, referenz)) : undefined;
+  const a = analysiereFirmware(bytes, ref);
+  analyse = a.ok ? a : null;
+  analyseName = a.ok ? `${name} — ${karteLabel(a.befund)}${ref ? "" : " (keine Referenz in der Ablage)"}` : name;
+  analyseAuswahl.clear();
+  if (a.ok) for (const x of a.erweiterungen) if (x.nach[karte.id].ok && x.art !== "code" && x.art !== "dsp") analyseAuswahl.add(x.id);
+  analyseAnzeigen();
+  setStatus(a.ok ? `${name} analysiert: ${a.erweiterungen.length} Erweiterung(en)${ref ? "" : " — für Erweiterungen die Stock-Firmware derselben Bauart in die Ablage legen"}.` : `Analyse nicht möglich: ${a.reason}`);
+  return a;
+}
+
+export function fwAnalyseWaehlen(id: string, an: boolean): void {
+  if (an) analyseAuswahl.add(id);
+  else analyseAuswahl.delete(id);
+  analyseAnzeigen();
+}
+
+export function fwAnalyseAuswahl(): string[] {
+  return [...analyseAuswahl];
+}
+
+/** Die gewaehlten Erweiterungen in die Basis legen — die Basis wird das Ergebnis. Fuer Tests direkt aufrufbar. */
+export async function fwAnalyseUebernehmen(): Promise<{ ok: true; zeilen: string[] } | { ok: false; reason: string }> {
+  if (!basis) return { ok: false, reason: "Erst eine Basis laden." };
+  if (!analyse) return { ok: false, reason: "Erst eine Firmware analysieren." };
+  const auswahl: Erweiterung[] = analyse.erweiterungen.filter((e) => analyseAuswahl.has(e.id));
+  if (!auswahl.length) return { ok: false, reason: "Nichts ausgewählt." };
+  const r = uebernehmeErweiterungen(basis, auswahl);
+  if (!r.ok) {
+    setStatus(`Nicht übernommen: ${r.reason}`);
+    return r;
+  }
+  const zeilen = [...r.zeilen, ...r.uebersprungen.map((u) => `übersprungen ${u.id}: ${u.grund}`)];
+  await basisSetzen(r.bytes, `${basisName} + ${auswahl.length - r.uebersprungen.length} Erweiterung(en)`);
+  const el = document.getElementById("fwBericht");
+  if (el) el.textContent = zeilen.join("\n");
+  setStatus(`${auswahl.length - r.uebersprungen.length} Erweiterung(en) in die Basis übernommen${r.uebersprungen.length ? `, ${r.uebersprungen.length} übersprungen` : ""} — jetzt Ziel wählen und bauen.`);
+  return { ok: true, zeilen };
+}
+
+function richteAblageEin(): void {
+  if (!document.getElementById("fwAblageLesen")) return;
+  document.getElementById("fwAblageLesen")?.addEventListener("click", () => void fwAblageLesen().then((st) => setStatus(st.fehlend.length ? `Ablage gelesen — es fehlt: ${st.fehlend.join("; ")}` : "Ablage gelesen — alles da.")));
+  document.getElementById("fwAblageOeffnen")?.addEventListener("click", () => {
+    const z = firmwareAblageZugang();
+    if (z.oeffnen) void z.oeffnen();
+    else setStatus("Im Browser gibt es keinen Ordner — Dateien über „Datei hinzufügen…“.");
+  });
+  dateiKnopfMehrere("fwAblageDatei", "fwAblageIn", (dateien) => void ablageDateienAufnehmen(dateien));
+  document.getElementById("fwHacktribeErzeugen")?.addEventListener("click", () => void fwHacktribeErzeugen());
+  document.getElementById("fwBasisUebernehmen")?.addEventListener("click", () => {
+    const wahl = ((document.getElementById("fwBasisWahl") as HTMLSelectElement | null)?.value ?? "hacktribe") as BasisWahl;
+    void fwBasisWaehlen(wahl);
+  });
+  document.getElementById("fwBasisWahl")?.addEventListener("change", () => {
+    const wahl = (document.getElementById("fwBasisWahl") as HTMLSelectElement).value as BasisWahl;
+    const eig = document.getElementById("fwBasisEigene");
+    eig?.classList.toggle("hidden", wahl !== "eigene");
+    const m = ablage ? basisMoeglich(ablage, wahl) : { ok: true as const };
+    setStatus(m.ok ? `${BASIS_WAHL_LABEL[wahl]} — „als Basis übernehmen“.` : `${BASIS_WAHL_LABEL[wahl]}: ${m.grund}`);
+  });
+  dateiKnopf("fwAnalyseLaden", "fwAnalyseIn", (f) => {
+    void f.arrayBuffer().then((b) => {
+      const ref = ((document.getElementById("fwAnalyseReferenz") as HTMLSelectElement | null)?.value ?? "stock") as "stock" | "hacktribe" | "basis";
+      fwAnalysieren(new Uint8Array(b), f.name, ref);
+    });
+  });
+  document.getElementById("fwAnalyseBasis")?.addEventListener("click", () => {
+    if (!basis) {
+      setStatus("Erst eine Basis laden.");
+      return;
+    }
+    const ref = ((document.getElementById("fwAnalyseReferenz") as HTMLSelectElement | null)?.value ?? "stock") as "stock" | "hacktribe" | "basis";
+    fwAnalysieren(basis, basisName, ref === "basis" ? "stock" : ref);
+  });
+  document.getElementById("fwAnalyseListe")?.addEventListener("change", (ev) => {
+    const t = (ev as Event | undefined)?.target as HTMLInputElement | null | undefined;
+    const id = t?.dataset?.erw;
+    if (id) fwAnalyseWaehlen(id, t!.checked);
+  });
+  document.getElementById("fwAnalyseAlle")?.addEventListener("click", () => {
+    if (!analyse) return;
+    for (const e of analyse.erweiterungen) if (e.nach[karte.id].ok) analyseAuswahl.add(e.id);
+    analyseAnzeigen();
+  });
+  document.getElementById("fwAnalyseKeine")?.addEventListener("click", () => {
+    analyseAuswahl.clear();
+    analyseAnzeigen();
+  });
+  document.getElementById("fwAnalyseUebernehmen")?.addEventListener("click", () => void fwAnalyseUebernehmen());
+  document.getElementById("fwZielGeraet")?.addEventListener("change", zielInfo);
+  document.getElementById("fwZielFirmware")?.addEventListener("change", zielInfo);
+  void fwAblageLesen().catch(() => undefined);
+}
+
 // ─── Init ────────────────────────────────────────────────────────────────────
+
+// ─── Crossgrade: Synth-Firmware fuer den Sampler vorbereiten ──────────────────
+//
+// Reine Byte-Operation ueber core/crossgrade.ts (am v2.02-Abbild disassembliert,
+// Omnitribe docs/reverse/e2synth_auf_e2s_crossgrade_v202.md). Es wird keine
+// Korg-Firmware mitgeliefert; der Nutzer laedt sie bei Korg und faehrt sie hier
+// durch.
+
+let xgDatei: { name: string; bytes: Uint8Array } | null = null;
+
+function xgStatus(t: string): void {
+  const el = document.getElementById("xgStatus");
+  if (el) el.textContent = t;
+}
+
+async function xgLaden(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const b = analysiere(bytes);
+  const info = document.getElementById("xgInfo");
+  const zuSampler = document.getElementById("xgZuSampler");
+  const zuSynth = document.getElementById("xgZuSynth");
+  const hash = await sha256Hex(bytes);
+  const bekannt = hash ? BEKANNTE_HASHES[hash] : undefined;
+  if (!b.ok || b.variante === "?") {
+    xgDatei = null;
+    if (info) info.textContent = `${f.name}: abgelehnt — ${b.grund}`;
+    zuSampler?.classList.add("hidden");
+    zuSynth?.classList.add("hidden");
+    xgStatus(b.grund);
+    return;
+  }
+  xgDatei = { name: f.name, bytes };
+  if (info) info.textContent = `${f.name} — ${VARIANTEN[b.variante].label}${bekannt ? ` (${bekannt})` : ""}`;
+  // Anbieten, was NICHT die aktuelle Variante ist.
+  zuSampler?.classList.toggle("hidden", b.variante === "sampler");
+  zuSynth?.classList.toggle("hidden", b.variante === "synth");
+  xgStatus(`Geladen. ${b.variante === "synth" ? "Für Sampler-Hardware umköpfen." : "Für Synth-Hardware umköpfen."}`);
+}
+
+async function xgUmkoepfen(ziel: Variante): Promise<void> {
+  if (!xgDatei) {
+    xgStatus("Erst eine SYSTEM.VSB laden.");
+    return;
+  }
+  let r;
+  try {
+    r = crossgrade(xgDatei.bytes, ziel);
+  } catch (e) {
+    xgStatus(e instanceof Error ? e.message : String(e));
+    return;
+  }
+  const hash = await sha256Hex(r.bytes);
+  const ab = await legeAb("SYSTEM.VSB", r.bytes, `Crossgrade-${ziel}`);
+  xgStatus(
+    `Umgeköpft ${r.vonVariante} → ${ziel} (Byte 0x12 und 0x2E)${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}` +
+      (ab.pfad ? ` → ${ab.pfad}.` : " → Download.") +
+      ` Installieren: als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
+      " ⚠ Vorher die Werks-SYSTEM.VSB als Rückweg auf der SD behalten.",
+  );
+}
+
+function richteCrossgradeEin(): void {
+  if (!document.getElementById("xgPanel")) return;
+  dateiKnopf("xgLaden", "xgIn", (f) => void xgLaden(f));
+  document.getElementById("xgZuSampler")?.addEventListener("click", () => void xgUmkoepfen("sampler"));
+  document.getElementById("xgZuSynth")?.addEventListener("click", () => void xgUmkoepfen("synth"));
+}
 
 export function initFirmwareWerkbank(h: WerkbankHooks): void {
   hooks = h;
@@ -1054,9 +1505,18 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   dspGewaehlt.clear();
   oszNeu = [];
   oszBasisAnzahl = 0;
+  modNeu = [];
+  modBasisAnzahl = 0;
+  karte = KARTE_HACKTRIBE;
+  analyse = null;
+  analyseAuswahl.clear();
+  ablage = null;
+  ablageDateien = [];
   pixel = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
   if (!document.getElementById("fwPanel")) return;
   dateiKnopf("fwBasisLaden", "fwBasisIn", (f) => void basisLaden(f));
+  richteCrossgradeEin();
+  richteAblageEin();
   dateiKnopf("fwGrooveLaden", "fwGrooveIn", (f) => void groovesLaden(f));
   dateiKnopf("fwInitLaden", "fwInitIn", (f) => void initLaden(f));
   for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwGlobal", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);
@@ -1144,8 +1604,12 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
       setStatus("Erst eine Basis laden.");
       return;
     }
+    if (karte.splash === undefined) {
+      setStatus(`${karte.label}: die Lage des Startbilds ist nicht bekannt.`);
+      return;
+    }
     bildHell = null;
-    fwSetzePixel(splashZuPixel(liesSplash(basis)));
+    fwSetzePixel(splashZuPixel(liesSplash(basis, karte)));
     setStatus("Startbild aus der Basis geholt.");
   });
   $("fwSplashLeer").addEventListener("click", () => {
@@ -1168,7 +1632,8 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
 
 /** Fuer Tests: den Init-Pattern-Namen aus einem Abbild lesen. */
 export function fwInitPatternName(fw: Uint8Array): string {
-  const pat = liesInitPattern(fw);
+  const e = erkenneKarte(fw);
+  const pat = liesInitPattern(fw, e.ok ? e.karte : KARTE_HACKTRIBE);
   let n = "";
   for (let i = 0; i < 16 && pat[0x110 + i]; i++) n += String.fromCharCode(pat[0x110 + i]);
   return escapeHtml(n.trim());

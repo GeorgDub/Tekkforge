@@ -583,17 +583,32 @@
                   <input id="pmSuche" type="search" placeholder="Suchen: Name oder Algorithmus" title="Zeigt in allen drei Listen nur Plätze, deren Name oder Algorithmus den Text enthält; leer = alle" style="width:200px;font-size:11px;padding:2px 6px;margin-left:auto" />
                 </div>
                 <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:8px">
-                  <div style="flex:0 0 280px;min-width:260px">
-                    <div class="sub" style="margin:0 0 4px"><b>Bibliothek</b> <span id="pmBibInfo">leer</span></div>
+                  <div style="flex:1 1 100%;min-width:320px;border:1px solid var(--border);border-radius:6px;padding:6px">
+                    <div class="sub" style="margin:0 0 4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>Bibliothek</b> <span id="pmBibInfo">leer</span><button id="pmBibOrdner" class="ghost hidden" title="Die Ablagedatei im Explorer zeigen" style="padding:1px 6px;font-size:11px">Ablage zeigen</button></div>
+                    <p class="sub" style="margin:0 0 6px">Alle mitgelieferten IFX-, MFX- und Groove-Sets plus alles, was hier geladen wird — bleibt über den Neustart erhalten. Stern = Favorit, Haken = Auswahl: daraus wird eine Datei mit Plätzen (zum Flashen), ein Bauplan, oder sie geht direkt in den Manager. Ziehen und auf einen Platz rechts fallen lassen geht weiter.</p>
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px">
-                      <button id="pmBibLaden" class="ghost" title="Presets und Sammlungen in die Bibliothek laden (.e2fxp, .mfx, .tfsam — mehrere auf einmal)" style="padding:2px 8px;font-size:11px">+ Laden…</button>
-                      <input id="pmBibIn" type="file" accept=".e2fxp,.mfx,.ifx,.e2gv,.tfsam,.json" multiple class="hidden" />
+                      <button id="pmBibLaden" class="ghost" title="Presets, Grooves, Sammlungen, Sicherungen oder Firmware in die Bibliothek laden (.e2fxp, .mfx, .e2gv, .tfsam, .tfbau, .tfbak, .VSB — mehrere auf einmal). Was schon da ist, kommt nicht doppelt hinein." style="padding:2px 8px;font-size:11px">+ Laden…</button>
+                      <input id="pmBibIn" type="file" accept=".e2fxp,.mfx,.ifx,.e2gv,.gv,.tfsam,.tfbau,.tfbak,.json,.vsb,.VSB" multiple class="hidden" />
                       <button id="pmBibAusEditor" class="ghost" title="Das Preset aus dem Editor in die Bibliothek legen" style="padding:2px 8px;font-size:11px">aus Editor</button>
+                      <button id="pmBibFxStand" class="ghost" title="Die je Pattern gemerkten Live-FX-Werte (MIDImix-Regler 2/3, Hacktribe-NRPN) in die IFX-Presets der Parts schreiben und als neue Einträge ablegen — braucht einen geladenen Stand (Gerät, Sicherung oder Firmware), damit das Preset des Parts bekannt ist. Danach auswählen und flashen oder in den Manager legen." style="padding:2px 8px;font-size:11px">FX-Stand aus Pattern…</button>
+                      <button id="pmBibExport" class="ghost" title="Die ganze Bibliothek (gefiltert, ohne Plätze) als .tfsam sichern — zum Weitergeben oder Wiederladen" style="padding:2px 8px;font-size:11px">Alle exportieren…</button>
                       <select id="pmBibFilter" style="font-size:11px;padding:2px 4px"><option value="alle">alle</option><option value="ifx">nur IFX</option><option value="mfx">nur MFX</option><option value="groove">nur Grooves</option></select>
-                      <button id="pmBibLeeren" class="ghost" title="Bibliothek leeren" style="padding:2px 8px;font-size:11px">✕</button>
+                      <input id="pmBibSuche" type="search" placeholder="Suchen: Name, Algorithmus, Set" style="width:170px;font-size:11px;padding:2px 6px" />
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px"><input id="pmBibNurFav" type="checkbox" /> ★ nur Favoriten</label>
+                      <button id="pmBibEingebaute" class="ghost hidden" title="Ausgeblendete mitgelieferte Einträge wieder zeigen" style="padding:2px 8px;font-size:11px">Eingebaute zeigen</button>
+                      <button id="pmBibLeeren" class="ghost" title="Alle eigenen Einträge entfernen (die mitgelieferten bleiben)" style="padding:2px 8px;font-size:11px;margin-left:auto">eigene leeren</button>
                     </div>
                     <div id="pmBibListe"></div>
-                    <p class="sub" style="margin:4px 0 0">Ziehen und auf einen Platz rechts fallen lassen. Belegter Platz: Ersetzen, davor oder danach einfügen — leerer Platz: einfach rein.</p>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                      <span class="sub" style="margin:0"><b>Auswahl:</b> <span id="pmBibAuswahlInfo">keine</span></span>
+                      <button id="pmBibAlle" class="ghost" title="Alle gerade sichtbaren Einträge auswählen" style="padding:2px 8px;font-size:11px">alle sichtbaren</button>
+                      <button id="pmBibKeine" class="ghost" style="padding:2px 8px;font-size:11px">keine</button>
+                      <button id="pmBibAuswahlDatei" class="ghost" title="Die Auswahl als .tfsam MIT Plätzen sichern — je Art fortlaufend ab dem Startplatz (fragt nach). Die Datei lädt „+ Datei einfügen…“ an ihre Plätze; die Firmware-Werkbank und „Firmware patchen“ nehmen sie zum Flashen." style="padding:2px 8px;font-size:11px">→ Datei mit Plätzen…</button>
+                      <button id="pmBibAuswahlBauplan" class="ghost" title="Die Auswahl als Bauplan (.tfbau) für die Firmware-Werkbank — Presets/Grooves mit Plätzen" style="padding:2px 8px;font-size:11px">→ Bauplan…</button>
+                      <button id="pmBibAuswahlManager" class="ghost" title="Die Auswahl in die Listen rechts legen — ab dem ersten leeren Platz ihrer Art (oder ab einem Startplatz, fragt nach)" style="padding:2px 8px;font-size:11px">→ in den Manager…</button>
+                      <button id="pmBibAuswahlFirmware" class="ghost" title="Die Auswahl direkt in eine Hacktribe-SYSTEM.VSB einbrennen: fragt nach der unveränderten Hacktribe-Firmware und den Startplätzen, schreibt die Auswahl dorthin und legt das Ergebnis ab. Installieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ + Update am Gerät." style="padding:2px 8px;font-size:11px">🔥 → Firmware…</button>
+                      <input id="pmBibFirmwareIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                    </div>
                   </div>
                   <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>IFX</b> <span id="pmIfxInfo"></span></div><div id="pmIfxListe"></div></div>
                   <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>MFX</b> <span id="pmMfxInfo"></span></div><div id="pmMfxListe"></div></div>
@@ -608,13 +623,38 @@
                 <div id="pmStatus" class="sub" style="margin-top:4px">bereit</div>
               </details>
               <details id="fwPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
-                <summary style="cursor:pointer;font-weight:600">🔥 Firmware-Werkbank — Presets, Grooves, Init-Pattern und Startbild dauerhaft einbrennen</summary>
-                <p class="sub" style="margin:6px 0">Die Hacktribe-Firmware ist ein Abbild des Gerätespeichers. Hier wird sie Baustein für Baustein umgebaut und als neue <code>SYSTEM.VSB</code> abgelegt — installiert wird sie über <code>KORG/electribe sampler/System/</code> und die Update-Funktion des Geräts. Eine schon gepatchte TekkForge-Firmware taugt wieder als Basis: die nächste Runde baut darauf auf.</p>
+                <summary style="cursor:pointer;font-weight:600">🔥 Firmware-Werkbank — Synth- oder Sampler-Firmware mit Hacktribe und eigenen Bausteinen bauen</summary>
+                <p class="sub" style="margin:6px 0">Eine <code>SYSTEM.VSB</code> ist ein Abbild des Gerätespeichers. Hier wird sie Baustein für Baustein umgebaut und als neue Datei abgelegt — installiert über die SD-Karte und die Update-Funktion des Geräts. Basis ist die offizielle <b>Synth-</b> oder <b>Sampler-</b>Firmware aus der Ablage, die daraus erzeugte <b>Hacktribe</b>, oder eine eigene, schon modifizierte Firmware (die sich hier auch analysieren lässt). Das Ziel (Gerät + laufende Firmware) setzt den Kopf, damit der Updater die Datei annimmt und nichts brickt. Es liegt keine Korg-Firmware in TekkForge — die offiziellen Dateien kommen von Korg in die Ablage.</p>
+                <div style="border:1px solid var(--border);border-radius:4px;padding:6px;margin-bottom:8px">
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <span class="sub" style="margin:0"><b>Firmware-Ablage:</b></span>
+                    <code id="fwAblagePfad" style="font-size:11px">—</code>
+                    <button id="fwAblageOeffnen" class="ghost" style="padding:1px 6px;font-size:11px" title="Den Ordner im Explorer zeigen — dort die SYSTEM.VSB aus electribe_system_v202.zip (Synth) und electribe_sampler_system_v202.zip (Sampler) sowie hacktribe-2.patch (bangcorrupt/hacktribe) ablegen; die Namen sind egal, erkannt wird am SHA-256">Ordner öffnen</button>
+                    <button id="fwAblageDatei" class="ghost" style="padding:1px 6px;font-size:11px" title="Dateien in die Ablage kopieren (Desktop) bzw. für die Sitzung merken (Browser)">Datei hinzufügen…</button>
+                    <input id="fwAblageIn" type="file" accept=".vsb,.VSB,.patch,.bin" multiple class="hidden" />
+                    <button id="fwAblageLesen" class="ghost" style="padding:1px 6px;font-size:11px" title="Ordner neu einlesen und jede Datei am SHA-256 einordnen — beschädigte oder veränderte Stock-Dateien fallen dabei auf">neu einlesen</button>
+                    <span class="sub" id="fwAblageInfo" style="margin:0">noch nicht eingelesen</span>
+                  </div>
+                  <div id="fwAblageListe" class="sub" style="margin:4px 0 0;font-size:11px;font-family:monospace;max-height:90px;overflow:auto"></div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                    <span class="sub" style="margin:0"><b>Basis wählen:</b></span>
+                    <select id="fwBasisWahl" style="font-size:11px;padding:2px 4px" title="Womit gebaut wird: die offizielle Sampler-Firmware, dieselbe mit Hacktribe (wird aus Stock + Patch in der App erzeugt und per Hash geprüft), die offizielle Synth-Firmware, oder eine eigene Firmware aus der Ablage">
+                      <option value="hacktribe">Sampler + Hacktribe</option>
+                      <option value="sampler-stock">Sampler — offizielle Firmware v2.02</option>
+                      <option value="synth-stock">Synth — offizielle Firmware v2.02</option>
+                      <option value="eigene">eigene/modifizierte Firmware aus der Ablage</option>
+                    </select>
+                    <select id="fwBasisEigene" class="hidden" style="font-size:11px;padding:2px 4px;max-width:260px"></select>
+                    <button id="fwBasisUebernehmen" class="primary" style="padding:2px 8px;font-size:11px">als Basis übernehmen</button>
+                    <button id="fwHacktribeErzeugen" class="ghost" style="padding:1px 6px;font-size:11px" title="Aus der offiziellen Sampler-Firmware und hacktribe-2.patch die Hacktribe-Firmware erzeugen (bspatch in der App); Ergebnis nur mit dem bekannten Hash 7cb4825c…">Hacktribe erzeugen</button>
+                  </div>
+                </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                   <span class="sub" style="margin:0"><b>Basis:</b></span>
-                  <button id="fwBasisLaden" class="ghost" title="Eine SYSTEM.VSB als Basis laden — Hacktribe oder eine frühere TekkForge-Fassung">Firmware laden…</button>
+                  <button id="fwBasisLaden" class="ghost" title="Eine SYSTEM.VSB von anderswo als Basis laden — Hacktribe, Stock (Synth oder Sampler) oder eine frühere TekkForge-Fassung; die Bauart wird am Payload erkannt">Firmware laden…</button>
                   <input id="fwBasisIn" type="file" accept=".vsb,.VSB" class="hidden" />
                   <span class="sub" id="fwBasisInfo" style="margin:0">keine geladen</span>
+                  <span class="sub" id="fwKarteInfo" style="margin:0;opacity:.7"></span>
                   <button id="fwVergleichen" class="ghost" title="Die Basis gegen eine zweite SYSTEM.VSB halten: welche Plätze, Zähler, Init-Pattern, Startbild unterscheiden sich — und was liegt außerhalb der bekannten Bereiche (Stock-Namen stehen an anderer Stelle und erscheinen als leer)">Mit Datei vergleichen…</button>
                   <input id="fwVergleichIn" type="file" accept=".vsb,.VSB" class="hidden" />
                   <button id="fwGeraetVergleich" class="ghost" title="Liest vom laufenden Gerät die Oszillator-Liste (Laufzeitkopie), die Modulationstabelle und die Oszillator-Grenze im Code und hält sie gegen die Basis — so sieht man ohne Display, welcher Stand im Gerät steckt und ob flüchtige Änderungen noch da sind. Braucht MIDI und ein gefundenes Gerät.">Gerät ↔ Basis</button>
@@ -624,7 +664,7 @@
                     <div class="sub" style="margin:0 0 4px"><b>Bausteine</b></div>
                     <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px" title="Alle Plätze des Preset-Managers, die sich von der Basis unterscheiden — auch Plätze hinter dem Zähler; das Menü wird nachgezogen"><input id="fwPresets" type="checkbox" checked /> Presets aus dem Preset-Manager <span id="fwPresetsInfo"></span></label>
                     <label class="sub" style="margin:4px 0 0;display:flex;align-items:center;gap:4px" title="Groove-Vorlagen mit Platz aus einer .tfsam — die vier Groove-Zähler werden bis zum höchsten belegten Platz nachgezogen"><input id="fwGrooves" type="checkbox" /> Grooves aus Sammlung <button id="fwGrooveLaden" class="ghost" style="padding:1px 6px;font-size:11px">laden…</button><input id="fwGrooveIn" type="file" accept=".tfsam,.json" class="hidden" /><span id="fwGroovesInfo"></span></label>
-                    <label class="sub" style="margin:4px 0 0;display:flex;align-items:center;gap:4px" title="Der Block, den das Gerät für ein neues Pattern nimmt — Tempo, Länge, Parts, Motion, alles wie im Editor eingestellt"><input id="fwInit" type="checkbox" /> Init-Pattern: <select id="fwInitQuelle" style="font-size:11px;padding:2px 4px"><option value="editor">aktuelles Pattern aus dem Editor</option><option value="datei">aus Datei</option></select><button id="fwInitLaden" class="ghost" style="padding:1px 6px;font-size:11px">Datei…</button><input id="fwInitIn" type="file" accept=".e2spat" class="hidden" /><span id="fwInitInfo"></span></label>
+                    <label class="sub" style="margin:4px 0 0;display:flex;align-items:center;gap:4px" title="Der Block, den das Gerät für ein neues Pattern nimmt — Tempo, Länge, Parts, Motion, alles wie im Editor eingestellt"><input id="fwInit" type="checkbox" /> Init-Pattern: <select id="fwInitQuelle" style="font-size:11px;padding:2px 4px"><option value="editor">aktuelles Pattern aus dem Editor</option><option value="datei">aus Datei</option></select><button id="fwInitLaden" class="ghost" style="padding:1px 6px;font-size:11px">Datei…</button><input id="fwInitIn" type="file" accept=".e2spat,.e2pat" class="hidden" /><span id="fwInitInfo"></span></label>
                     <label class="sub" style="margin:4px 0 0;display:flex;align-items:center;gap:4px" title="Das 128 × 64 Pixel große Bild beim Einschalten — aus dem Pixel-Editor rechts"><input id="fwSplash" type="checkbox" /> Startbild aus dem Pixel-Editor</label>
                     <label class="sub" style="margin:4px 0 0;display:flex;align-items:center;gap:4px" title="Der Global-Block (256 Byte, GLST…GLED) als Werksstand: MIDI-Kanal, Clock-Quelle, Chain Mode, Filter, Kontrast. Quelle: der Block aus dem Geräte-RAM (0xC00CFE58) oder eine 256-Byte-Datei (z. B. der Global-Dump aus dem RAM-Panel). ⚠ Ob das Gerät ihn beim Werksreset nimmt, ist noch nicht geprüft."><input id="fwGlobal" type="checkbox" /> Init-Global: <button id="fwGlobalGeraet" class="ghost" style="padding:1px 6px;font-size:11px" title="Den Block aus dem Geräte-RAM lesen (Gerät muss verbunden sein)">vom Gerät</button><button id="fwGlobalLaden" class="ghost" style="padding:1px 6px;font-size:11px">Datei…</button><input id="fwGlobalIn" type="file" accept=".bin,.glb,.dat" class="hidden" /><span id="fwGlobalInfo"></span></label>
                     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
@@ -653,8 +693,30 @@
                       </div>
                       <div id="fwModListe" style="max-height:120px;overflow:auto;font-size:11px;margin-top:2px"></div>
                     </div>
+                    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                      <div class="sub" style="margin:0 0 4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" title="Eine schon modifizierte SYSTEM.VSB (Hacktribe, TekkForge, Omnitribe — Synth oder Sampler) aufschlüsseln: alle IFX/MFX/Grooves/Oszillatoren/Modulations-Typen, Init-Pattern, Startbild, DSP-Kette — und gegen die Stock-Firmware derselben Bauart aus der Ablage jede Erweiterung einzeln. Die Auswahl lässt sich in die geladene Basis übernehmen, auch über die Variantengrenze (z. B. aus einer modifizierten Sampler-Firmware einen Synth machen): Presets in beide Richtungen, Grooves/Osz/Mod nur nach Hacktribe, Code und DSP nur in dieselbe Bauart und nur auf unveränderte Stellen."><b>Modifizierte Firmware analysieren</b>
+                        <button id="fwAnalyseLaden" class="ghost" style="padding:1px 6px;font-size:11px">Firmware analysieren…</button><input id="fwAnalyseIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                        <button id="fwAnalyseBasis" class="ghost" style="padding:1px 6px;font-size:11px" title="Die geladene Basis selbst aufschlüsseln">die Basis analysieren</button>
+                        <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Referenz <select id="fwAnalyseReferenz" style="font-size:11px;padding:2px 4px" title="Wogegen die Erweiterungen bestimmt werden"><option value="stock">Stock derselben Bauart (Ablage)</option><option value="hacktribe">Hacktribe unverändert (Ablage)</option><option value="basis">die geladene Basis</option></select></label>
+                      </div>
+                      <pre id="fwAnalyseBericht" class="sub" style="margin:2px 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
+                      <div id="fwInhaltListe" style="font-size:11px"></div>
+                      <div id="fwAnalyseListe" style="max-height:200px;overflow:auto;font-size:11px;margin-top:4px"></div>
+                      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px">
+                        <button id="fwAnalyseAlle" class="ghost" style="padding:1px 6px;font-size:11px">alle übertragbaren</button>
+                        <button id="fwAnalyseKeine" class="ghost" style="padding:1px 6px;font-size:11px">keine</button>
+                        <button id="fwAnalyseUebernehmen" class="primary" style="padding:2px 8px;font-size:11px" title="Die angehakten Erweiterungen in die geladene Basis legen — die Basis wird das Ergebnis; danach Ziel wählen und bauen">Auswahl in die Basis übernehmen</button>
+                        <span class="sub" id="fwAnalyseInfo" style="margin:0"></span>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)" title="Der Kopf der Datei muss zur Firmware passen, die das Update ausführt — nicht zur Hardware: ihr SD-Updater prüft die Device-ID strikt (Sampler 0x0124, Synth 0x0123). Läuft auf einem Sampler schon eine umgeköpfte Synth-Firmware, verlangt sie einen Synth-Kopf und den Synth-Pfad. Gerät und laufende Firmware wählen — Kopf und Pfad rechnet die Freigabe.">
+                      <span class="sub" style="margin:0"><b>Ziel:</b></span>
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Gerät <select id="fwZielGeraet" style="font-size:11px;padding:2px 4px"><option value="sampler">electribe 2 sampler</option><option value="synth">electribe 2 (Synth)</option></select></label>
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">darauf läuft <select id="fwZielFirmware" style="font-size:11px;padding:2px 4px"><option value="sampler-stock">Sampler-Firmware (Korg v2.02)</option><option value="hacktribe">Hacktribe / TekkForge-Fassung</option><option value="synth-stock">Synth-Firmware (Korg v2.02)</option><option value="synth-crossgrade">Synth-Firmware, umgeköpft (Crossgrade)</option></select></label>
+                      <span class="sub" id="fwZielInfo" style="margin:0"></span>
+                    </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
-                      <button id="fwBauen" class="primary" title="Alle angehakten Bausteine in die Basis einbrennen und als SYSTEM.VSB ablegen (Ordner Firmware/)">🔥 Firmware bauen</button>
+                      <button id="fwBauen" class="primary" title="Alle angehakten Bausteine in die Basis einbrennen, den Kopf fürs Ziel setzen, die Freigabe-Prüfung durchlaufen (Größe, Magic, Layout, Vektortabelle, Zähler, Init-Blöcke, DSP-Kette) und als SYSTEM.VSB ablegen (Ordner Firmware/) — bei einer roten Prüfung wird nichts abgelegt">🔥 Firmware bauen</button>
                       <button id="fwSichtbar" class="ghost" title="Den Bauplan anzeigen, ohne zu bauen">Vorschau</button>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
@@ -691,6 +753,21 @@
                   </div>
                 </div>
                 <div id="fwStatus" class="sub" style="margin-top:4px">bereit</div>
+              </details>
+              <details id="xgPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
+                <summary style="cursor:pointer;font-weight:600">🎛 Synth-Firmware für den Sampler vorbereiten (Crossgrade)</summary>
+                <p class="sub" style="margin:6px 0">Aus einem Sampler einen echten <b>electribe 2 Synth</b> machen: die offizielle Synth-<code>SYSTEM.VSB</code> von Korg laden, hier auf die Sampler-Variante umköpfen und über die Update-Funktion des Geräts flashen. Nur zwei Kopf-Bytes ändern sich (Device-ID 0x0123→0x0124); die Synth-Klangerzeugung (Oszillatoren, VPM, Filter) steckt im Payload und reist mit. Umgekehrt geht auch (Sampler→Synth). Am v2.02-Abbild disassembliert, <b>am Gerät noch nicht abgenommen</b>.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <button id="xgLaden" class="ghost" title="Eine offizielle electribe-2-SYSTEM.VSB laden (Synth oder Sampler)">SYSTEM.VSB laden…</button>
+                  <input id="xgIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                  <span class="sub" id="xgInfo" style="margin:0">keine geladen</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <button id="xgZuSampler" class="primary hidden" title="Auf die Sampler-Variante umköpfen und als SYSTEM.VSB ablegen — für Sampler-Hardware">→ für Sampler umköpfen</button>
+                  <button id="xgZuSynth" class="primary hidden" title="Auf die Synth-Variante umköpfen und als SYSTEM.VSB ablegen — für Synth-Hardware">→ für Synth umköpfen</button>
+                </div>
+                <p class="sub" style="margin:6px 0 0">⚠ Vor dem Flashen die passende Werks-<code>SYSTEM.VSB</code> des Geräts als Rückweg auf der SD-Karte behalten. PCM-Instrumente stammen aus der geräteeigenen <code>PCM.VSB</code> und bleiben die des Samplers.</p>
+                <div id="xgStatus" class="sub" style="margin-top:4px">bereit</div>
               </details>
             </div>
             <button id="midiEnable" class="primary">MIDI aktivieren</button>

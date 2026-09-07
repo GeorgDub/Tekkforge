@@ -15,9 +15,13 @@ sie gruppenweise auf einmal laden.
 | **Ketten** — Paare, die fehlten | Insert | `.e2fxp` | `0xC00A80F0` | 0–95 | `IFX-Ketten` (12) · `IFX-Ketten-Variationen` (24) |
 | **Charakter** — zwölf Algorithmen | Master | `.mfx` | `0xC00B4F30` | 0–31 | `MFX-Charakter` (12) · `MFX-Charakter-Variationen` (24) |
 
-Zusammen decken die acht Sets **alle 20 Insert-Algorithmen und 24 der 25
-Master-Algorithmen** der Hacktribe-Firmware ab. Übrig bleibt nur der
-Master-`Mute` — ein gespeichertes Preset, das nichts tut, ist keins.
+Zusammen decken die acht Sets **19 der 20 Insert-Algorithmen und 24 der 25
+Master-Algorithmen** der Hacktribe-Firmware ab. Draußen bleibt auf beiden
+Seiten nur `Mute`: er schaltet den ganzen Effektweg stumm, sein `fader` tut
+nichts (Ohr 2026-09-01) — ein gespeichertes Preset, das nichts tut, ist keins.
+Das frühere `19-cut-fader` (Mute) ist seit 2026-09-06 durch `19-filter-sweep`
+ersetzt; wer die alte Datei noch in einem Platz hat, ersetzt sie im
+Preset-Manager.
 
 Zu jedem der 96 Basis-Presets gibt es **zwei Variationen** (`01a-…`, `01b-…`
 zu `01-…`): derselbe Algorithmus, in genau eine Richtung verschoben. Nur so
@@ -125,7 +129,7 @@ Zweier-Kombinationen aus der Leicht-Whitelist.
 | `16-air-excite` | Air Excite | Exciter | — | `blend` 0 → 127 |
 | `17-wide-chorus` | Wide Chorus | Chorus | — | `mod_int` 0 → 127 |
 | `18-level-pump` | Level Pump | Level Mod | — | `level_mod_int` 0 → 127 |
-| `19-cut-fader` | Cut Fader | Mute | — | `fader` 0 → 127 |
+| `19-filter-sweep` | Filter Sweep | Filter | — | `frequency` 5 → 127 (Resonanz 80; Live-Parameter 2/3 = Frequenz/Resonanz liegen im MIDImix-FX-Layout auf Regler 2/3) |
 | `20-eq-filter` | EQ Filter | EQ 2-Band | Filter | `frequency` 10 → 127 |
 | `21-punch-drive` | Punch Drive | Punch | Acid Driver | `drive` 20 → 127 |
 | `22-comp-filter` | Comp Filter | Cheap Comp | Filter | `frequency` 5 → 127 |
@@ -148,7 +152,7 @@ Filter→Zerre deutlich aggressiver.
 | Air Excite | Air Excite Soft | Air Excite Max | Anteil 40 / 90 / 127 |
 | Wide Chorus | Chorus Narrow | Chorus Deep | Tiefe + Spreizung 40/20 · 90/110 · 127/127 |
 | Level Pump | Level Pump Soft | Level Pump Hard | Tiefe 60 / 127 / 127, Sättigung 10 / 40 / 100 |
-| Cut Fader | Cut Fader Half | Cut Fader Full | `fader` 0 / 64 / 127 |
+| Filter Sweep | Filt Sweep Res | Filt Sweep Alt | Resonanz 118 · `output_select` 2 mit Frequenz 40 |
 | EQ Filter | EQ Filter Dark | EQ Filter Brite | Höhen und Filterlage gegenläufig |
 | Punch Drive | Punch Drive Lo | Punch Drive Hi | Zerre 40 / 80 / 127 |
 | Comp Filter | Comp Filter Lo | Comp Filter Hi | Kompression + Filterlage zusammen |
@@ -399,7 +403,7 @@ Ohr, was keine Tabelle hergibt:
 | `EQ Tilt Dark` ↔ `EQ Tilt Bright` | dasselbe für den Master-EQ |
 | `Two Band Smile` ↔ `Two Band Mid` | dasselbe für den 2-Band-EQ |
 | `Acid Filter Alt` (1), `Punch Filt Alt2` (2), Basis (0) | Was macht `output_select` beim Filter? |
-| `Cut Fader` (0), `Half` (64), `Full` (127) | Ist `fader` beim Mute ein Pegel oder eine Dämpfung? |
+| `Cut Fader` (0), `Half` (64), `Full` (127) — Sonde von 2026-09-01, seit 2026-09-06 nicht mehr im Set | Ist `fader` beim Mute ein Pegel oder eine Dämpfung? |
 | `Grain Fine` ↔ `Grain Rough` | Was tut `off_duration`? |
 | `Bit Tekk Rate` ↔ `Bit Tekk Bits` | Welche der beiden Achsen macht den Crush-Klang aus? |
 | `Trem Welle 0` / `1` / `2` | Welche Zahl ist welche LFO-Wellenform? (2 ist beim Werks-Tremolo das Rechteck) |
@@ -416,7 +420,7 @@ Unterschied?) und der Hall-Vergleich `m20`–`m23`.
 |---|---|
 | EQ-Neutralwert | **36 ist neutral, höher = lauter** — bei allen drei EQs (4-Band-Insert, 2-Band-Insert, Master): Boost lauter/voller, Scoop hohl, Smile fett an den Rändern, die Master-Kippe dumpf bzw. spitz. |
 | `output_select` (Filter) | Wirkt hörbar: 0/1/2 klingen klar verschieden. **Welcher Wert welcher Ausgang ist, ist noch unbenannt** — der Hörer konnte die Charaktere nicht zuordnen; ein Sweep-Mitschnitt steht aus. |
-| `fader` (Mute) | **Weder Pegel noch Dämpfung**: alle drei Fassungen (0/64/127) sind still, auch der Regler bringt an keiner Stellung Ton — erst Part-IFX Off gibt das Signal frei. Mute macht schlicht zu; Verdacht Blendzeit, ungeklärt. Damit ist ein gespeichertes „Cut Fader“-Preset so nutzlos wie der Master-Mute — ob es aus dem Set fliegt, ist offen. |
+| `fader` (Mute) | **Weder Pegel noch Dämpfung**: alle drei Fassungen (0/64/127) sind still, auch der Regler bringt an keiner Stellung Ton — erst Part-IFX Off gibt das Signal frei. Mute macht schlicht zu; Verdacht Blendzeit, ungeklärt. Damit ist ein gespeichertes „Cut Fader“-Preset so nutzlos wie der Master-Mute — **aus dem Set geflogen (2026-09-06)**, Platz 19 ist jetzt „Filter Sweep“. |
 | `off_duration` (Grain Shifter) | Wörtlich die Länge der **Aus-Phase** zwischen den Schnipseln: hoch = löchriger, mehr Stottern — nicht gröbere Schnipsel. |
 | Decimator-Achsen | `bit_depth` runter = rauschig-kratziger. ⚠ Am unteren Anschlag wird das Signal zum **Vollpegel-Rechteck** — Dynamik weg, mit Level ist nichts mehr zu regeln. Die Rate-Seite ist noch nicht getrennt beschrieben. |
 | Kettenfolge (`10` ↔ `23`) | **Ja, deutlich**: Filter→Zerre ist klar aggressiver als Zerre→Filter. |
@@ -538,7 +542,8 @@ Wo selbst die *Richtung* offen ist, entscheidet nicht das Skript, sondern die
 Hand. Wie viel Hall über der Summe richtig ist, weiß hier niemand: `dry_wet`
 von `m07-room-wide` bleibt deshalb auf dem Werkswert und liegt stattdessen auf
 der X-Achse. Wer wischt, hört in einer Sekunde, was keine Vermutung leisten
-kann. Dasselbe bei den beiden Delays und beim `fader` von `Cut Fader`.
+kann. Dasselbe bei den beiden Delays (und, bis 2026-09-06, beim `fader` des
+früheren `Cut Fader`).
 
 Gehört hat das hier niemand. Genau dafür sind es Testdateien: was am Gerät
 anders klingt als der Name verspricht, gehört gemeldet und korrigiert.

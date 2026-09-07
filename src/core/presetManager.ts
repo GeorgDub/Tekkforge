@@ -19,8 +19,9 @@
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "./e2FxPreset";
 import { decodeGroove, encodeGroove, GROOVE_SIZE } from "./e2Groove";
 import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "./hacktribeRam";
-import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer } from "./ifxErweiterung";
-import { dateiOffset, pruefeFirmware, istGroovePlatzLeer, leseGrooveStand } from "./firmwareBau";
+import { istPresetPlatzLeer } from "./ifxErweiterung";
+import { pruefeFirmware, istGroovePlatzLeer, leseGrooveStand } from "./firmwareBau";
+import { KARTE_HACKTRIBE, grooveOffset, leseZaehler, presetOffset, presetPlaetze, type FirmwareKarte } from "./firmwareKarte";
 import type { Sicherung } from "./geraetSicherung";
 import type { SammlungsEintrag } from "./sammlung";
 
@@ -132,24 +133,27 @@ export function zustandAusSicherung(s: Sicherung): ManagerZustand {
   return zustandAusBaenken(ifx, mfx, max, block("groove"), gAnzahl !== undefined ? gAnzahl - 1 : -1);
 }
 
-export function zustandAusFirmware(fw: Uint8Array): ManagerZustand {
-  const pr = pruefeFirmware(fw);
+/**
+ * Den Manager-Stand aus einem Abbild lesen. Mit der Hacktribe-Karte
+ * (Vorgabe) wie bisher aus den flachen Baenken; mit einer Stock-Karte ueber
+ * die Zeigertabellen — Plaetze, die die Karte nicht hat (IFX 39–96, alle
+ * Grooves), erscheinen leer.
+ */
+export function zustandAusFirmware(fw: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): ManagerZustand {
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) throw new Error(pr.reason);
-  const map = (key: string) => E2_RAM_MAP.find((e) => e.key === key)!;
-  const bank = (key: string, n: number, groesse: number): Uint8Array[] =>
+  const preset = (art: "ifx" | "mfx", n: number): Uint8Array[] =>
     Array.from({ length: n }, (_, i) => {
-      const off = dateiOffset(addressForSlot(map(key), i));
-      return fw.subarray(off, off + groesse);
+      const off = i < presetPlaetze(karte, art) ? presetOffset(karte, fw, art, i) : null;
+      return off === null ? leererBlock(art) : fw.subarray(off, off + FX_PRESET_SIZE);
     });
-  const stand = leseZaehlerStand(IFX_ZAEHLER.map((z) => ({ addr: z.addr, wert: fw[dateiOffset(z.addr)] })));
-  const gv = leseGrooveStand(fw);
-  return zustandAusBloecken(
-    bank("ifxPreset", IFX_PLAETZE, FX_PRESET_SIZE),
-    bank("mfxPreset", MFX_PLAETZE, FX_PRESET_SIZE),
-    stand.ok ? stand.maxIndex : -1,
-    bank("groove", GROOVE_PLAETZE, GROOVE_SIZE),
-    gv.ok ? gv.maxIndex : -1,
-  );
+  const grooves = Array.from({ length: GROOVE_PLAETZE }, (_, i) => {
+    const off = grooveOffset(karte, i);
+    return off === null ? leererBlock("groove") : fw.subarray(off, off + GROOVE_SIZE);
+  });
+  const stand = leseZaehler(fw, karte.ifxZaehler);
+  const gv = karte.grooveZaehler ? leseGrooveStand(fw, karte) : null;
+  return zustandAusBloecken(preset("ifx", IFX_PLAETZE), preset("mfx", MFX_PLAETZE), stand.ok ? stand.maxIndex : -1, grooves, gv?.ok ? gv.maxIndex : -1);
 }
 
 // ─── Operationen ─────────────────────────────────────────────────────────────

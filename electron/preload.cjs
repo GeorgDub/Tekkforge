@@ -75,6 +75,35 @@ contextBridge.exposeInMainWorld("tekkBib", {
   ordner: () => ipcRenderer.invoke("bib:ordner"),
 });
 
+// ── FX-/Groove-Bibliothek (userData/fx-bibliothek.json) ──
+contextBridge.exposeInMainWorld("tekkFxBib", {
+  available: true,
+  /** Ganzer Stand als JSON-Text, null wenn noch keiner da ist. */
+  lesen: () => ipcRenderer.invoke("fxbib:lesen"),
+  /** Stand ablegen (Nebendatei + Umbenennen). */
+  schreiben: (text) => ipcRenderer.invoke("fxbib:schreiben", text),
+  /** Ordner im Explorer zeigen. */
+  ordner: () => ipcRenderer.invoke("fxbib:ordner"),
+});
+
+// ── Firmware-Ablage (userData/firmware) ──
+contextBridge.exposeInMainWorld("tekkFirmware", {
+  available: true,
+  /** Pfad des Ablage-Ordners (wird angelegt). */
+  ordner: () => ipcRenderer.invoke("firmware:ordner"),
+  /** Ordner im Explorer zeigen. */
+  ordnerOeffnen: () => ipcRenderer.invoke("firmware:ordnerOeffnen"),
+  /** [{ name, groesse, sha256, wann }] aller .vsb/.patch/.bin im Ordner. */
+  liste: () => ipcRenderer.invoke("firmware:liste"),
+  /** Datei als Bytes (Uint8Array), null wenn nicht da. */
+  lesen: async (name) => {
+    const b = await ipcRenderer.invoke("firmware:lesen", name);
+    return b ? new Uint8Array(b) : null;
+  },
+  /** Datei in den Ordner legen (Nebendatei + Umbenennen). */
+  ablegen: (name, bytes) => ipcRenderer.invoke("firmware:ablegen", name, bytes),
+});
+
 // ── Update-Check (GitHub Releases) ──
 contextBridge.exposeInMainWorld("tekkUpdate", {
   available: true,

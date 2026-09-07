@@ -41,7 +41,15 @@ describe("midimixLayout", () => {
     expect(l.master).toEqual({ art: "mfx", was: "x" });
     expect(layoutMixer(9).spalten[7].fader).toEqual({ art: "part", part: 16, key: "volume" });
     expect(LAYOUT_VORGABEN.map((v) => v.id)).toContain("fx9");
-    expect(layoutFx(1).spalten[0].knobs[2]).toEqual({ art: "fx", part: 1, slot: 0, param: 2 });
+    // FX-Layout (2026-09-06): Regler 1 = IFX-Regler (Stock-CC, vom Geraet gespeichert), 2/3 = Hacktribe-Param 2/3 (Filter: Frequenz/Resonanz)
+    expect(layoutFx(1).spalten[0].knobs[0]).toEqual({ art: "part", part: 1, key: "ifxEdit" });
+    expect(layoutFx(1).spalten[0].knobs[1]).toEqual({ art: "fx", part: 1, slot: 0, param: 2 }); // Filter: frequency
+    expect(layoutFx(1).spalten[0].knobs[2]).toEqual({ art: "fx", part: 1, slot: 0, param: 3 }); // Filter: resonance
+    expect(layoutFx(9).spalten[7].knobs[0]).toEqual({ art: "part", part: 16, key: "ifxEdit" });
+    expect(layoutFx(1).spalten[3].mute).toEqual({ art: "ifx", part: 4 });
+    // Regler 1 geht als CC 87 auf den Part-Kanal
+    const m = reglerNachrichten(layoutFx(1).spalten[1].knobs[0], 100, 0);
+    expect([...m[0]]).toEqual([0xb1, 87, 100]);
   });
 
   it("reglerNachrichten: Part-Parameter als Stock-CC auf dem Part-Kanal, MFX auf dem Global-Kanal, FX als NRPN", () => {

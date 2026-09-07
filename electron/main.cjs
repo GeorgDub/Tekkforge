@@ -586,6 +586,113 @@ function registerBibliothekIpc() {
   });
 }
 
+/**
+ * FX-/Groove-Bibliothek: EIN Stand als Datei in userData — eigene Presets,
+ * Favoriten, ausgeblendete Eingebaute (fxBibliothek.ts). Klein genug fuer eine
+ * Datei (die Eingebauten stecken in der App, nicht hier); geschrieben ueber
+ * Nebendatei und Umbenennen wie die Pattern-Bibliothek.
+ */
+function fxBibPfad() {
+  return path.join(app.getPath("userData"), "fx-bibliothek.json");
+}
+
+/**
+ * Firmware-Ablage: userData/firmware — die offiziellen Korg-Abbilder (Synth
+ * und Sampler v2.02), hacktribe-2.patch und eigene Fassungen, die der Nutzer
+ * dort ablegt. Die App liefert keine Firmware mit; sie liest den Ordner ein,
+ * rechnet je Datei SHA-256 und ordnet im Renderer ein (firmwareAblage.ts).
+ * Bytes gehen als Buffer ueber die Bruecke; geschrieben wird ueber Nebendatei
+ * und Umbenennen, damit nie eine halbe SYSTEM.VSB im Ordner liegt.
+ */
+function firmwareOrdnerPfad() {
+  return path.join(app.getPath("userData"), "firmware");
+}
+
+const FIRMWARE_ENDUNGEN = new Set([".vsb", ".patch", ".bin"]);
+const FIRMWARE_MAX_BYTES = 8 * 1024 * 1024;
+
+function firmwareNameOk(name) {
+  return typeof name === "string" && /^[A-Za-z0-9._ -]{1,120}$/.test(name) && !name.startsWith(".") && name !== ".." && FIRMWARE_ENDUNGEN.has(path.extname(name).toLowerCase());
+}
+
+function registerFirmwareIpc() {
+  const crypto = require("crypto");
+  ipcMain.handle("firmware:ordner", () => {
+    const o = firmwareOrdnerPfad();
+    fs.mkdirSync(o, { recursive: true });
+    return o;
+  });
+  ipcMain.handle("firmware:ordnerOeffnen", () => {
+    const o = firmwareOrdnerPfad();
+    fs.mkdirSync(o, { recursive: true });
+    void shell.openPath(o);
+    return o;
+  });
+  ipcMain.handle("firmware:liste", () => {
+    const o = firmwareOrdnerPfad();
+    fs.mkdirSync(o, { recursive: true });
+    const out = [];
+    for (const name of fs.readdirSync(o)) {
+      if (!firmwareNameOk(name)) continue;
+      const p = path.join(o, name);
+      let st;
+      try {
+        st = fs.statSync(p);
+      } catch {
+        continue;
+      }
+      if (!st.isFile() || st.size > FIRMWARE_MAX_BYTES) continue;
+      const bytes = fs.readFileSync(p);
+      out.push({ name, groesse: st.size, sha256: crypto.createHash("sha256").update(bytes).digest("hex"), wann: st.mtimeMs });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    return out;
+  });
+  ipcMain.handle("firmware:lesen", (_e, name) => {
+    if (!firmwareNameOk(name)) throw new Error(`Ungültiger Dateiname: ${String(name)}`);
+    const p = path.join(firmwareOrdnerPfad(), name);
+    if (!fs.existsSync(p)) return null;
+    const st = fs.statSync(p);
+    if (!st.isFile() || st.size > FIRMWARE_MAX_BYTES) return null;
+    return fs.readFileSync(p);
+  });
+  ipcMain.handle("firmware:ablegen", (_e, name, bytes) => {
+    if (!firmwareNameOk(name)) throw new Error(`Ungültiger Dateiname: ${String(name)}`);
+    const o = firmwareOrdnerPfad();
+    fs.mkdirSync(o, { recursive: true });
+    const ziel = path.join(o, name);
+    const tmp = `${ziel}.tmp`;
+    const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    fs.writeFileSync(tmp, buf);
+    fs.renameSync(tmp, ziel);
+    return { pfad: ziel, bytes: buf.length };
+  });
+}
+
+function registerFxBibIpc() {
+  ipcMain.handle("fxbib:lesen", () => {
+    const ziel = fxBibPfad();
+    try {
+      return fs.existsSync(ziel) ? fs.readFileSync(ziel, "utf8") : null;
+    } catch {
+      return null;
+    }
+  });
+  ipcMain.handle("fxbib:schreiben", (_e, text) => {
+    const ziel = fxBibPfad();
+    fs.mkdirSync(path.dirname(ziel), { recursive: true });
+    const tmp = `${ziel}.tmp`;
+    fs.writeFileSync(tmp, String(text), "utf8");
+    fs.renameSync(tmp, ziel);
+    return { pfad: ziel, bytes: Buffer.byteLength(String(text)) };
+  });
+  ipcMain.handle("fxbib:ordner", () => {
+    const ordner = path.dirname(fxBibPfad());
+    void shell.openPath(ordner);
+    return ordner;
+  });
+}
+
 function registerLiedIpc(win) {
   ipcMain.handle("lied:pythonStatus", async () => {
     const py = pythonPfad();
@@ -994,6 +1101,8 @@ app.whenReady().then(() => {
   registerUpdateIpc(win);
   registerAutosaveIpc();
   registerBibliothekIpc();
+  registerFxBibIpc();
+  registerFirmwareIpc();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();

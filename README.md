@@ -470,8 +470,10 @@ in acht Sets:
 
 Je zwoelf Basis-Presets, dazu **zwei Variationen pro Basis** (`01a-…`/`01b-…`
 zu `01-…`): derselbe Algorithmus, in eine Richtung verschoben — zum
-Vergleichen am Geraet. Zusammen decken die acht Sets **alle 20 Insert- und 24
-der 25 Master-Algorithmen** ab. Die Sets 7 und 8 (2026-09-05) fuellen die
+Vergleichen am Geraet. Zusammen decken die acht Sets **19 der 20 Insert- und 24
+der 25 Master-Algorithmen** ab — Mute bleibt auf beiden Seiten draussen, er
+schaltet den ganzen Effektweg stumm (Platz 19 „Cut Fader" ist seit 2026-09-06
+„Filter Sweep"). Die Sets 7 und 8 (2026-09-05) fuellen die
 Luecken der ersten sechs: von den erlaubten Zwei-Insert-Paaren fehlten neun,
 und weil die Kettenfolge hoerbar ist, sind auch die umgekehrten Reihenfolgen
 (Filter Comp zu Comp Filter, Drive EQ zu EQ Drive) eigene Presets; auf der
@@ -716,6 +718,85 @@ Laeufen ausserhalb — der eigentliche Patch). Stock-Presets erscheinen dabei
 als „leer", weil die Serien-Firmware die Namen an anderer Stelle im Block
 haelt (+0x7D statt +0x01, Omnitribes Befund); das ist eine bekannte Grenze,
 kein Fehler.
+
+### Firmware-Werkbank 2.0 — Synth oder Sampler als Basis, Hacktribe in der App, Analyse, Ziel-Freigabe (2026-09-07)
+
+Die Werkbank kennt seit v0.7 nicht mehr nur die Hacktribe-Datei, sondern
+**drei Karten** (`core/firmwareKarte.ts`) — je eine Lagebeschreibung, erkannt
+am **Payload**, nicht am Kopf (ein umgekoepftes Abbild traegt den Kopf der
+einen und das Layout der anderen Variante):
+
+| Karte | Presets | Grooves | Init-Pattern / Init-Global | Startbild | Osz-/Mod-Tabelle | DSP-Kette |
+|---|---|---|---|---|---|---|
+| **Hacktribe** (Sampler v2.02 + Patch) | flache Baenke `0xC00A80F0` (100) / `0xC00B4F30` (32), Menue waechst bis 96 | `0xC0143B00` (96) | `0xD0058` / `0xCFF58` | `0xF9954` | 421 / 96+, erweiterbar | ab `0xF9F10` |
+| **Sampler-Stock** (offiziell) | 38 IFX-Zeiger `0xC00ADF94`, 32 MFX-Zeiger `0xC00AF390` → Bloecke mit Name ab +1 (ersetzen) | keine | wie Hacktribe | wie Hacktribe | 421 / 72, fest | ab `0xF9F10` |
+| **Synth-Stock** (offiziell) | 38 IFX-Zeiger `0xC009898C`, 32 MFX-Zeiger `0xC0099D88` (gleiche Namen) | keine | `0xBA9B0` / `0xBA8B0` | Lage unbekannt | 84 (`0xC14E8`) / 72 (`0xC1F68`), fest | ab `0xDFC80` (154 Bloecke) |
+
+Alle Synth-Adressen sind am offiziellen v2.02-Abbild belegt
+(`tests/firmware-karte.test.ts` prueft sie gegen die echten Dateien, wenn sie
+lokal liegen: Zaehler 37/38 stimmig, Platz 1 „Punch" / „Mod Delay", Platz 38
+„Slicer" / 32 „Auto Pan", Osz 1 „SAW", Mod 1 „EG+ Filter", DSP-Kette gueltig).
+Befund dabei: die 38 gezeigten Stock-IFX-Bloecke sind **byte-gleich** mit
+Hacktribes Bank-Slots 0–37 — Hacktribe faedelt sie nur zu einer Bank auf.
+Die Synth-IFX-Zaehler sind zu zwoelf Zellen gefunden, die dreizehnte fehlt —
+darum ist das Synth-Menue nicht erweiterbar; Stock-Presets werden ersetzt.
+
+**Firmware-Ablage.** Es liegt keine Korg-Firmware in TekkForge. Der Nutzer legt
+die `SYSTEM.VSB` aus `electribe_system_v202.zip` (Synth) und
+`electribe_sampler_system_v202.zip` (Sampler) sowie `hacktribe-2.patch`
+(bangcorrupt/hacktribe) in `userData/firmware` (Knopf „Ordner oeffnen"; im
+Browser „Datei hinzufuegen…" fuer die Sitzung). Die Werkbank ordnet jede Datei
+am **SHA-256** ein (`core/firmwareAblage.ts`): Synth `41fc5f1c…`, Sampler
+`1d0f0689…`, Hacktribe `7cb4825c…`, Patch `e70406ec…`. Eine Datei, die wie
+Stock aussieht, aber einen anderen Hash traegt, gilt als **beschaedigt** und
+taugt nicht als Stock-Basis (ein gekipptes Bit, ein halber Download); alles
+andere Gueltige ist „eigene Firmware" und analysierbar.
+
+**Basis waehlen.** „Sampler + Hacktribe", „Sampler — offiziell", „Synth —
+offiziell" oder eine eigene Datei. Hacktribe entsteht **in der App**: `bspatch`
+in reinem TypeScript (`core/bspatch.ts`, bzip2-Dekoder `core/bunzip2.ts`,
+portiert aus seek-bzip) legt den Patch auf die Stock-Sampler-Firmware und legt
+das Ergebnis nur ab, wenn Stock-, Patch- und Ergebnis-Hash stimmen — Golden-
+Test gegen die echte `hacktribe-2.patch` (`tests/bspatch.test.ts`). Bausteine,
+die die Karte nicht hat, sind ausgegraut (Synth: keine Grooves, kein Startbild,
+kein Osz-/Mod-Anhang); `.e2pat` geht als Init-Pattern fuer den Synth.
+
+**Modifizierte Firmware analysieren** (`core/firmwareAnalyse.ts`). Eine
+beliebige `SYSTEM.VSB` aufschluesseln — alle IFX/MFX mit Name und Algorithmus,
+Grooves, Oszillator- und Modulationstabelle, Init-Pattern, Init-Global,
+Startbild, DSP-Kette — und gegen die Referenz (Stock derselben Bauart aus der
+Ablage, oder Hacktribe, oder die geladene Basis) jede **Erweiterung** einzeln:
+platzweise fuer Presets/Grooves/Tabellen (Hacktribes Slot 3 gegen Stocks
+gezeigten Block 3, obwohl beide woanders liegen), blockweise fuer Init und
+Startbild, als Byte-Laeufe fuer DSP und Code. Jede Erweiterung sagt fuer jede
+Zielkarte, ob sie dorthin darf:
+
+| Erweiterung | → Hacktribe | → Sampler-Stock | → Synth-Stock |
+|---|---|---|---|
+| IFX/MFX-Preset | ja, Menue waechst | ersetzt Werks-Platz 1–38 / 1–32 | ersetzt Werks-Platz 1–38 / 1–32 |
+| Groove, Osz-Variante, Mod-Typ | ja (angehaengt) | nein | nein |
+| Init-Pattern, Init-Global | ja | ja | ja, mit Hinweis (andere Variante) |
+| Startbild | ja | ja | nein (Lage unbekannt) |
+| DSP-/Code-Lauf | nur dieselbe Bauart **und** nur, wo das Ziel noch die Referenz-Bytes traegt (Drei-Wege-Regel) | dito | nein |
+
+„Auswahl in die Basis uebernehmen" legt die angehakten Erweiterungen auf die
+Basis; das Ergebnis wird die neue Basis. So wird aus einer modifizierten
+Sampler-Firmware ein Synth: Synth-Stock als Basis, Sampler-Datei analysieren,
+Presets und Init uebernehmen, bauen.
+
+**Ziel und Freigabe** (`core/firmwareFreigabe.ts`). Vor dem Bau waehlt man das
+Geraet und **welche Firmware darauf laeuft** — denn der SD-Updater der
+laufenden Firmware prueft die Device-ID strikt (Sampler `0x0124`, Synth
+`0x0123`): auf einem Sampler mit umgekoepfter Synth-Firmware braucht das
+naechste Update einen Synth-Kopf und den Synth-Pfad. Die Freigabe setzt den
+Kopf und prueft: Groesse, Magic, Tag, Version, Kopf-Rest, Layout, ARM-
+Vektortabelle (acht `ldr pc,[pc,#0x18]`), IFX-/Groove-Zaehler, Init-Bloecke,
+DSP-Kette, Bytes ausserhalb der bekannten Bereiche gegen die Referenz. Eine
+rote harte Pruefung → keine Datei. Der Bericht nennt Kopf, SD-Pfad, PCM-Hinweis
+und den Rueckweg. Tests: `firmware-karte`, `firmware-analyse`,
+`firmware-freigabe`, `firmware-ablage`, `bspatch`, plus GUI-Faelle in
+`firmware-werkbank.test.ts`. ⚠ Am Geraet ist der Synth-Crossgrade weiterhin
+nicht abgenommen; die Freigabe macht ihn pruefbar, nicht bewiesen.
 
 ### DSP-Patches — der Klang selbst (experimentell)
 
@@ -1437,7 +1518,9 @@ Part und Parameter oder einen Effekt zeigt — statt nur der Live-FX-Belegung
   Geraet nicht an).
 - **Vorgaben:** Mixer 1–8 / 9–16 (Cutoff, Resonance, IFX Edit, Fader Level,
   Master = MFX X), Klang 1–8 / 9–16 (Cutoff, Mod Depth, Decay), FX 1–8 /
-  9–16 (IFX-1-Parameter 0/1/2, Master = MFX-Parameter 0).
+  9–16 (seit 2026-09-06: Regler 1 = IFX Edit, Regler 2/3 = IFX-1-Parameter
+  2/3 — beim Filter Frequenz/Resonanz —, Master = MFX-Parameter 0; siehe
+  Abschnitt „MIDImix-IFX je Part, FX-Stand je Pattern, FX-Bibliothek“).
 - **Im Pad-Deck** die aufklappbare Karte „MIDImix-Layout“: je Spalte drei
   Regler, Fader, Mute- und Rec-Taste als Auswahlmenue, dazu der
   Master-Fader; „Layout aktiv“ hat Vorrang vor Live-FX und Pad-Learn;
@@ -1586,6 +1669,97 @@ die Tonhoehe kommt wie bei Samples ueber die Abspielrate. Das ist eine grobe
 Naeherung, kein Nachbau der Engine — es geht darum, Lage und Rhythmus zu
 hoeren. Sowohl der Spieler im Fenster als auch „als WAV ausrechnen" nutzen
 sie; ein Pool-Sample derselben Nummer hat Vorrang.
+
+## MIDImix-IFX je Part, FX-Stand je Pattern, FX-Bibliothek (2026-09-06)
+
+Drei Nutzerbefunde vom Geraet und ein Wunsch, in einem Zug umgesetzt.
+
+**1. IFX-Taste schaltete immer Part 1.** Die IFX-Tasten des FX-Layouts
+gingen als Stock-CC 104 auf den Kanal des Parts. Am Geraet schaltet CC 104
+aber den dort GEWAEHLTEN Part, egal auf welchem Kanal er ankommt — Taste
+fuer Part 2 gedrueckt, Part 1 geschaltet (in TekkForge stand es richtig).
+Jetzt geht die IFX-Taste denselben Weg wie der Mute: Geraete-Pattern im
+Spiegel, `ifxOn` im Part-Header umschalten, sofort in den Edit-Buffer
+(`ifxVomController` im Panel). Kein CC mehr. Doku in `e2Remote.ts` und
+`midimixLayout.ts`; `buildSchalterCc` bleibt fuer den Panel-Weg, wo der
+Edit-Buffer ohnehin hinterherkommt.
+
+**2. FX-Regler-Werte waren nach dem Patternwechsel weg — auch nach „Write“.**
+Die drei Regler des FX-Layouts schickten Hacktribe-NRPN (`setFxParam`) in
+den FX-Slot des Parts. Das landet im FX-Edit-Buffer, nicht im Pattern; beim
+Laden eines Patterns zieht die Firmware das Preset frisch, und „Write“
+speichert nur Preset-Nummer und IFX-Regler. Umbau des FX-Layouts:
+- **Regler 1 = IFX Edit** (Stock-CC 87) — den Wert speichert das Geraet
+  selbst im Pattern, Write behaelt ihn.
+- **Regler 2/3 = Hacktribe-Parameter 2/3 des IFX 1** — beim Algorithmus
+  „Filter“ Frequenz und Resonanz (Parameter zaehlen dry_wet, output_select,
+  frequency, resonance). Dazu das neue Preset `19-filter-sweep` (Filter
+  allein in Stufe 1), s. u.
+- **FX-Stand je Pattern** (`core/fxStand.ts`): jeder Live-FX-Wert vom
+  MIDImix (Layout und alte Live-FX-Belegung) wird im angezeigten Pattern
+  UND im zugehoerigen Projekt-Pattern gemerkt (`fxStand` am EditorPattern,
+  im `.tekkforge` gespeichert). Beim Patternwechsel — vom Geraet gemeldet
+  (Program Change) oder von TekkForge ausgeloest (dann nach dem naechsten
+  Taktende) — schickt das Panel die Werte des neuen Patterns nach
+  (`sendeFxStand`).
+- **Dauerhaft in die Firmware:** Preset-Manager → Bibliothek → „FX-Stand
+  aus Pattern…“ schreibt die gemerkten Werte in das IFX-Preset, das der
+  Part traegt (`ifxType` → Platz im geladenen Stand), legt das Ergebnis als
+  eigenen Eintrag ab und waehlt es aus — von dort in den Manager oder direkt
+  „→ Firmware…“. Master-Werte bleiben nur im Pattern (das Pattern kennt
+  kein MFX-Preset).
+
+**3. Mute mutet den ganzen IFX.** Der Algorithmus Mute (0x27) schaltet den
+ganzen Effektweg stumm, sein `fader` tut nichts (Ohr 2026-09-01). Er fliegt
+aus den eigenen Sets: `19-cut-fader` (+ zwei Variationen) ist durch
+`19-filter-sweep` / `19a-filt-sweep-res` / `19b-filt-sweep-alt` ersetzt
+(Filter allein, Regler auf Frequenz; die Sammlungen Farben, Farben-
+Variationen und IFX-Alle sind neu geschrieben, alle anderen Dateien
+byte-gleich). Test: kein eigenes Preset traegt 0x27 in irgendeiner Stufe.
+Im Preset-Editor heisst der Eintrag jetzt „Mute (schaltet den ganzen IFX
+stumm)“.
+
+**4. IFX-, MFX- und Groove-Bibliothek** (`core/fxBibliothek.ts`, im
+Preset-Manager):
+- **Alle vorhandenen sind gelistet:** die 288 FX-Presets der acht Sets und
+  die Tekk-Grooves stecken fest in der App (`fxBibliothekEingebaut.ts`,
+  Vite `?raw` der Sammlungen aus `examples/`; ein Test haelt sie byte-gleich
+  mit dem Repo). Dazu alles, was geladen wird: `.e2fxp`, `.mfx`, `.e2gv`,
+  Sammlungen `.tfsam`, Bauplaene `.tfbau`, Sicherungen `.tfbak` (belegte
+  Plaetze), Firmware `.VSB` (belegte Plaetze), und „aus Editor“. Derselbe
+  Block kommt nicht zweimal hinein.
+- **Bleibt ueber den Neustart:** Desktop `userData/fx-bibliothek.json`
+  (IPC `fxbib:*`, Bruecke `tekkFxBib`), Browser localStorage. Abgelegt
+  werden nur eigene Eintraege, Favoriten und ausgeblendete Eingebaute —
+  ein Update bringt neue Sets mit, ohne die Ablage anzufassen.
+- **Favoriten** (Stern), Filter nach Art, Suche ueber Name/Algorithmus/Set,
+  „nur Favoriten“, Eingebaute ausblenden und wieder zeigen, eigene leeren.
+- **Export:** „Alle exportieren…“ = die gefilterte Bibliothek als `.tfsam`
+  ohne Plaetze (wieder ladbar).
+- **Aus einer Auswahl Dateien bauen** (Haken je Eintrag, „alle sichtbaren“):
+  „→ Datei mit Plaetzen…“ (`.tfsam`, je Art fortlaufend ab erfragtem
+  Startplatz — Vorschlag: erster leerer Platz des geladenen Stands, sonst
+  IFX 50 / MFX 1 / Groove 63), „→ Bauplan…“ (`.tfbau` fuer die Werkbank),
+  „→ in den Manager…“ (direkt auf die Plaetze), „🔥 → Firmware…“ (die
+  Auswahl in eine unveraenderte Hacktribe-`SYSTEM.VSB` brennen — derselbe
+  Bauweg wie „Firmware patchen…“, `firmwareBauenMit`). Was hinter die
+  Art-Grenze fiele, wird gemeldet statt still umgebrochen.
+- Ziehen auf einen Platz rechts geht weiter wie bisher.
+
+Tests: `fx-stand.test.ts` (merken, senden, Projekt-Roundtrip, ins Preset
+patchen), `fx-bibliothek.test.ts` (Eingebaute = Repo, Stand-Roundtrip,
+Dedupe, Dateien lesen, Auswahl mit Plaetzen), `preset-manager-panel.test.ts`
+(Eingebaute da, Ablage-Bruecke ueberlebt Neustart, Auswahl → Manager,
+FX-Stand → Preset), `midimix-layout.test.ts` (FX-Layout),
+`fx-presets-beispiele.test.ts` (kein Mute, Platz 19 = Filter).
+
+**Recherche E2-Synth-Firmware auf dem Sampler:** siehe
+`docs/2026-09-06-e2synth-firmware-auf-sampler.md` — Kurzfassung: Hacktribe
+ist die Sampler-Firmware mit Synth-Bausteinen, nicht der Synth auf dem
+Sampler; die Synth-`SYSTEM.VSB` unterscheidet sich im Kopf nur in zwei
+Bytes (`0x12`, `0x2E`), es gibt keine Pruefsumme, Hacktribes `e2-header.py`
+setzt genau diese; der vermutliche Haken ist die getrennte `PCM.VSB` mit den
+Synth-Wellenformen. Kein dokumentierter Versuch in dieser Richtung.
 
 ## Sample-Ordner → Bank + Pattern-Set
 
