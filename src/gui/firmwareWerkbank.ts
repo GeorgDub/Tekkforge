@@ -113,6 +113,7 @@ import {
   pbmZuPixel,
 } from "../core/splash";
 import { legeAb } from "./ablage";
+import { analysiere, crossgrade, VARIANTEN, BEKANNTE_HASHES, type Variante } from "../core/crossgrade";
 import { liesModTabelle, modKombinationen, modName, decodeMod, setzeModTabelle, istModLeer, MOD_TABELLE_ADDR_HACKTRIBE, MOD_EINTRAG, MOD_MAX, MOD_WELLEN, MOD_ZIEL_NAMEN, type ModEintragMitPlatz, modGrenzeSchreibliste, armImmediateWert, MOD_GRENZE_VERGLEICHE, MOD_FELD_ZEIGER, MOD_FELD_BASIS_STOCK, MOD_FELD_BASIS_NEU } from "../core/modTabelle";
 
 const FIRMWARE_ORDNER = "Firmware";
@@ -1053,6 +1054,73 @@ async function bauplanLaden(f: File): Promise<void> {
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 
+// ─── Crossgrade: Synth-Firmware fuer den Sampler vorbereiten ──────────────────
+//
+// Reine Byte-Operation ueber core/crossgrade.ts (am v2.02-Abbild disassembliert,
+// Omnitribe docs/reverse/e2synth_auf_e2s_crossgrade_v202.md). Es wird keine
+// Korg-Firmware mitgeliefert; der Nutzer laedt sie bei Korg und faehrt sie hier
+// durch.
+
+let xgDatei: { name: string; bytes: Uint8Array } | null = null;
+
+function xgStatus(t: string): void {
+  const el = document.getElementById("xgStatus");
+  if (el) el.textContent = t;
+}
+
+async function xgLaden(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const b = analysiere(bytes);
+  const info = document.getElementById("xgInfo");
+  const zuSampler = document.getElementById("xgZuSampler");
+  const zuSynth = document.getElementById("xgZuSynth");
+  const hash = await sha256Hex(bytes);
+  const bekannt = hash ? BEKANNTE_HASHES[hash] : undefined;
+  if (!b.ok || b.variante === "?") {
+    xgDatei = null;
+    if (info) info.textContent = `${f.name}: abgelehnt — ${b.grund}`;
+    zuSampler?.classList.add("hidden");
+    zuSynth?.classList.add("hidden");
+    xgStatus(b.grund);
+    return;
+  }
+  xgDatei = { name: f.name, bytes };
+  if (info) info.textContent = `${f.name} — ${VARIANTEN[b.variante].label}${bekannt ? ` (${bekannt})` : ""}`;
+  // Anbieten, was NICHT die aktuelle Variante ist.
+  zuSampler?.classList.toggle("hidden", b.variante === "sampler");
+  zuSynth?.classList.toggle("hidden", b.variante === "synth");
+  xgStatus(`Geladen. ${b.variante === "synth" ? "Für Sampler-Hardware umköpfen." : "Für Synth-Hardware umköpfen."}`);
+}
+
+async function xgUmkoepfen(ziel: Variante): Promise<void> {
+  if (!xgDatei) {
+    xgStatus("Erst eine SYSTEM.VSB laden.");
+    return;
+  }
+  let r;
+  try {
+    r = crossgrade(xgDatei.bytes, ziel);
+  } catch (e) {
+    xgStatus(e instanceof Error ? e.message : String(e));
+    return;
+  }
+  const hash = await sha256Hex(r.bytes);
+  const ab = await legeAb("SYSTEM.VSB", r.bytes, `Crossgrade-${ziel}`);
+  xgStatus(
+    `Umgeköpft ${r.vonVariante} → ${ziel} (Byte 0x12 und 0x2E)${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}` +
+      (ab.pfad ? ` → ${ab.pfad}.` : " → Download.") +
+      ` Installieren: als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
+      " ⚠ Vorher die Werks-SYSTEM.VSB als Rückweg auf der SD behalten.",
+  );
+}
+
+function richteCrossgradeEin(): void {
+  if (!document.getElementById("xgPanel")) return;
+  dateiKnopf("xgLaden", "xgIn", (f) => void xgLaden(f));
+  document.getElementById("xgZuSampler")?.addEventListener("click", () => void xgUmkoepfen("sampler"));
+  document.getElementById("xgZuSynth")?.addEventListener("click", () => void xgUmkoepfen("synth"));
+}
+
 export function initFirmwareWerkbank(h: WerkbankHooks): void {
   hooks = h;
   basis = null;
@@ -1069,6 +1137,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   pixel = new Uint8Array(SPLASH_BREITE * SPLASH_HOEHE);
   if (!document.getElementById("fwPanel")) return;
   dateiKnopf("fwBasisLaden", "fwBasisIn", (f) => void basisLaden(f));
+  richteCrossgradeEin();
   dateiKnopf("fwGrooveLaden", "fwGrooveIn", (f) => void groovesLaden(f));
   dateiKnopf("fwInitLaden", "fwInitIn", (f) => void initLaden(f));
   for (const id of ["fwPresets", "fwGrooves", "fwInit", "fwSplash", "fwGlobal", "fwInitQuelle"]) $(id).addEventListener("change", vorschau);

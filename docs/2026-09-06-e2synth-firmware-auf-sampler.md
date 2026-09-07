@@ -217,3 +217,37 @@ Sample-Liste die Synth-Namen (SAW, PULSE, …), (c) klingen sie. Dazu die
 `PCM.VSB`-Frage klären: Größe und Kopf der Synth-`PCM.VSB`, ob das
 Update-Menü sie annimmt, und ob die Sampler-`PCM.VSB` beim Rückflash wieder
 hergestellt werden muss.
+
+
+---
+
+## Nachtrag (2026-09-07): Weg gefunden, Werkzeug gebaut
+
+Die offene Frage aus §3.7 („kein dokumentierter Versuch") ist beantwortet.
+Am v2.02-Abbild disassembliert (Omnitribe
+`docs/reverse/e2synth_auf_e2s_crossgrade_v202.md`,
+`tools/reverse/crossgrade_probe.py` + `find_update_check.py`):
+
+- Die echte Ladebasis des ARM-Payloads ist `Datei-Offset + 0xBFFFFF00`
+  (Datei 0x100 → DDR2 0xC0000000).
+- Der SYSTEM.VSB-Validator des Samplers (`0xC0030860`) prüft: Magic (16 Byte),
+  `family_check` und den „SYSTEM"-Tag. Der `family_check` (`0xC00367E8`) wird
+  vom SYSTEM-Pfad **strikt** aufgerufen (Flag 0 → Zweig `0xC0036824`:
+  `subs r3,#0x24`) und akzeptiert nur Device-ID low `0x24` (Sampler). Eine
+  Synth-Datei (`0x23`) fällt als „Invalid File". Das ist die Geräte-Sperre.
+- Setzt man Kopf-Byte `0x2E` auf `0x24` (Device-ID 0x0123→0x0124), nimmt der
+  Sampler die Datei an. Byte `0x12` (E2/E2S-Suffix) wird vom SYSTEM-Validator
+  nicht geprüft, wird aber mitgesetzt, damit die Datei einer echten
+  Sampler-Datei gleicht.
+- Der Payload-Diff zeigt: die Synth-Klangerzeugung (Oszillatoren, VPM, Filter)
+  steckt in den Payload-Regionen 0x00–0x13 und reist beim Crossgrade mit.
+  PCM bleibt die geräteeigene (Sampler-`PCM.VSB`).
+
+**Werkzeug:** `tools/crossgrade/e2_crossgrade.py` in Omnitribe (Python-CLI) und
+`src/core/crossgrade.ts` hier in TekkForge, in der Firmware-Werkbank unter
+„🎛 Synth-Firmware für den Sampler vorbereiten (Crossgrade)". Beide ändern nur
+die zwei Kopf-Bytes, prüfen streng und legen die fertige `SYSTEM.VSB` ab; der
+Rückweg (Sampler→Synth) geht spiegelbildlich.
+
+Status: **am Abbild bewiesen, am Gerät noch nicht abgenommen.** Vor jedem Flash
+die Werks-`SYSTEM.VSB` als Rückweg auf der SD behalten.
