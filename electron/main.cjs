@@ -586,6 +586,40 @@ function registerBibliothekIpc() {
   });
 }
 
+/**
+ * FX-/Groove-Bibliothek: EIN Stand als Datei in userData — eigene Presets,
+ * Favoriten, ausgeblendete Eingebaute (fxBibliothek.ts). Klein genug fuer eine
+ * Datei (die Eingebauten stecken in der App, nicht hier); geschrieben ueber
+ * Nebendatei und Umbenennen wie die Pattern-Bibliothek.
+ */
+function fxBibPfad() {
+  return path.join(app.getPath("userData"), "fx-bibliothek.json");
+}
+
+function registerFxBibIpc() {
+  ipcMain.handle("fxbib:lesen", () => {
+    const ziel = fxBibPfad();
+    try {
+      return fs.existsSync(ziel) ? fs.readFileSync(ziel, "utf8") : null;
+    } catch {
+      return null;
+    }
+  });
+  ipcMain.handle("fxbib:schreiben", (_e, text) => {
+    const ziel = fxBibPfad();
+    fs.mkdirSync(path.dirname(ziel), { recursive: true });
+    const tmp = `${ziel}.tmp`;
+    fs.writeFileSync(tmp, String(text), "utf8");
+    fs.renameSync(tmp, ziel);
+    return { pfad: ziel, bytes: Buffer.byteLength(String(text)) };
+  });
+  ipcMain.handle("fxbib:ordner", () => {
+    const ordner = path.dirname(fxBibPfad());
+    void shell.openPath(ordner);
+    return ordner;
+  });
+}
+
 function registerLiedIpc(win) {
   ipcMain.handle("lied:pythonStatus", async () => {
     const py = pythonPfad();
@@ -994,6 +1028,7 @@ app.whenReady().then(() => {
   registerUpdateIpc(win);
   registerAutosaveIpc();
   registerBibliothekIpc();
+  registerFxBibIpc();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       midiWin = createWindow();

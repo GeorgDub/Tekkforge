@@ -470,8 +470,10 @@ in acht Sets:
 
 Je zwoelf Basis-Presets, dazu **zwei Variationen pro Basis** (`01a-…`/`01b-…`
 zu `01-…`): derselbe Algorithmus, in eine Richtung verschoben — zum
-Vergleichen am Geraet. Zusammen decken die acht Sets **alle 20 Insert- und 24
-der 25 Master-Algorithmen** ab. Die Sets 7 und 8 (2026-09-05) fuellen die
+Vergleichen am Geraet. Zusammen decken die acht Sets **19 der 20 Insert- und 24
+der 25 Master-Algorithmen** ab — Mute bleibt auf beiden Seiten draussen, er
+schaltet den ganzen Effektweg stumm (Platz 19 „Cut Fader" ist seit 2026-09-06
+„Filter Sweep"). Die Sets 7 und 8 (2026-09-05) fuellen die
 Luecken der ersten sechs: von den erlaubten Zwei-Insert-Paaren fehlten neun,
 und weil die Kettenfolge hoerbar ist, sind auch die umgekehrten Reihenfolgen
 (Filter Comp zu Comp Filter, Drive EQ zu EQ Drive) eigene Presets; auf der
@@ -1437,7 +1439,9 @@ Part und Parameter oder einen Effekt zeigt — statt nur der Live-FX-Belegung
   Geraet nicht an).
 - **Vorgaben:** Mixer 1–8 / 9–16 (Cutoff, Resonance, IFX Edit, Fader Level,
   Master = MFX X), Klang 1–8 / 9–16 (Cutoff, Mod Depth, Decay), FX 1–8 /
-  9–16 (IFX-1-Parameter 0/1/2, Master = MFX-Parameter 0).
+  9–16 (seit 2026-09-06: Regler 1 = IFX Edit, Regler 2/3 = IFX-1-Parameter
+  2/3 — beim Filter Frequenz/Resonanz —, Master = MFX-Parameter 0; siehe
+  Abschnitt „MIDImix-IFX je Part, FX-Stand je Pattern, FX-Bibliothek“).
 - **Im Pad-Deck** die aufklappbare Karte „MIDImix-Layout“: je Spalte drei
   Regler, Fader, Mute- und Rec-Taste als Auswahlmenue, dazu der
   Master-Fader; „Layout aktiv“ hat Vorrang vor Live-FX und Pad-Learn;
@@ -1586,6 +1590,97 @@ die Tonhoehe kommt wie bei Samples ueber die Abspielrate. Das ist eine grobe
 Naeherung, kein Nachbau der Engine — es geht darum, Lage und Rhythmus zu
 hoeren. Sowohl der Spieler im Fenster als auch „als WAV ausrechnen" nutzen
 sie; ein Pool-Sample derselben Nummer hat Vorrang.
+
+## MIDImix-IFX je Part, FX-Stand je Pattern, FX-Bibliothek (2026-09-06)
+
+Drei Nutzerbefunde vom Geraet und ein Wunsch, in einem Zug umgesetzt.
+
+**1. IFX-Taste schaltete immer Part 1.** Die IFX-Tasten des FX-Layouts
+gingen als Stock-CC 104 auf den Kanal des Parts. Am Geraet schaltet CC 104
+aber den dort GEWAEHLTEN Part, egal auf welchem Kanal er ankommt — Taste
+fuer Part 2 gedrueckt, Part 1 geschaltet (in TekkForge stand es richtig).
+Jetzt geht die IFX-Taste denselben Weg wie der Mute: Geraete-Pattern im
+Spiegel, `ifxOn` im Part-Header umschalten, sofort in den Edit-Buffer
+(`ifxVomController` im Panel). Kein CC mehr. Doku in `e2Remote.ts` und
+`midimixLayout.ts`; `buildSchalterCc` bleibt fuer den Panel-Weg, wo der
+Edit-Buffer ohnehin hinterherkommt.
+
+**2. FX-Regler-Werte waren nach dem Patternwechsel weg — auch nach „Write“.**
+Die drei Regler des FX-Layouts schickten Hacktribe-NRPN (`setFxParam`) in
+den FX-Slot des Parts. Das landet im FX-Edit-Buffer, nicht im Pattern; beim
+Laden eines Patterns zieht die Firmware das Preset frisch, und „Write“
+speichert nur Preset-Nummer und IFX-Regler. Umbau des FX-Layouts:
+- **Regler 1 = IFX Edit** (Stock-CC 87) — den Wert speichert das Geraet
+  selbst im Pattern, Write behaelt ihn.
+- **Regler 2/3 = Hacktribe-Parameter 2/3 des IFX 1** — beim Algorithmus
+  „Filter“ Frequenz und Resonanz (Parameter zaehlen dry_wet, output_select,
+  frequency, resonance). Dazu das neue Preset `19-filter-sweep` (Filter
+  allein in Stufe 1), s. u.
+- **FX-Stand je Pattern** (`core/fxStand.ts`): jeder Live-FX-Wert vom
+  MIDImix (Layout und alte Live-FX-Belegung) wird im angezeigten Pattern
+  UND im zugehoerigen Projekt-Pattern gemerkt (`fxStand` am EditorPattern,
+  im `.tekkforge` gespeichert). Beim Patternwechsel — vom Geraet gemeldet
+  (Program Change) oder von TekkForge ausgeloest (dann nach dem naechsten
+  Taktende) — schickt das Panel die Werte des neuen Patterns nach
+  (`sendeFxStand`).
+- **Dauerhaft in die Firmware:** Preset-Manager → Bibliothek → „FX-Stand
+  aus Pattern…“ schreibt die gemerkten Werte in das IFX-Preset, das der
+  Part traegt (`ifxType` → Platz im geladenen Stand), legt das Ergebnis als
+  eigenen Eintrag ab und waehlt es aus — von dort in den Manager oder direkt
+  „→ Firmware…“. Master-Werte bleiben nur im Pattern (das Pattern kennt
+  kein MFX-Preset).
+
+**3. Mute mutet den ganzen IFX.** Der Algorithmus Mute (0x27) schaltet den
+ganzen Effektweg stumm, sein `fader` tut nichts (Ohr 2026-09-01). Er fliegt
+aus den eigenen Sets: `19-cut-fader` (+ zwei Variationen) ist durch
+`19-filter-sweep` / `19a-filt-sweep-res` / `19b-filt-sweep-alt` ersetzt
+(Filter allein, Regler auf Frequenz; die Sammlungen Farben, Farben-
+Variationen und IFX-Alle sind neu geschrieben, alle anderen Dateien
+byte-gleich). Test: kein eigenes Preset traegt 0x27 in irgendeiner Stufe.
+Im Preset-Editor heisst der Eintrag jetzt „Mute (schaltet den ganzen IFX
+stumm)“.
+
+**4. IFX-, MFX- und Groove-Bibliothek** (`core/fxBibliothek.ts`, im
+Preset-Manager):
+- **Alle vorhandenen sind gelistet:** die 288 FX-Presets der acht Sets und
+  die Tekk-Grooves stecken fest in der App (`fxBibliothekEingebaut.ts`,
+  Vite `?raw` der Sammlungen aus `examples/`; ein Test haelt sie byte-gleich
+  mit dem Repo). Dazu alles, was geladen wird: `.e2fxp`, `.mfx`, `.e2gv`,
+  Sammlungen `.tfsam`, Bauplaene `.tfbau`, Sicherungen `.tfbak` (belegte
+  Plaetze), Firmware `.VSB` (belegte Plaetze), und „aus Editor“. Derselbe
+  Block kommt nicht zweimal hinein.
+- **Bleibt ueber den Neustart:** Desktop `userData/fx-bibliothek.json`
+  (IPC `fxbib:*`, Bruecke `tekkFxBib`), Browser localStorage. Abgelegt
+  werden nur eigene Eintraege, Favoriten und ausgeblendete Eingebaute —
+  ein Update bringt neue Sets mit, ohne die Ablage anzufassen.
+- **Favoriten** (Stern), Filter nach Art, Suche ueber Name/Algorithmus/Set,
+  „nur Favoriten“, Eingebaute ausblenden und wieder zeigen, eigene leeren.
+- **Export:** „Alle exportieren…“ = die gefilterte Bibliothek als `.tfsam`
+  ohne Plaetze (wieder ladbar).
+- **Aus einer Auswahl Dateien bauen** (Haken je Eintrag, „alle sichtbaren“):
+  „→ Datei mit Plaetzen…“ (`.tfsam`, je Art fortlaufend ab erfragtem
+  Startplatz — Vorschlag: erster leerer Platz des geladenen Stands, sonst
+  IFX 50 / MFX 1 / Groove 63), „→ Bauplan…“ (`.tfbau` fuer die Werkbank),
+  „→ in den Manager…“ (direkt auf die Plaetze), „🔥 → Firmware…“ (die
+  Auswahl in eine unveraenderte Hacktribe-`SYSTEM.VSB` brennen — derselbe
+  Bauweg wie „Firmware patchen…“, `firmwareBauenMit`). Was hinter die
+  Art-Grenze fiele, wird gemeldet statt still umgebrochen.
+- Ziehen auf einen Platz rechts geht weiter wie bisher.
+
+Tests: `fx-stand.test.ts` (merken, senden, Projekt-Roundtrip, ins Preset
+patchen), `fx-bibliothek.test.ts` (Eingebaute = Repo, Stand-Roundtrip,
+Dedupe, Dateien lesen, Auswahl mit Plaetzen), `preset-manager-panel.test.ts`
+(Eingebaute da, Ablage-Bruecke ueberlebt Neustart, Auswahl → Manager,
+FX-Stand → Preset), `midimix-layout.test.ts` (FX-Layout),
+`fx-presets-beispiele.test.ts` (kein Mute, Platz 19 = Filter).
+
+**Recherche E2-Synth-Firmware auf dem Sampler:** siehe
+`docs/2026-09-06-e2synth-firmware-auf-sampler.md` — Kurzfassung: Hacktribe
+ist die Sampler-Firmware mit Synth-Bausteinen, nicht der Synth auf dem
+Sampler; die Synth-`SYSTEM.VSB` unterscheidet sich im Kopf nur in zwei
+Bytes (`0x12`, `0x2E`), es gibt keine Pruefsumme, Hacktribes `e2-header.py`
+setzt genau diese; der vermutliche Haken ist die getrennte `PCM.VSB` mit den
+Synth-Wellenformen. Kein dokumentierter Versuch in dieser Richtung.
 
 ## Sample-Ordner → Bank + Pattern-Set
 

@@ -22,6 +22,11 @@
  *   (mehrfach gemessen: Display bleibt, Edit-Buffer bleibt) — Wechsel per MIDI
  *   funktioniert nur während der Wiedergabe (greift am Taktende).
  *   IFX On/Off = CC 104, MFX Send = CC 105, Master FX On/Off = CC 106 (Stock).
+ *   ⚠ CC 104 adressiert KEINEN Part ueber den Kanal: am Geraet gemessen
+ *   (Nutzer, 2026-09-06, MIDImix-FX-Layout) schaltet CC 104 auf Kanal 2 den
+ *   IFX des am Geraet GEWAEHLTEN Parts (Part 1), nicht den von Part 2 — bei
+ *   jedem Kanal. Verlaesslich fuer beliebige Parts ist nur die Edit-Buffer-
+ *   Uebertragung (ifxOn im Part-Header, partParams.ts).
  */
 
 /** Stock-CCs für die Schalter (KORG MIDI-Implementation, Klasse S = Filter „Off"). */
@@ -30,7 +35,11 @@ export const SCHALTER_CC: Record<string, number> = {
   mfxSend: 105,
 };
 
-/** CC-Nachricht für einen 0/1-Schalter auf dem Kanal des Parts, oder null ohne CC. */
+/**
+ * CC-Nachricht für einen 0/1-Schalter auf dem Kanal des Parts, oder null ohne CC.
+ * ⚠ Das Geraet wendet CC 104/105 auf den dort gewaehlten Part an, nicht auf
+ * den Kanal (siehe Modulkopf) — nur brauchbar, wenn der Ziel-Part aktiv ist.
+ */
 export function buildSchalterCc(part0: number, key: string, an: boolean): Uint8Array | null {
   const cc = SCHALTER_CC[key];
   if (cc === undefined) return null;

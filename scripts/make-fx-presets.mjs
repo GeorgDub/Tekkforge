@@ -83,6 +83,7 @@ const A = {
   levelMod: 0x15,
   ringMod: 0x16,
   shortDelay: 0x18,
+  /** 0x27 Mute: bewusst in keinem Set — schaltet den ganzen IFX stumm. */
   mute: 0x27,
 };
 
@@ -454,9 +455,11 @@ const MASTER_PRESETS = [
  * Das erste Set zerlegt — Zerre, Bitcrusher, Ringmodulator. Dieses formt:
  * Kompression, EQ, Anwaermung, Breite. Es benutzt **ausschliesslich
  * Algorithmen, die im ersten Set nicht vorkommen** (SR1 Comp, Limiter,
- * EQ 2-Band, Exciter, Chorus, Level Mod, Mute) und fuenf noch ungenutzte
- * Zweier-Kombinationen aus der Leicht-Whitelist. Zusammen decken beide Sets
- * damit alle 20 Insert-Algorithmen ab.
+ * EQ 2-Band, Exciter, Chorus, Level Mod, Filter allein) und fuenf noch
+ * ungenutzte Zweier-Kombinationen aus der Leicht-Whitelist. Zusammen decken
+ * beide Sets damit 19 der 20 Insert-Algorithmen ab — Mute (0x27) bleibt
+ * bewusst draussen: er schaltet den ganzen IFX stumm (Ohr 2026-09-01,
+ * Nutzer 2026-09-06).
  *
  * `23-filter-drive` ist Absicht: dieselben Werte wie `10-acid-filter`, nur
  * die Reihenfolge der beiden Inserts vertauscht. Zwei Presets, die sich in
@@ -524,11 +527,15 @@ const INSERT_FARBEN = [
     regler: [{ kette: KETTE.ifx1, param: "level_mod_int", min: 0, max: 127 }],
   },
   {
-    datei: "19-cut-fader",
-    name: "Cut Fader",
-    zweck: "Mute mit einem Parameter: der Regler IST der Fader. Der Ruhewert bleibt der Werkswert (0) — was der bedeutet, sagt erst das Ohr.",
-    ifx1: { device: A.mute, werte: {} },
-    regler: [{ kette: KETTE.ifx1, param: "fader", min: 0, max: 127 }],
+    // Ersetzt „19-cut-fader“ (Mute, 0x27): Mute schaltet den ganzen IFX stumm,
+    // der fader tut nichts (Ohr 2026-09-01; Nutzer 2026-09-06: raus aus den
+    // eigenen Presets). Der Filter allein in Stufe 1 — dazu passt das
+    // MIDImix-FX-Layout: Regler 2/3 = Parameter 2/3 = Frequenz/Resonanz.
+    datei: "19-filter-sweep",
+    name: "Filter Sweep",
+    zweck: "Der Filter allein: der Regler faehrt die Frequenz, Resonanz steht schon an. Live-Parameter 2/3 (Frequenz/Resonanz) liegen im FX-Layout auf Regler 2/3.",
+    ifx1: { device: A.filter, werte: { dry_wet: 127, output_select: 0, frequency: 64, resonance: 80 } },
+    regler: [{ kette: KETTE.ifx1, param: "frequency", min: 5, max: 127 }],
   },
   {
     datei: "20-eq-filter",
@@ -2133,18 +2140,18 @@ const VARIATIONEN = {
       ifx1: { werte: { level_mod_int: 127, saturation: 100, lfo_speed: 70, output_gain: 40 } },
     },
   ],
-  "19-cut-fader": [
+  "19-filter-sweep": [
     {
-      datei: "19a-cut-fader-half",
-      name: "Cut Fader Half",
-      zweck: "Sonde: fader auf 64 statt auf dem Werkswert 0. Was der Wert bedeutet, sagt der Vergleich.",
-      ifx1: { werte: { fader: 64 } },
+      datei: "19a-filt-sweep-res",
+      name: "Filt Sweep Res",
+      zweck: "Resonanz am Anschlag — pfeift beim Fahren.",
+      ifx1: { werte: { resonance: 118 } },
     },
     {
-      datei: "19b-cut-fader-full",
-      name: "Cut Fader Full",
-      zweck: "Sonde: fader auf 127. Mit der Basis (0) und „Half“ (64) die ganze Reihe.",
-      ifx1: { werte: { fader: 127 } },
+      datei: "19b-filt-sweep-alt",
+      name: "Filt Sweep Alt",
+      zweck: "output_select 2 statt 0 — der andere Ausgang des Filters (welcher, sagt das Ohr).",
+      ifx1: { werte: { output_select: 2, frequency: 40 } },
     },
   ],
   "20-eq-filter": [

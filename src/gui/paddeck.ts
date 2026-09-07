@@ -26,6 +26,8 @@ import {
   transportStop,
   wechslePattern,
   muteVomController,
+  ifxVomController,
+  merkeFxWert,
 } from "./panel";
 import {
   PAD_FARBEN,
@@ -67,7 +69,6 @@ import {
   naechsteVorgabeId,
   vorgabeIdVon,
   ledNachrichten,
-  ifxSchalterNachricht,
   type MidimixLayout,
   type ReglerZiel,
   type TastenZiel,
@@ -555,6 +556,7 @@ function fxLiveVerarbeite(cc: number, wert: number): boolean {
   if (!msgs) return false;
   for (const m of msgs) panelBridge.midi.send(Uint8Array.from(m));
   const param = paramFuerCc(fxLive.map, cc);
+  if (param !== null) merkeFxWert(fxLive.ziel.art === "mfx" ? { mfx: true, param } : { part: fxLive.ziel.part, slot: fxLive.ziel.slot, param }, wert);
   fxLiveInfo(`Parameter ${param} = ${wert} → ${fxLiveZielListe().find((z) => z.wert === fxLiveZielWert(fxLive.ziel))?.name}`);
   return true;
 }
@@ -639,7 +641,11 @@ function mmReglerOptionen(gewaehlt: ReglerZiel): string {
   for (let p = 1; p <= 16; p++) teile.push(`<optgroup label="Part ${p}">${PART_KEYS.map((k) => o(`p${p}:${k.key}`, `${p} · ${k.label}`)).join("")}</optgroup>`);
   teile.push(`<optgroup label="Master-FX">${o("mfx:x", "MFX X")}${o("mfx:y", "MFX Y")}${[0, 1, 2, 3].map((i) => o(`mfxp:${i}`, `MFX Param ${i}`)).join("")}</optgroup>`);
   const fx: string[] = [];
-  for (let p = 1; p <= 16; p++) for (const s of [0, 1] as const) for (let i = 0; i < 4; i++) fx.push(o(`fx${p}:${s}:${i}`, `${p} · IFX ${s + 1} · Param ${i}`));
+  // Die Parameter-Indizes zaehlen im Struct des geladenen Algorithmus; die
+  // Namen des Filters (dry_wet, output_select, frequency, resonance) stehen als
+  // Anhalt dabei, weil das FX-Layout darauf zielt.
+  const filterNamen = ["dry/wet", "Ausgang", "Frequenz", "Resonanz"];
+  for (let p = 1; p <= 16; p++) for (const s of [0, 1] as const) for (let i = 0; i < 6; i++) fx.push(o(`fx${p}:${s}:${i}`, `${p} · IFX ${s + 1} · Param ${i}${filterNamen[i] ? ` (Filter: ${filterNamen[i]})` : ""}`));
   teile.push(`<optgroup label="FX-Parameter (Hacktribe)">${fx.join("")}</optgroup>`);
   return teile.join("");
 }
@@ -706,6 +712,9 @@ function midimixVerarbeite(bytes: number[]): boolean {
     const ziel = zielAnOrt(midimix.layout, ort);
     const msgs = reglerNachrichten(ziel, bytes[2], panelBridge.midiChannel);
     for (const m of msgs) panelBridge.midi.send(m);
+    // Hacktribe-Live-FX-Werte verwirft das Geraet beim Patternwechsel — je Pattern merken (fxStand.ts).
+    if (ziel?.art === "fx") merkeFxWert({ part: ziel.part, slot: ziel.slot, param: ziel.param }, bytes[2]);
+    else if (ziel?.art === "mfxParam") merkeFxWert({ mfx: true, param: ziel.param }, bytes[2]);
     mmInfo(ziel ? `${beschreibeZiel(ziel)} = ${bytes[2]}` : `Regler ${ort.was}${ort.spalte >= 0 ? ` Spalte ${ort.spalte + 1}` : ""}: kein Ziel`);
     return true;
   }
@@ -751,18 +760,16 @@ function midimixVerarbeite(bytes: number[]): boolean {
       });
       return true;
     }
-    const p = aktuellesPanelPattern();
-    const part = p?.parts[ziel.part - 1];
-    if (!part) return true;
     if (ziel.art === "ifx") {
-      // IFX an/aus: lokal im Part merken und als Schalter-CC ans Geraet
-      const neu = (part.params?.ifxOn ?? 0) ? 0 : 1;
-      part.params = { ...(part.params ?? {}), ifxOn: neu };
-      const cc = ifxSchalterNachricht(ziel, neu === 1);
-      if (cc) panelBridge.midi.send(cc);
-      panelBridge.markDirty();
-      mmInfo(`${beschreibeZiel(ziel)}: ${neu ? "an" : "aus"}`);
-      mmLeds();
+      // IFX an/aus wie der Mute ueber das GERAETE-Pattern und den Edit-Buffer.
+      // Kein CC 104: der wirkt am Geraet nur auf den dort gewaehlten Part,
+      // egal auf welchem Kanal (Nutzerbefund 2026-09-06 — Part 2 gedrueckt,
+      // Part 1 geschaltet).
+      mmInfo(`${beschreibeZiel(ziel)} …`);
+      void ifxVomController(ziel.part - 1).then((r) => {
+        mmInfo(r ? `${beschreibeZiel(ziel)}: ${r.an ? "an" : "aus"} („${r.name}“)` : `${beschreibeZiel(ziel)}: kein Geraete-Pattern — im Panel „Sync vom Gerät“ drücken`);
+        mmLeds();
+      });
       return true;
     }
     return true;

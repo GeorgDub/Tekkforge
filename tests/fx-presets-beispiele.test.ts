@@ -293,6 +293,29 @@ describe("Sammlungen der Beispiel-Presets", () => {
   });
 });
 
+describe("Kein Mute in den eigenen Presets (2026-09-06)", () => {
+  /**
+   * Mute (0x27) schaltet den ganzen Effektweg stumm — der `fader` tut nichts
+   * (Ohr 2026-09-01). Der Nutzer will ihn aus den eigenen Sets draussen haben
+   * (2026-09-06): Platz 19 „Cut Fader“ wurde durch „Filter Sweep“ ersetzt.
+   */
+  it.each(presetDateien)("%s nutzt in keiner Stufe Mute (0x27)", (f) => {
+    const p = dekodiere(f);
+    expect(p.ifx1.device).not.toBe(0x27);
+    expect(p.ifx2.device).not.toBe(0x27);
+    expect(p.mfx.device).not.toBe(0x27);
+  });
+
+  it("Platz 19 ist der Filter allein — Regler 2/3 des FX-Layouts treffen Frequenz und Resonanz", () => {
+    const p = dekodiere("19-filter-sweep.e2fxp");
+    expect(p.name).toBe("Filter Sweep");
+    expect(p.ifx1.device).toBe(0x0a);
+    expect(p.ifx1.paramNamen[2]).toBe("frequency");
+    expect(p.ifx1.paramNamen[3]).toBe("resonance");
+    expect(p.ifx2.device).toBe(0);
+  });
+});
+
 describe("Set 7 „Ketten“ und Set 8 „Charakter“ (2026-09-05)", () => {
   /**
    * Die beiden Sets sollen die Auswahl VERGROESSERN, nicht wiederholen: Ketten

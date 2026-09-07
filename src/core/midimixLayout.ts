@@ -19,6 +19,22 @@
  * Global-Kanal, FX-Parameter als Hacktribe-NRPN (`hacktribeNrpn`). Mutes
  * nimmt das Geraet NICHT per Panel-NRPN — die laufen ueber den lokalen
  * Part-Mute und die Edit-Buffer-Uebertragung (siehe Pad-Deck).
+ *
+ * ⚠ IFX an/aus ebenfalls NICHT per CC: CC 104 wirkt am Geraet nur auf den
+ * dort gerade GEWAEHLTEN Part, egal auf welchem Kanal er ankommt (Nutzerbefund
+ * 2026-09-06: Taste fuer Part 2 schaltete am Geraet Part 1). Deshalb geht
+ * die IFX-Taste wie der Mute ueber das Geraete-Pattern und den Edit-Buffer
+ * (`ifxVomController` im Panel); `ifxSchalterNachricht` bleibt nur fuer den
+ * Fall, dass der Ziel-Part der aktive ist.
+ *
+ * FX-Layout (Nutzerwunsch 2026-09-06): Regler 1 ist der IFX-Regler des Parts
+ * (Stock-CC 87 — den Wert speichert das Geraet selbst im Pattern, „Write“
+ * behaelt ihn), Regler 2 und 3 sind Hacktribe-Live-Parameter 2 und 3 des
+ * IFX 1 — beim Algorithmus „Filter“ sind das Frequenz und Resonanz (die
+ * Parameter zaehlen dry_wet, output_select, frequency, resonance). Die merkt
+ * sich TekkForge je Pattern (fxStand.ts) und
+ * schickt sie beim Patternwechsel nach, weil das Geraet sie beim Laden eines
+ * Patterns verwirft.
  */
 import { buildKnobCc, ccValueToParam, KNOB_CCS } from "./e2KnobCc";
 import { buildMfxCc, buildNoteOn, buildNoteOff, buildSchalterCc } from "./e2Remote";
@@ -102,15 +118,23 @@ export function layoutKlang(vonPart = 1): MidimixLayout {
   return l;
 }
 
-/** FX: Regler = FX-Parameter 0/1/2 des IFX 1 je Part (Hacktribe-NRPN), Fader Level, Master = MFX-Parameter 0. */
+/** Parameter-Indizes des Algorithmus „Filter“ (e2FxParams 0x0a): 2 = Frequenz, 3 = Resonanz. */
+export const FILTER_PARAM = { frequenz: 2, resonanz: 3 } as const;
+
+/**
+ * FX: Regler 1 = IFX-Regler des Parts (Stock-CC 87, vom Geraet im Pattern
+ * gespeichert), Regler 2/3 = FX-Parameter 2/3 des IFX 1 (Hacktribe-NRPN —
+ * beim Filter Frequenz und Resonanz; je Pattern in TekkForge gemerkt),
+ * Fader Level, Master = MFX-Parameter 0.
+ */
 export function layoutFx(vonPart = 1): MidimixLayout {
   const l = layoutMixer(vonPart, `FX Parts ${vonPart}–${vonPart + 7}`);
   l.spalten.forEach((s, i) => {
     const part = vonPart + i;
     s.knobs = [
-      { art: "fx", part, slot: 0, param: 0 },
-      { art: "fx", part, slot: 0, param: 1 },
-      { art: "fx", part, slot: 0, param: 2 },
+      partZiel(part, "ifxEdit"),
+      { art: "fx", part, slot: 0, param: FILTER_PARAM.frequenz },
+      { art: "fx", part, slot: 0, param: FILTER_PARAM.resonanz },
     ];
   });
   l.master = { art: "mfxParam", param: 0 };
@@ -197,7 +221,11 @@ export function tastenNachrichten(ziel: TastenZiel, an: boolean): Uint8Array[] {
   return [an ? buildNoteOn(ziel.part - 1, 60, 110) : buildNoteOff(ziel.part - 1, 60)];
 }
 
-/** IFX an/aus als Stock-CC auf dem Part-Kanal (Schalter-CC, geraetebestaetigt). */
+/**
+ * IFX an/aus als Stock-CC 104 auf dem Part-Kanal. ⚠ Wirkt am Geraet nur auf
+ * den dort gewaehlten Part (Befund 2026-09-06, siehe Modulkopf) — fuer andere
+ * Parts geht der Weg ueber den Edit-Buffer.
+ */
 export function ifxSchalterNachricht(ziel: TastenZiel, an: boolean): Uint8Array | null {
   if (!ziel || ziel.art !== "ifx") return null;
   return buildSchalterCc(ziel.part - 1, "ifxOn", an);

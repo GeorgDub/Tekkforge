@@ -107,7 +107,8 @@ function adresse(): { addr: number; slot: number; max: number; len: number } | n
 function algorithmenListe(mfx: boolean): { id: number; name: string }[] {
   const tabelle = mfx ? MFX_TYPES : IFX_TYPES;
   return Object.entries(tabelle)
-    .map(([id, def]) => ({ id: Number(id), name: def.name }))
+    // Mute (0x27) schaltet den ganzen Effektweg stumm — kein Preset-Baustein (Ohr 2026-09-01, Nutzer 2026-09-06).
+    .map(([id, def]) => ({ id: Number(id), name: Number(id) === 0x27 ? `${def.name} (schaltet den ganzen ${mfx ? "MFX" : "IFX"} stumm)` : def.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

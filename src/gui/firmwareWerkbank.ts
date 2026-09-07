@@ -208,8 +208,18 @@ async function bildLaden(f: File): Promise<void> {
 
 // ─── Basis ───────────────────────────────────────────────────────────────────
 
+/**
+ * Laufende Nummer des letzten Ladevorgangs: wer zweimal schnell hintereinander
+ * eine Basis waehlt, bekommt nur das Ergebnis des letzten Vorgangs — ein
+ * aelterer, noch am Hashen, darf Anzeige, Status und die Oszillator-
+ * Vormerkliste nicht mehr ueberschreiben.
+ */
+let basisLauf = 0;
+
 async function basisLaden(f: File): Promise<void> {
+  const lauf = ++basisLauf;
   const bytes = new Uint8Array(await f.arrayBuffer());
+  if (lauf !== basisLauf) return;
   const befund = pruefeBasis(bytes);
   if (!befund.ok) {
     basis = null;
@@ -221,7 +231,9 @@ async function basisLaden(f: File): Promise<void> {
   basis = bytes;
   basisName = f.name;
   basisBefund = befund;
-  basisHash = await sha256Hex(bytes);
+  const hash = await sha256Hex(bytes);
+  if (lauf !== basisLauf) return;
+  basisHash = hash;
   const herkunft = basisHash === HACKTRIBE_SHA256 ? "unveränderte Hacktribe-Firmware" : "nicht die Hacktribe-Datei, Struktur stimmig (schon gepatcht?)";
   ($("fwBasisInfo") as HTMLElement).textContent =
     `${f.name} — ${herkunft}; IFX-Menü bis ${befund.ifxMaxIndex + 1}, Grooves bis ${befund.grooveMaxIndex + 1}, Init-Pattern „${befund.initPatternName || "?"}“`;

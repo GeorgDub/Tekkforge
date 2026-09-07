@@ -50,6 +50,30 @@ import { baueFirmware, pruefeFirmware, HACKTRIBE_SHA256 } from "../core/firmware
 import { addressForSlot } from "../core/hacktribeRam";
 import { IFX_ZAEHLER, leseZaehlerStand, type ZaehlerWert } from "../core/ifxErweiterung";
 import { legeAb } from "./ablage";
+import { baueBauplan } from "../core/bauplan";
+import {
+  leererStand,
+  leseStand,
+  serialisiereStand,
+  bibliotheksEintraege,
+  filtereEintraege,
+  fuegeHinzu,
+  entferne,
+  setzeFavorit,
+  zeigeEingebaute,
+  leereEigene,
+  eintraegeAusDatei,
+  alsSammlungsText,
+  auswahlMitPlaetzen,
+  platzBedarf,
+  artAusDateiname,
+  type BibliotheksStand,
+  type BibliotheksEintrag,
+  type BibArt,
+} from "../core/fxBibliothek";
+import { fxStandInPreset, partsMitFxStand, fxStandBeschreibung } from "../core/fxStand";
+import { fxBibAblage, type FxBibAblage } from "./tekkFxBib";
+import type { EditorPattern } from "../core/editorModel";
 
 let hooks: FxPresetHooks | null = null;
 let basis: ManagerZustand | null = null;
@@ -58,14 +82,29 @@ let quelle = "";
 /** Wurde ein echter Stand (Geraet, Sicherung, Firmware) geladen? Ohne den gibt es kein fluechtiges Schreiben. */
 let geladen = false;
 
-/** Die Bibliothek: Presets und Grooves aus Dateien und aus dem Editor, zum Ziehen auf die Plaetze. */
+/**
+ * Die Bibliothek (core/fxBibliothek.ts): mitgelieferte Sets plus eigene
+ * Eintraege, mit Favoriten, abgelegt ueber tekkFxBib. `bibliothek` ist die
+ * gerade SICHTBARE Liste (gefiltert) — Ziehen und die Test-Aufrufe
+ * adressieren sie ueber den Index.
+ */
 export interface BibEintrag {
   art: ManagerArt;
   name: string;
   bytes: Uint8Array;
   woher: string;
 }
-let bibliothek: BibEintrag[] = [];
+let bibStand: BibliotheksStand = leererStand();
+let bibliothek: BibliotheksEintrag[] = [];
+let bibAblage: FxBibAblage | null = null;
+/** Ausgewaehlte Kennungen — nur fuer die Sitzung. */
+let auswahl = new Set<string>();
+/** Woher der Preset-Manager das Pattern mit den Live-FX-Werten bekommt (vom Panel registriert). */
+let fxStandQuelle: (() => { pattern: EditorPattern; name: string } | null) | null = null;
+
+export function registriereFxStandQuelle(fn: () => { pattern: EditorPattern; name: string } | null): void {
+  fxStandQuelle = fn;
+}
 
 const FIRMWARE_ORDNER = "Firmware";
 const ARTEN_LABEL: Record<ManagerArt, string> = { ifx: "IFX", mfx: "MFX", groove: "GROOVE" };
@@ -195,26 +234,70 @@ function render(): void {
 /** Was gerade gezogen wird — HTML5-Drag traegt nur Text, der Eintrag selbst liegt hier. */
 let gezogen: { index: number; art: ManagerArt } | null = null;
 
+function bibSpeichern(): void {
+  const text = serialisiereStand(bibStand);
+  void bibAblage?.schreiben(text).catch((e: unknown) => setStatus(`Bibliothek nicht abgelegt: ${e instanceof Error ? e.message : String(e)}`));
+}
+
+function bibAendern(neu: BibliotheksStand): void {
+  bibStand = neu;
+  bibSpeichern();
+  renderBibliothek();
+}
+
+/** Die sichtbare Liste nach Filter, Suche und Favoriten-Haken neu berechnen. */
+function bibSichtbar(): BibliotheksEintrag[] {
+  const art = ((document.getElementById("pmBibFilter") as HTMLSelectElement | null)?.value || "alle") as BibArt | "alle";
+  const suche = (document.getElementById("pmBibSuche") as HTMLInputElement | null)?.value ?? "";
+  const nurFavoriten = !!(document.getElementById("pmBibNurFav") as HTMLInputElement | null)?.checked;
+  return filtereEintraege(bibliotheksEintraege(bibStand), { art, suche, nurFavoriten });
+}
+
+const ablageText = (): string => (bibAblage?.wo === "datei" ? "Ablage: Datei" : bibAblage?.wo === "browser" ? "Ablage: Browser" : "⚠ nur für diese Sitzung");
+
 function renderBibliothek(): void {
+  bibliothek = bibSichtbar();
+  const alle = bibliotheksEintraege(bibStand);
   const liste = document.getElementById("pmBibListe");
   const info = document.getElementById("pmBibInfo");
-  const filter = (document.getElementById("pmBibFilter") as HTMLSelectElement | null)?.value || "alle";
-  const sichtbar = bibliothek.map((e, index) => ({ e, index })).filter(({ e }) => filter === "alle" || e.art === filter);
-  if (info) info.textContent = bibliothek.length ? `${bibliothek.length} Eintrag/Einträge${filter === "alle" ? "" : `, ${sichtbar.length} gezeigt`}` : "leer";
+  const eigene = bibStand.eigene.length;
+  const eingebaut = alle.length - eigene;
+  if (info) {
+    info.textContent =
+      `${eigene} eigene · ${eingebaut} eingebaut · ${bibStand.favoriten.length} Favorit(en)` +
+      (bibliothek.length !== alle.length ? ` · ${bibliothek.length} gezeigt` : "") +
+      ` · ${ablageText()}`;
+  }
+  const zeigen = document.getElementById("pmBibEingebaute");
+  if (zeigen) zeigen.classList.toggle("hidden", bibStand.ausgeblendet.length === 0);
+  const ordnerKnopf = document.getElementById("pmBibOrdner");
+  if (ordnerKnopf) ordnerKnopf.classList.toggle("hidden", !bibAblage?.ordner);
+  // Auswahl auf sichtbare + vorhandene Kennungen begrenzen
+  const bekannt = new Set(alle.map((e) => e.id));
+  for (const id of [...auswahl]) if (!bekannt.has(id)) auswahl.delete(id);
+  const auswahlInfo = document.getElementById("pmBibAuswahlInfo");
+  if (auswahlInfo) {
+    const gew = alle.filter((e) => auswahl.has(e.id));
+    const b = platzBedarf(gew);
+    auswahlInfo.textContent = gew.length ? `${gew.length} (${b.ifx} IFX · ${b.mfx} MFX · ${b.groove} Grooves)` : "keine";
+  }
   if (!liste) return;
-  liste.innerHTML = sichtbar.length
-    ? `<div class="startListe" style="max-height:420px;overflow:auto">${sichtbar
+  liste.innerHTML = bibliothek.length
+    ? `<div class="startListe" style="max-height:360px;overflow:auto">${bibliothek
         .map(
-          ({ e, index }) =>
-            `<div class="pmBib" draggable="true" data-index="${index}" title="${escapeHtml(e.woher)} — ziehen und auf einen ${ARTEN_LABEL[e.art]}-Platz fallen lassen" style="cursor:grab">` +
+          (e, index) =>
+            `<div class="pmBib" draggable="true" data-index="${index}" data-id="${escapeHtml(e.id)}" title="${escapeHtml(e.woher)} — ziehen und auf einen ${ARTEN_LABEL[e.art]}-Platz fallen lassen" style="cursor:grab;display:flex;align-items:center;gap:6px">` +
+            `<input type="checkbox" class="pmBibWahl" data-id="${escapeHtml(e.id)}"${auswahl.has(e.id) ? " checked" : ""} title="auswählen — für Datei, Bauplan, Manager oder Firmware" />` +
+            `<button class="ghost pmBibFav" data-id="${escapeHtml(e.id)}" title="${e.favorit ? "Favorit — Klick entfernt den Stern" : "als Favorit markieren"}" style="padding:0 4px;font-size:13px;color:${e.favorit ? "var(--accent)" : "var(--muted)"}">${e.favorit ? "★" : "☆"}</button>` +
             `<span class="rolle" style="min-width:30px">${ARTEN_LABEL[e.art] === "GROOVE" ? "GV" : ARTEN_LABEL[e.art]}</span>` +
-            `<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</span>` +
-            `<span class="sub" style="margin:0;flex:0 0 80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(algorithmusVon(e.bytes, e.art))}</span>` +
+            `<span style="flex:1 1 120px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(e.name)}">${escapeHtml(e.name)}</span>` +
+            `<span class="sub" style="margin:0;flex:0 1 110px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(algorithmusVon(e.bytes, e.art))}</span>` +
+            `<span class="sub" style="margin:0;flex:0 1 120px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.7" title="${escapeHtml(e.woher)}">${escapeHtml(e.woher)}</span>` +
             `<button class="ghost pmBibZu" data-index="${index}" title="ohne Ziehen: auf einen Platz legen (fragt nach dem Platz)" style="padding:1px 6px;font-size:11px">→</button>` +
-            `<button class="ghost pmBibWeg" data-index="${index}" title="aus der Bibliothek entfernen" style="padding:1px 6px;font-size:11px">✕</button></div>`,
+            `<button class="ghost pmBibWeg" data-id="${escapeHtml(e.id)}" title="${e.eingebaut ? "ausblenden (mitgelieferter Eintrag — „Eingebaute zeigen“ holt ihn zurück)" : "aus der Bibliothek entfernen"}" style="padding:1px 6px;font-size:11px">✕</button></div>`,
         )
         .join("")}</div>`
-    : `<p class="sub" style="margin:0">Noch leer — Presets, Grooves oder Sammlungen laden, oder aus dem Editor übernehmen.</p>`;
+    : `<p class="sub" style="margin:0">${alle.length ? "Nichts passt zu Filter und Suche." : "Noch leer — Presets, Grooves oder Sammlungen laden, oder aus dem Editor übernehmen."}</p>`;
   for (const z of liste.querySelectorAll<HTMLElement>(".pmBib")) {
     z.addEventListener("dragstart", (e) => {
       const index = Number(z.dataset.index);
@@ -230,48 +313,208 @@ function renderBibliothek(): void {
     b.addEventListener("click", () => void bibZuPlatzGefragt(Number(b.dataset.index)));
   }
   for (const b of liste.querySelectorAll<HTMLButtonElement>(".pmBibWeg")) {
-    b.addEventListener("click", () => {
-      bibliothek.splice(Number(b.dataset.index), 1);
-      renderBibliothek();
-    });
+    b.addEventListener("click", () => bibAendern(entferne(bibStand, b.dataset.id ?? "")));
+  }
+  for (const b of liste.querySelectorAll<HTMLButtonElement>(".pmBibFav")) {
+    b.addEventListener("click", () => pmBibFavorit(b.dataset.id ?? "", !bibStand.favoriten.includes(b.dataset.id ?? "")));
+  }
+  for (const c of liste.querySelectorAll<HTMLInputElement>(".pmBibWahl")) {
+    c.addEventListener("change", () => pmBibWaehlen(c.dataset.id ?? "", c.checked));
   }
 }
 
-/** Art einer Einzeldatei an der Endung: .mfx Master, .e2gv Groove, sonst Insert. */
-const artAusDateiname = (name: string): ManagerArt => (/\.mfx$/i.test(name) ? "mfx" : /\.e2gv$/i.test(name) ? "groove" : "ifx");
+export function pmBibFavorit(id: string, an: boolean): void {
+  bibAendern(setzeFavorit(bibStand, id, an));
+}
 
-/** Dateien in die Bibliothek: Einzelpresets nach Endung, Sammlungen mit ihrer Art. */
+export function pmBibWaehlen(id: string, an: boolean): void {
+  if (an) auswahl.add(id);
+  else auswahl.delete(id);
+  renderBibliothek();
+}
+
+/** Fuer Tests: die sichtbare Bibliothek. */
+export function pmBibEintraege(): BibliotheksEintrag[] {
+  return bibliothek;
+}
+
+/** Die ausgewaehlten Eintraege in Bibliotheks-Reihenfolge. */
+export function pmBibAuswahl(): BibliotheksEintrag[] {
+  return bibliotheksEintraege(bibStand).filter((e) => auswahl.has(e.id));
+}
+
+/** Dateien in die Bibliothek: Einzelpresets nach Endung, Sammlungen/Sicherungen/Firmware mit allen Eintraegen. */
 async function bibLaden(dateien: readonly File[]): Promise<void> {
-  let n = 0;
+  let neu = 0;
+  let schonDa = 0;
+  let st = bibStand;
   for (const f of dateien) {
     try {
-      if (/\.(tfsam|json)$/i.test(f.name)) {
-        const s = leseSammlung(await f.text());
-        for (const e of s.eintraege) {
-          bibliothek.push({ art: e.art, name: e.name, bytes: e.bytes, woher: `${s.titel} (${f.name})` });
-          n++;
-        }
-      } else {
-        const bytes = new Uint8Array(await f.arrayBuffer());
-        const art = artAusDateiname(f.name);
-        if (bytes.length !== blockGroesse(art)) throw new Error(`${f.name}: ${bytes.length} Bytes — ein ${ARTEN_LABEL[art]}-Block hat ${blockGroesse(art)}`);
-        bibliothek.push({ art, name: nameVon(bytes, art) || f.name, bytes, woher: f.name });
-        n++;
+      // Textdateien (Sammlung, Sicherung) kommen auch ohne arrayBuffer() an — z. B. aus dem Test-Stub.
+      const bytes = typeof f.arrayBuffer === "function" ? new Uint8Array(await f.arrayBuffer()) : new TextEncoder().encode(await f.text());
+      for (const e of eintraegeAusDatei(f.name, bytes)) {
+        const r = fuegeHinzu(st, e);
+        st = r.stand;
+        if (r.vorhanden) schonDa++;
+        else neu++;
       }
     } catch (e) {
+      bibAendern(st);
       setStatus(e instanceof Error ? e.message : String(e));
-      renderBibliothek();
       return;
     }
   }
-  renderBibliothek();
-  setStatus(`${n} Eintrag/Einträge in die Bibliothek geladen — jetzt auf einen Platz ziehen.`);
+  bibAendern(st);
+  setStatus(`${neu} neu in der Bibliothek${schonDa ? `, ${schonDa} schon vorhanden` : ""} — Stern setzen, auswählen oder auf einen Platz ziehen.`);
 }
 
 /** Fuer Tests und den „aus Editor"-Knopf: einen Eintrag direkt aufnehmen. */
 export function bibAufnehmen(e: BibEintrag): void {
-  bibliothek.push({ ...e, bytes: e.bytes.slice() });
-  renderBibliothek();
+  try {
+    const r = fuegeHinzu(bibStand, { art: e.art, name: e.name, bytes: e.bytes, woher: e.woher });
+    bibAendern(r.stand);
+    if (r.vorhanden) setStatus(`„${e.name}“ ist schon in der Bibliothek.`);
+  } catch (err) {
+    setStatus(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/**
+ * Die Live-FX-Werte (fxStand.ts) des aktuellen Patterns in die IFX-Presets
+ * seiner Parts schreiben — je Part das Preset, das der Part traegt
+ * (`ifxType`, 0-basiert) aus dem geladenen Stand — und als eigene Eintraege
+ * ablegen, ausgewaehlt. Master-Werte haben kein Preset im Pattern und werden
+ * genannt, nicht geschrieben.
+ */
+export function pmFxStandUebernehmen(): { eintraege: number; meldung: string } {
+  const q = fxStandQuelle?.() ?? null;
+  if (!q) return { eintraege: 0, meldung: "Kein Pattern bekannt — erst das Panel öffnen (Live-Sync) oder ein Pattern im Editor wählen." };
+  const liste = q.pattern.fxStand;
+  if (!liste?.length) return { eintraege: 0, meldung: `„${q.name}“ hat keine gemerkten Live-FX-Werte — erst am MIDImix (FX-Layout, Regler 2/3) drehen.` };
+  if (!zustand || !geladen) return { eintraege: 0, meldung: "Erst einen Stand laden (Gerät, Sicherung oder Firmware) — sonst ist nicht bekannt, welches Preset der Part trägt." };
+  const parts = partsMitFxStand(liste);
+  let st = bibStand;
+  let n = 0;
+  const zeilen: string[] = [];
+  for (const part of parts) {
+    const p = q.pattern.parts[part - 1];
+    const typ = p?.params?.ifxType;
+    if (typ === undefined || !Number.isInteger(typ) || typ < 0 || typ >= zustand.ifx.length) {
+      zeilen.push(`Part ${part}: IFX-Typ unbekannt`);
+      continue;
+    }
+    const basis = zustand.ifx[typ];
+    if (istLeer(basis, "ifx")) {
+      zeilen.push(`Part ${part}: Platz ${typ + 1} ist leer`);
+      continue;
+    }
+    const r = fxStandInPreset(basis, liste, part);
+    if (!r.gesetzt) {
+      zeilen.push(`Part ${part}: kein Wert passt zu „${nameVon(basis, "ifx")}“`);
+      continue;
+    }
+    const f = fuegeHinzu(st, { art: "ifx", name: nameVon(basis, "ifx"), bytes: r.bytes, woher: `${q.name} Part ${part} (Platz ${typ + 1})` });
+    st = f.stand;
+    auswahl.add(f.id);
+    n++;
+    zeilen.push(`Part ${part}: „${nameVon(basis, "ifx")}“ + ${r.gesetzt} Wert(e)${r.ausgelassen.length ? `, ${r.ausgelassen.length} ausgelassen` : ""}`);
+  }
+  if (liste.some((e) => e.part === 0)) zeilen.push("Master-Werte bleiben nur im Pattern (das Pattern kennt kein MFX-Preset)");
+  bibAendern(st);
+  const meldung = `${n} Preset(s) aus „${q.name}“ in der Bibliothek, ausgewählt — ${fxStandBeschreibung(liste)}. ${zeilen.join("; ")}.`;
+  return { eintraege: n, meldung };
+}
+
+// ─── Auswahl herausgeben ─────────────────────────────────────────────────────
+
+/** Startplaetze erfragen: Vorschlag ist der erste leere Platz des geladenen Stands, sonst hinter den Werks-Presets. */
+async function startPlaetzeFragen(bedarf: Record<BibArt, number>): Promise<Record<BibArt, number> | null> {
+  const vorgabe: Record<BibArt, number> = {
+    ifx: (geladen && ersterLeerer("ifx")) || 50,
+    mfx: (geladen && ersterLeerer("mfx")) || 1,
+    groove: (geladen && ersterLeerer("groove")) || 63,
+  };
+  const out: Record<BibArt, number> = { ...vorgabe };
+  for (const art of ["ifx", "mfx", "groove"] as const) {
+    if (!bedarf[art]) continue;
+    const roh = await frageText(`${bedarf[art]} ${ARTEN_LABEL[art]} ab Platz (1..${anzahlPlaetze(art)}):`, String(vorgabe[art]));
+    if (roh === null || roh.trim() === "") return null;
+    const n = Number(roh);
+    if (!Number.isInteger(n) || n < 1 || n > anzahlPlaetze(art)) {
+      setStatus(`Platz ${roh} gibt es nicht — ${ARTEN_LABEL[art]} zählt 1..${anzahlPlaetze(art)}.`);
+      return null;
+    }
+    out[art] = n;
+  }
+  return out;
+}
+
+/** Auswahl mit Plaetzen versehen; meldet, was hinter der Grenze keinen Platz mehr bekam. */
+async function auswahlMitPlaetzenGefragt(): Promise<SammlungsEintrag[] | null> {
+  const gew = pmBibAuswahl();
+  if (!gew.length) {
+    setStatus("Nichts ausgewählt — Haken in der Bibliothek setzen.");
+    return null;
+  }
+  const start = await startPlaetzeFragen(platzBedarf(gew));
+  if (!start) return null;
+  const r = auswahlMitPlaetzen(gew, start);
+  if (r.ohnePlatz.length) {
+    setStatus(`${r.ohnePlatz.length} Eintrag/Einträge passen hinter die Art-Grenze nicht mehr (${r.ohnePlatz.map((e) => e.name).join(", ")}) — Startplatz kleiner wählen oder weniger auswählen.`);
+    return null;
+  }
+  return r.eintraege;
+}
+
+async function auswahlAlsDatei(): Promise<void> {
+  const eintraege = await auswahlMitPlaetzenGefragt();
+  if (!eintraege) return;
+  const titel = (await frageText("Titel der Sammlung:", "Meine Auswahl")) ?? "";
+  if (!titel.trim()) return;
+  const datei = `${titel.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "auswahl"}.tfsam`;
+  download(baueSammlung(eintraege, { titel }), datei, "application/json");
+  setStatus(`${eintraege.length} Einträge mit Platz als ${datei} gesichert — „+ Datei einfügen…“ legt sie an ihre Plätze, „Firmware patchen…“ brennt sie ein.`);
+}
+
+async function auswahlAlsBauplan(): Promise<void> {
+  const eintraege = await auswahlMitPlaetzenGefragt();
+  if (!eintraege) return;
+  const titel = (await frageText("Titel des Bauplans:", "Meine Presets")) ?? "";
+  if (!titel.trim()) return;
+  const datei = `${titel.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "bauplan"}.tfbau`;
+  download(baueBauplan({ titel, autor: "", eintraege }), datei, "application/json");
+  setStatus(`Bauplan ${datei} mit ${eintraege.length} Einträgen gesichert — in der Firmware-Werkbank laden.`);
+}
+
+/** Die Auswahl in die Listen rechts legen — ab den erfragten Startplaetzen. Exportiert fuer Tests. */
+export async function pmAuswahlInManager(start?: Record<BibArt, number>): Promise<number> {
+  if (!zustand) return 0;
+  const gew = pmBibAuswahl();
+  if (!gew.length) {
+    setStatus("Nichts ausgewählt — Haken in der Bibliothek setzen.");
+    return 0;
+  }
+  const s = start ?? (await startPlaetzeFragen(platzBedarf(gew)));
+  if (!s) return 0;
+  const r = auswahlMitPlaetzen(gew, s);
+  let n = 0;
+  try {
+    for (const e of r.eintraege) {
+      zustand = ersetzen(zustand, e.art, e.platz!, e.bytes);
+      n++;
+    }
+  } catch (err) {
+    setStatus(err instanceof Error ? err.message : String(err));
+  }
+  render();
+  setStatus(`${n} Einträge in den Manager gelegt${r.ohnePlatz.length ? `, ${r.ohnePlatz.length} passten hinter die Art-Grenze nicht` : ""} — „Flüchtig schreiben“ oder „Firmware patchen…“.`);
+  return n;
+}
+
+async function auswahlInFirmware(f: File): Promise<void> {
+  const eintraege = await auswahlMitPlaetzenGefragt();
+  if (!eintraege) return;
+  await firmwareBauenMit(f, eintraege, `${eintraege.length} Einträge aus der Bibliothek`);
 }
 
 export type AblegeModus = "ersetzen" | "vor" | "nach";
@@ -628,7 +871,33 @@ async function firmwarePatchen(f: File): Promise<void> {
     setStatus("Die Firmware enthält diesen Stand schon — nichts einzubrennen.");
     return;
   }
-  const r = baueFirmware(fw, diff);
+  await firmwareBauenMit(f, diff, `${diff.length} Platz/Plätze`, fw);
+}
+
+/**
+ * Der eine Bauweg: unveraenderte Hacktribe-Firmware pruefen (Kopf + Hash),
+ * die Eintraege mit Platz einbrennen, ablegen. Vom Manager (Unterschiede)
+ * und von der Bibliothek (Auswahl) gleichermassen benutzt.
+ */
+async function firmwareBauenMit(f: File, eintraege: readonly SammlungsEintrag[], was: string, geprueft?: Uint8Array): Promise<void> {
+  let fw = geprueft;
+  if (!fw) {
+    fw = new Uint8Array(await f.arrayBuffer());
+    const pr = pruefeFirmware(fw);
+    if (!pr.ok) {
+      setStatus(`Firmware abgelehnt: ${pr.reason}`);
+      return;
+    }
+    const hash = await sha256Hex(fw);
+    if (hash !== null && hash !== HACKTRIBE_SHA256) {
+      setStatus(
+        `Firmware abgelehnt: ${f.name} ist nicht die unveränderte Hacktribe-Firmware (SHA-256 ${hash.slice(0, 16)}…, erwartet ${HACKTRIBE_SHA256.slice(0, 16)}…). ` +
+          "Für schon gepatchte Basen: die Firmware-Werkbank darunter.",
+      );
+      return;
+    }
+  }
+  const r = baueFirmware(fw, eintraege);
   if (!r.ok) {
     setStatus(`Nicht gebaut: ${r.reason}`);
     return;
@@ -638,7 +907,7 @@ async function firmwarePatchen(f: File): Promise<void> {
   const menue = r.bericht.zaehler.length ? `, IFX-Menü bis Platz ${r.bericht.ifxMaxNachher + 1}` : "";
   const grooves = r.bericht.grooveZaehler.length ? `, Grooves bis Platz ${r.bericht.grooveMaxNachher + 1}` : "";
   setStatus(
-    `Firmware gebaut: ${diff.length} Platz/Plätze eingebrannt${menue}${grooves}` +
+    `Firmware gebaut: ${was} eingebrannt${menue}${grooves}` +
       (neu ? `, SHA-256 ${neu.slice(0, 16)}…` : "") +
       (ab.pfad ? ` → ${ab.pfad}.` : " → Download.") +
       " Installieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ auf die SD-Karte, dann am Gerät die Update-Funktion.",
@@ -676,17 +945,64 @@ export function initPresetManager(h: FxPresetHooks): void {
     bibAufnehmen({ art: p.art, name: nameVon(p.bytes, p.art) || "Eintrag", bytes: p.bytes, woher: "Editor" });
     setStatus(`„${nameVon(p.bytes, p.art)}“ in die Bibliothek gelegt.`);
   });
+  $("pmBibFxStand").addEventListener("click", () => setStatus(pmFxStandUebernehmen().meldung));
+  $("pmBibExport").addEventListener("click", () => {
+    void (async () => {
+      const sichtbar = bibSichtbar();
+      if (!sichtbar.length) {
+        setStatus("Nichts zu exportieren.");
+        return;
+      }
+      const titel = (await frageText("Titel der Sammlung:", "Meine Bibliothek")) ?? "";
+      if (!titel.trim()) return;
+      const datei = `${titel.replace(/[^A-Za-z0-9 _-]/g, "").trim() || "bibliothek"}.tfsam`;
+      download(alsSammlungsText(sichtbar, titel), datei, "application/json");
+      setStatus(`${sichtbar.length} Einträge als ${datei} gesichert (ohne Plätze — „+ Laden…“ holt sie zurück).`);
+    })();
+  });
   $("pmBibFilter").addEventListener("change", renderBibliothek);
+  $("pmBibSuche").addEventListener("input", renderBibliothek);
+  $("pmBibNurFav").addEventListener("change", renderBibliothek);
+  $("pmBibEingebaute").addEventListener("click", () => bibAendern(zeigeEingebaute(bibStand)));
+  $("pmBibOrdner").addEventListener("click", () => void bibAblage?.ordner?.());
   $("pmSuche").addEventListener("input", render);
   $("pmBibLeeren").addEventListener("click", () => {
-    bibliothek = [];
+    if (!bibStand.eigene.length) {
+      setStatus("Keine eigenen Einträge da.");
+      return;
+    }
+    bibAendern(leereEigene(bibStand));
+    setStatus("Eigene Einträge entfernt — die mitgelieferten bleiben.");
+  });
+  $("pmBibAlle").addEventListener("click", () => {
+    for (const e of bibSichtbar()) auswahl.add(e.id);
     renderBibliothek();
   });
+  $("pmBibKeine").addEventListener("click", () => {
+    auswahl.clear();
+    renderBibliothek();
+  });
+  $("pmBibAuswahlDatei").addEventListener("click", () => void auswahlAlsDatei());
+  $("pmBibAuswahlBauplan").addEventListener("click", () => void auswahlAlsBauplan());
+  $("pmBibAuswahlManager").addEventListener("click", () => void pmAuswahlInManager());
+  dateiKnopf("pmBibAuswahlFirmware", "pmBibFirmwareIn", (f) => void auswahlInFirmware(f));
   zustand = leererZustand();
   basis = leererZustand();
   geladen = false;
-  bibliothek = [];
+  auswahl = new Set();
+  bibStand = leererStand();
+  bibAblage = fxBibAblage();
   render();
+  // Den abgelegten Stand nachladen — ein reiner Sitzungsspeicher faengt leer an.
+  if (bibAblage.wo !== "sitzung") {
+    void bibAblage
+      .lesen()
+      .then((text) => {
+        bibStand = leseStand(text);
+        renderBibliothek();
+      })
+      .catch(() => renderBibliothek());
+  }
 }
 
 /** Fuer Tests: der aktuelle Zustand. */
@@ -712,9 +1028,14 @@ export function pmEintraegeUebernehmen(eintraege: readonly SammlungsEintrag[], w
         /* dann eben in die Bibliothek */
       }
     }
-    bibliothek.push({ art: e.art, name: e.name, bytes: e.bytes.slice(), woher });
-    inBibliothek++;
+    try {
+      bibStand = fuegeHinzu(bibStand, { art: e.art, name: e.name, bytes: e.bytes, woher }).stand;
+      inBibliothek++;
+    } catch {
+      /* leerer Block — gehoert nirgendwohin */
+    }
   }
+  bibSpeichern();
   render();
   return { gesetzt, inBibliothek };
 }

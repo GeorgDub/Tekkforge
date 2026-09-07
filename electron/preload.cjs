@@ -75,6 +75,17 @@ contextBridge.exposeInMainWorld("tekkBib", {
   ordner: () => ipcRenderer.invoke("bib:ordner"),
 });
 
+// ── FX-/Groove-Bibliothek (userData/fx-bibliothek.json) ──
+contextBridge.exposeInMainWorld("tekkFxBib", {
+  available: true,
+  /** Ganzer Stand als JSON-Text, null wenn noch keiner da ist. */
+  lesen: () => ipcRenderer.invoke("fxbib:lesen"),
+  /** Stand ablegen (Nebendatei + Umbenennen). */
+  schreiben: (text) => ipcRenderer.invoke("fxbib:schreiben", text),
+  /** Ordner im Explorer zeigen. */
+  ordner: () => ipcRenderer.invoke("fxbib:ordner"),
+});
+
 // ── Update-Check (GitHub Releases) ──
 contextBridge.exposeInMainWorld("tekkUpdate", {
   available: true,

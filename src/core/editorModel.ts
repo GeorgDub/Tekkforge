@@ -11,6 +11,7 @@
 
 import type { E2PatternInput } from "./electribePatternBuilder";
 import { deserialisiereDeck, type PadDeck } from "./padDeck";
+import { fxStandNormalisieren, type FxStandEintrag } from "./fxStand";
 import { buildE2AllPatFile, buildE2PatternFileV2 } from "./e2sExport";
 import { buildE2sBank, type E2sSlotInput } from "./e2sBankBuilder";
 import { convertToE2sSpec, downmixToMono } from "./audioProcessor";
@@ -132,6 +133,11 @@ export interface EditorPattern {
    */
   chainTo?: number;
   chainRepeat?: number;
+  /**
+   * Live-FX-Werte (Hacktribe-NRPN) dieses Patterns, die das Geraet nicht
+   * speichert — TekkForge schickt sie beim Patternwechsel nach. Siehe fxStand.ts.
+   */
+  fxStand?: FxStandEintrag[];
 }
 
 export interface PoolSample {
@@ -716,6 +722,11 @@ export function deserializeProject(text: string): EditorProject {
     if (Number.isFinite(p.chainTo)) base.chainTo = Math.min(250, Math.max(0, Math.round(p.chainTo as number)));
     if (Number.isFinite(p.chainRepeat))
       base.chainRepeat = Math.min(64, Math.max(1, Math.round(p.chainRepeat as number)));
+    // Live-FX-Werte (fxStand.ts): nur, was brauchbar ist — Muell stoppt das Laden nicht.
+    if (Array.isArray((p as { fxStand?: unknown }).fxStand)) {
+      const fs = fxStandNormalisieren((p as { fxStand?: unknown }).fxStand);
+      if (fs.length) base.fxStand = fs;
+    }
     for (let pi = 0; pi < EDITOR_PARTS; pi++) {
       const src = p.parts?.[pi];
       if (!src) continue;

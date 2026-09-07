@@ -583,17 +583,32 @@
                   <input id="pmSuche" type="search" placeholder="Suchen: Name oder Algorithmus" title="Zeigt in allen drei Listen nur Plätze, deren Name oder Algorithmus den Text enthält; leer = alle" style="width:200px;font-size:11px;padding:2px 6px;margin-left:auto" />
                 </div>
                 <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:8px">
-                  <div style="flex:0 0 280px;min-width:260px">
-                    <div class="sub" style="margin:0 0 4px"><b>Bibliothek</b> <span id="pmBibInfo">leer</span></div>
+                  <div style="flex:1 1 100%;min-width:320px;border:1px solid var(--border);border-radius:6px;padding:6px">
+                    <div class="sub" style="margin:0 0 4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>Bibliothek</b> <span id="pmBibInfo">leer</span><button id="pmBibOrdner" class="ghost hidden" title="Die Ablagedatei im Explorer zeigen" style="padding:1px 6px;font-size:11px">Ablage zeigen</button></div>
+                    <p class="sub" style="margin:0 0 6px">Alle mitgelieferten IFX-, MFX- und Groove-Sets plus alles, was hier geladen wird — bleibt über den Neustart erhalten. Stern = Favorit, Haken = Auswahl: daraus wird eine Datei mit Plätzen (zum Flashen), ein Bauplan, oder sie geht direkt in den Manager. Ziehen und auf einen Platz rechts fallen lassen geht weiter.</p>
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px">
-                      <button id="pmBibLaden" class="ghost" title="Presets und Sammlungen in die Bibliothek laden (.e2fxp, .mfx, .tfsam — mehrere auf einmal)" style="padding:2px 8px;font-size:11px">+ Laden…</button>
-                      <input id="pmBibIn" type="file" accept=".e2fxp,.mfx,.ifx,.e2gv,.tfsam,.json" multiple class="hidden" />
+                      <button id="pmBibLaden" class="ghost" title="Presets, Grooves, Sammlungen, Sicherungen oder Firmware in die Bibliothek laden (.e2fxp, .mfx, .e2gv, .tfsam, .tfbau, .tfbak, .VSB — mehrere auf einmal). Was schon da ist, kommt nicht doppelt hinein." style="padding:2px 8px;font-size:11px">+ Laden…</button>
+                      <input id="pmBibIn" type="file" accept=".e2fxp,.mfx,.ifx,.e2gv,.gv,.tfsam,.tfbau,.tfbak,.json,.vsb,.VSB" multiple class="hidden" />
                       <button id="pmBibAusEditor" class="ghost" title="Das Preset aus dem Editor in die Bibliothek legen" style="padding:2px 8px;font-size:11px">aus Editor</button>
+                      <button id="pmBibFxStand" class="ghost" title="Die je Pattern gemerkten Live-FX-Werte (MIDImix-Regler 2/3, Hacktribe-NRPN) in die IFX-Presets der Parts schreiben und als neue Einträge ablegen — braucht einen geladenen Stand (Gerät, Sicherung oder Firmware), damit das Preset des Parts bekannt ist. Danach auswählen und flashen oder in den Manager legen." style="padding:2px 8px;font-size:11px">FX-Stand aus Pattern…</button>
+                      <button id="pmBibExport" class="ghost" title="Die ganze Bibliothek (gefiltert, ohne Plätze) als .tfsam sichern — zum Weitergeben oder Wiederladen" style="padding:2px 8px;font-size:11px">Alle exportieren…</button>
                       <select id="pmBibFilter" style="font-size:11px;padding:2px 4px"><option value="alle">alle</option><option value="ifx">nur IFX</option><option value="mfx">nur MFX</option><option value="groove">nur Grooves</option></select>
-                      <button id="pmBibLeeren" class="ghost" title="Bibliothek leeren" style="padding:2px 8px;font-size:11px">✕</button>
+                      <input id="pmBibSuche" type="search" placeholder="Suchen: Name, Algorithmus, Set" style="width:170px;font-size:11px;padding:2px 6px" />
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px"><input id="pmBibNurFav" type="checkbox" /> ★ nur Favoriten</label>
+                      <button id="pmBibEingebaute" class="ghost hidden" title="Ausgeblendete mitgelieferte Einträge wieder zeigen" style="padding:2px 8px;font-size:11px">Eingebaute zeigen</button>
+                      <button id="pmBibLeeren" class="ghost" title="Alle eigenen Einträge entfernen (die mitgelieferten bleiben)" style="padding:2px 8px;font-size:11px;margin-left:auto">eigene leeren</button>
                     </div>
                     <div id="pmBibListe"></div>
-                    <p class="sub" style="margin:4px 0 0">Ziehen und auf einen Platz rechts fallen lassen. Belegter Platz: Ersetzen, davor oder danach einfügen — leerer Platz: einfach rein.</p>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                      <span class="sub" style="margin:0"><b>Auswahl:</b> <span id="pmBibAuswahlInfo">keine</span></span>
+                      <button id="pmBibAlle" class="ghost" title="Alle gerade sichtbaren Einträge auswählen" style="padding:2px 8px;font-size:11px">alle sichtbaren</button>
+                      <button id="pmBibKeine" class="ghost" style="padding:2px 8px;font-size:11px">keine</button>
+                      <button id="pmBibAuswahlDatei" class="ghost" title="Die Auswahl als .tfsam MIT Plätzen sichern — je Art fortlaufend ab dem Startplatz (fragt nach). Die Datei lädt „+ Datei einfügen…“ an ihre Plätze; die Firmware-Werkbank und „Firmware patchen“ nehmen sie zum Flashen." style="padding:2px 8px;font-size:11px">→ Datei mit Plätzen…</button>
+                      <button id="pmBibAuswahlBauplan" class="ghost" title="Die Auswahl als Bauplan (.tfbau) für die Firmware-Werkbank — Presets/Grooves mit Plätzen" style="padding:2px 8px;font-size:11px">→ Bauplan…</button>
+                      <button id="pmBibAuswahlManager" class="ghost" title="Die Auswahl in die Listen rechts legen — ab dem ersten leeren Platz ihrer Art (oder ab einem Startplatz, fragt nach)" style="padding:2px 8px;font-size:11px">→ in den Manager…</button>
+                      <button id="pmBibAuswahlFirmware" class="ghost" title="Die Auswahl direkt in eine Hacktribe-SYSTEM.VSB einbrennen: fragt nach der unveränderten Hacktribe-Firmware und den Startplätzen, schreibt die Auswahl dorthin und legt das Ergebnis ab. Installieren: als SYSTEM.VSB nach KORG/electribe sampler/System/ + Update am Gerät." style="padding:2px 8px;font-size:11px">🔥 → Firmware…</button>
+                      <input id="pmBibFirmwareIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                    </div>
                   </div>
                   <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>IFX</b> <span id="pmIfxInfo"></span></div><div id="pmIfxListe"></div></div>
                   <div style="flex:1;min-width:320px"><div class="sub" style="margin:0 0 4px"><b>MFX</b> <span id="pmMfxInfo"></span></div><div id="pmMfxListe"></div></div>
