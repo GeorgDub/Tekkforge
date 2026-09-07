@@ -33,36 +33,40 @@
  * ✔ Preset-Weg am Geraet abgenommen (2026-09-02, Plaetze 50–96). Grooves,
  * Init-Pattern, Startbild und Init-Global sind am Geraet noch offen.
  */
-import { DDR2_BASE, E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "./hacktribeRam";
-import { IFX_ZAEHLER, leseZaehlerStand, istPresetPlatzLeer, planeIfxErweiterung, zaehlerSchreibliste, type ZaehlerWert } from "./ifxErweiterung";
+import { E2_RAM_MAP, addressForSlot, IFX_PRESET_WRITE_MAX, MFX_PRESET_WRITE_MAX } from "./hacktribeRam";
+import { IFX_ZAEHLER, istPresetPlatzLeer, planeIfxErweiterung, zaehlerSchreibliste, type ZaehlerWert } from "./ifxErweiterung";
+import {
+  KARTE_HACKTRIBE,
+  GROOVE_ZAEHLER,
+  HACKTRIBE_SHA256,
+  SAMPLER_STOCK_SHA256,
+  VSB_HEADER,
+  dateiOffset,
+  erkenneKarte,
+  grooveOffset,
+  leseZaehler,
+  presetOffset,
+  type FirmwareKarte,
+} from "./firmwareKarte";
 import { decodeFxPreset, encodeFxPreset, FX_PRESET_SIZE } from "./e2FxPreset";
 import { decodeGroove, encodeGroove, GROOVE_SIZE } from "./e2Groove";
 import { planeVerteilung, type SammlungsEintrag, type SammlungsArt } from "./sammlung";
 
 /** Der KORG-Header vor dem RAM-Abbild. */
-export const VSB_HEADER = 0x100;
+export { VSB_HEADER, dateiOffset, GROOVE_ZAEHLER, HACKTRIBE_SHA256 };
 /** 2 MiB Payload plus Header — jede andere Groesse ist keine E2-Firmware. */
 export const VSB_GROESSE = 0x200000 + VSB_HEADER;
-/** hacktribe/hash/hacked-SYSTEM.VSB.sha — die unveraenderte Hacktribe-Firmware. */
-export const HACKTRIBE_SHA256 = "7cb4825c184a7e3fa92224304be22a788c96c4b748c277e63a496baa9faae7ee";
 /** Ebenfalls aus dem hacktribe-Repo: die Stock-Firmware 2.02, aus der Hacktribe entsteht. */
-export const STOCK_SHA256 = "1d0f0689d5a12c8a8bde9f821f2a59adc5f6cd6012ddb201ebb192b72468a646";
-
-export function dateiOffset(ramAddr: number): number {
-  return ramAddr - DDR2_BASE + VSB_HEADER;
-}
+export const STOCK_SHA256 = SAMPLER_STOCK_SHA256;
 
 /**
- * Die vier Groove-Zaehler aus hacktribe `add_groove` — zwei auf den
- * Max-Index, zwei auf Max-Index + 1 (0xC007BB88 ist die Read-Quelle). In der
- * gepatchten Firmware stehen sie auf 61/62 bei 62 Werks-Vorlagen.
+ * Seit v0.7 kennt jede Funktion hier eine Karte (`firmwareKarte.ts`):
+ * Hacktribe (Vorgabe — alles wie bisher, byte-genau), Sampler-Stock,
+ * Synth-Stock. Wer keine Karte uebergibt, bekommt die Hacktribe-Lage; wer
+ * eine fremde Datei hat, laesst sie mit `erkenneKarte` bestimmen und reicht
+ * die Karte durch. Die festen Offsets unten bleiben als Hacktribe-Konstanten
+ * fuer die bestehenden Aufrufer und Tests.
  */
-export const GROOVE_ZAEHLER: readonly { addr: number; plusEins: boolean }[] = [
-  { addr: 0xc0049da4, plusEins: false },
-  { addr: 0xc007bb90, plusEins: false },
-  { addr: 0xc007bb88, plusEins: true },
-  { addr: 0xc007bb94, plusEins: true },
-];
 
 /**
  * Das Init-Pattern: der Pattern-Block (0x3C00 Bytes, "PTST" … "PTED"), den
@@ -92,16 +96,27 @@ export const INIT_GLOBAL_GROESSE = 0x100;
 
 export type FirmwarePruefung = { ok: true } | { ok: false; reason: string };
 
-/** Groesse, Magic, Geraetekennung — der Hash wird davon getrennt geprueft (siehe Aufrufer). */
-export function pruefeFirmware(bytes: Uint8Array): FirmwarePruefung {
+/**
+ * Groesse, Magic, Geraetekennung — der Hash wird davon getrennt geprueft
+ * (siehe Aufrufer). Mit der Hacktribe-Karte (Vorgabe) gilt das bisherige
+ * E2S-Gate am Kopf; mit einer anderen Karte zaehlt das PAYLOAD-Layout
+ * (`erkenneKarte`), damit auch ein umgekoepftes Abbild durchkommt.
+ */
+export function pruefeFirmware(bytes: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): FirmwarePruefung {
   if (bytes.length !== VSB_GROESSE) {
     return { ok: false, reason: `${bytes.length} Bytes — eine E2-Firmware hat ${VSB_GROESSE}` };
   }
   const ascii = (von: number, bis: number): string => String.fromCharCode(...bytes.subarray(von, bis));
   if (ascii(0, 16) !== "KORG SYSTEM FILE") return { ok: false, reason: "Kein KORG-SYSTEM-FILE-Header" };
-  if (ascii(0x10, 0x13) !== "E2S" || bytes[0x13] !== 0) {
-    return { ok: false, reason: "Geraetekennung ist nicht E2S (Sampler) — nur die Sampler-Firmware kennt diese Adressen" };
+  if (karte.id === "hacktribe") {
+    if (ascii(0x10, 0x13) !== "E2S" || bytes[0x13] !== 0) {
+      return { ok: false, reason: "Geraetekennung ist nicht E2S (Sampler) — nur die Sampler-Firmware kennt diese Adressen" };
+    }
+    return { ok: true };
   }
+  const e = erkenneKarte(bytes);
+  if (!e.ok) return { ok: false, reason: e.reason };
+  if (e.karte.id !== karte.id) return { ok: false, reason: `Das Abbild ist „${e.karte.label}“, die Karte verlangt „${karte.label}“` };
   return { ok: true };
 }
 
@@ -131,22 +146,20 @@ export function leererGrooveBlock(): Uint8Array {
 }
 
 /** Groove-Zaehler aus dem Abbild lesen — stimmig nur, wenn beide Paare zusammenpassen. */
-export function leseGrooveStand(fw: Uint8Array): { ok: true; maxIndex: number } | { ok: false; reason: string } {
-  const werte = GROOVE_ZAEHLER.map((z) => ({ ...z, wert: fw[dateiOffset(z.addr)] }));
-  const max = werte[0].wert;
-  for (const w of werte) {
-    const soll = w.plusEins ? max + 1 : max;
-    if (w.wert !== soll) {
-      return { ok: false, reason: `Groove-Zähler widersprechen sich: 0x${w.addr.toString(16).toUpperCase()} steht auf ${w.wert}, nach Max-Index ${max} müsste dort ${soll} stehen` };
-    }
-  }
-  return { ok: true, maxIndex: max };
+export function leseGrooveStand(fw: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): { ok: true; maxIndex: number } | { ok: false; reason: string } {
+  if (!karte.grooveZaehler) return { ok: false, reason: `${karte.label} hat keine Groove-Bank` };
+  const r = leseZaehler(fw, karte.grooveZaehler);
+  return r.ok ? r : { ok: false, reason: `Groove-${r.reason}` };
 }
 
 export type FirmwareBauErgebnis = { ok: true; bytes: Uint8Array; bericht: FirmwareBauBericht } | { ok: false; reason: string };
 
 const mapFuer = (art: SammlungsArt) => E2_RAM_MAP.find((e) => e.key === (art === "groove" ? "groove" : art === "mfx" ? "mfxPreset" : "ifxPreset"))!;
-const schreibMax = (art: SammlungsArt): number => (art === "groove" ? mapFuer("groove").count - 1 : art === "mfx" ? MFX_PRESET_WRITE_MAX : IFX_PRESET_WRITE_MAX);
+const schreibMax = (art: SammlungsArt, karte: FirmwareKarte): number =>
+  art === "groove" ? (karte.grooveBank?.count ?? 0) - 1 : art === "mfx" ? karte.mfxSchreibMax : karte.ifxSchreibMax;
+/** Datei-Offset eines Platzes (0-basiert) in dieser Karte — null, wenn es ihn nicht gibt. */
+const platzOffset = (karte: FirmwareKarte, fw: Uint8Array, art: SammlungsArt, slot: number): number | null =>
+  art === "groove" ? grooveOffset(karte, slot) : presetOffset(karte, fw, art, slot);
 
 /**
  * Baut aus `basis` (unveraendert zurueckgegeben) ein neues Abbild mit den
@@ -154,8 +167,8 @@ const schreibMax = (art: SammlungsArt): number => (art === "groove" ? mapFuer("g
  * Plaetze, Luecken hinter dem Zaehler und ein unstimmiger Zaehlersatz
  * liefern einen Grund statt einer halben Datei.
  */
-export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEintrag[]): FirmwareBauErgebnis {
-  const pruefung = pruefeFirmware(basis);
+export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEintrag[], karte: FirmwareKarte = KARTE_HACKTRIBE): FirmwareBauErgebnis {
+  const pruefung = pruefeFirmware(basis, karte);
   if (!pruefung.ok) return pruefung;
   const plan = planeVerteilung(eintraege);
   if (plan.doppelt.length) {
@@ -179,10 +192,14 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
 
   for (const { eintrag } of plan.schritte) {
     const platz = eintrag.platz!;
-    if (platz - 1 > schreibMax(eintrag.art)) {
-      return { ok: false, reason: `„${eintrag.name}“: Platz ${platz} liegt über der Schreibgrenze (${eintrag.art.toUpperCase()} bis ${schreibMax(eintrag.art) + 1})` };
+    if (eintrag.art === "groove" && !karte.grooveBank) {
+      return { ok: false, reason: `„${eintrag.name}“: ${karte.label} hat keine Groove-Bank — Grooves gehen nur in die Hacktribe-Firmware` };
     }
-    const offset = dateiOffset(addressForSlot(mapFuer(eintrag.art), platz - 1));
+    if (platz - 1 > schreibMax(eintrag.art, karte)) {
+      return { ok: false, reason: `„${eintrag.name}“: Platz ${platz} liegt über der Schreibgrenze (${eintrag.art.toUpperCase()} bis ${schreibMax(eintrag.art, karte) + 1})` };
+    }
+    const offset = platzOffset(karte, out, eintrag.art, platz - 1);
+    if (offset === null) return { ok: false, reason: `„${eintrag.name}“: Platz ${platz} (${eintrag.art.toUpperCase()}) hat in ${karte.label} keinen Block` };
     const len = eintrag.art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
     const unterlage = out.subarray(offset, offset + len);
     // Unterlage nur, wenn dort schon etwas steht: ein leerer Groove-Platz ist
@@ -203,67 +220,71 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
     bericht.geschrieben.push({ art: eintrag.art, platz, name: eintrag.name, offset });
   }
 
-  // IFX-Zaehler: lesen, pruefen, nur bei Bedarf nachziehen.
-  const gelesen: ZaehlerWert[] = IFX_ZAEHLER.map((z) => ({ addr: z.addr, wert: out[dateiOffset(z.addr)] }));
-  const stand = leseZaehlerStand(gelesen);
+  // IFX-Zaehler: lesen, pruefen, nur bei Bedarf nachziehen. Bei einer Karte
+  // ohne erweiterbares Menue (Stock: 38 feste Plaetze ueber Zeiger) bleiben
+  // die Zaehler unangetastet — dort wird nur ersetzt, nie angehaengt.
+  const stand = leseZaehler(out, karte.ifxZaehler);
   if (!stand.ok) return { ok: false, reason: `IFX-Zähler in der Firmware: ${stand.reason}` };
   bericht.ifxMaxVorher = stand.maxIndex;
   bericht.ifxMaxNachher = stand.maxIndex;
-  const ifxMap = mapFuer("ifx");
   // Das Menue folgt der BANK, nicht den geschriebenen Eintraegen: Zaehler auf
   // den hoechsten belegten Platz im Abbild — nach oben mit Lueckenpruefung,
   // nach unten, wenn das oberste Preset geleert wurde (sonst bliebe ein
   // namenloser Eintrag im Menue). Angefasst wird nur, was der Bau beruehrt hat.
   const hoechsterBelegtImAbbild = (art: SammlungsArt, bis: number): number => {
-    const map = mapFuer(art);
     const len = art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
     for (let slot = bis; slot >= 0; slot--) {
-      const off = dateiOffset(addressForSlot(map, slot));
+      const off = platzOffset(karte, out, art, slot);
+      if (off === null) continue;
       const block = out.subarray(off, off + len);
       if (art === "groove" ? !istGroovePlatzLeer(block) : !istPresetPlatzLeer(block)) return slot;
     }
     return -1;
   };
   const beruehrt = (art: SammlungsArt): boolean => bericht.geschrieben.some((g) => g.art === art);
-  const hoechster = beruehrt("ifx") ? hoechsterBelegtImAbbild("ifx", IFX_PRESET_WRITE_MAX) : stand.maxIndex;
-  if (hoechster > stand.maxIndex) {
-    const erweiterung = planeIfxErweiterung(stand.maxIndex, hoechster, (slot) => {
-      const off = dateiOffset(addressForSlot(ifxMap, slot));
-      return istPresetPlatzLeer(out.subarray(off, off + FX_PRESET_SIZE));
-    });
-    if (!erweiterung.ok) return { ok: false, reason: erweiterung.reason };
-    for (const w of erweiterung.schreiben) out[dateiOffset(w.addr)] = w.wert;
-    bericht.zaehler = erweiterung.schreiben;
-    bericht.ifxMaxNachher = hoechster;
-  } else if (hoechster >= 0 && hoechster < stand.maxIndex) {
-    bericht.zaehler = zaehlerSchreibliste(hoechster);
-    for (const w of bericht.zaehler) out[dateiOffset(w.addr)] = w.wert;
-    bericht.ifxMaxNachher = hoechster;
+  if (karte.ifxErweiterbar) {
+    const hoechster = beruehrt("ifx") ? hoechsterBelegtImAbbild("ifx", karte.ifxSchreibMax) : stand.maxIndex;
+    if (hoechster > stand.maxIndex) {
+      const erweiterung = planeIfxErweiterung(stand.maxIndex, hoechster, (slot) => {
+        const off = platzOffset(karte, out, "ifx", slot);
+        return off === null || istPresetPlatzLeer(out.subarray(off, off + FX_PRESET_SIZE));
+      });
+      if (!erweiterung.ok) return { ok: false, reason: erweiterung.reason };
+      for (const w of erweiterung.schreiben) out[dateiOffset(w.addr)] = w.wert;
+      bericht.zaehler = erweiterung.schreiben;
+      bericht.ifxMaxNachher = hoechster;
+    } else if (hoechster >= 0 && hoechster < stand.maxIndex) {
+      bericht.zaehler = zaehlerSchreibliste(hoechster);
+      for (const w of bericht.zaehler) out[dateiOffset(w.addr)] = w.wert;
+      bericht.ifxMaxNachher = hoechster;
+    }
   }
 
   // Groove-Zaehler: dieselbe Regel — lueckenlos bis zum hoechsten belegten Platz.
-  const grooveStand = leseGrooveStand(out);
-  if (!grooveStand.ok) return { ok: false, reason: grooveStand.reason };
-  bericht.grooveMaxVorher = grooveStand.maxIndex;
-  bericht.grooveMaxNachher = grooveStand.maxIndex;
-  const grooveMap = mapFuer("groove");
-  const hoechsterGroove = beruehrt("groove") ? hoechsterBelegtImAbbild("groove", grooveMap.count - 1) : grooveStand.maxIndex;
-  if (hoechsterGroove >= 0 && hoechsterGroove < grooveStand.maxIndex) {
-    bericht.grooveZaehler = GROOVE_ZAEHLER.map((z) => ({ addr: z.addr, wert: z.plusEins ? hoechsterGroove + 1 : hoechsterGroove }));
-    for (const w of bericht.grooveZaehler) out[dateiOffset(w.addr)] = w.wert;
-    bericht.grooveMaxNachher = hoechsterGroove;
-  } else if (hoechsterGroove > grooveStand.maxIndex) {
-    const luecken: number[] = [];
-    for (let slot = grooveStand.maxIndex + 1; slot <= hoechsterGroove; slot++) {
-      const off = dateiOffset(addressForSlot(grooveMap, slot));
-      if (istGroovePlatzLeer(out.subarray(off, off + GROOVE_SIZE))) luecken.push(slot + 1);
+  if (karte.grooveBank && karte.grooveZaehler) {
+    const grooveStand = leseGrooveStand(out, karte);
+    if (!grooveStand.ok) return { ok: false, reason: grooveStand.reason };
+    bericht.grooveMaxVorher = grooveStand.maxIndex;
+    bericht.grooveMaxNachher = grooveStand.maxIndex;
+    const grooveZaehler = karte.grooveZaehler;
+    const hoechsterGroove = beruehrt("groove") ? hoechsterBelegtImAbbild("groove", karte.grooveBank.count - 1) : grooveStand.maxIndex;
+    if (hoechsterGroove >= 0 && hoechsterGroove < grooveStand.maxIndex) {
+      bericht.grooveZaehler = grooveZaehler.map((z) => ({ addr: z.addr, wert: z.plusEins ? hoechsterGroove + 1 : hoechsterGroove }));
+      for (const w of bericht.grooveZaehler) out[dateiOffset(w.addr)] = w.wert;
+      bericht.grooveMaxNachher = hoechsterGroove;
+    } else if (hoechsterGroove > grooveStand.maxIndex) {
+      const luecken: number[] = [];
+      for (let slot = grooveStand.maxIndex + 1; slot <= hoechsterGroove; slot++) {
+        const off = grooveOffset(karte, slot)!;
+        if (istGroovePlatzLeer(out.subarray(off, off + GROOVE_SIZE))) luecken.push(slot + 1);
+      }
+      if (luecken.length) {
+        return { ok: false, reason: `Groove-Bereich hat Lücken hinter dem Zähler: Platz ${luecken.join(", ")} leer — erst dort eine Vorlage ablegen` };
+      }
+      bericht.grooveZaehler = grooveZaehler.map((z) => ({ addr: z.addr, wert: z.plusEins ? hoechsterGroove + 1 : hoechsterGroove }));
+      for (const w of bericht.grooveZaehler) out[dateiOffset(w.addr)] = w.wert;
+      bericht.grooveMaxNachher = hoechsterGroove;
     }
-    if (luecken.length) {
-      return { ok: false, reason: `Groove-Bereich hat Lücken hinter dem Zähler: Platz ${luecken.join(", ")} leer — erst dort eine Vorlage ablegen` };
-    }
-    bericht.grooveZaehler = GROOVE_ZAEHLER.map((z) => ({ addr: z.addr, wert: z.plusEins ? hoechsterGroove + 1 : hoechsterGroove }));
-    for (const w of bericht.grooveZaehler) out[dateiOffset(w.addr)] = w.wert;
-    bericht.grooveMaxNachher = hoechsterGroove;
   }
   return { ok: true, bytes: out, bericht };
 }
@@ -273,10 +294,12 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
 export interface BasisBefund {
   ok: boolean;
   reason?: string;
-  /** IFX-Max-Index laut Zaehler, Groove-Max-Index, Name des Init-Patterns. */
+  /** IFX-Max-Index laut Zaehler, Groove-Max-Index (-1 ohne Groove-Bank), Name des Init-Patterns. */
   ifxMaxIndex: number;
   grooveMaxIndex: number;
   initPatternName: string;
+  /** Die Karte, mit der geprueft wurde. */
+  karte: FirmwareKarte;
 }
 
 /**
@@ -285,43 +308,54 @@ export interface BasisBefund {
  * gepatchte Firmware, die naechste Runde baut dann darauf auf. Den
  * Hacktribe-Hash prueft der Aufrufer getrennt, wenn er ihn verlangen will.
  */
-export function pruefeBasis(fw: Uint8Array): BasisBefund {
-  const leer = { ifxMaxIndex: -1, grooveMaxIndex: -1, initPatternName: "" };
-  const pr = pruefeFirmware(fw);
+export function pruefeBasis(fw: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): BasisBefund {
+  const leer = { ifxMaxIndex: -1, grooveMaxIndex: -1, initPatternName: "", karte };
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) return { ok: false, reason: pr.reason, ...leer };
-  const ifx = leseZaehlerStand(IFX_ZAEHLER.map((z) => ({ addr: z.addr, wert: fw[dateiOffset(z.addr)] })));
+  const ifx = leseZaehler(fw, karte.ifxZaehler);
   if (!ifx.ok) return { ok: false, reason: `IFX-Zähler: ${ifx.reason}`, ...leer };
-  const gv = leseGrooveStand(fw);
-  if (!gv.ok) return { ok: false, reason: gv.reason, ...leer, ifxMaxIndex: ifx.maxIndex };
-  const magic = String.fromCharCode(...fw.subarray(INIT_PATTERN_OFFSET, INIT_PATTERN_OFFSET + 4));
-  if (magic !== "PTST") return { ok: false, reason: `An der Init-Pattern-Stelle steht „${magic}“ statt „PTST“`, ...leer, ifxMaxIndex: ifx.maxIndex, grooveMaxIndex: gv.maxIndex };
+  let grooveMaxIndex = -1;
+  if (karte.grooveZaehler) {
+    const gv = leseGrooveStand(fw, karte);
+    if (!gv.ok) return { ok: false, reason: gv.reason, ...leer, ifxMaxIndex: ifx.maxIndex };
+    grooveMaxIndex = gv.maxIndex;
+  }
+  const initOff = dateiOffset(karte.initPattern);
+  const magic = String.fromCharCode(...fw.subarray(initOff, initOff + 4));
+  if (magic !== "PTST") return { ok: false, reason: `An der Init-Pattern-Stelle steht „${magic}“ statt „PTST“`, ...leer, ifxMaxIndex: ifx.maxIndex, grooveMaxIndex };
   let name = "";
   for (let i = 0; i < 16; i++) {
-    const c = fw[INIT_PATTERN_OFFSET + 0x10 + i];
+    const c = fw[initOff + 0x10 + i];
     if (!c) break;
     name += String.fromCharCode(c);
   }
-  return { ok: true, ifxMaxIndex: ifx.maxIndex, grooveMaxIndex: gv.maxIndex, initPatternName: name.trim() };
+  return { ok: true, ifxMaxIndex: ifx.maxIndex, grooveMaxIndex, initPatternName: name.trim(), karte };
 }
 
 // ─── Init-Pattern und Startbildschirm ────────────────────────────────────────
 
 /** Das Init-Pattern als vollstaendige `.e2spat` (KORG-Header + Block), ladbar wie jede Pattern-Datei. */
-export function liesInitPattern(fw: Uint8Array): Uint8Array {
-  const pr = pruefeFirmware(fw);
+export function liesInitPattern(fw: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): Uint8Array {
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) throw new Error(pr.reason);
+  const off = dateiOffset(karte.initPattern);
+  return patternAlsDatei(fw.subarray(off, off + INIT_PATTERN_GROESSE), karte);
+}
+
+/** Einen nackten 0x3C00-Block als `.e2spat`/`.e2pat` verpacken (KORG-Kopf, Kennung der Karte, Version 1). */
+export function patternAlsDatei(block: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): Uint8Array {
   const out = new Uint8Array(E2SPAT_GROESSE);
   out.fill(0xff, 0x24, 0x100);
   out.set(new TextEncoder().encode("KORG"), 0);
-  out.set(new TextEncoder().encode("e2sampler"), 0x10);
+  out.set(new TextEncoder().encode(karte.patternKennung), 0x10);
   out[0x20] = 1; // version u32 LE = 1
-  out.set(fw.subarray(INIT_PATTERN_OFFSET, INIT_PATTERN_OFFSET + INIT_PATTERN_GROESSE), 0x100);
+  out.set(block.subarray(0, INIT_PATTERN_GROESSE), 0x100);
   return out;
 }
 
 /** Eine `.e2spat` (oder ihr nackter Block) als Init-Pattern einbrennen — liefert ein neues Abbild. */
-export function setzeInitPattern(fw: Uint8Array, pattern: Uint8Array): Uint8Array {
-  const pr = pruefeFirmware(fw);
+export function setzeInitPattern(fw: Uint8Array, pattern: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): Uint8Array {
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) throw new Error(pr.reason);
   let block: Uint8Array;
   if (pattern.length === E2SPAT_GROESSE) block = pattern.subarray(0x100, 0x100 + INIT_PATTERN_GROESSE);
@@ -330,22 +364,28 @@ export function setzeInitPattern(fw: Uint8Array, pattern: Uint8Array): Uint8Arra
   const magic = String.fromCharCode(...block.subarray(0, 4));
   if (magic !== "PTST") throw new Error(`Kein Pattern-Block (erwartet „PTST“, gefunden „${magic}“)`);
   const out = fw.slice();
-  out.set(block, INIT_PATTERN_OFFSET);
+  out.set(block, dateiOffset(karte.initPattern));
   return out;
 }
 
-export function liesSplash(fw: Uint8Array): Uint8Array {
-  const pr = pruefeFirmware(fw);
+const splashOffset = (karte: FirmwareKarte): number => {
+  if (karte.splash === undefined) throw new Error(`${karte.label}: die Lage des Startbilds ist nicht bekannt`);
+  return dateiOffset(karte.splash);
+};
+
+export function liesSplash(fw: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): Uint8Array {
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) throw new Error(pr.reason);
-  return fw.slice(SPLASH_OFFSET, SPLASH_OFFSET + SPLASH_GROESSE);
+  const off = splashOffset(karte);
+  return fw.slice(off, off + SPLASH_GROESSE);
 }
 
-export function setzeSplash(fw: Uint8Array, splash: Uint8Array): Uint8Array {
-  const pr = pruefeFirmware(fw);
+export function setzeSplash(fw: Uint8Array, splash: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): Uint8Array {
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) throw new Error(pr.reason);
   if (splash.length !== SPLASH_GROESSE) throw new Error(`${splash.length} Bytes — der Startbildschirm hat ${SPLASH_GROESSE}`);
   const out = fw.slice();
-  out.set(splash, SPLASH_OFFSET);
+  out.set(splash, splashOffset(karte));
   return out;
 }
 
@@ -354,19 +394,20 @@ const istGlobalBlock = (b: Uint8Array): boolean =>
   String.fromCharCode(...b.subarray(0, 4)) === "GLST" &&
   String.fromCharCode(...b.subarray(0xfc, 0x100)) === "GLED";
 
-export function liesInitGlobal(fw: Uint8Array): Uint8Array {
-  const pr = pruefeFirmware(fw);
+export function liesInitGlobal(fw: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): Uint8Array {
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) throw new Error(pr.reason);
-  return fw.slice(INIT_GLOBAL_OFFSET, INIT_GLOBAL_OFFSET + INIT_GLOBAL_GROESSE);
+  const off = dateiOffset(karte.initGlobal);
+  return fw.slice(off, off + INIT_GLOBAL_GROESSE);
 }
 
 /** Einen Global-Block (256 B, GLST … GLED — wie der Global-Dump des Geraets) als Werksstand einbrennen. */
-export function setzeInitGlobal(fw: Uint8Array, block: Uint8Array): Uint8Array {
-  const pr = pruefeFirmware(fw);
+export function setzeInitGlobal(fw: Uint8Array, block: Uint8Array, karte: FirmwareKarte = KARTE_HACKTRIBE): Uint8Array {
+  const pr = pruefeFirmware(fw, karte);
   if (!pr.ok) throw new Error(pr.reason);
   if (!istGlobalBlock(block)) throw new Error(`Kein Global-Block (${block.length} Bytes, erwartet ${INIT_GLOBAL_GROESSE} mit „GLST“ … „GLED“)`);
   const out = fw.slice();
-  out.set(block, INIT_GLOBAL_OFFSET);
+  out.set(block, dateiOffset(karte.initGlobal));
   return out;
 }
 
@@ -397,8 +438,10 @@ export interface SicherungsBauBericht {
 export function firmwareAusSicherung(
   basis: Uint8Array,
   bloecke: readonly { key: string; bytes: Uint8Array }[],
+  karte: FirmwareKarte = KARTE_HACKTRIBE,
 ): { ok: true; bytes: Uint8Array; bericht: SicherungsBauBericht } | { ok: false; reason: string } {
-  const pr = pruefeFirmware(basis);
+  if (karte.id !== "hacktribe") return { ok: false, reason: `Eine Gerätesicherung trägt die Hacktribe-Bänke — sie passt nicht in „${karte.label}“` };
+  const pr = pruefeFirmware(basis, karte);
   if (!pr.ok) return pr;
   const block = (key: string): Uint8Array | undefined => bloecke.find((b) => b.key === key)?.bytes;
   const out = basis.slice();

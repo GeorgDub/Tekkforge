@@ -719,6 +719,85 @@ als „leer", weil die Serien-Firmware die Namen an anderer Stelle im Block
 haelt (+0x7D statt +0x01, Omnitribes Befund); das ist eine bekannte Grenze,
 kein Fehler.
 
+### Firmware-Werkbank 2.0 — Synth oder Sampler als Basis, Hacktribe in der App, Analyse, Ziel-Freigabe (2026-09-07)
+
+Die Werkbank kennt seit v0.7 nicht mehr nur die Hacktribe-Datei, sondern
+**drei Karten** (`core/firmwareKarte.ts`) — je eine Lagebeschreibung, erkannt
+am **Payload**, nicht am Kopf (ein umgekoepftes Abbild traegt den Kopf der
+einen und das Layout der anderen Variante):
+
+| Karte | Presets | Grooves | Init-Pattern / Init-Global | Startbild | Osz-/Mod-Tabelle | DSP-Kette |
+|---|---|---|---|---|---|---|
+| **Hacktribe** (Sampler v2.02 + Patch) | flache Baenke `0xC00A80F0` (100) / `0xC00B4F30` (32), Menue waechst bis 96 | `0xC0143B00` (96) | `0xD0058` / `0xCFF58` | `0xF9954` | 421 / 96+, erweiterbar | ab `0xF9F10` |
+| **Sampler-Stock** (offiziell) | 38 IFX-Zeiger `0xC00ADF94`, 32 MFX-Zeiger `0xC00AF390` → Bloecke mit Name ab +1 (ersetzen) | keine | wie Hacktribe | wie Hacktribe | 421 / 72, fest | ab `0xF9F10` |
+| **Synth-Stock** (offiziell) | 38 IFX-Zeiger `0xC009898C`, 32 MFX-Zeiger `0xC0099D88` (gleiche Namen) | keine | `0xBA9B0` / `0xBA8B0` | Lage unbekannt | 84 (`0xC14E8`) / 72 (`0xC1F68`), fest | ab `0xDFC80` (154 Bloecke) |
+
+Alle Synth-Adressen sind am offiziellen v2.02-Abbild belegt
+(`tests/firmware-karte.test.ts` prueft sie gegen die echten Dateien, wenn sie
+lokal liegen: Zaehler 37/38 stimmig, Platz 1 „Punch" / „Mod Delay", Platz 38
+„Slicer" / 32 „Auto Pan", Osz 1 „SAW", Mod 1 „EG+ Filter", DSP-Kette gueltig).
+Befund dabei: die 38 gezeigten Stock-IFX-Bloecke sind **byte-gleich** mit
+Hacktribes Bank-Slots 0–37 — Hacktribe faedelt sie nur zu einer Bank auf.
+Die Synth-IFX-Zaehler sind zu zwoelf Zellen gefunden, die dreizehnte fehlt —
+darum ist das Synth-Menue nicht erweiterbar; Stock-Presets werden ersetzt.
+
+**Firmware-Ablage.** Es liegt keine Korg-Firmware in TekkForge. Der Nutzer legt
+die `SYSTEM.VSB` aus `electribe_system_v202.zip` (Synth) und
+`electribe_sampler_system_v202.zip` (Sampler) sowie `hacktribe-2.patch`
+(bangcorrupt/hacktribe) in `userData/firmware` (Knopf „Ordner oeffnen"; im
+Browser „Datei hinzufuegen…" fuer die Sitzung). Die Werkbank ordnet jede Datei
+am **SHA-256** ein (`core/firmwareAblage.ts`): Synth `41fc5f1c…`, Sampler
+`1d0f0689…`, Hacktribe `7cb4825c…`, Patch `e70406ec…`. Eine Datei, die wie
+Stock aussieht, aber einen anderen Hash traegt, gilt als **beschaedigt** und
+taugt nicht als Stock-Basis (ein gekipptes Bit, ein halber Download); alles
+andere Gueltige ist „eigene Firmware" und analysierbar.
+
+**Basis waehlen.** „Sampler + Hacktribe", „Sampler — offiziell", „Synth —
+offiziell" oder eine eigene Datei. Hacktribe entsteht **in der App**: `bspatch`
+in reinem TypeScript (`core/bspatch.ts`, bzip2-Dekoder `core/bunzip2.ts`,
+portiert aus seek-bzip) legt den Patch auf die Stock-Sampler-Firmware und legt
+das Ergebnis nur ab, wenn Stock-, Patch- und Ergebnis-Hash stimmen — Golden-
+Test gegen die echte `hacktribe-2.patch` (`tests/bspatch.test.ts`). Bausteine,
+die die Karte nicht hat, sind ausgegraut (Synth: keine Grooves, kein Startbild,
+kein Osz-/Mod-Anhang); `.e2pat` geht als Init-Pattern fuer den Synth.
+
+**Modifizierte Firmware analysieren** (`core/firmwareAnalyse.ts`). Eine
+beliebige `SYSTEM.VSB` aufschluesseln — alle IFX/MFX mit Name und Algorithmus,
+Grooves, Oszillator- und Modulationstabelle, Init-Pattern, Init-Global,
+Startbild, DSP-Kette — und gegen die Referenz (Stock derselben Bauart aus der
+Ablage, oder Hacktribe, oder die geladene Basis) jede **Erweiterung** einzeln:
+platzweise fuer Presets/Grooves/Tabellen (Hacktribes Slot 3 gegen Stocks
+gezeigten Block 3, obwohl beide woanders liegen), blockweise fuer Init und
+Startbild, als Byte-Laeufe fuer DSP und Code. Jede Erweiterung sagt fuer jede
+Zielkarte, ob sie dorthin darf:
+
+| Erweiterung | → Hacktribe | → Sampler-Stock | → Synth-Stock |
+|---|---|---|---|
+| IFX/MFX-Preset | ja, Menue waechst | ersetzt Werks-Platz 1–38 / 1–32 | ersetzt Werks-Platz 1–38 / 1–32 |
+| Groove, Osz-Variante, Mod-Typ | ja (angehaengt) | nein | nein |
+| Init-Pattern, Init-Global | ja | ja | ja, mit Hinweis (andere Variante) |
+| Startbild | ja | ja | nein (Lage unbekannt) |
+| DSP-/Code-Lauf | nur dieselbe Bauart **und** nur, wo das Ziel noch die Referenz-Bytes traegt (Drei-Wege-Regel) | dito | nein |
+
+„Auswahl in die Basis uebernehmen" legt die angehakten Erweiterungen auf die
+Basis; das Ergebnis wird die neue Basis. So wird aus einer modifizierten
+Sampler-Firmware ein Synth: Synth-Stock als Basis, Sampler-Datei analysieren,
+Presets und Init uebernehmen, bauen.
+
+**Ziel und Freigabe** (`core/firmwareFreigabe.ts`). Vor dem Bau waehlt man das
+Geraet und **welche Firmware darauf laeuft** — denn der SD-Updater der
+laufenden Firmware prueft die Device-ID strikt (Sampler `0x0124`, Synth
+`0x0123`): auf einem Sampler mit umgekoepfter Synth-Firmware braucht das
+naechste Update einen Synth-Kopf und den Synth-Pfad. Die Freigabe setzt den
+Kopf und prueft: Groesse, Magic, Tag, Version, Kopf-Rest, Layout, ARM-
+Vektortabelle (acht `ldr pc,[pc,#0x18]`), IFX-/Groove-Zaehler, Init-Bloecke,
+DSP-Kette, Bytes ausserhalb der bekannten Bereiche gegen die Referenz. Eine
+rote harte Pruefung → keine Datei. Der Bericht nennt Kopf, SD-Pfad, PCM-Hinweis
+und den Rueckweg. Tests: `firmware-karte`, `firmware-analyse`,
+`firmware-freigabe`, `firmware-ablage`, `bspatch`, plus GUI-Faelle in
+`firmware-werkbank.test.ts`. ⚠ Am Geraet ist der Synth-Crossgrade weiterhin
+nicht abgenommen; die Freigabe macht ihn pruefbar, nicht bewiesen.
+
 ### DSP-Patches — der Klang selbst (experimentell)
 
 Die Klangerzeugung der Electribe laeuft nicht auf dem ARM, sondern auf einem

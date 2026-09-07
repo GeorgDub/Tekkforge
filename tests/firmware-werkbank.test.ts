@@ -659,3 +659,139 @@ describe("Firmware-Werkbank", () => {
     expect(el("fwStatus").textContent).toMatch(/Kein Geräte-Leseweg/);
   });
 });
+
+// ─── Werkbank 2.0: Ablage, Basis-Wahl, Analyse, Ziel-Freigabe ────────────────
+import { fwAblageLesen, fwBasisWaehlen, fwAnalysieren, fwAnalyseWaehlen, fwAnalyseAuswahl, fwAnalyseUebernehmen, fwFreigabe, fwHacktribeErzeugen, basisSetzen } from "../src/gui/firmwareWerkbank";
+import { fakeHacktribe, fakeSamplerStock, fakeSynthStock, presetBytes as fakePresetBytes, grooveBytes as fakeGrooveBytes } from "./helpers/fakeFirmware";
+import { KARTE_HACKTRIBE, KARTE_SYNTH_STOCK, presetOffset, presetName, leseZaehler } from "../src/core/firmwareKarte";
+import { OFF_ID_LOW } from "../src/core/crossgrade";
+
+describe("Firmware-Werkbank 2.0 — Ablage, Basis-Wahl, Analyse, Freigabe", () => {
+  /** Dateien ueber das Ablage-Feld in die Sitzungs-Ablage nehmen (im Test gibt es keine Bruecke). */
+  async function ablageMit(dateien: { name: string; bytes: Uint8Array }[]): Promise<void> {
+    el("fwAblageIn").files = dateien.map((d) => fakeDatei(d.name, d.bytes));
+    el("fwAblageIn").feuere("change");
+    for (let i = 0; i < 200 && !/Datei\(en\) in die Ablage/.test(el("fwStatus").textContent); i++) await new Promise((r) => setTimeout(r, 2));
+  }
+
+  it("Ablage: Stock-artige Fakes gelten als beschädigt/eigene, Fehlendes wird benannt, Basis-Wahl Stock scheitert sauber", async () => {
+    await ablageMit([
+      { name: "sampler.vsb", bytes: fakeSamplerStock() },
+      { name: "tekk.vsb", bytes: fakeHacktribe() },
+    ]);
+    const st = await fwAblageLesen();
+    expect(st.dateien.map((d) => d.rolle).sort()).toEqual(["beschaedigt", "eigene"]);
+    expect(st.fehlend.length).toBe(3);
+    expect(el("fwAblageListe").innerHTML).toMatch(/sampler.vsb/);
+    expect(el("fwAblageInfo").textContent).toMatch(/Es fehlt/);
+    expect(el("fwAblagePfad").textContent).toMatch(/Sitzung/);
+    expect(await fwBasisWaehlen("sampler-stock")).toBe(false);
+    expect(el("fwStatus").textContent).toMatch(/Sampler v2.02 fehlt/);
+    expect(await fwBasisWaehlen("hacktribe")).toBe(false);
+    const e = await fwHacktribeErzeugen();
+    expect(e.ok).toBe(false);
+    // eigene Firmware aus der Ablage als Basis
+    expect(await fwBasisWaehlen("eigene", "tekk.vsb")).toBe(true);
+    expect(el("fwBasisInfo").textContent).toMatch(/tekk.vsb — Hacktribe/);
+    expect(await fwBasisWaehlen("eigene", "gibtsnicht.vsb")).toBe(false);
+  });
+
+  it("Synth-Stock als Basis: Karte erkannt, Grooves/Startbild/Osz/Mod ausgegraut, Presets werden ersetzt, Ziel vorbelegt", async () => {
+    expect(await basisSetzen(fakeSynthStock(), "synth.vsb")).toBe(true);
+    expect(el("fwBasisInfo").textContent).toMatch(/electribe 2 \(Synth\) v2.02/);
+    expect(el("fwBasisInfo").textContent).toMatch(/keine Groove-Bank/);
+    expect((el("fwGrooves") as unknown as { disabled: boolean }).disabled).toBe(true);
+    expect((el("fwSplash") as unknown as { disabled: boolean }).disabled).toBe(true);
+    expect((el("fwOsz") as unknown as { disabled: boolean }).disabled).toBe(true);
+    expect((el("fwMod") as unknown as { disabled: boolean }).disabled).toBe(true);
+    expect(el("fwKarteInfo").textContent).toMatch(/38 feste IFX-Plätze \(ersetzen\), 32 MFX, keine Grooves, kein Startbild/);
+    expect(el("fwZielGeraet").value).toBe("synth");
+    expect(el("fwZielFirmware").value).toBe("synth-stock");
+    expect(fwOszAnhaengen(1, "X", 0)).toEqual({ ok: false, reason: expect.stringMatching(/nur an die Hacktribe/) });
+    // Preset-Manager mit der Synth-Firmware laden, Werks-IFX 2 umbenennen → ersetzt im Zeiger-Block
+    el("pmFirmwareIn").files = [fakeDatei("synth.vsb", fakeSynthStock())];
+    el("pmFirmwareIn").feuere("change");
+    await warte();
+    await warte();
+    pmAktion("name", "ifx", 2, "Mein Drive");
+    el("fwPresets").checked = true;
+    const r = fwBaueAbbild();
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const off = presetOffset(KARTE_SYNTH_STOCK, r.bytes, "ifx", 1)!;
+    expect(presetName(r.bytes.subarray(off, off + FX_PRESET_SIZE))).toBe("Mein Drive");
+    expect(leseZaehler(r.bytes, KARTE_SYNTH_STOCK.ifxZaehler)).toEqual({ ok: true, maxIndex: 37 });
+    expect(r.zeilen.join("\n")).toMatch(/electribe 2 \(Synth\)/);
+    // Freigabe fuer einen Sampler mit Stock-Firmware: Sampler-Kopf, Sampler-Pfad
+    el("fwZielGeraet").value = "sampler";
+    el("fwZielFirmware").value = "sampler-stock";
+    const f = fwFreigabe();
+    expect(f.ok).toBe(true);
+    if (!f.ok) return;
+    expect(f.freigabe.ok).toBe(true);
+    expect(f.freigabe.bytes[OFF_ID_LOW]).toBe(0x24);
+    expect(f.freigabe.sdPfad).toBe("KORG/electribe sampler/System/SYSTEM.VSB");
+    expect(f.zeilen.join("\n")).toMatch(/FREIGEGEBEN/);
+    expect(f.zeilen.join("\n")).toMatch(/PCM/);
+  });
+
+  it("Analyse: modifizierte Hacktribe gegen die Basis, Auswahl übernehmen — die Basis wird das Ergebnis", async () => {
+    await basisSetzen(fakeHacktribe(), "basis.vsb");
+    const mod = fakeHacktribe({ ifxBelegt: 50 });
+    mod.set(fakePresetBytes("Tekk Drive"), presetOffset(KARTE_HACKTRIBE, mod, "ifx", 49)!);
+    mod.set(fakeGrooveBytes("Swing X"), dateiOffset(KARTE_HACKTRIBE.grooveBank!.base + 62 * KARTE_HACKTRIBE.grooveBank!.stride));
+    for (const z of KARTE_HACKTRIBE.grooveZaehler!) mod[dateiOffset(z.addr)] = z.plusEins ? 63 : 62;
+    mod[0x21000] ^= 0x33;
+    const a = fwAnalysieren(mod, "mod.vsb", "basis");
+    expect(a.ok).toBe(true);
+    if (!a.ok) return;
+    expect(a.erweiterungen.map((e) => e.id).sort()).toEqual(["code:0x21000", "groove:63", "ifx:50"]);
+    expect(el("fwAnalyseBericht").textContent).toMatch(/mod.vsb — Hacktribe/);
+    expect(el("fwAnalyseListe").innerHTML).toMatch(/data-erw="ifx:50" checked/);
+    expect(el("fwAnalyseListe").innerHTML).toMatch(/data-erw="code:0x21000"(?! checked)/);
+    expect(el("fwInhaltListe").innerHTML).toMatch(/IFX \(50\)/);
+    expect(fwAnalyseAuswahl().sort()).toEqual(["groove:63", "ifx:50"]);
+    fwAnalyseWaehlen("code:0x21000", true);
+    expect(el("fwAnalyseInfo").textContent).toMatch(/3 von 3 übertragbaren/);
+    const u = await fwAnalyseUebernehmen();
+    expect(u.ok).toBe(true);
+    for (let i = 0; i < 100 && !/Erweiterung/.test(el("fwBasisInfo").textContent); i++) await new Promise((r) => setTimeout(r, 2));
+    expect(el("fwBasisInfo").textContent).toMatch(/basis.vsb \+ 3 Erweiterung/);
+    expect(el("fwBasisInfo").textContent).toMatch(/IFX-Menü bis 50, Grooves bis 63/);
+    el("fwPresets").checked = false;
+    el("fwSplash").checked = true;
+    const r = fwBaueAbbild();
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const off = presetOffset(KARTE_HACKTRIBE, r.bytes, "ifx", 49)!;
+    expect(presetName(r.bytes.subarray(off, off + FX_PRESET_SIZE))).toBe("Tekk Drive");
+    expect(r.bytes[0x21000]).toBe(mod[0x21000]);
+  });
+
+  it("Analyse ohne Referenz listet nur den Inhalt; Übernahme ohne Auswahl und ohne Analyse wird abgelehnt", async () => {
+    await basisSetzen(fakeSynthStock(), "synth.vsb");
+    expect((await fwAnalyseUebernehmen()).ok).toBe(false);
+    const a = fwAnalysieren(fakeSynthStock(), "synth.vsb", "stock");
+    expect(a.ok && a.erweiterungen.length).toBe(0);
+    expect(el("fwAnalyseListe").innerHTML).toMatch(/keine Referenz/);
+    expect(el("fwStatus").textContent).toMatch(/Stock-Firmware derselben Bauart in die Ablage/);
+    const u = await fwAnalyseUebernehmen();
+    expect(u.ok).toBe(false);
+    expect(!u.ok && u.reason).toMatch(/Nichts ausgewählt/);
+  });
+
+  it("Freigabe rot → nichts gebaut: kaputte Vektortabelle in der Basis", async () => {
+    const fw = fakeHacktribe();
+    fw[0x101] = 0;
+    await basisSetzen(fw, "kaputt.vsb");
+    el("fwSplash").checked = true;
+    const f = fwFreigabe();
+    expect(f.ok).toBe(true);
+    if (!f.ok) return;
+    expect(f.freigabe.ok).toBe(false);
+    expect(f.zeilen.join("\n")).toMatch(/NICHT FREIGEGEBEN/);
+    el("fwBauen").click();
+    for (let i = 0; i < 100 && !/FREIGEGEBEN/.test(el("fwStatus").textContent); i++) await new Promise((r) => setTimeout(r, 2));
+    expect(el("fwStatus").textContent).toMatch(/NICHT FREIGEGEBEN/);
+  });
+});

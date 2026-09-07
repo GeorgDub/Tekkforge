@@ -47,6 +47,7 @@ import {
 import { baueSammlung, leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
 import { baueFirmware, pruefeFirmware, HACKTRIBE_SHA256 } from "../core/firmwareBau";
+import { erkenneKarte, karteLabel } from "../core/firmwareKarte";
 import { addressForSlot } from "../core/hacktribeRam";
 import { IFX_ZAEHLER, leseZaehlerStand, type ZaehlerWert } from "../core/ifxErweiterung";
 import { legeAb } from "./ablage";
@@ -696,7 +697,13 @@ async function ausSicherung(f: File): Promise<void> {
 
 async function ausFirmware(f: File): Promise<void> {
   try {
-    uebernehmen(zustandAusFirmware(new Uint8Array(await f.arrayBuffer())), `Firmware ${f.name}`);
+    const fw = new Uint8Array(await f.arrayBuffer());
+    // Jede Karte darf in den Manager: Hacktribe ueber die Baenke, Stock
+    // (Sampler wie Synth) ueber die Zeigertabellen — Plaetze, die die Karte
+    // nicht hat, bleiben leer.
+    const e = erkenneKarte(fw);
+    if (!e.ok) throw new Error(e.reason);
+    uebernehmen(zustandAusFirmware(fw, e.karte), `Firmware ${f.name} (${karteLabel(e)})`);
   } catch (e) {
     setStatus(`Firmware nicht lesbar: ${e instanceof Error ? e.message : String(e)}`);
   }
