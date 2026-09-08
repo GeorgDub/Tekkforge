@@ -46,6 +46,7 @@ import {
   grooveOffset,
   leseZaehler,
   presetOffset,
+  presetBlockMitName,
   type FirmwareKarte,
 } from "./firmwareKarte";
 import { decodeFxPreset, encodeFxPreset, FX_PRESET_SIZE } from "./e2FxPreset";
@@ -202,6 +203,12 @@ export function baueFirmware(basis: Uint8Array, eintraege: readonly SammlungsEin
     if (offset === null) return { ok: false, reason: `„${eintrag.name}“: Platz ${platz} (${eintrag.art.toUpperCase()}) hat in ${karte.label} keinen Block` };
     const len = eintrag.art === "groove" ? GROOVE_SIZE : FX_PRESET_SIZE;
     const unterlage = out.subarray(offset, offset + len);
+    // Stock-Karten: der Zeiger wird nicht blind geglaubt — dort, wo er hinfuehrt,
+    // muss ein Preset-Block mit Namen liegen (so haelt Stock alle 38/32). Ein
+    // verbogener Zeiger wuerde sonst 524 Bytes auf Code legen.
+    if (eintrag.art !== "groove" && !(eintrag.art === "ifx" ? karte.ifxBank : karte.mfxBank) && !presetBlockMitName(unterlage)) {
+      return { ok: false, reason: `„${eintrag.name}“: der Zeiger für ${eintrag.art.toUpperCase()}-Platz ${platz} führt auf keinen Preset-Block (0x${offset.toString(16).toUpperCase()}) — Abbild verändert? Nichts geschrieben.` };
+    }
     // Unterlage nur, wenn dort schon etwas steht: ein leerer Groove-Platz ist
     // lauter 0xFF und traegt weder Rahmen noch Step-Tabelle — darueber gelegt
     // fehlte dem Block das "GVST". Und ein LEERER Eintrag (geloeschter Platz aus

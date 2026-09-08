@@ -80,8 +80,8 @@ function kopf(fw: Uint8Array, variante: Variante): void {
   fw[OFF_ID_LOW] = VARIANTEN[variante].idLow;
   fw[OFF_SUFFIX] = VARIANTEN[variante].suffix;
   fw.fill(0xff, 0x42, 0x100);
-  // Vektortabelle: acht ldr pc,[pc,#0x18]
-  for (let i = 0; i < 8; i++) setU32(fw, 0x100 + i * 4, 0xe59ff018);
+  // Vektortabelle wie in allen drei echten Abbildern: 5 × ldr pc,[pc,#0x18], dann #0x04, #0x14, #0x14
+  for (const [i, w] of [0xe59ff018, 0xe59ff018, 0xe59ff018, 0xe59ff018, 0xe59ff018, 0xe59ff004, 0xe59ff014, 0xe59ff014].entries()) setU32(fw, 0x100 + i * 4, w);
 }
 
 function initBloecke(fw: Uint8Array, k: FirmwareKarte, name: string): void {

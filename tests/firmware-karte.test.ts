@@ -16,6 +16,7 @@ import {
   presetName,
   grooveOffset,
   karteLabel,
+  presetBlockMitName,
   HACKTRIBE_SHA256,
   SAMPLER_STOCK_SHA256,
   SYNTH_STOCK_SHA256,
@@ -25,13 +26,28 @@ import { IFX_ZAEHLER } from "../src/core/ifxErweiterung";
 import { leseLdrKette } from "../src/core/dspPatch";
 import { decodeOsz } from "../src/core/oszTabelle";
 import { modName } from "../src/core/modTabelle";
+import { freigabe } from "../src/core/firmwareFreigabe";
 import { firmwareOrdner, firmwareDatei } from "./helpers/firmwareDateien";
 
 const asc = (b: Uint8Array, off: number, s: string): void => {
   for (let i = 0; i < s.length; i++) b[off + i] = s.charCodeAt(i);
 };
 
-/** Ein Abbild mit Kopf und den Init-Bloecken der gewuenschten Familie. */
+/** Drei gueltige Stock-IFX-Zeiger (auf Bloecke mit Kategorie 0 und Namen) — so unterscheidet sich Stock von Hacktribe. */
+function stockZeiger(b: Uint8Array, k: typeof KARTE_SAMPLER_STOCK): void {
+  for (let s = 0; s < 3; s++) {
+    const block = 0x150000 + s * 0x20c;
+    asc(b, block + 1, ["Punch", "Overdrive", "Distortion"][s]);
+    const ram = block - 0x100 + 0xc0000000;
+    const z = dateiOffset(k.ifxZeiger!.addr) + 4 * s;
+    b[z] = ram & 0xff;
+    b[z + 1] = (ram >>> 8) & 0xff;
+    b[z + 2] = (ram >>> 16) & 0xff;
+    b[z + 3] = (ram >>> 24) & 0xff;
+  }
+}
+
+/** Ein Abbild mit Kopf, den Init-Bloecken der gewuenschten Familie und (Stock) den Zeigern. */
 function abbild(familie: "sampler" | "synth", kopf: "sampler" | "synth" = familie): Uint8Array {
   const b = new Uint8Array(VSB_TOTAL);
   asc(b, 0, "KORG SYSTEM FILE");
@@ -45,6 +61,7 @@ function abbild(familie: "sampler" | "synth", kopf: "sampler" | "synth" = famili
   asc(b, dateiOffset(k.initPattern) + 0x3c00 - 4, "PTED");
   asc(b, dateiOffset(k.initGlobal), "GLST");
   asc(b, dateiOffset(k.initGlobal) + 0xfc, "GLED");
+  stockZeiger(b, k);
   return b;
 }
 
@@ -54,6 +71,20 @@ describe("firmwareKarte — Erkennung", () => {
     expect(r.ok && r.karte.id).toBe("sampler-stock");
     expect(r.ok && r.hacktribe).toBe(false);
     expect(r.ok && r.umgekoepft).toBe(false);
+  });
+
+  it("ohne gültige Stock-Zeiger ist ein Sampler-Layout Hacktribe — auch mit leerem Slot 1 und leerer Groove-Bank", () => {
+    const h = abbild("sampler");
+    // Zeiger zerstoeren: Hacktribe hat dort Bank-Inhalt
+    h.fill(0, dateiOffset(KARTE_SAMPLER_STOCK.ifxZeiger!.addr), dateiOffset(KARTE_SAMPLER_STOCK.ifxZeiger!.addr) + 12);
+    const r = erkenneKarte(h);
+    expect(r.ok && r.karte.id).toBe("hacktribe");
+    expect(presetBlockMitName(new Uint8Array(0x20c))).toBe(false);
+    const ok = new Uint8Array(0x20c);
+    asc(ok, 1, "Punch");
+    expect(presetBlockMitName(ok)).toBe(true);
+    ok[0] = 0x40;
+    expect(presetBlockMitName(ok)).toBe(false);
   });
 
   it("Name in Slot 0 der flachen IFX-Bank oder GVST in der Groove-Bank → Hacktribe", () => {
@@ -118,8 +149,9 @@ describe("firmwareKarte — Karten", () => {
     expect(dateiOffset(KARTE_SYNTH_STOCK.modTabelle!.base)).toBe(0xc1f68);
     expect(KARTE_SYNTH_STOCK.splash).toBeUndefined();
     expect(KARTE_SYNTH_STOCK.ifxErweiterbar).toBe(false);
-    expect(KARTE_SYNTH_STOCK.ifxZaehlerVollstaendig).toBe(false);
-    expect(IFX_ZAEHLER_SYNTH.length).toBe(12);
+    expect(KARTE_SYNTH_STOCK.ifxZaehlerVollstaendig).toBe(true);
+    expect(IFX_ZAEHLER_SYNTH.length).toBe(13);
+    expect(dateiOffset(IFX_ZAEHLER_SYNTH[3].addr)).toBe(0x443f8);
     expect(dateiOffset(IFX_ZAEHLER_SYNTH[0].addr)).toBe(0x39cfc);
     expect(ramAdresse(dateiOffset(0xc0012345))).toBe(0xc0012345);
     expect(KARTE_SYNTH_STOCK.patternEndung).toBe(".e2pat");
@@ -140,7 +172,8 @@ describe("firmwareKarte — Karten", () => {
     b[zeigerOff + 2] = 0x0a;
     b[zeigerOff + 3] = 0xc0;
     expect(presetOffset(KARTE_SAMPLER_STOCK, b, "ifx", 0)).toBe(dateiOffset(0xc00a8790));
-    expect(presetOffset(KARTE_SAMPLER_STOCK, b, "ifx", 1)).toBeNull(); // Zeiger 0 → ungültig
+    expect(presetOffset(KARTE_SAMPLER_STOCK, b, "ifx", 1)).toBe(dateiOffset(0xc0000000 + 0x150000 - 0x100 + 0x20c)); // aus stockZeiger()
+    expect(presetOffset(KARTE_SAMPLER_STOCK, b, "ifx", 3)).toBeNull(); // Zeiger 0 → ungültig
     expect(presetOffset(KARTE_SAMPLER_STOCK, b, "ifx", 38)).toBeNull();
     expect(grooveOffset(KARTE_SAMPLER_STOCK, 0)).toBeNull();
     expect(grooveOffset(KARTE_HACKTRIBE, 95)).toBe(dateiOffset(0xc0143b00 + 95 * 0x140));
@@ -211,6 +244,14 @@ describe.skipIf(!firmwareOrdner())("firmwareKarte — echte Abbilder", () => {
       expect(kette.ok).toBe(true);
       expect(kette.bloecke.length).toBeGreaterThanOrEqual(150);
       expect(ascii(fw, dateiOffset(k.initPattern) + 0x10, 12)).toBe("Init Pattern");
+      // Die Freigabe muss ein echtes, unveraendertes Abbild durchlassen — mit jedem plausiblen Ziel.
+      const laufend = f.id === "synth-stock" ? "synth-stock" : f.id === "hacktribe" ? "hacktribe" : "sampler-stock";
+      const fg = freigabe(fw, { geraet: k.variante, laufend }, fw);
+      expect(fg.pruefungen.filter((p) => p.hart && !p.ok).map((p) => `${p.name}: ${p.text}`)).toEqual([]);
+      expect(fg.ok).toBe(true);
+      expect(fg.pruefungen.find((p) => p.name === "Vektortabelle")?.text).toMatch(/^8\/8/);
+      // Synth-Payload fuer einen Sampler mit Stock-Firmware: Kopf umgekoepft, trotzdem frei
+      if (f.id === "synth-stock") expect(freigabe(fw, { geraet: "sampler", laufend: "sampler-stock" }).ok).toBe(true);
     });
   }
 

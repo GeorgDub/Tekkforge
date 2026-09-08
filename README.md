@@ -738,8 +738,9 @@ lokal liegen: Zaehler 37/38 stimmig, Platz 1 „Punch" / „Mod Delay", Platz 38
 „Slicer" / 32 „Auto Pan", Osz 1 „SAW", Mod 1 „EG+ Filter", DSP-Kette gueltig).
 Befund dabei: die 38 gezeigten Stock-IFX-Bloecke sind **byte-gleich** mit
 Hacktribes Bank-Slots 0–37 — Hacktribe faedelt sie nur zu einer Bank auf.
-Die Synth-IFX-Zaehler sind zu zwoelf Zellen gefunden, die dreizehnte fehlt —
-darum ist das Synth-Menue nicht erweiterbar; Stock-Presets werden ersetzt.
+Die Synth-IFX-Zaehler sind zu allen dreizehn Zellen gefunden; ohne flache Bank
+ist das Synth-Menue trotzdem nicht erweiterbar — Stock-Presets werden ersetzt
+(am Zeigerziel muss ein Preset-Block mit Namen liegen, sonst schreibt der Bau nichts).
 
 **Firmware-Ablage.** Es liegt keine Korg-Firmware in TekkForge. Der Nutzer legt
 die `SYSTEM.VSB` aus `electribe_system_v202.zip` (Synth) und

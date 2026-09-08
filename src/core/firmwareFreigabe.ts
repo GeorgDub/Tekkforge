@@ -119,11 +119,13 @@ export function freigabe(bytes: Uint8Array, ziel: Ziel, referenz?: Uint8Array): 
   } else {
     const k = befund.karte;
     p("Layout", true, `${k.label}${befund.umgekoepft ? " — Payload einer anderen Variante als der Kopf (Crossgrade)" : ""}`);
-    // Vektortabelle: acht ldr pc,[pc,#0x18] (0xE59FF018) am Payload-Anfang — so
-    // beginnen Stock-Synth, Stock-Sampler und Hacktribe gleichermassen.
+    // Vektortabelle: acht `ldr pc,[pc,#imm]` (0xE59FF000 | imm12) am Payload-
+    // Anfang — so beginnen Stock-Synth, Stock-Sampler und Hacktribe gleichermassen
+    // (am Abbild: 5 × #0x18, dann #0x04, #0x14, #0x14; die Immediates sind je
+    // Vektor verschieden, die Befehlsform nicht).
     let vektoren = 0;
-    for (let i = 0; i < 8; i++) if (u32(out, VSB_HEADER + i * 4) === 0xe59ff018) vektoren++;
-    p("Vektortabelle", vektoren === 8, `${vektoren}/8 Sprungvektoren am Payload-Anfang`);
+    for (let i = 0; i < 8; i++) if (((u32(out, VSB_HEADER + i * 4) & 0xfffff000) >>> 0) === 0xe59ff000) vektoren++;
+    p("Vektortabelle", vektoren === 8, `${vektoren}/8 Sprungvektoren (ldr pc,[pc,#…]) am Payload-Anfang`);
     const z = leseZaehler(out, k.ifxZaehler);
     p("IFX-Zähler", z.ok, z.ok ? `stimmig, Menü bis ${z.maxIndex + 1}${k.ifxZaehlerVollstaendig ? "" : " (nicht alle Zellen bekannt — nur gelesen)"}` : z.reason);
     if (k.grooveZaehler) {
@@ -144,11 +146,18 @@ export function freigabe(bytes: Uint8Array, ziel: Ziel, referenz?: Uint8Array): 
         const laeufe = unterschiedsLaeufe(out, referenz);
         const bereiche = bekannteBereiche(out, k);
         let draussen = 0;
+        let dsp = 0;
         for (const l of laeufe) {
-          for (let i = l.von; i < l.bis; i++) if (out[i] !== referenz[i] && !bereiche.some((b) => b.von <= i && i < b.bis)) draussen++;
+          for (let i = l.von; i < l.bis; i++) {
+            if (out[i] === referenz[i]) continue;
+            const b = bereiche.find((x) => x.von <= i && i < x.bis);
+            if (!b) draussen++;
+            else if (b.art === "dsp") dsp++;
+          }
         }
-        p("Referenz", true, `${laeufe.length} Byte-Läufe gegenüber ${r.karte.label}, davon ${draussen} Bytes außerhalb der bekannten Bereiche (Code/DSP)`, false);
-        if (draussen) warnungen.push(`${draussen} Bytes außerhalb der bekannten Bereiche geändert — das ist Hacktribe-/Code-Patch-Gebiet; nur flashen, was man kennt.`);
+        p("Referenz", true, `${laeufe.length} Byte-Läufe gegenüber ${r.karte.label}, davon ${draussen} Bytes im Code außerhalb der bekannten Bereiche und ${dsp} Bytes in der DSP-Kette`, false);
+        if (draussen) warnungen.push(`${draussen} Bytes im Code außerhalb der bekannten Bereiche geändert — das ist Hacktribe-/Code-Patch-Gebiet; nur flashen, was man kennt.`);
+        if (dsp) warnungen.push(`${dsp} Bytes in der BF523-DSP-Kette geändert — DSP-Patches sind experimentell; erst am Gerät hören.`);
       }
     }
     // Zielgeraet vs. Payload

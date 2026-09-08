@@ -32,9 +32,9 @@
  *                  (beide „GLST“/„PTST“ am Abbild belegt), Osz-Tabelle
  *                  0xC00C13E8 (84 × 32: SAW, BOOST-SAW, PULSE …), Mod-Tabelle
  *                  0xC00C1E68 (72), DSP-Kette ab Datei 0xDFC80 (154 Bloecke).
- *                  IFX-Zaehler: der Getter (mov r0,#38) bei 0xC0039BFC und elf
- *                  Spiegel per Befehlskontext gefunden; die zwoelfte Zelle
- *                  (Analog zu 0xC004A1F8) fehlt — darum nicht erweiterbar.
+ *                  IFX-Zaehler: der Getter (mov r0,#38) bei 0xC0039BFC und alle
+ *                  zwoelf Spiegel per Befehlskontext gefunden; ohne flache Bank
+ *                  trotzdem nicht erweiterbar (38 feste Plaetze, ersetzen).
  *                  Startbild: Lage im Synth NICHT gefunden (kein Baustein).
  *
  * Was eine Karte NICHT kann, sagt sie selbst (`ifxErweiterbar`, fehlende
@@ -206,14 +206,16 @@ export const KARTE_SAMPLER_STOCK: FirmwareKarte = {
 };
 
 /**
- * Synth: Getter `mov r0,#38` bei Datei 0x39CFC, dazu elf Spiegelzellen, per
- * Befehlskontext (cmp/ldrb/movle) am Sampler-Gegenstueck wiedergefunden.
- * Reihenfolge wie im Sampler; die Zelle zu 0xC004A1F8 fehlt.
+ * Synth: Getter `mov r0,#38` bei Datei 0x39CFC, dazu zwoelf Spiegelzellen, per
+ * Befehlskontext (cmp/ldrb/movle) am Sampler-Gegenstueck wiedergefunden —
+ * Reihenfolge wie im Sampler. Die dreizehnte (0x443F8, Analog zu 0xC004A1F8,
+ * Kontext `mov r1,r5 · cmp r2,#0x25`) fand der Review am 2026-09-07 nach.
  */
 export const IFX_ZAEHLER_SYNTH: readonly Zaehler[] = [
   { addr: ramAdresse(0x39cfc), plusEins: true }, // Getter (0xC003EFDC im Sampler)
   { addr: ramAdresse(0x43240), plusEins: false }, // 0xC0048F80
   { addr: ramAdresse(0x4410c), plusEins: false }, // 0xC0049EF0
+  { addr: ramAdresse(0x443f8), plusEins: false }, // 0xC004A1F8
   { addr: ramAdresse(0x85844), plusEins: false }, // 0xC009814C
   { addr: ramAdresse(0x85848), plusEins: true }, // 0xC0098150
   { addr: ramAdresse(0x85880), plusEins: false }, // 0xC0098188
@@ -236,7 +238,8 @@ export const KARTE_SYNTH_STOCK: FirmwareKarte = {
   mfxZeiger: { addr: ramAdresse(0x99e88), count: 32 },
   mfxSchreibMax: 31,
   ifxZaehler: IFX_ZAEHLER_SYNTH,
-  ifxZaehlerVollstaendig: false,
+  ifxZaehlerVollstaendig: true,
+  // Alle Zaehler bekannt, aber keine flache Bank: das Synth-Menue bleibt bei 38.
   ifxErweiterbar: false,
   initPattern: ramAdresse(0xba9b0),
   initGlobal: ramAdresse(0xba8b0),
@@ -275,6 +278,23 @@ export interface KartenBefund {
 }
 export type KartenErkennung = KartenBefund | { ok: false; reason: string };
 
+/** Stock-Zeigertabelle: die ersten drei IFX-Zeiger fuehren auf Bloecke mit Namen. */
+function stockZeigerGueltig(bytes: Uint8Array, k: FirmwareKarte): boolean {
+  for (let s = 0; s < 3; s++) {
+    const off = presetOffset(k, bytes, "ifx", s);
+    if (off === null || off + 0x20c > bytes.length) return false;
+    if (!presetBlockMitName(bytes.subarray(off, off + 0x20c))) return false;
+  }
+  return true;
+}
+
+/** Ein Preset-Block, wie Stock ihn fuehrt: Kategorie-Byte < 0x10 und ASCII-Name ab +1. */
+export function presetBlockMitName(block: Uint8Array): boolean {
+  if (block.length < 0x20c || block[0] > 0x0f) return false;
+  const n = presetName(block);
+  return n.length > 0 && /^[\x20-\x7e]+$/.test(n);
+}
+
 /**
  * Bauart an den Init-Bloecken erkennen — „PTST“ und „GLST“ an den Stellen
  * der Karte; die liegen in Stock und Hacktribe gleich. Die Endmarken
@@ -305,7 +325,11 @@ export function erkenneKarte(bytes: Uint8Array): KartenErkennung {
     const groove = KARTE_HACKTRIBE.grooveBank!;
     const ifxName = bytes[dateiOffset(bank.base) + 1] !== 0;
     const gvst = ascii(bytes, dateiOffset(groove.base), 4) === "GVST";
-    karte = ifxName || gvst ? KARTE_HACKTRIBE : KARTE_SAMPLER_STOCK;
+    // Stock haelt seine 38 IFX ueber die Zeigertabelle bei 0xC00ADF94 — bei
+    // Hacktribe liegt dort Bank-Inhalt, die „Zeiger“ fuehren ins Leere. Das
+    // entscheidet auch dann, wenn Slot 1 der Bank geleert und die Groove-Bank leer ist.
+    const stockZeiger = stockZeigerGueltig(bytes, KARTE_SAMPLER_STOCK);
+    karte = ifxName || gvst || !stockZeiger ? KARTE_HACKTRIBE : KARTE_SAMPLER_STOCK;
   } else if (hatFamilie(bytes, KARTE_SYNTH_STOCK)) {
     karte = KARTE_SYNTH_STOCK;
   } else {

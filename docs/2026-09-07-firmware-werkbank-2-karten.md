@@ -20,7 +20,7 @@ wenn `TEKKFORGE_FIRMWARE_DIR` bzw. `../omnitribe/vendor/firmware` sie hat).
 | IFX-Zeigertabelle (38 × LE32) | `0xAE094` (RAM `0xC00ADF94`) | `0x98A8C` (RAM `0xC009898C`) | Zeiger → Blöcke mit `00 "Punch"` … `"Slicer"` |
 | MFX-Zeigertabelle (32 × LE32) | `0xAF490` (RAM `0xC00AF390`) | `0x99E88` (RAM `0xC0099D88`) | Zeiger → Blöcke mit `02 "Mod Delay"` … `"Auto Pan"` |
 | IFX-Anzahl-Getter `mov r0,#38` | `0x3F0DC` | `0x39CFC` | Wert 0x26 in beiden Stock-Abbildern, 0x31 (49) in Hacktribe |
-| IFX-Spiegelzellen (Max-Index 37 / Anzahl 38) | 12 weitere (siehe `ifxErweiterung.ts`) | `0x43240`, `0x4410C`, `0x85844`, `0x85848`(+1), `0x85880`, `0x8588C`(+1), `0x857E0`, `0x857E4`(+1), `0x85794`(+1), `0x85814`(+1), `0x85830`(+1) | Befehlskontext (`cmp #0x25`, `movle #0x26`, `ldrb`+`cmp`) — die Zelle zu `0xC004A1F8` **fehlt** |
+| IFX-Spiegelzellen (Max-Index 37 / Anzahl 38) | 12 weitere (siehe `ifxErweiterung.ts`) | `0x43240`, `0x4410C`, `0x443F8`, `0x85844`, `0x85848`(+1), `0x85880`, `0x8588C`(+1), `0x857E0`, `0x857E4`(+1), `0x85794`(+1), `0x85814`(+1), `0x85830`(+1) | Befehlskontext (`cmp #0x25`, `movle #0x26`, `ldrb`+`cmp`); `0x443F8` = Analog zu `0xC004A1F8` (`mov r1,r5 · cmp r2,#0x25`, im Review nachgefunden) — alle 13 bekannt |
 | Oszillator-Tabelle (32 B je Eintrag) | `0xD9BB0`, 421 (Hacktribe 274 belegt) | `0xC14E8`, **84** Einträge (SAW, BOOST-SAW, PULSE, TRIANGLE, SINE, DUAL-SAW …) | ASCII-Namen; direkt dahinter beginnt die Mod-Tabelle |
 | Modulations-Tabelle (0x58 je Eintrag, 72) | `0xD82F0` (Hacktribe verlegt nach `0x1A0100`) | `0xC1F68` | „EG+ Filter“ … „Random IFX“ |
 | BF523-DSP-Kette (LDR, Signatur 0xAD) | ab `0xF9F10`, 157 Blöcke | ab `0xDFC80`, 154 Blöcke | Kette gültig bis Endblock; erster Block Flags 0x5001 → 0xFFA00000 |
@@ -64,11 +64,26 @@ Regeln, die nie gebrochen werden:
 - Der Kopf folgt der **laufenden Firmware**, nicht der Hardware (strikter `family_check`).
 - Eine rote harte Prüfung in der Freigabe → keine Datei.
 
+## 2b. Review-Befunde (2026-09-07, eingearbeitet in 0.7.1)
+
+- Die Freigabe verlangte acht `ldr pc,[pc,#0x18]`; die echten Abbilder tragen
+  5 × `#0x18`, `#0x04`, `#0x14`, `#0x14` — die Prüfung war für jede echte Datei
+  rot. Jetzt zählt die Befehlsform (`0xE59FF000 | imm12`); Golden-Test gegen die
+  echten Abbilder.
+- Stock-Zeiger werden beim Bau nicht blind geglaubt: am Zeigerziel muss ein
+  Preset-Block mit Namen liegen, sonst wird nichts geschrieben.
+- Hacktribe-Erkennung auch bei geleertem Slot 1 und leerer Groove-Bank: Stock
+  hat gültige IFX-Zeiger bei `0xC00ADF94`, Hacktribe nicht.
+- „Geänderte“ Osz-/Mod-Einträge werden an ihrem Platz ersetzt statt angehängt.
+- Code-/DSP-Läufe schalten in der Auswahl nur gemeinsam (ein Patchsatz).
+- „Sicherung einbrennen“ geht ebenfalls durch die Freigabe.
+
 ## 3. Offen
 
 1. **Startbild im Synth**: Lage unbekannt (kein Baustein, keine Übernahme).
-2. **Dreizehnte IFX-Zelle im Synth** (`0xC004A1F8`-Analog): nicht gefunden; das
-   Synth-IFX-Menü bleibt bei 38 (ersetzen statt anhängen).
+2. **Synth-IFX-Menü erweitern**: alle 13 Zählerzellen sind bekannt, aber es gibt
+   keine flache Bank — Anhängen bräuchte Hacktribes Bank-Umbau für den Synth;
+   bis dahin: 38 feste Plätze, ersetzen.
 3. **Am Gerät**: Synth-Crossgrade, Stock-Preset-Ersatz und Init-Pattern über die
    Variantengrenze sind am Abbild belegt, am Gerät nicht abgenommen. Werks-
    `SYSTEM.VSB` der laufenden Firmware als Rückweg auf der SD behalten.
