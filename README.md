@@ -62,10 +62,10 @@ pnpm dev            # GUI im Browser-Dev-Server (Vite)
 pnpm dist:win       # Windows-Installer (NSIS) + Portable nach release/
 ```
 
-**Release:** ein Tag `vX.Y.Z` auf `main` (passend zur `version` in `package.json`) startet
-`.github/workflows/release.yml` — Windows-Build (Installer, Portable, Zip, FX-Presets) und
-GitHub-Release mit den Notizen aus `docs/versionen/X.Y.Z.md`. Die App prüft beim Start
-gegen dieses Release auf Updates.
+**Release:** `version` in `package.json` anheben, Notizen nach `docs/versionen/X.Y.Z.md`,
+auf `main` mergen — `.github/workflows/release.yml` baut unter Windows (Installer, Portable,
+Zip, FX-Presets), legt den Tag `vX.Y.Z` an und veröffentlicht das GitHub-Release. Ist der
+Tag schon da, passiert nichts. Die App prüft beim Start gegen dieses Release auf Updates.
 
 Die gebaute `dist/index.html` ist selbsttragend (kein Server) und lässt sich auch einfach
 im Browser doppelklicken.
