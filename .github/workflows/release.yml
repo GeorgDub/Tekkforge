@@ -1,0 +1,105 @@
+name: Release
+
+# Baut TekkForge nativ unter Windows (NSIS-Installer, Portable, Zip) und
+# veroeffentlicht das Ergebnis als GitHub-Release. Ausgeloest durch einen
+# Versions-Tag (v0.7.1) oder von Hand (workflow_dispatch: nimmt die Version
+# aus package.json und legt den Tag an, falls er fehlt).
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Windows-Build + Release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: pnpm einrichten
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Dependencies installieren
+        run: pnpm install --frozen-lockfile
+
+      - name: Version bestimmen
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [[ "${TAG}" != "v${VERSION}" ]]; then
+              echo "Tag ${TAG} passt nicht zu package.json (${VERSION})" >&2
+              exit 1
+            fi
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: TypeScript pruefen
+        run: pnpm check
+
+      - name: CLI + GUI bauen
+        run: pnpm build
+
+      - name: Electron-Pakete bauen (NSIS, Portable, Zip)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm exec electron-builder --win nsis portable zip --publish never
+
+      - name: FX-Presets packen
+        shell: bash
+        run: 7z a -tzip "release/TekkForge-FX-Presets.zip" ./examples/fx-presets/*
+
+      - name: Release-Notizen waehlen
+        id: notes
+        shell: bash
+        run: |
+          NOTES="docs/versionen/${{ steps.version.outputs.version }}.md"
+          if [[ -f "${NOTES}" ]]; then
+            echo "path=${NOTES}" >> "$GITHUB_OUTPUT"
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build-Artefakte sichern
+        uses: actions/upload-artifact@v4
+        with:
+          name: tekkforge-windows-${{ steps.version.outputs.version }}
+          path: |
+            release/*.exe
+            release/*.zip
+          retention-days: 14
+
+      - name: GitHub-Release anlegen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: TekkForge ${{ steps.version.outputs.version }}
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: ${{ steps.notes.outputs.generate }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            release/*.exe
+            release/*.zip

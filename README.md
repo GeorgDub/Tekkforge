@@ -62,6 +62,11 @@ pnpm dev            # GUI im Browser-Dev-Server (Vite)
 pnpm dist:win       # Windows-Installer (NSIS) + Portable nach release/
 ```
 
+**Release:** ein Tag `vX.Y.Z` auf `main` (passend zur `version` in `package.json`) startet
+`.github/workflows/release.yml` — Windows-Build (Installer, Portable, Zip, FX-Presets) und
+GitHub-Release mit den Notizen aus `docs/versionen/X.Y.Z.md`. Die App prüft beim Start
+gegen dieses Release auf Updates.
+
 Die gebaute `dist/index.html` ist selbsttragend (kein Server) und lässt sich auch einfach
 im Browser doppelklicken.
 5. **Generator** (Tab): Sample-Verzeichnis wählen (Unterordner werden mitgescannt; nur
