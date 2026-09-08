@@ -647,23 +647,36 @@ export function uebernehmeErweiterungen(ziel: Uint8Array, auswahl: readonly Erwe
     return { ok: false, reason: err instanceof Error ? err.message : String(err) };
   }
 
-  const oszNeu = auswahl.filter((e) => e.art === "osz" && e.nach[karte.id].ok);
-  if (oszNeu.length) {
+  // Osz/Mod: ein Eintrag, dessen Platz im Ziel schon belegt ist („geändert“),
+  // wird an Ort und Stelle ersetzt; alles andere wird hinten angehaengt.
+  const oszAlle = auswahl.filter((e) => e.art === "osz" && e.nach[karte.id].ok);
+  if (oszAlle.length) {
     const vorhanden = oszListe(out, karte).length;
-    const eintraege: OszEintragMitPlatz[] = oszNeu.map((e, i) => ({ platz: vorhanden + 1 + i, bytes: e.bytes.slice() }));
+    const ersetzt = oszAlle.filter((e) => (e.platz ?? 0) >= 1 && (e.platz ?? 0) <= vorhanden);
+    const neu = oszAlle.filter((e) => !ersetzt.includes(e));
+    const eintraege: OszEintragMitPlatz[] = [...ersetzt.map((e) => ({ platz: e.platz!, bytes: e.bytes.slice() })), ...neu.map((e, i) => ({ platz: vorhanden + 1 + i, bytes: e.bytes.slice() }))];
     const r = setzeOszTabelle(out, eintraege);
     if (!r.ok) return { ok: false, reason: `Oszillatoren: ${r.reason}` };
     out = r.bytes;
-    zeilen.push(`${oszNeu.length} Oszillator-Eintrag/-Einträge angehängt (Liste bis ${r.anzahlNachher})`);
+    zeilen.push(`Oszillatoren: ${ersetzt.length} ersetzt, ${neu.length} angehängt (Liste bis ${r.anzahlNachher})`);
   }
-  const modNeu = auswahl.filter((e) => e.art === "mod" && e.nach[karte.id].ok);
-  if (modNeu.length) {
+  const modAlle = auswahl.filter((e) => e.art === "mod" && e.nach[karte.id].ok);
+  if (modAlle.length) {
+    const t = karte.modTabelle!;
     const vorhanden = modListe(out, karte).length;
-    const eintraege: ModEintragMitPlatz[] = modNeu.map((e, i) => ({ platz: vorhanden + i, bytes: e.bytes.slice() }));
-    const r = setzeModTabelle(out, eintraege, karte.modTabelle!.base);
-    if (!r.ok) return { ok: false, reason: `Modulations-Typen: ${r.reason}` };
-    out = r.bytes;
-    zeilen.push(`${modNeu.length} Modulations-Typ(en) angehängt (bis ${r.anzahlNachher})`);
+    const ersetzt = modAlle.filter((e) => (e.platz ?? 0) >= 1 && (e.platz ?? 0) <= vorhanden);
+    const neu = modAlle.filter((e) => !ersetzt.includes(e));
+    for (const e of ersetzt) {
+      if (e.bytes.length !== MOD_EINTRAG || istModLeer(e.bytes)) return { ok: false, reason: `Modulations-Typ ${e.platz}: kein gültiger Eintrag` };
+      out.set(e.bytes, dateiOffset(t.base) + (e.platz! - 1) * t.stride);
+    }
+    if (neu.length) {
+      const eintraege: ModEintragMitPlatz[] = neu.map((e, i) => ({ platz: vorhanden + i, bytes: e.bytes.slice() }));
+      const r = setzeModTabelle(out, eintraege, t.base);
+      if (!r.ok) return { ok: false, reason: `Modulations-Typen: ${r.reason}` };
+      out = r.bytes;
+      zeilen.push(`Modulations-Typen: ${ersetzt.length} ersetzt, ${neu.length} angehängt (bis ${r.anzahlNachher})`);
+    } else zeilen.push(`Modulations-Typen: ${ersetzt.length} ersetzt`);
   }
 
   let roh = 0;

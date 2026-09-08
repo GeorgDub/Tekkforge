@@ -40,14 +40,25 @@ describe("firmwareFreigabe", () => {
     expect(f.warnungen.some((w) => /sicher, dass/.test(w))).toBe(false);
   });
 
-  it("Referenz: zählt Bytes außerhalb der bekannten Bereiche und warnt", () => {
+  it("Referenz: zählt Code-Bytes außerhalb der bekannten Bereiche und DSP-Bytes getrennt und warnt", () => {
     const fw = fakeHacktribe();
     fw[0x30000] ^= 0xff;
+    fw[KARTE_HACKTRIBE.ldrStart! + 16 + 3] ^= 0x01;
     const f = freigabe(fw, { geraet: "sampler", laufend: "hacktribe" }, fakeHacktribe());
     const ref = f.pruefungen.find((p) => p.name === "Referenz")!;
     expect(ref.hart).toBe(false);
-    expect(ref.text).toMatch(/1 Bytes außerhalb/);
+    expect(ref.text).toMatch(/1 Bytes im Code außerhalb .* und 1 Bytes in der DSP-Kette/);
     expect(f.warnungen.some((w) => /Code-Patch-Gebiet/.test(w))).toBe(true);
+    expect(f.warnungen.some((w) => /DSP-Kette geändert/.test(w))).toBe(true);
+  });
+
+  it("Vektortabelle: jede ldr-pc-Form zählt (die echten Abbilder haben 5 × #0x18, #0x04, #0x14, #0x14), alles andere nicht", () => {
+    const fw = fakeSamplerStock();
+    expect(freigabe(fw, { geraet: "sampler", laufend: "sampler-stock" }).pruefungen.find((p) => p.name === "Vektortabelle")?.text).toMatch(/^8\/8/);
+    fw[0x11c] = 0x20; // Immediate anders — bleibt ldr pc,[pc,#…]
+    expect(freigabe(fw, { geraet: "sampler", laufend: "sampler-stock" }).pruefungen.find((p) => p.name === "Vektortabelle")?.ok).toBe(true);
+    fw[0x11f] = 0xea; // Branch statt ldr — nicht die Vektortabelle der electribe
+    expect(freigabe(fw, { geraet: "sampler", laufend: "sampler-stock" }).pruefungen.find((p) => p.name === "Vektortabelle")?.ok).toBe(false);
   });
 
   it("rote harte Prüfungen: kaputte Vektortabelle, widersprüchliche Zähler, kaputte DSP-Kette, Größe", () => {

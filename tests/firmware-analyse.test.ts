@@ -3,7 +3,7 @@ import { analysiereFirmware, uebernehmeErweiterungen, unterschiedsLaeufe, bekann
 import { erkenneKarte, dateiOffset, presetOffset, presetName, KARTE_HACKTRIBE, KARTE_SAMPLER_STOCK, KARTE_SYNTH_STOCK, leseZaehler } from "../src/core/firmwareKarte";
 import { fakeHacktribe, fakeSamplerStock, fakeSynthStock, presetBytes, grooveBytes, oszEintrag, modEintrag, asc } from "./helpers/fakeFirmware";
 import { decodeGroove, GROOVE_SIZE } from "../src/core/e2Groove";
-import { liesModTabelle } from "../src/core/modTabelle";
+import { liesModTabelle, modName } from "../src/core/modTabelle";
 import { liesOsz, decodeOsz } from "../src/core/oszTabelle";
 
 /**
@@ -166,6 +166,29 @@ describe("firmwareAnalyse — Übernahme", () => {
     expect(r.bytes[k.ldrStart! + 16 + 5]).toBe(fakeHacktribe()[k.ldrStart! + 16 + 5] ^ 0x01);
     expect(r.zeilen.join("\n")).toMatch(/Preset-\/Groove-Platz/);
     expect(r.zeilen.join("\n")).toMatch(/Drei-Wege-Regel/);
+  });
+
+  it("geänderte Osz-/Mod-Einträge werden an ihrem Platz ersetzt, neue angehängt", () => {
+    const fw = fakeHacktribe();
+    const k = KARTE_HACKTRIBE;
+    fw.set(oszEintrag("SAW HOT"), dateiOffset(k.oszTabelle!.base) + 2 * k.oszTabelle!.stride); // Platz 3 geaendert
+    fw.set(oszEintrag("X-SAW +7"), dateiOffset(k.oszTabelle!.base) + 12 * k.oszTabelle!.stride); // Platz 13 neu
+    fw.set(modEintrag("EG- Filter"), dateiOffset(k.modTabelle!.base) + 1 * k.modTabelle!.stride); // Platz 2 geaendert
+    fw.set(modEintrag("SawUp Filter"), dateiOffset(k.modTabelle!.base) + 4 * k.modTabelle!.stride); // Platz 5 neu
+    const a = analysiereFirmware(fw, fakeHacktribe()) as FirmwareAnalyse;
+    expect(a.erweiterungen.map((e) => e.id).sort()).toEqual(["mod:2", "mod:5", "osz:13", "osz:3"]);
+    const r = uebernehmeErweiterungen(fakeHacktribe(), a.erweiterungen);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(decodeOsz(liesOsz(r.bytes, 3)).name).toBe("SAW HOT");
+    expect(decodeOsz(liesOsz(r.bytes, 13)).name).toBe("X-SAW +7");
+    expect(liesOsz(r.bytes, 14).every((b) => b === 0xff)).toBe(true); // nichts doppelt angehaengt
+    const mods = liesModTabelle(r.bytes);
+    expect(mods.length).toBe(5);
+    expect(modName(mods[1])).toBe("EG- Filter");
+    expect(modName(mods[4])).toBe("SawUp Filter");
+    expect(r.zeilen.join("\n")).toMatch(/Oszillatoren: 1 ersetzt, 1 angehängt/);
+    expect(r.zeilen.join("\n")).toMatch(/Modulations-Typen: 1 ersetzt, 1 angehängt/);
   });
 
   it("Code/DSP wird nicht auf ein Ziel gelegt, das dort schon abweicht", () => {

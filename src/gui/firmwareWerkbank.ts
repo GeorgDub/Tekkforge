@@ -249,6 +249,8 @@ export async function basisSetzen(bytes: Uint8Array, name: string): Promise<bool
   if (!erk.ok || !befund.ok) {
     basis = null;
     basisBefund = null;
+    karte = KARTE_HACKTRIBE;
+    bausteineFreischalten();
     const grund = erk.ok ? befund.reason : erk.reason;
     ($("fwBasisInfo") as HTMLElement).textContent = `${name}: abgelehnt — ${grund}`;
     setStatus(`Basis abgelehnt: ${grund}`);
@@ -287,6 +289,7 @@ export async function basisSetzen(bytes: Uint8Array, name: string): Promise<bool
   dspListe();
   bausteineFreischalten();
   zielVorbelegen();
+  analyseAnzeigen(); // Uebertragbarkeit gilt je Zielkarte — neu zeichnen
   vorschau();
   return true;
 }
@@ -759,11 +762,15 @@ function bauplan(): Bauplan | null {
     // Ohne geladenen Stand ist die leere Bank des Managers nur die Vorschau —
     // sie als Wunsch zu nehmen hiesse, alle 128 Plaetze der Firmware zu leeren.
     if (z && pmGeladen()) {
-      presets = unterschiede(z, zustandAusFirmware(basis, karte)).filter((e) => {
-        // Plaetze, die die Karte nicht hat, kann der Manager nicht schreiben — sie fallen leise raus (Stock: IFX > 38, alle Grooves).
+      const alle = unterschiede(z, zustandAusFirmware(basis, karte));
+      // Plaetze, die die Karte nicht hat, kann der Manager nicht schreiben (Stock: IFX > 38, alle Grooves) — sie werden genannt, nicht verschwiegen.
+      const passt = (e: SammlungsEintrag): boolean => {
         const max = e.art === "groove" ? (karte.grooveBank?.count ?? 0) : e.art === "mfx" ? karte.mfxSchreibMax + 1 : karte.ifxSchreibMax + 1;
         return (e.platz ?? 0) <= max;
-      });
+      };
+      presets = alle.filter(passt);
+      const draussen = alle.filter((e) => !passt(e));
+      if (draussen.length) zeilen.push(`Presets: ${draussen.length} Platz/Plätze des Managers gibt es in ${karte.label} nicht (${draussen.map((e) => `${e.art.toUpperCase()} ${e.platz}`).slice(0, 6).join(", ")}${draussen.length > 6 ? ", …" : ""}) — übergangen`);
       const ifx = presets.filter((e) => e.art === "ifx").length;
       const mfx = presets.filter((e) => e.art === "mfx").length;
       zeilen.push(`Presets: ${presets.length} Platz/Plätze anders als in der Datei (${ifx} IFX, ${mfx} MFX); IFX belegt bis ${hoechsterBelegter(z, "ifx")}`);
@@ -888,11 +895,20 @@ function referenzFuer(k: FirmwareKarte, bevorzugt?: "stock" | "hacktribe"): Uint
   return d ? ablageDateien.find((x) => x.name === d.name)?.bytes : undefined;
 }
 
+/**
+ * Referenz fuer die Freigabe: fuer eine Hacktribe-Basis die unveraenderte
+ * Hacktribe (sonst zaehlten Hacktribes eigene Code-Patches als „draussen“),
+ * sonst Stock derselben Bauart.
+ */
+function freigabeReferenz(): Uint8Array | undefined {
+  return (karte.id === "hacktribe" ? referenzFuer(karte, "hacktribe") : undefined) ?? referenzFuer(karte);
+}
+
 /** Das gebaute Abbild durch die Freigabe fuehren — fuer Tests direkt aufrufbar. */
 export function fwFreigabe(): { ok: true; freigabe: Freigabe; zeilen: string[] } | { ok: false; reason: string } {
   const r = fwBaueAbbild();
   if (!r.ok) return r;
-  const f = freigabe(r.bytes, zielWahl(), referenzFuer(karte));
+  const f = freigabe(r.bytes, zielWahl(), freigabeReferenz());
   return { ok: true, freigabe: f, zeilen: [...r.zeilen, "", ...f.zeilen] };
 }
 
@@ -1060,18 +1076,25 @@ async function sicherungEinbrennen(f: File): Promise<void> {
     setStatus(`Nicht gebaut: ${r.reason}`);
     return;
   }
-  const hash = await sha256Hex(r.bytes);
-  const name = (await frageText("Dateiname (im Ordner Firmware/):", "SYSTEM.VSB")) ?? "SYSTEM.VSB";
-  const ab = await legeAb(name.trim() || "SYSTEM.VSB", r.bytes, FIRMWARE_ORDNER);
+  // Auch dieser Weg geht durch die Freigabe — Kopf fuers Ziel, harte Pruefungen.
+  const fg = freigabe(r.bytes, zielWahl(), freigabeReferenz());
   const el = document.getElementById("fwBericht");
+  if (!fg.ok) {
+    if (el) el.textContent = [...r.zeilen, "", ...fg.zeilen].join("\n");
+    setStatus("NICHT FREIGEGEBEN — siehe Bericht. Es wurde keine Datei abgelegt.");
+    return;
+  }
+  const hash = await sha256Hex(fg.bytes);
+  const name = (await frageText("Dateiname (im Ordner Firmware/):", "SYSTEM.VSB")) ?? "SYSTEM.VSB";
+  const ab = await legeAb(name.trim() || "SYSTEM.VSB", fg.bytes, FIRMWARE_ORDNER);
   // Nach dem Bau die Gegenprobe: was hat sich gegenueber der Basis wirklich geaendert?
-  const gegenprobe = basis ? vergleicheFirmware(basis, r.bytes).zeilen.map((z) => `  ${z}`) : [];
+  const gegenprobe = basis ? vergleicheFirmware(basis, fg.bytes).zeilen.map((z) => `  ${z}`) : [];
   if (el) {
-    el.textContent = [...r.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download", "Gegenprobe Basis ↔ Ergebnis:", ...gegenprobe]
+    el.textContent = [...r.zeilen, "", ...fg.zeilen, hash ? `Ergebnis SHA-256 ${hash}` : "", ab.pfad ? `→ ${ab.pfad}` : "→ Download", "Gegenprobe Basis ↔ Ergebnis:", ...gegenprobe]
       .filter(Boolean)
       .join("\n");
   }
-  setStatus(`Gerätestand aus ${f.name} eingebrannt${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Installieren wie gehabt über die SD-Karte.`);
+  setStatus(`Gerätestand aus ${f.name} eingebrannt und freigegeben${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Installieren: als ${fg.sdPfad} auf die SD-Karte.`);
 }
 
 // ─── Bauplan ─────────────────────────────────────────────────────────────────
@@ -1183,6 +1206,11 @@ async function bauplanLaden(f: File): Promise<void> {
 // der Nutzer in userData/firmware (Desktop) — oder waehlt sie im Browser fuer
 // die Sitzung. Jede Datei wird am SHA-256 eingeordnet (firmwareAblage.ts);
 // die Basis-Wahl nimmt dann die richtige Datei, ohne dass jemand suchen muss.
+
+/** Ein Versprechen aus einem Klick-Handler: Fehler landen in der Statuszeile, nie als unbehandelte Rejection. */
+function sicher(p: Promise<unknown>): void {
+  p.catch((e) => setStatus(`Fehler: ${e instanceof Error ? e.message : String(e)}`));
+}
 
 function ablageAnzeigen(): void {
   const liste = document.getElementById("fwAblageListe");
@@ -1339,9 +1367,19 @@ export function fwAnalysieren(bytes: Uint8Array, name: string, referenz: "stock"
   return a;
 }
 
+/**
+ * Eine Erweiterung an-/abwaehlen. Code- und DSP-Laeufe sind EIN Patchsatz —
+ * halb angewandt waeren sie gefaehrlich (ein Sprung ins Nichts brickt) —
+ * darum schalten sie nur gemeinsam.
+ */
 export function fwAnalyseWaehlen(id: string, an: boolean): void {
-  if (an) analyseAuswahl.add(id);
-  else analyseAuswahl.delete(id);
+  const e = analyse?.erweiterungen.find((x) => x.id === id);
+  const ids = e && (e.art === "code" || e.art === "dsp") ? analyse!.erweiterungen.filter((x) => (x.art === "code" || x.art === "dsp") && x.nach[karte.id].ok).map((x) => x.id) : [id];
+  for (const i of ids) {
+    if (an) analyseAuswahl.add(i);
+    else analyseAuswahl.delete(i);
+  }
+  if (e && ids.length > 1) setStatus(`Code-/DSP-Läufe sind ein Patchsatz — ${ids.length} zusammen ${an ? "gewählt" : "abgewählt"}.`);
   analyseAnzeigen();
 }
 
@@ -1376,11 +1414,11 @@ function richteAblageEin(): void {
     if (z.oeffnen) void z.oeffnen();
     else setStatus("Im Browser gibt es keinen Ordner — Dateien über „Datei hinzufügen…“.");
   });
-  dateiKnopfMehrere("fwAblageDatei", "fwAblageIn", (dateien) => void ablageDateienAufnehmen(dateien));
-  document.getElementById("fwHacktribeErzeugen")?.addEventListener("click", () => void fwHacktribeErzeugen());
+  dateiKnopfMehrere("fwAblageDatei", "fwAblageIn", (dateien) => sicher(ablageDateienAufnehmen(dateien)));
+  document.getElementById("fwHacktribeErzeugen")?.addEventListener("click", () => sicher(fwHacktribeErzeugen()));
   document.getElementById("fwBasisUebernehmen")?.addEventListener("click", () => {
     const wahl = ((document.getElementById("fwBasisWahl") as HTMLSelectElement | null)?.value ?? "hacktribe") as BasisWahl;
-    void fwBasisWaehlen(wahl);
+    sicher(fwBasisWaehlen(wahl));
   });
   document.getElementById("fwBasisWahl")?.addEventListener("change", () => {
     const wahl = (document.getElementById("fwBasisWahl") as HTMLSelectElement).value as BasisWahl;
@@ -1417,7 +1455,7 @@ function richteAblageEin(): void {
     analyseAuswahl.clear();
     analyseAnzeigen();
   });
-  document.getElementById("fwAnalyseUebernehmen")?.addEventListener("click", () => void fwAnalyseUebernehmen());
+  document.getElementById("fwAnalyseUebernehmen")?.addEventListener("click", () => sicher(fwAnalyseUebernehmen()));
   document.getElementById("fwZielGeraet")?.addEventListener("change", zielInfo);
   document.getElementById("fwZielFirmware")?.addEventListener("change", zielInfo);
   void fwAblageLesen().catch(() => undefined);

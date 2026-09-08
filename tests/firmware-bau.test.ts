@@ -29,6 +29,8 @@ import { E2_RAM_MAP, addressForSlot, DDR2_BASE } from "../src/core/hacktribeRam"
 import { IFX_ZAEHLER, IFX_ANZAHL_ADDR } from "../src/core/ifxErweiterung";
 import { decodeFxPreset, encodeFxPreset, initFxPresetBytes, FX_PRESET_SIZE } from "../src/core/e2FxPreset";
 import type { SammlungsEintrag } from "../src/core/sammlung";
+import { KARTE_SAMPLER_STOCK, presetOffset, presetName } from "../src/core/firmwareKarte";
+import { fakeSamplerStock } from "./helpers/fakeFirmware";
 
 /**
  * Presets dauerhaft machen: in die Hacktribe-SYSTEM.VSB einbrennen. Die
@@ -197,6 +199,30 @@ describe("firmwareBau — bauen", () => {
     const r = baueFirmware(basis, [{ art: "ifx", name: "A", bytes: presetBytes("A"), platz: 50 }]);
     if (!r.ok) throw new Error(r.reason);
     expect(r.bytes[off + 0x130]).toBe(0x5a);
+  });
+});
+
+describe("firmwareBau — Stock-Karte: Presets über Zeiger, verbogener Zeiger wird abgelehnt", () => {
+  it("ersetzt ein Stock-Preset am Zeigerziel; ein Zeiger auf Nicht-Preset-Bytes stoppt den Bau", () => {
+    const fw = fakeSamplerStock();
+    const r = baueFirmware(fw, [{ art: "ifx", name: "Tekk Punch", bytes: presetBytes("Tekk Punch"), platz: 1 }], KARTE_SAMPLER_STOCK);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const off = presetOffset(KARTE_SAMPLER_STOCK, r.bytes, "ifx", 0)!;
+    expect(presetName(r.bytes.subarray(off, off + FX_PRESET_SIZE))).toBe("Tekk Punch");
+    expect(r.bericht.zaehler).toEqual([]); // Stock: Zaehler bleiben
+    // Zeiger 4 auf Code verbiegen (dort steht kein Preset-Block); die ersten drei bleiben, damit die Karte noch Stock ist
+    const z = dateiOffset(KARTE_SAMPLER_STOCK.ifxZeiger!.addr) + 12;
+    fw[z] = 0x00;
+    fw[z + 1] = 0x20;
+    fw[z + 2] = 0x00;
+    fw[z + 3] = 0xc0; // RAM 0xC0002000
+    const kaputt = baueFirmware(fw, [{ art: "ifx", name: "X", bytes: presetBytes("X"), platz: 4 }], KARTE_SAMPLER_STOCK);
+    expect(kaputt.ok).toBe(false);
+    if (!kaputt.ok) expect(kaputt.reason).toMatch(/führt auf keinen Preset-Block/);
+    // Groove in eine Stock-Karte: klar abgelehnt
+    const g = baueFirmware(fakeSamplerStock(), [{ art: "groove", name: "G", bytes: grooveBytes("G"), platz: 1 }], KARTE_SAMPLER_STOCK);
+    expect(!g.ok && g.reason).toMatch(/keine Groove-Bank/);
   });
 });
 
