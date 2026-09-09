@@ -756,7 +756,8 @@
               </details>
               <details id="xgPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
                 <summary style="cursor:pointer;font-weight:600">🎛 Synth-Firmware für den Sampler vorbereiten (Crossgrade)</summary>
-                <p class="sub" style="margin:6px 0">Aus einem Sampler einen echten <b>electribe 2 Synth</b> machen: die offizielle Synth-<code>SYSTEM.VSB</code> von Korg laden, hier auf die Sampler-Variante umköpfen und über die Update-Funktion des Geräts flashen. Nur zwei Kopf-Bytes ändern sich (Device-ID 0x0123→0x0124); die Synth-Klangerzeugung (Oszillatoren, VPM, Filter) steckt im Payload und reist mit. Umgekehrt geht auch (Sampler→Synth). Am v2.02-Abbild disassembliert, <b>am Gerät noch nicht abgenommen</b>.</p>
+                <p class="sub" style="margin:6px 0">Aus einem Sampler einen echten <b>electribe 2 Synth</b> machen: die offizielle Synth-<code>SYSTEM.VSB</code> von Korg laden, hier auf die Sampler-Variante umköpfen und über die Update-Funktion des Geräts flashen. Nur zwei Kopf-Bytes ändern sich (Device-ID 0x0123→0x0124); die Synth-Klangerzeugung (Oszillatoren, VPM, Filter) steckt im Payload und reist mit. Umgekehrt geht auch (Sampler→Synth).</p>
+                <p class="sub" style="margin:6px 0;color:var(--warn,#c0392b);font-weight:600">⚠ Am Gerät falsifiziert (2026-09-09): Die umgeköpfte Datei wird angenommen und geflasht (die unveränderte Stock-Synth-Datei würde als „Invalid File" abgelehnt), aber das Gerät bleibt danach in einer <b>Update-Schleife</b> — beim Booten wird erneut ein Update verlangt, ein zweiter Durchlauf hilft nicht. Ursache ist nicht der Kopf, sondern eine Panel-/MCU-Firmware-Prüfung im Synth-OS. Nur zum Experimentieren; der belegte Rückweg ist die Werks-<code>SYSTEM.VSB</code> des Geräts.</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                   <button id="xgLaden" class="ghost" title="Eine offizielle electribe-2-SYSTEM.VSB laden (Synth oder Sampler)">SYSTEM.VSB laden…</button>
                   <input id="xgIn" type="file" accept=".vsb,.VSB" class="hidden" />
@@ -767,7 +768,7 @@
                   <button id="xgZuSynth" class="primary hidden" title="Auf die Synth-Variante umköpfen und als SYSTEM.VSB ablegen — für Synth-Hardware">→ für Synth umköpfen</button>
                 </div>
                 <p class="sub" style="margin:6px 0 0">⚠ Vor dem Flashen die passende Werks-<code>SYSTEM.VSB</code> des Geräts als Rückweg auf der SD-Karte behalten. PCM-Instrumente stammen aus der geräteeigenen <code>PCM.VSB</code> und bleiben die des Samplers.</p>
-                <div id="xgStatus" class="sub" style="margin-top:4px">bereit</div>
+                <div id="xgStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit</div>
               </details>
             </div>
             <button id="midiEnable" class="primary">MIDI aktivieren</button>
