@@ -801,18 +801,26 @@ DSP-Kette, Bytes ausserhalb der bekannten Bereiche gegen die Referenz. Eine
 rote harte Pruefung → keine Datei. Der Bericht nennt Kopf, SD-Pfad, PCM-Hinweis
 und den Rueckweg. Tests: `firmware-karte`, `firmware-analyse`,
 `firmware-freigabe`, `firmware-ablage`, `bspatch`, plus GUI-Faelle in
-`firmware-werkbank.test.ts`. ⚠ **Am Geraet FALSIFIZIERT (2026-09-09):** Der
-reine Synth-Crossgrade taugt nicht. Die umgekoepfte Datei wird zwar angenommen
-und geflasht (die unveraenderte Stock-Synth-Datei faellt dagegen als „Invalid
-File"), aber danach haengt das Geraet in einer Update-Schleife — beim Booten
-wird erneut ein Update verlangt, ein zweiter Durchlauf hilft nicht. Ursache ist
-nicht der Kopf, sondern eine Panel-/MCU-Firmware-Pruefung im Synth-OS (die
-SYSTEM.VSB traegt ein eingebettetes Cortex-M3-Panel-Abbild; das OS faehrt beim
-Booten eine 12-stufige Panel-Firmware-Uebertragung). Rueckweg (belegt): die
-Werks-SYSTEM.VSB des Geraets flashen. Diagnose im haengenden Zustand:
-`node scripts/crossgrade-diagnose.cjs` (Inquiry-Byte `0x23` = Synth-OS,
-`0x24` = Sampler-OS). Details: Omnitribe
-`docs/reverse/e2synth_auf_e2s_crossgrade_v202.md` (Nachtrag 2026-09-09).
+`firmware-werkbank.test.ts`. ✅ **Am Geraet BESTAETIGT (2026-09-09):** Der
+Crossgrade funktioniert mit dem **Boot-ID-Tor-Patch**. Der reine Kopf-Crossgrade
+allein booted in die Update-Schleife (am Geraet belegt, Inquiry-Byte `0x23` =
+Synth-OS laeuft, also der Crossgrade BOOTET). Ursache war nicht der Kopf, sondern
+ein Plattform-Gate: das OS liest die geraeteinterne USER-Signatur
+(`elec2USR`=0x123 / `ele2sUSR`=0x124) und erzwingt bei Nichtuebereinstimmung
+Boot-Code `0xA` (Update-Schleife). Der Umpatcher (`core/crossgrade.ts`,
+`BOOT_GATE`) patcht dieses Tor: Synth-Payload akzeptiert die Sampler-USER-Daten
+(Vergleichswert `0x123`→`0x124` bei Datei-Offset `0x25F64`); Sampler-Payload
+booted unabhaengig vom USER-Stempel (`mov r3,#0xA`→`#0` bei `0x28AE0`). Mit dem
+Patch bootet die umgekoepfte Firmware normal, die Klangerzeugung laeuft. **Offene
+Grenze:** synth-eigene PCM-Sample-Oszillatoren bleiben an die geraeteeigene
+`PCM.VSB` (Sampler-PCM) gebunden, bis eine Synth-`PCM.VSB` vorliegt (Extraktion
+per Hacktribe `synth-pcm-dump`-Zweig, braucht Synth-Hardware). **Recovery:** laeuft
+nach dem Crossgrade schon Synth, nimmt dessen Updater nur Synth-Koepfe an — die
+Sampler-Firmware muss fuer den Rueckweg ebenfalls umgekoepft werden (der
+Umpatcher macht das, Zielordner richtet sich nach der laufenden Firmware).
+Diagnose im haengenden Zustand: `node scripts/crossgrade-diagnose.cjs`. Details:
+Omnitribe `docs/reverse/e2synth_auf_e2s_crossgrade_v202.md` +
+`crossgrade_idgate_befund_2026-09-09.md`.
 
 ### DSP-Patches — der Klang selbst (experimentell)
 

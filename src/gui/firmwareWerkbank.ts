@@ -1515,14 +1515,22 @@ async function xgUmkoepfen(ziel: Variante): Promise<void> {
   }
   const hash = await sha256Hex(r.bytes);
   const ab = await legeAb("SYSTEM.VSB", r.bytes, `Crossgrade-${ziel}`);
+  const torZeile = r.gatePatch
+    ? r.gatePatch.angewendet
+      ? `Boot-ID-Tor gepatcht (Offset 0x${r.gatePatch.offset.toString(16)}) — bootet ohne Update-Schleife.`
+      : `⚠ ${r.gatePatch.grund}`
+    : "Boot-ID-Tor NICHT gepatcht (auf Wunsch) — kann in der Update-Schleife hängen.";
   xgStatus(
-    `Umgeköpft ${r.vonVariante} → ${ziel} (Byte 0x12 und 0x2E)${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}` +
+    `Umgeköpft ${r.vonVariante} → ${ziel} (Kopf 0x12/0x2E)${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}` +
       (ab.pfad ? ` → ${ab.pfad}.` : " → Download.") +
+      "\n" +
+      torZeile +
       "\n" +
       r.geraetebefund +
       "\n" +
-      `Zum Experimentieren: als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
-      " Vorher die Werks-SYSTEM.VSB als Rückweg auf der SD behalten.",
+      `Als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
+      " ⚠ Der Zielordner richtet sich nach der AKTUELL laufenden Firmware (Synth liest KORG/electribe/System, Sampler KORG/electribe sampler/System)." +
+      " Vorher die Firmware der laufenden Variante als Rückweg auf der SD behalten.",
   );
 }
 

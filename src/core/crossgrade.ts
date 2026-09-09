@@ -1,61 +1,56 @@
 /**
  * crossgrade — eine electribe-2-SYSTEM.VSB von einer Variante auf die andere
- * umkoepfen, damit die offizielle Synth-Firmware auf Sampler-Hardware laeuft
- * (und umgekehrt). Beide Geraete sind hardware-identisch; nur die Firmware
- * unterscheidet sich.
+ * umkoepfen, damit die Firmware der einen Variante auf der Hardware der anderen
+ * laeuft. Beide Geraete sind hardware-identisch; nur die Firmware unterscheidet
+ * sich. Enthaelt neben dem Kopf-Umkoepfen den am Geraet bewiesenen
+ * Boot-ID-Tor-Patch, ohne den die umgekoepfte Firmware nicht durchbootet.
  *
  * Am v2.02-Abbild disassembliert (Omnitribe
- * `docs/reverse/e2synth_auf_e2s_crossgrade_v202.md`): Der SD-Updater der
- * Electribe 2 prueft eine SYSTEM.VSB in drei Schritten —
- *   1. memcmp(Kopf, "KORG SYSTEM FILE", 16)   (ohne das E2/E2S-Suffix)
- *   2. family_check: Device-ID-Feld (Kopf[0x2D:0x2E] als 0x01xx). Der
- *      SYSTEM-Validator ruft ihn STRIKT: akzeptiert nur die eigene Variante
- *      (Sampler 0x0124). Eine Synth-Datei (0x0123) faellt als „Invalid File".
- *   3. memcmp(Kopf[0x20:], "SYSTEM", 6)        (Dateityp, variantenneutral)
+ * `docs/reverse/e2synth_auf_e2s_crossgrade_v202.md` und
+ * `docs/reverse/crossgrade_idgate_befund_2026-09-09.md`):
  *
- * Der einzige geraetetragende Unterschied im 0x100-Byte-Kopf ist Byte 0x2E
- * (Device-ID low). Byte 0x12 (Magic-Suffix 'E2' vs 'E2S') wird vom
- * SYSTEM-Validator nicht geprueft, aber mitgesetzt, damit die Datei einer
- * echten Datei der Zielvariante byte-genau gleicht.
+ * 1. DATEI-PRUEFUNG DES UPDATERS. Der SD-Updater prueft in drei Schritten —
+ *    a. memcmp(Kopf, "KORG SYSTEM FILE", 16)
+ *    b. family_check auf Byte 0x2E (Device-ID low). Der SYSTEM-Validator ruft
+ *       ihn STRIKT: die LAUFENDE Firmware akzeptiert nur die eigene Variante
+ *       (Synth-OS nur 0x23, Sampler-OS nur 0x24). Eine fremde Datei faellt als
+ *       „Invalid File". Deshalb MUSS der Kopf auf die Variante der aktuell
+ *       laufenden Firmware umgekoepft werden, nicht auf die Zielvariante.
+ *    c. memcmp(Kopf[0x20:], "SYSTEM", 6).
+ *    Getragene Kopf-Bytes: 0x2E (Device-ID low) und 0x12 (Magic-Suffix
+ *    'E2'/'E2S'); 0x2D wird auf 0x01 gesetzt.
  *
- * Der Payload ab 0x100 (ARM-App + eingebettete Blackfin-Audio-Engine:
- * Oszillatoren, VPM, Filter) bleibt unangetastet und reist mit — die
- * Synth-Datei auf dem Sampler ergibt eine echte Synth-Klangerzeugung.
- * PCM-Instrumente liegen NICHT im SYSTEM.VSB, sondern geraeteseitig in
- * PCM.VSB — die bleibt die des Samplers (Caveat).
+ * 2. BOOT-ID-TOR. Beim Booten liest das OS die GERAETEINTERNE Plattform-
+ *    Signatur aus den USER-Daten ("elec2USR"=0x123 / "ele2sUSR"=0x124) und
+ *    vergleicht sie gegen einen fest verdrahteten Wert. Passt sie nicht, geht
+ *    das OS in einen Update-/Recovery-Bootcode (0xA) — die „Update-Schleife".
+ *    Der Kopf-Crossgrade allein reicht darum NICHT: das Tor sitzt im Payload.
+ *    - Synth-Payload auf Sampler-Hardware: Vergleichskonstante 0x00000123 bei
+ *      Datei-Offset 0x025F64 -> 0x00000124 (Synth akzeptiert Sampler-USER-Daten).
+ *    - Sampler-Payload (Recovery, wenn USER evtl. auf Synth gestempelt wurde):
+ *      `mov r3,#0xA` (Mismatch-Bootcode) bei Datei-Offset 0x028AE0 -> `mov r3,#0`
+ *      (bootet normal, egal was im USER-Stempel steht).
+ *
+ * ✅ GERAETEBEFUND 2026-09-09 — der Crossgrade FUNKTIONIERT mit dem Boot-Tor-
+ * Patch: Der reine Kopf-Crossgrade booted in die Update-Schleife (am Geraet
+ * belegt, Inquiry-Byte 0x23 = Synth-OS laeuft), MIT dem Byte-Patch am ID-Tor
+ * bootet die Synth-Firmware normal auf Sampler-Hardware. Die Klangerzeugung
+ * (VPM, Analog-Modeling, geteilte PCM) laeuft. Offene Grenze: synth-eigene
+ * PCM-Oszillatoren bleiben an die im Geraet vorhandene PCM.VSB gebunden
+ * (Sampler-PCM), bis eine Synth-PCM.VSB vorliegt.
  *
  * Reine Byte-Operation. Es wird KEINE Korg-Firmware mitgeliefert; der Nutzer
- * laedt die offizielle SYSTEM.VSB bei Korg und faehrt sie hier durch.
+ * laedt die Firmware selbst und faehrt sie hier durch.
  *
- * ⚠ GERAETEBEFUND 2026-09-09 — der Crossgrade FUNKTIONIERT NICHT am Geraet:
- * Das Umkoepfen bringt die Datei sauber durch die Datei-Pruefung des Updaters
- * (die Synth-Datei mit Sampler-Kopf wird NICHT als „Invalid File" abgelehnt —
- * genau wie hier vorhergesagt, waehrend die unveraenderte Stock-Synth-Datei
- * mit „Invalid File" faellt). Nach dem Flashen und dem geforderten Neustart
- * bleibt das Geraet aber in einer Update-Schleife: es verlangt beim Booten
- * erneut ein Update und kommt nicht durch. Ein zweiter Durchlauf aendert
- * nichts. Erst eine Sampler-basierte Firmware (Stock oder unsere Hacktribe-
- * Fassung) bootet wieder normal.
- *
- * Der Grund liegt NICHT im Kopf: die SYSTEM.VSB traegt ein eingebettetes
- * Cortex-M3-Panel-Firmware-Abbild (Vektortabelle SP 0x20004000), und das
- * OS faehrt beim Booten eine 12-stufige Panel/MCU-Firmware-Uebertragung
- * (Zustandsmaschine bei RAM 0xC0040A.., Panel-Kommandos 0xC7/0xC8), die an
- * einem Versions-/Handshake-Check haengt. Der Weg „reiner Crossgrade" taugt
- * also nicht — das deckt sich mit dem aelteren Repo-Schluss („Hacktribe
- * existiert, weil der bloße Crossgrade nicht taugt"). Details und der noch
- * offene Ein-Nachrichten-Unterscheider (Geraete-Inquiry-Byte 0x23 vs 0x24 im
- * haengenden Zustand) stehen in Omnitribe
- * `docs/reverse/e2synth_auf_e2s_crossgrade_v202.md`.
- *
- * Rueckweg (belegt): die passende Werks-SYSTEM.VSB des Geraets ueber denselben
- * SD-Update-Weg flashen. Der Nutzer hat das bestaetigt („dann ist der Stand
- * wie vorher").
+ * Rueckweg (belegt): die Firmware der aktuell laufenden Variante flashen. Laeuft
+ * bereits die andere Variante (z. B. Synth nach dem Crossgrade), muss die
+ * Rueckweg-Datei fuer deren Updater ebenfalls umgekoepft werden — genau dafuer
+ * ist der Umpatcher da.
  */
 
-/** Kurzer Warnhinweis fuer die Oberflaeche — der Crossgrade ist am Geraet falsifiziert. */
+/** Ergebnis am Geraet bestaetigt — Kurzhinweis fuer die Oberflaeche. */
 export const CROSSGRADE_GERAETEBEFUND =
-  "⚠ Am Gerät falsifiziert (2026-09-09): Die umgeköpfte Datei wird angenommen und geflasht, aber das Gerät bleibt danach in einer Update-Schleife (verlangt beim Booten wieder ein Update). Rückweg: die Werks-SYSTEM.VSB des Geräts flashen. Ursache ist nicht der Kopf, sondern eine Panel-/MCU-Firmware-Prüfung im Synth-OS. Nur zum Experimentieren — nicht als fertiger Weg.";
+  "✅ Am Gerät bestätigt (2026-09-09): Mit dem Boot-ID-Tor-Patch bootet die umgeköpfte Firmware normal. Ohne den Patch hängt sie in der Update-Schleife. Klangerzeugung läuft; PCM-Sample-Oszillatoren bleiben an die im Gerät vorhandene PCM.VSB gebunden. Rückweg: Firmware der laufenden Variante flashen (bei bereits laufender Synth-Firmware ebenfalls hier umköpfen).";
 
 export const VSB_HEADER = 0x100;
 export const VSB_PAYLOAD = 0x200000;
@@ -82,11 +77,42 @@ export const VARIANTEN: Record<Variante, VariantenDef> = {
   sampler: { suffix: 0x53, idLow: 0x24, deviceId: 0x0124, sdOrdner: "KORG/electribe sampler/System", label: "electribe 2 sampler" },
 };
 
+/**
+ * Boot-ID-Tor-Patch, gekennzeichnet nach der PAYLOAD-Variante (= der Firmware,
+ * die nach dem Flashen laeuft, also der Quellvariante der Datei). `erwartet`
+ * wird vor dem Patchen geprueft; passt es nicht (andere Firmware-Version), wird
+ * der Patch NICHT angewendet und das gemeldet — der Kopf-Crossgrade bleibt gueltig.
+ * Offsets am v2.02-Abbild belegt (Synth) bzw. an der Hacktribe-Fassung (Sampler).
+ */
+export interface GatePatch {
+  offset: number;
+  erwartet: number[];
+  gepatcht: number[];
+  zweck: string;
+}
+
+export const BOOT_GATE: Record<Variante, GatePatch> = {
+  // Synth-Firmware: Vergleichswert 0x00000123 (ldr r3,=0x123 @0xC0025E44) -> 0x124.
+  synth: {
+    offset: 0x025f64,
+    erwartet: [0x23, 0x01, 0x00, 0x00],
+    gepatcht: [0x24, 0x01, 0x00, 0x00],
+    zweck: "Synth-OS akzeptiert die Sampler-USER-Signatur (0x124) und bootet normal auf Sampler-Hardware.",
+  },
+  // Sampler-Firmware: Mismatch-Bootcode `mov r3,#0xA` @0xC00289E0 -> `mov r3,#0`.
+  sampler: {
+    offset: 0x028ae0,
+    erwartet: [0x0a, 0x30, 0xa0, 0xe3],
+    gepatcht: [0x00, 0x30, 0xa0, 0xe3],
+    zweck: "Sampler-OS bootet unabhängig vom USER-Stempel (auch wenn er auf Synth 0x123 steht).",
+  },
+};
+
 /** Bekannte offizielle v2.02-Abbilder und das umgekoepfte Ergebnis (SHA-256). */
 export const BEKANNTE_HASHES: Record<string, string> = {
   "41fc5f1c33209ef381d1c9fef21a72380bcd8d3431c9c1350a964f5c619ab8b8": "Synth v2.02 (offiziell)",
   "1d0f0689d5a12c8a8bde9f821f2a59adc5f6cd6012ddb201ebb192b72468a646": "Sampler v2.02 (offiziell)",
-  "0d78b5b0ee0e8671329753696773fde3b762cd882a5ab1ee544e1c160b37bcd7": "Synth v2.02 → Sampler umgekoepft",
+  "0d78b5b0ee0e8671329753696773fde3b762cd882a5ab1ee544e1c160b37bcd7": "Synth v2.02 → Sampler umgekoepft (nur Kopf)",
 };
 
 export interface VsbBefund {
@@ -133,36 +159,99 @@ export function unterschiedsBytes(a: Uint8Array, b: Uint8Array): number[] {
   return out;
 }
 
+/** Prueft, ob an `offset` genau die erwarteten Bytes stehen. */
+function bytesPassen(data: Uint8Array, offset: number, erwartet: number[]): boolean {
+  for (let i = 0; i < erwartet.length; i++) if (data[offset + i] !== erwartet[i]) return false;
+  return true;
+}
+
+export interface GatePatchErgebnis {
+  angewendet: boolean;
+  offset: number;
+  grund: string;
+}
+
 export interface CrossgradeErgebnis {
   bytes: Uint8Array;
   vonVariante: Variante;
   zuVariante: Variante;
-  /** Geänderte Offsets — muss genau [0x12, 0x2E] sein. */
+  /** Alle geänderten Offsets (Kopf + ggf. Boot-Tor). */
   geaendert: number[];
+  /** Nur die Kopf-Offsets — muss [0x12, 0x2E] sein. */
+  kopfGeaendert: number[];
   sdPfad: string;
-  /** Warnhinweis: der Crossgrade ist am Gerät falsifiziert (siehe {@link CROSSGRADE_GERAETEBEFUND}). */
+  /** Ergebnis des Boot-ID-Tor-Patches (nur bei bootGate). */
+  gatePatch?: GatePatchErgebnis;
+  /** Am Gerät bestätigter Befund (siehe {@link CROSSGRADE_GERAETEBEFUND}). */
   geraetebefund: string;
 }
 
+export interface CrossgradeOptionen {
+  /**
+   * Boot-ID-Tor mitpatchen (Standard: true). Ohne den Patch hängt die umgeköpfte
+   * Firmware in der Update-Schleife. Der Patch wird nur angewendet, wenn die
+   * erwarteten Bytes an der bekannten Stelle stehen; sonst bleibt es beim
+   * reinen Kopf-Crossgrade (mit Hinweis).
+   */
+  bootGate?: boolean;
+}
+
 /**
- * Kopf auf die Zielvariante setzen (nur Byte 0x12 und 0x2E). Payload bleibt.
- * Wirft mit klarer Begründung, wenn die Eingabe keine gültige SYSTEM.VSB ist
+ * Kopf auf die Zielvariante setzen (Byte 0x12, 0x2D, 0x2E) und — sofern
+ * `bootGate` (Standard an) — das Boot-ID-Tor der PAYLOAD-Firmware patchen.
+ *
+ * WICHTIG zur Zielwahl: `ziel` ist die Variante, deren UPDATER die Datei
+ * annehmen soll (also die aktuell laufende Firmware). Der Payload — und damit
+ * die Firmware, die danach laeuft — bleibt der der Quelldatei. Fuer den
+ * Synth-auf-Sampler-Weg laedt man eine Synth-Datei und waehlt `ziel="sampler"`
+ * nur, wenn der laufende Updater ein Sampler ist; laeuft bereits Synth, waehlt
+ * man `ziel="synth"` (Recovery einer Sampler-Datei fuer den Synth-Updater).
+ *
+ * Wirft mit klarer Begruendung, wenn die Eingabe keine gueltige SYSTEM.VSB ist
  * oder schon die Zielvariante hat.
  */
-export function crossgrade(data: Uint8Array, ziel: Variante): CrossgradeErgebnis {
+export function crossgrade(data: Uint8Array, ziel: Variante, opts: CrossgradeOptionen = {}): CrossgradeErgebnis {
+  const bootGate = opts.bootGate ?? true;
   const befund = analysiere(data);
   if (!befund.ok || befund.variante === "?") throw new Error(`Eingabe abgelehnt: ${befund.grund}`);
   if (befund.variante === ziel) throw new Error(`Datei ist bereits „${VARIANTEN[ziel].label}“ — nichts umzukoepfen.`);
+  const quelle = befund.variante;
   const v = VARIANTEN[ziel];
   const out = new Uint8Array(data);
   out[OFF_SUFFIX] = v.suffix;
   out[OFF_ID_LOW] = v.idLow;
   out[OFF_ID_HIGH] = 0x01;
-  const geaendert = unterschiedsBytes(data, out);
-  if (geaendert.length !== 2 || geaendert[0] !== OFF_SUFFIX || geaendert[1] !== OFF_ID_LOW) {
-    throw new Error(`Unerwartete Änderung an Offsets ${geaendert.map((x) => "0x" + x.toString(16))} — abgebrochen.`);
+  const kopfGeaendert = unterschiedsBytes(data, out);
+  if (kopfGeaendert.length !== 2 || kopfGeaendert[0] !== OFF_SUFFIX || kopfGeaendert[1] !== OFF_ID_LOW) {
+    throw new Error(`Unerwartete Kopf-Änderung an Offsets ${kopfGeaendert.map((x) => "0x" + x.toString(16))} — abgebrochen.`);
   }
+
+  // Boot-ID-Tor der Payload-Firmware (= Quellvariante) patchen.
+  let gatePatch: GatePatchErgebnis | undefined;
+  if (bootGate) {
+    const g = BOOT_GATE[quelle];
+    if (bytesPassen(out, g.offset, g.erwartet)) {
+      for (let i = 0; i < g.gepatcht.length; i++) out[g.offset + i] = g.gepatcht[i];
+      gatePatch = { angewendet: true, offset: g.offset, grund: `Boot-ID-Tor bei 0x${g.offset.toString(16)} gepatcht — ${g.zweck}` };
+    } else {
+      gatePatch = {
+        angewendet: false,
+        offset: g.offset,
+        grund: `Boot-ID-Tor bei 0x${g.offset.toString(16)} NICHT gefunden (andere Firmware-Version?). Nur Kopf umgeköpft — die Firmware kann in der Update-Schleife hängen bleiben.`,
+      };
+    }
+  }
+
   const res = analysiere(out);
   if (!res.ok || res.variante !== ziel) throw new Error(`Ergebnis nicht gültig als „${ziel}“: ${res.grund}`);
-  return { bytes: out, vonVariante: befund.variante, zuVariante: ziel, geaendert, sdPfad: `${v.sdOrdner}/SYSTEM.VSB`, geraetebefund: CROSSGRADE_GERAETEBEFUND };
+  return {
+    bytes: out,
+    vonVariante: quelle,
+    zuVariante: ziel,
+    geaendert: unterschiedsBytes(data, out),
+    kopfGeaendert,
+    sdPfad: `${v.sdOrdner}/SYSTEM.VSB`,
+    gatePatch,
+    geraetebefund: CROSSGRADE_GERAETEBEFUND,
+  };
 }
