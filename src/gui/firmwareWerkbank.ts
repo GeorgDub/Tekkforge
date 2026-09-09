@@ -1518,8 +1518,11 @@ async function xgUmkoepfen(ziel: Variante): Promise<void> {
   xgStatus(
     `Umgeköpft ${r.vonVariante} → ${ziel} (Byte 0x12 und 0x2E)${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}` +
       (ab.pfad ? ` → ${ab.pfad}.` : " → Download.") +
-      ` Installieren: als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
-      " ⚠ Vorher die Werks-SYSTEM.VSB als Rückweg auf der SD behalten.",
+      "\n" +
+      r.geraetebefund +
+      "\n" +
+      `Zum Experimentieren: als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
+      " Vorher die Werks-SYSTEM.VSB als Rückweg auf der SD behalten.",
   );
 }
 

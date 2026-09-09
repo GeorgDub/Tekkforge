@@ -26,7 +26,36 @@
  *
  * Reine Byte-Operation. Es wird KEINE Korg-Firmware mitgeliefert; der Nutzer
  * laedt die offizielle SYSTEM.VSB bei Korg und faehrt sie hier durch.
+ *
+ * ⚠ GERAETEBEFUND 2026-09-09 — der Crossgrade FUNKTIONIERT NICHT am Geraet:
+ * Das Umkoepfen bringt die Datei sauber durch die Datei-Pruefung des Updaters
+ * (die Synth-Datei mit Sampler-Kopf wird NICHT als „Invalid File" abgelehnt —
+ * genau wie hier vorhergesagt, waehrend die unveraenderte Stock-Synth-Datei
+ * mit „Invalid File" faellt). Nach dem Flashen und dem geforderten Neustart
+ * bleibt das Geraet aber in einer Update-Schleife: es verlangt beim Booten
+ * erneut ein Update und kommt nicht durch. Ein zweiter Durchlauf aendert
+ * nichts. Erst eine Sampler-basierte Firmware (Stock oder unsere Hacktribe-
+ * Fassung) bootet wieder normal.
+ *
+ * Der Grund liegt NICHT im Kopf: die SYSTEM.VSB traegt ein eingebettetes
+ * Cortex-M3-Panel-Firmware-Abbild (Vektortabelle SP 0x20004000), und das
+ * OS faehrt beim Booten eine 12-stufige Panel/MCU-Firmware-Uebertragung
+ * (Zustandsmaschine bei RAM 0xC0040A.., Panel-Kommandos 0xC7/0xC8), die an
+ * einem Versions-/Handshake-Check haengt. Der Weg „reiner Crossgrade" taugt
+ * also nicht — das deckt sich mit dem aelteren Repo-Schluss („Hacktribe
+ * existiert, weil der bloße Crossgrade nicht taugt"). Details und der noch
+ * offene Ein-Nachrichten-Unterscheider (Geraete-Inquiry-Byte 0x23 vs 0x24 im
+ * haengenden Zustand) stehen in Omnitribe
+ * `docs/reverse/e2synth_auf_e2s_crossgrade_v202.md`.
+ *
+ * Rueckweg (belegt): die passende Werks-SYSTEM.VSB des Geraets ueber denselben
+ * SD-Update-Weg flashen. Der Nutzer hat das bestaetigt („dann ist der Stand
+ * wie vorher").
  */
+
+/** Kurzer Warnhinweis fuer die Oberflaeche — der Crossgrade ist am Geraet falsifiziert. */
+export const CROSSGRADE_GERAETEBEFUND =
+  "⚠ Am Gerät falsifiziert (2026-09-09): Die umgeköpfte Datei wird angenommen und geflasht, aber das Gerät bleibt danach in einer Update-Schleife (verlangt beim Booten wieder ein Update). Rückweg: die Werks-SYSTEM.VSB des Geräts flashen. Ursache ist nicht der Kopf, sondern eine Panel-/MCU-Firmware-Prüfung im Synth-OS. Nur zum Experimentieren — nicht als fertiger Weg.";
 
 export const VSB_HEADER = 0x100;
 export const VSB_PAYLOAD = 0x200000;
@@ -111,6 +140,8 @@ export interface CrossgradeErgebnis {
   /** Geänderte Offsets — muss genau [0x12, 0x2E] sein. */
   geaendert: number[];
   sdPfad: string;
+  /** Warnhinweis: der Crossgrade ist am Gerät falsifiziert (siehe {@link CROSSGRADE_GERAETEBEFUND}). */
+  geraetebefund: string;
 }
 
 /**
@@ -133,5 +164,5 @@ export function crossgrade(data: Uint8Array, ziel: Variante): CrossgradeErgebnis
   }
   const res = analysiere(out);
   if (!res.ok || res.variante !== ziel) throw new Error(`Ergebnis nicht gültig als „${ziel}“: ${res.grund}`);
-  return { bytes: out, vonVariante: befund.variante, zuVariante: ziel, geaendert, sdPfad: `${v.sdOrdner}/SYSTEM.VSB` };
+  return { bytes: out, vonVariante: befund.variante, zuVariante: ziel, geaendert, sdPfad: `${v.sdOrdner}/SYSTEM.VSB`, geraetebefund: CROSSGRADE_GERAETEBEFUND };
 }

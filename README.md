@@ -801,8 +801,18 @@ DSP-Kette, Bytes ausserhalb der bekannten Bereiche gegen die Referenz. Eine
 rote harte Pruefung → keine Datei. Der Bericht nennt Kopf, SD-Pfad, PCM-Hinweis
 und den Rueckweg. Tests: `firmware-karte`, `firmware-analyse`,
 `firmware-freigabe`, `firmware-ablage`, `bspatch`, plus GUI-Faelle in
-`firmware-werkbank.test.ts`. ⚠ Am Geraet ist der Synth-Crossgrade weiterhin
-nicht abgenommen; die Freigabe macht ihn pruefbar, nicht bewiesen.
+`firmware-werkbank.test.ts`. ⚠ **Am Geraet FALSIFIZIERT (2026-09-09):** Der
+reine Synth-Crossgrade taugt nicht. Die umgekoepfte Datei wird zwar angenommen
+und geflasht (die unveraenderte Stock-Synth-Datei faellt dagegen als „Invalid
+File"), aber danach haengt das Geraet in einer Update-Schleife — beim Booten
+wird erneut ein Update verlangt, ein zweiter Durchlauf hilft nicht. Ursache ist
+nicht der Kopf, sondern eine Panel-/MCU-Firmware-Pruefung im Synth-OS (die
+SYSTEM.VSB traegt ein eingebettetes Cortex-M3-Panel-Abbild; das OS faehrt beim
+Booten eine 12-stufige Panel-Firmware-Uebertragung). Rueckweg (belegt): die
+Werks-SYSTEM.VSB des Geraets flashen. Diagnose im haengenden Zustand:
+`node scripts/crossgrade-diagnose.cjs` (Inquiry-Byte `0x23` = Synth-OS,
+`0x24` = Sampler-OS). Details: Omnitribe
+`docs/reverse/e2synth_auf_e2s_crossgrade_v202.md` (Nachtrag 2026-09-09).
 
 ### DSP-Patches — der Klang selbst (experimentell)
 
