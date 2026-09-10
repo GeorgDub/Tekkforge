@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   analysiere,
   crossgrade,
+  vereinheitliche,
   unterschiedsBytes,
   VARIANTEN,
   BOOT_GATE,
+  FAMILY_CHECK_LOOSE,
   VSB_TOTAL,
   VSB_HEADER,
   OFF_SUFFIX,
@@ -49,6 +51,14 @@ function macheVsbMitTor(variante: Variante, fuell = 0xab): Uint8Array {
   const b = macheVsb(variante, fuell);
   const g = BOOT_GATE[variante];
   for (let i = 0; i < g.erwartet.length; i++) b[g.offset + i] = g.erwartet[i];
+  return b;
+}
+
+/** Zusätzlich die family_check-Bytes setzen (für Loose-/Vereinheitlichungs-Tests). */
+function macheVsbMitTorUndFamily(variante: Variante, fuell = 0xab): Uint8Array {
+  const b = macheVsbMitTor(variante, fuell);
+  const f = FAMILY_CHECK_LOOSE[variante];
+  for (let i = 0; i < f.erwartet.length; i++) b[f.offset + i] = f.erwartet[i];
   return b;
 }
 
@@ -153,5 +163,39 @@ describe("crossgrade — Boot-ID-Tor-Patch (Umpatcher)", () => {
     // Tor-Bytes unverändert
     const g = BOOT_GATE.synth;
     for (let i = 0; i < g.erwartet.length; i++) expect(r.bytes[g.offset + i]).toBe(g.erwartet[i]);
+  });
+});
+
+describe("crossgrade — einheitlicher Header (Loose-Updater)", () => {
+  it("vereinheitliche patcht Boot-Tor + family_check ohne Kopf-Änderung", () => {
+    const syn = macheVsbMitTorUndFamily("synth");
+    const r = vereinheitliche(syn);
+    expect(r.variante).toBe("synth");
+    expect(r.gatePatch.angewendet).toBe(true);
+    expect(r.familyPatch.angewendet).toBe(true);
+    // Kopf bleibt Synth (0x23, Suffix E2) — NICHT umgeköpft.
+    expect(analysiere(r.bytes).variante).toBe("synth");
+    expect(r.bytes[OFF_ID_LOW]).toBe(0x23);
+    const f = FAMILY_CHECK_LOOSE.synth;
+    for (let i = 0; i < f.gepatcht.length; i++) expect(r.bytes[f.offset + i]).toBe(f.gepatcht[i]);
+    // Geänderte Offsets = Boot-Tor + family_check, KEIN Kopf-Offset.
+    expect(r.geaendert).toContain(BOOT_GATE.synth.offset);
+    expect(r.geaendert).toContain(FAMILY_CHECK_LOOSE.synth.offset);
+    expect(r.geaendert).not.toContain(OFF_ID_LOW);
+  });
+
+  it("vereinheitliche funktioniert auch für Sampler-Payload", () => {
+    const sam = macheVsbMitTorUndFamily("sampler");
+    const r = vereinheitliche(sam);
+    expect(r.variante).toBe("sampler");
+    expect(r.familyPatch.angewendet).toBe(true);
+    expect(r.bytes[OFF_ID_LOW]).toBe(0x24); // Kopf bleibt Sampler
+  });
+
+  it("crossgrade mit familyLoose patcht den Updater zusätzlich", () => {
+    const syn = macheVsbMitTorUndFamily("synth");
+    const r = crossgrade(syn, "sampler", { familyLoose: true });
+    expect(r.familyPatch?.angewendet).toBe(true);
+    expect(r.geaendert).toContain(FAMILY_CHECK_LOOSE.synth.offset);
   });
 });

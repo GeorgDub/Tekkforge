@@ -108,6 +108,29 @@ export const BOOT_GATE: Record<Variante, GatePatch> = {
   },
 };
 
+/**
+ * „Einheitlicher Header" / Loose-Updater: patcht `family_check`, sodass der
+ * SD-Updater der laufenden Firmware BEIDE Header (Synth 0x23 UND Sampler 0x24)
+ * annimmt — dann muss der Kopf beim Firmware-Wechsel nie mehr umgeköpft werden.
+ * Mechanik: der Sprung in den strikten Zweig (nur eigene Variante) wird zum NOP,
+ * alle Aufrufer fallen in den Loose-Zweig, der `idLow ∈ {0x23,0x24}` akzeptiert.
+ * Offset nach PAYLOAD-Variante (die laufende Firmware). Am v2.02-Abbild belegt.
+ */
+export const FAMILY_CHECK_LOOSE: Record<Variante, GatePatch> = {
+  synth: {
+    offset: 0x032910,
+    erwartet: [0x08, 0x00, 0x00, 0x0a], // beq 0xC0032838 (in den strikten Zweig)
+    gepatcht: [0x01, 0x10, 0xa0, 0xe1], // mov r1,r1 (NOP) -> immer Loose-Zweig
+    zweck: "Synth-Updater akzeptiert Synth- UND Sampler-Header (kein Umköpfen nötig).",
+  },
+  sampler: {
+    offset: 0x0368fc,
+    erwartet: [0x08, 0x00, 0x00, 0x0a],
+    gepatcht: [0x01, 0x10, 0xa0, 0xe1],
+    zweck: "Sampler-Updater akzeptiert Synth- UND Sampler-Header (kein Umköpfen nötig).",
+  },
+};
+
 /** Bekannte offizielle v2.02-Abbilder und das umgekoepfte Ergebnis (SHA-256). */
 export const BEKANNTE_HASHES: Record<string, string> = {
   "41fc5f1c33209ef381d1c9fef21a72380bcd8d3431c9c1350a964f5c619ab8b8": "Synth v2.02 (offiziell)",
@@ -182,6 +205,8 @@ export interface CrossgradeErgebnis {
   sdPfad: string;
   /** Ergebnis des Boot-ID-Tor-Patches (nur bei bootGate). */
   gatePatch?: GatePatchErgebnis;
+  /** Ergebnis des Loose-Updater-Patches (nur bei familyLoose). */
+  familyPatch?: GatePatchErgebnis;
   /** Am Gerät bestätigter Befund (siehe {@link CROSSGRADE_GERAETEBEFUND}). */
   geraetebefund: string;
 }
@@ -194,6 +219,43 @@ export interface CrossgradeOptionen {
    * reinen Kopf-Crossgrade (mit Hinweis).
    */
   bootGate?: boolean;
+  /**
+   * `family_check` auf Loose patchen (Standard: false), sodass der Updater der
+   * FERTIGEN Firmware beide Header annimmt — dann muss beim nächsten
+   * Firmware-Wechsel nicht mehr umgeköpft werden. Siehe {@link vereinheitliche}.
+   */
+  familyLoose?: boolean;
+}
+
+/** Wendet einen GatePatch (Boot-Tor / family_check) an, wenn die erwarteten Bytes passen. */
+function wendeGatePatch(out: Uint8Array, g: GatePatch): GatePatchErgebnis {
+  if (bytesPassen(out, g.offset, g.erwartet)) {
+    for (let i = 0; i < g.gepatcht.length; i++) out[g.offset + i] = g.gepatcht[i];
+    return { angewendet: true, offset: g.offset, grund: `bei 0x${g.offset.toString(16)} gepatcht — ${g.zweck}` };
+  }
+  return { angewendet: false, offset: g.offset, grund: `bei 0x${g.offset.toString(16)} NICHT gefunden (andere Firmware-Version?).` };
+}
+
+/**
+ * „Einheitlicher Header": patcht Boot-ID-Tor + `family_check` (Loose), OHNE den
+ * Kopf zu ändern. Ergebnis: die Firmware bootet auf der Hardware und ihr Updater
+ * akzeptiert beide Header — der Nutzer muss beim Firmware-Wechsel nie umköpfen.
+ * Am Gerät bestätigt 2026-09-10 (Synth mit Loose-Updater flasht Sampler direkt).
+ */
+export function vereinheitliche(
+  data: Uint8Array,
+  opts: { bootGate?: boolean } = {},
+): { bytes: Uint8Array; variante: Variante; gatePatch: GatePatchErgebnis; familyPatch: GatePatchErgebnis; geaendert: number[] } {
+  const bootGate = opts.bootGate ?? true;
+  const befund = analysiere(data);
+  if (!befund.ok || befund.variante === "?") throw new Error(`Eingabe abgelehnt: ${befund.grund}`);
+  const v = befund.variante;
+  const out = new Uint8Array(data);
+  const gatePatch = bootGate
+    ? wendeGatePatch(out, BOOT_GATE[v])
+    : { angewendet: false, offset: BOOT_GATE[v].offset, grund: "Boot-Tor auf Wunsch übersprungen." };
+  const familyPatch = wendeGatePatch(out, FAMILY_CHECK_LOOSE[v]);
+  return { bytes: out, variante: v, gatePatch, familyPatch, geaendert: unterschiedsBytes(data, out) };
 }
 
 /**
@@ -227,20 +289,9 @@ export function crossgrade(data: Uint8Array, ziel: Variante, opts: CrossgradeOpt
   }
 
   // Boot-ID-Tor der Payload-Firmware (= Quellvariante) patchen.
-  let gatePatch: GatePatchErgebnis | undefined;
-  if (bootGate) {
-    const g = BOOT_GATE[quelle];
-    if (bytesPassen(out, g.offset, g.erwartet)) {
-      for (let i = 0; i < g.gepatcht.length; i++) out[g.offset + i] = g.gepatcht[i];
-      gatePatch = { angewendet: true, offset: g.offset, grund: `Boot-ID-Tor bei 0x${g.offset.toString(16)} gepatcht — ${g.zweck}` };
-    } else {
-      gatePatch = {
-        angewendet: false,
-        offset: g.offset,
-        grund: `Boot-ID-Tor bei 0x${g.offset.toString(16)} NICHT gefunden (andere Firmware-Version?). Nur Kopf umgeköpft — die Firmware kann in der Update-Schleife hängen bleiben.`,
-      };
-    }
-  }
+  const gatePatch = bootGate ? wendeGatePatch(out, BOOT_GATE[quelle]) : undefined;
+  // Optional den Updater auf Loose patchen (kein künftiges Umköpfen nötig).
+  const familyPatch = opts.familyLoose ? wendeGatePatch(out, FAMILY_CHECK_LOOSE[quelle]) : undefined;
 
   const res = analysiere(out);
   if (!res.ok || res.variante !== ziel) throw new Error(`Ergebnis nicht gültig als „${ziel}“: ${res.grund}`);
@@ -252,6 +303,7 @@ export function crossgrade(data: Uint8Array, ziel: Variante, opts: CrossgradeOpt
     kopfGeaendert,
     sdPfad: `${v.sdOrdner}/SYSTEM.VSB`,
     gatePatch,
+    familyPatch,
     geraetebefund: CROSSGRADE_GERAETEBEFUND,
   };
 }
