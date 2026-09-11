@@ -66,6 +66,7 @@ import { setzeFxWert, fxStandNachrichten, fxStandBeschreibung, type FxStandZiel 
 import { msBisNaechsterTakt } from "../core/padDeck";
 import { registriereFxStandQuelle } from "./presetManager";
 import { buildKnobCc, ccValueToParam, decodeKnobCc } from "../core/e2KnobCc";
+import { MOD_TYPEN, modTypName } from "../core/e2ModTypen";
 
 let modus: "live" | "prepare" = "prepare";
 type PadModus = "mute" | "sequencer" | "erase" | "trigger" | "keyboard" | "patternset";
@@ -358,7 +359,7 @@ function renderPanel(): void {
   dreheKnob("e2sKnobCutoff", params.cutoff);
   dreheKnob("e2sKnobReso", params.resonance);
   dreheKnob("e2sKnobEgInt", params.egInt, -63, 63);
-  dreheKnob("e2sKnobModType", params.modType, 0, 71, `Mod-Typ ${params.modType ?? "—"}`);
+  dreheKnob("e2sKnobModType", params.modType, 0, MOD_TYPEN.length - 1, params.modType == null ? "Mod-Typ —" : modTypName(params.modType));
   dreheKnob("e2sKnobDepth", params.modDepth);
   dreheKnob("e2sKnobSpeed", params.modSpeed);
   dreheKnob("e2sKnobLevel", part?.volume);
@@ -1064,7 +1065,7 @@ function setzeSchalterParam(key: string, wert: number, was: string): void {
 /** Auswahlregler: Ziehen schaltet den Wert schrittweise weiter (kein CC — Übertragung). */
 const AUSWAHL_BELEGUNG: Record<string, { key: string; min: number; max: number; label: string; anzeige?: (w: number) => string }> = {
   e2sKnobIfxType: { key: "ifxType", min: 0, max: 48, label: "IFX-Typ" },
-  e2sKnobModType: { key: "modType", min: 0, max: 71, label: "Mod-Typ", anzeige: (w) => String(w + 1) },
+  e2sKnobModType: { key: "modType", min: 0, max: MOD_TYPEN.length - 1, label: "Mod-Typ", anzeige: (w) => modTypName(w) },
 };
 
 function macheAuswahlDrehbar(): void {
