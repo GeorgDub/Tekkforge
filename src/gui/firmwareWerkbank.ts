@@ -69,7 +69,7 @@ import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GR
 import { standardKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
 import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
-import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett } from "../core/geraeteFlash";
+import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet } from "../core/geraeteFlash";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1737,9 +1737,32 @@ async function bootFlashKomplett(): Promise<void> {
   bootStatus(`Flash komplett gelesen (16 MiB in ${((Date.now() - t0) / 60000).toFixed(1)} min)${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Das ist die vollständige Sicherung des Geräts (Bootloader, Firmware, User-Daten, Pattern, PCM, Slices) — Regionen lassen sich unten als Update-Dateien ausschneiden.`);
 }
 
+/** Nur die Pattern-Bank (gut 4 MiB) vom Gerät lesen und als .e2sallpat sichern. */
+async function bootPatternBankVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  dumpAbbruch = false;
+  document.getElementById("bootDumpAbbrechen")?.classList.remove("hidden");
+  bootStatus("Prüfe, wie groß ein Häppchen sein darf…");
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const r = await liesPatternBankVomGeraet(lesen, {
+    chunk: probe.chunk,
+    abbruch: () => dumpAbbruch,
+    fortschritt: (f) => bootStatus(`Pattern-Bank lesen: ${(f.gelesen / 1048576).toFixed(2)} / ${(f.gesamt / 1048576).toFixed(2)} MiB (${probe.hinweis}, ${((Date.now() - t0) / 1000).toFixed(0)} s) — Gerät nicht bedienen.`),
+  });
+  document.getElementById("bootDumpAbbrechen")?.classList.add("hidden");
+  if (!r.ok) return bootStatus(`Pattern-Bank nicht gelesen: ${r.reason}`);
+  const benannt = r.namen.filter((n) => n);
+  const name = `Patterns-vom-Geraet-${bootStempel()}.e2sallpat`;
+  const ab = await legeAb(name, r.bank, "Sets");
+  bootStatus(`${name} gesichert (${((Date.now() - t0) / 1000).toFixed(0)} s, ${benannt.length} Patterns: ${benannt.slice(0, 3).map((n) => `„${n}“`).join(", ")}${benannt.length > 3 ? ", …" : ""})${ab.pfad ? ` → ${ab.pfad}` : ""} — ladbar in TekkForge (Import) und am Gerät (DATA UTILITY → LOAD ALL PATTERN).`);
+}
+
 function richteBootEin(): void {
   if (!document.getElementById("bootPanel")) return;
   document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
+  document.getElementById("bootPatternsGeraet")?.addEventListener("click", () => void bootPatternBankVomGeraet());
   document.getElementById("bootDumpAbbrechen")?.addEventListener("click", () => {
     dumpAbbruch = true;
     bootStatus("Abbruch angefordert — der laufende 64-KiB-Block wird noch beendet.");

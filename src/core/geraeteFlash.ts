@@ -8,6 +8,7 @@
  * einen Nachbau. Lage der Records wie in `flashKarte.ts` (electribe2-re, storage-and-updates.md).
  */
 import { liesBootSektor, BOOTSEKTOR_GROESSE, type BootSektorBefund } from "./bootSektor";
+import { PATTERN_BANK, PATTERN_BANK_FLASH_GROESSE, baueE2sallpat, patternNamenAusBank } from "./flashKarte";
 import type { Variante } from "./crossgrade";
 
 /** Flash lesen; `chunk` (optional) = Bytes je SysEx-Anfrage, sonst der Standard 0x100. */
@@ -128,6 +129,23 @@ export async function liesFlashKomplett(lesen: LesenFlash, opts: DumpOptionen = 
     opts.fortschritt?.({ gelesen, gesamt, chunk });
   }
   return { ok: true, bytes: out };
+}
+
+export type PatternBankErgebnis = { ok: true; bank: Uint8Array; namen: string[] } | { ok: false; reason: string };
+
+/**
+ * Nur die Pattern-Bank vom Gerät lesen (Flash 0x230000..0x628000, gut 4 MiB — mit 0x400-Häppchen
+ * etwa eine halbe Minute) und als `.e2sallpat` liefern. Kein 16-MiB-Dump nötig.
+ */
+export async function liesPatternBankVomGeraet(lesen: LesenFlash, opts: Pick<DumpOptionen, "fortschritt" | "abbruch" | "chunk"> = {}): Promise<PatternBankErgebnis> {
+  const r = await liesFlashKomplett(lesen, { ...opts, start: PATTERN_BANK.glst, gesamt: PATTERN_BANK_FLASH_GROESSE });
+  if (!r.ok) return { ok: false, reason: r.reason };
+  try {
+    const bank = baueE2sallpat(r.bytes);
+    return { ok: true, bank, namen: patternNamenAusBank(bank) };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function liesBootSektorVomGeraet(lesen: LesenFlash): Promise<{ ok: true; bytes: Uint8Array; befund: BootSektorBefund } | { ok: false; reason: string }> {

@@ -68,3 +68,26 @@ describe("Pattern-Bank aus dem echten Gerätedump (nur wenn er lokal liegt)", ()
     expect(parsed.patterns[0].name.trim()).toBe("Mfmt Pattern");
   });
 });
+
+describe("liesPatternBankVomGeraet", () => {
+  it("liest nur das 4-MiB-Stück ab 0x230000 und liefert die Bank samt Namen", async () => {
+    const { liesPatternBankVomGeraet } = await import("../src/core/geraeteFlash");
+    const d = dumpMitBank();
+    const anfragen: number[] = [];
+    const lesen = async (addr: number, len: number) => {
+      anfragen.push(addr);
+      return { ok: true as const, bytes: d.slice(addr, addr + len) };
+    };
+    const r = await liesPatternBankVomGeraet(lesen, { chunk: 0x400 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bank.length).toBe(ELECTRIBE_ALLPAT_EXPECTED_SIZE);
+    expect(isElectribeAllPatBank(r.bank)).toBe(true);
+    expect(r.namen.slice(0, 3)).toEqual(["PAT 1", "PAT 2", "PAT 3"]);
+    expect(Math.min(...anfragen)).toBe(PATTERN_BANK.glst);
+    expect(Math.max(...anfragen)).toBeLessThan(0x628000);
+    const leer = async () => ({ ok: true as const, bytes: new Uint8Array(0x10000).fill(0xff) });
+    const f = await liesPatternBankVomGeraet(leer);
+    expect(f.ok).toBe(false);
+  });
+});

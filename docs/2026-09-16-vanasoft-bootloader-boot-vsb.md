@@ -23,7 +23,7 @@ Flash-Karte, Ghidra-Export) steht in Omnitribe:
 
 - **Pattern-Bank im Flash = e2sallpat ohne Kopf:** 0x230000 (Selektor 0x23, GLST-Block 0x10000) +
   0x240000 (Selektor 0x24, 250 × 0x4000 PTST) — TekkForge schneidet daraus die `.e2sallpat`
-  (`patternBankAusDump`), am Dump vom 2026-09-16 belegt (250 Records, Import in die App gelingt).
+  (`patternBankAusDump`) oder liest sie direkt vom Gerät (`liesPatternBankVomGeraet`, 4 MiB in 25 s); am Gerät belegt (250 Records, byte-gleich mit dem Dump, Import in die App gelingt).
 
 ## Werkzeug
 `python scripts/make_bootsect.py build|vsb|check|extract …` — baut aus `bootloader.bin` den

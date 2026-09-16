@@ -35,29 +35,43 @@ const asciiName = (b: Uint8Array, off: number, n: number): string => {
   return s.trim();
 };
 
-/** Patternnamen der 250 Slots (leer, wenn kein „PTST“ am Slot). */
-export function patternNamenAusDump(bytes: Uint8Array): string[] {
+/** Patternnamen der 250 Slots ab `basis` (leer, wenn kein „PTST“ am Slot). */
+export function patternNamenAb(bytes: Uint8Array, basis: number): string[] {
   const out: string[] = [];
   for (let i = 0; i < PATTERN_BANK.anzahl; i++) {
-    const p = PATTERN_BANK.patterns + i * PATTERN_BANK.stride;
+    const p = basis + i * PATTERN_BANK.stride;
     out.push(ascii(bytes, p, 4) === "PTST" ? asciiName(bytes, p + PATTERN_BANK.nameOffset, 16) : "");
   }
   return out;
 }
+export const patternNamenAusDump = (bytes: Uint8Array): string[] => patternNamenAb(bytes, PATTERN_BANK.patterns);
+/** Namen aus einer fertigen `.e2sallpat` (Records ab 0x10100). */
+export const patternNamenAusBank = (bank: Uint8Array): string[] => patternNamenAb(bank, ALLPAT_KOPF_GROESSE + PATTERN_BANK.glstGroesse);
 
-/** Die Pattern-Bank des Geräts als `.e2sallpat` (4 161 792 Bytes) — direkt am Gerät und in TekkForge ladbar. */
-export function patternBankAusDump(bytes: Uint8Array): Uint8Array {
-  if (bytes.length !== FLASH_GROESSE) throw new Error("kein 16-MiB-Flash-Dump");
-  if (ascii(bytes, PATTERN_BANK.glst, 4) !== "GLST") throw new Error("bei 0x230000 steht kein GLST-Block — keine Pattern-Bank im Dump");
-  const out = new Uint8Array(ALLPAT_KOPF_GROESSE + PATTERN_BANK.glstGroesse + PATTERN_BANK.anzahl * PATTERN_BANK.stride);
+/** Größe des Flash-Stücks 0x230000..0x628000, das die Pattern-Bank trägt (GLST + 250 Records). */
+export const PATTERN_BANK_FLASH_GROESSE = PATTERN_BANK.glstGroesse + PATTERN_BANK.anzahl * PATTERN_BANK.stride;
+
+/**
+ * `.e2sallpat` aus dem zusammenhängenden Flash-Stück ab 0x230000 (GLST-Block gefolgt von den
+ * 250 Records) — so, wie das Gerät es selbst exportiert: 0x100-Kopf davor, sonst byte-gleich.
+ */
+export function baueE2sallpat(flashStueck: Uint8Array): Uint8Array {
+  if (flashStueck.length < PATTERN_BANK_FLASH_GROESSE) throw new Error(`Pattern-Bank unvollständig: ${flashStueck.length} von ${PATTERN_BANK_FLASH_GROESSE} Bytes`);
+  if (ascii(flashStueck, 0, 4) !== "GLST") throw new Error("bei 0x230000 steht kein GLST-Block — keine Pattern-Bank");
+  const out = new Uint8Array(ALLPAT_KOPF_GROESSE + PATTERN_BANK_FLASH_GROESSE);
   out.fill(0xff, 0x24, ALLPAT_KOPF_GROESSE);
   for (let i = 0; i < 4; i++) out[i] = "KORG".charCodeAt(i);
   const id = "e2sampler";
   for (let i = 0; i < id.length; i++) out[0x10 + i] = id.charCodeAt(i);
   out[0x20] = 1;
-  out.set(bytes.subarray(PATTERN_BANK.glst, PATTERN_BANK.glst + PATTERN_BANK.glstGroesse), ALLPAT_KOPF_GROESSE);
-  out.set(bytes.subarray(PATTERN_BANK.patterns, PATTERN_BANK.patterns + PATTERN_BANK.anzahl * PATTERN_BANK.stride), ALLPAT_KOPF_GROESSE + PATTERN_BANK.glstGroesse);
+  out.set(flashStueck.subarray(0, PATTERN_BANK_FLASH_GROESSE), ALLPAT_KOPF_GROESSE);
   return out;
+}
+
+/** Die Pattern-Bank des Geräts als `.e2sallpat` (4 161 792 Bytes) aus einem 16-MiB-Dump. */
+export function patternBankAusDump(bytes: Uint8Array): Uint8Array {
+  if (bytes.length !== FLASH_GROESSE) throw new Error("kein 16-MiB-Flash-Dump");
+  return baueE2sallpat(bytes.subarray(PATTERN_BANK.glst, PATTERN_BANK.glst + PATTERN_BANK_FLASH_GROESSE));
 }
 
 export interface FlashRegion {
