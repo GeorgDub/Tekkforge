@@ -797,7 +797,7 @@
                   <span class="sub" style="margin:0"><b>Vom Gerät lesen (Hacktribe, nur lesen):</b></span>
                   <button id="bootKennungenGeraet" class="ghost" title="Gerätestempel (elec2USR/ele2sUSR), Main-Version und PCM-Kopf direkt aus dem Flash lesen — SysEx 0x55, ein paar Dutzend Bytes">Kennungen</button>
                   <button id="bootSektorGeraet" class="ghost" title="Den ersten 128-KiB-Block (AIS + Werks-SBL) aus dem Flash lesen — der Rückweg, BEVOR ein eigener Bootloader installiert wird; wird sofort als .bin und BOOT.VSB in Downloads\TekkForge\Firmware gesichert (512 Häppchen, ~60 s)">Boot-Sektor (128 KiB)</button>
-                  <button id="bootFlashKomplett" class="ghost" title="Den ganzen 16-MiB-Flash lesen und als Flash-vom-Geraet-<Datum>.bin sichern — vollständige Gerätesicherung (Bootloader, Firmware, User-Daten, Pattern, PCM, Slices), ohne JTAG. Dauert je nach Häppchengröße 10–40 Minuten; Gerät solange nicht bedienen">Flash komplett (16 MiB, lange)</button>
+                  <button id="bootFlashKomplett" class="ghost" title="Den ganzen 16-MiB-Flash lesen und als Flash-vom-Geraet-<Datum>.bin sichern — vollständige Gerätesicherung (Bootloader, Firmware, User-Daten, Pattern, PCM, Slices), ohne JTAG. Mit 0x400-Häppchen etwa zwei Minuten, sonst bis zu 10; Gerät solange nicht bedienen">Flash komplett (16 MiB, lange)</button>
                   <button id="bootDumpAbbrechen" class="ghost hidden" title="Nach dem laufenden 64-KiB-Block abbrechen; das Teilstück wird gesichert">Abbrechen</button>
                   <span class="sub" id="bootGeraetInfo" style="margin:0"></span>
                 </div>

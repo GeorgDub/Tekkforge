@@ -1092,6 +1092,9 @@ User-Samples 501–532). Nur Lesen und Dateien — nichts schreibt ins Gerät.
 | MIDI-Stop, dann Monitor | Maske `0x10`: Slot 5 = **Part 10, User-Sample 598, Note 60, „One-Shot läuft aus“**, Generation 76 |
 | **Flash lesen (Hacktribe 0x55)**: Kennungen | Antwortformat wie bei 0x52 (Echo 0x55 an Index 7, Daten ab 9); Gerätestempel `ele2sUSR` (Sampler 0x124), Main-Version 02.02.00, PCM-Kopf `KORG elec2PCM` (= die eingespielte Synth-Werks-PCM) |
 | **Flash lesen**: Boot-Sektor (128 KiB, 512 Häppchen, ~60 s) | Korgs Werks-Boot-Sektor lädt **drei** Sektionen: 60 B Vektoren → 0x80000000, **21 924 B Code → 0x80000040** (exakt die Größe des SBL-Programms im Ghidra-Archiv, 0x80000040–0x800055E3), 2 124 B Daten → 0x800055F0, dann Jump 0x80000000; keine Wortsumme (0xFFFF). Der Parser kennt seither beide Layouts (Werk / vanasoft) |
+| **Flash komplett lesen** (16 MiB) | Häppchen-Probe bestätigt **0x400 Bytes je Anfrage**; 7,4 MiB in 45 s, alle 16 MiB in gut zwei Minuten → `Flash-vom-Geraet-<Datum>.bin` (Abbruch sichert das Teilstück) — die vollständige Gerätesicherung ohne JTAG, kartiert mit Boot-Sektor, Firmware, Stempel, PCM |
+| Dump-Integrität | Boot-Region byte-gleich mit der separaten 128-KiB-Lesung; SYSTEM-Region byte-gleich mit `MOD132-IFX100-GROOVE96-SYSTEM.VSB`; User-Record `KORG ele2sUSR 01 01 D2 3B`; Katalog-Image 0x6B0000 leer |
+| PCM-Region des Geräts | byte-gleich mit `SYNTH-PCM-usersamples-TEST.VSB` (der Brick-Datei vom 11.09.) — die Werks-PCM aus `Stock-PCM-Restore` ist **nicht** eingespielt; erklärt „klingt falsch“. Die Sampler-Firmware bootet mit dieser PCM, der Boot-Hänger war synth-spezifisch |
 | User-Samples 501–532 (35 KB Katalog, ~6 s) | alle 32 geladen, 14 812–30 172 Bytes, **22 050 Hz** — die Bank war mit halber Rate gebaut (Rate nach Rolloff), der Katalog bestätigt es |
 
 Damit sind Slot-Maske, `voice_t`-Zeiger (Part-Zuordnung), Oszillator-ID, Notenzustand, Release-
