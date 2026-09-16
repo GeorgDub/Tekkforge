@@ -34,6 +34,14 @@ Flash-Karte, Ghidra-Export) steht in Omnitribe:
   Werks-Pattern-Bank für den Werksreset, Handler 0x11). `core/globalFlash.ts`, am Gerät belegt.
   USER-Region 0x220000: nur der 16-Byte-Stempel, Rest 0xFF.
 
+- **SQEZ nachgebaut** (`core/sqez.ts`, Omnitribe `tools/formats/sqez.py`): Kopf „SQEZ“ | u32 Stromlänge | u32
+  entpackt | u16 CRC-16/ARC | Bitstrom ab +0x0E (MSB zuerst). Blöcke: u16 Symbolzahl, 19er-Längentabelle
+  (5-Bit-Zähler, 3-Bit-Längen, „111“+Einsen = 7+, 2-Bit-Nullenlauf nach den ersten drei), Literal/Längen-
+  Längen (9-Bit-Zähler, Symbole 0/1/2 = Nullenläufe 1 / 3+4 Bit / 20+9 Bit, 3..18 = Länge 1..16, Wurzel
+  12 Bit), Distanztabelle (14 Symbole, 4-Bit-Zähler, Wurzel 8 Bit). Literal < 0x100, Länge = Symbol − 0xFD,
+  Distanz d → 0 bzw. (d−1) Extra-Bits + 2^(d−1), Quelle = Pos − 1 − Distanz (8-KiB-Fenster). Am Gerät: CRC
+  stimmt, 243/250 Records = Flash. → `core/werksbank.ts`: Werks-Pattern-Bank als .e2sallpat, vom Gerät in 1,4 s.
+
 ## Werkzeug
 `python scripts/make_bootsect.py build|vsb|check|extract …` — baut aus `bootloader.bin` den
 Boot-Sektor (AIS-Kopf + SBL + Jump + 16-Bit-Wortsumme, exakt wie `install_sbl_to_flash()`), verpackt

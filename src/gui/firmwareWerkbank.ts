@@ -71,6 +71,7 @@ import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump,
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
 import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet, liesRegionVomGeraet, liesGlobalVomGeraet } from "../core/geraeteFlash";
 import { globalBerichtZeilen } from "../core/globalFlash";
+import { werksbankAusDump, liesWerksbankVomGeraet, werksbankZeile } from "../core/werksbank";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1652,6 +1653,13 @@ function bootRegionSichern(region: string): void {
     void legeAb(name, bank, "Sets").then((ab) => bootStatus(`${name} gesichert (${bank.length} Bytes, ${namen} Patterns mit Namen)${ab.pfad ? ` → ${ab.pfad}` : ""} — die komplette Pattern-Bank des Geräts, ladbar in TekkForge (Pattern-Bibliothek) und am Gerät.`));
     return;
   }
+  if (region === "WERKSBANK") {
+    const w = werksbankAusDump(flashDump.bytes);
+    if (!w.ok) return bootStatus(w.grund);
+    const name = `Werksbank-aus-Dump-${bootStempel()}.e2sallpat`;
+    void legeAb(name, w.bank, "Sets").then((ab) => bootStatus(`${name} gesichert (${w.bank.length} Bytes, CRC ${w.crcOk ? "stimmt" : "FALSCH"}${w.abweichungen ? `, ${w.abweichungen.length} Records im Flash verändert` : ""})${ab.pfad ? ` → ${ab.pfad}` : ""} — der Werkszustand aller 250 Patterns, ladbar in TekkForge und am Gerät.`));
+    return;
+  }
   const art = region as VsbArt;
   const v = bootKopfVorlage();
   const kopf = flashDump.befund.variante ? standardKopf(flashDump.befund.variante, art) : v.kopf;
@@ -1785,6 +1793,20 @@ async function bootRegionVomGeraet(): Promise<void> {
   bootStatus(`${name} gesichert (${r.datei.length} Bytes in ${((Date.now() - t0) / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${k.variante ? `nach Gerätestempel (${VARIANTEN[k.variante].label})` : "aus der Vorlage"}, Prüfung: ${pruefung.ok ? "das Gerät nähme die Datei per SD-Update an" : pruefung.pruefungen.find((x) => !x.ok)?.detail ?? "nicht bestanden"}.`);
 }
 
+/** Werks-Pattern-Bank direkt vom Gerät (Werks-Global + SQEZ-Strom, ~128 KiB). */
+async function bootWerksbankVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const w = await liesWerksbankVomGeraet(lesen, { chunk: probe.chunk, fortschritt: (g, ges) => bootStatus(`Werks-Pattern-Bank lesen: ${(g / 1024).toFixed(0)} / ${(ges / 1024).toFixed(0)} KiB …`) });
+  if (!w.ok) return bootStatus(`Werks-Pattern-Bank nicht gelesen: ${w.grund}`);
+  const name = `Werksbank-vom-Geraet-${bootStempel()}.e2sallpat`;
+  const ab = await legeAb(name, w.bank, "Sets");
+  bootBerichtZeigen([werksbankZeile(w)]);
+  bootStatus(`${name} gesichert (${((Date.now() - t0) / 1000).toFixed(1)} s, CRC ${w.crcOk ? "stimmt" : "FALSCH"}, z. B. ${w.namen.slice(0, 3).map((n) => `„${n}“`).join(", ")})${ab.pfad ? ` → ${ab.pfad}` : ""} — der Werkszustand aller 250 Patterns, ladbar in TekkForge und am Gerät (LOAD ALL PATTERN).`);
+}
+
 /** Global-Blöcke aus dem Flash des Geräts lesen und benannt zeigen. */
 async function bootGlobalVomGeraet(): Promise<void> {
   if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
@@ -1798,6 +1820,7 @@ async function bootGlobalVomGeraet(): Promise<void> {
 function richteBootEin(): void {
   if (!document.getElementById("bootPanel")) return;
   document.getElementById("bootGlobalGeraet")?.addEventListener("click", () => void bootGlobalVomGeraet());
+  document.getElementById("bootWerksbankGeraet")?.addEventListener("click", () => void bootWerksbankVomGeraet());
   document.getElementById("bootRegionGeraet")?.addEventListener("click", () => void bootRegionVomGeraet());
   document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
   document.getElementById("bootPatternsGeraet")?.addEventListener("click", () => void bootPatternBankVomGeraet());
