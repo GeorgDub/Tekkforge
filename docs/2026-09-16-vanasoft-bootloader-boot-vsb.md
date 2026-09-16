@@ -21,6 +21,10 @@ Flash-Karte, Ghidra-Export) steht in Omnitribe:
   (Literal 0x123→0x124 @ Dateioffset 0x25F64) — beide booten die Synth-Firmware auf Sampler-Hardware
   und beide haben das PCM.VSB-Problem.
 
+- **Pattern-Bank im Flash = e2sallpat ohne Kopf:** 0x230000 (Selektor 0x23, GLST-Block 0x10000) +
+  0x240000 (Selektor 0x24, 250 × 0x4000 PTST) — TekkForge schneidet daraus die `.e2sallpat`
+  (`patternBankAusDump`), am Dump vom 2026-09-16 belegt (250 Records, Import in die App gelingt).
+
 ## Werkzeug
 `python scripts/make_bootsect.py build|vsb|check|extract …` — baut aus `bootloader.bin` den
 Boot-Sektor (AIS-Kopf + SBL + Jump + 16-Bit-Wortsumme, exakt wie `install_sbl_to_flash()`), verpackt

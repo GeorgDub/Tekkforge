@@ -15,6 +15,51 @@ import { erkenneKarte, type Familie } from "./firmwareKarte";
 
 export const FLASH_GROESSE = 0x1000000;
 
+/**
+ * Die Pattern-Bank des Geräts liegt im Flash genau so, wie das Gerät sie als
+ * `electribe_sampler_allpattern.e2sallpat` exportiert (electribe2-re, CommandTask-Handler 0x16):
+ * 0x100-Kopf (KORG / e2sampler / Version 1 / 0xFF) + 0x10000-GLST-Block (Selektor 0x23) +
+ * 250 × 0x4000 Pattern-Records (Selektor 0x24, Voice-Assignment-Image). Am Gerätedump 2026-09-16
+ * belegt: 0x230000 = „GLST“, 0x240000 = „PTST“ + Patternname.
+ */
+export const PATTERN_BANK = { glst: 0x230000, glstGroesse: 0x10000, patterns: 0x240000, anzahl: 250, stride: 0x4000, nameOffset: 0x10 } as const;
+
+const ALLPAT_KOPF_GROESSE = 0x100;
+const asciiName = (b: Uint8Array, off: number, n: number): string => {
+  let s = "";
+  for (let i = 0; i < n; i++) {
+    const c = b[off + i];
+    if (c === 0) break;
+    s += c >= 0x20 && c < 0x7f ? String.fromCharCode(c) : "?";
+  }
+  return s.trim();
+};
+
+/** Patternnamen der 250 Slots (leer, wenn kein „PTST“ am Slot). */
+export function patternNamenAusDump(bytes: Uint8Array): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < PATTERN_BANK.anzahl; i++) {
+    const p = PATTERN_BANK.patterns + i * PATTERN_BANK.stride;
+    out.push(ascii(bytes, p, 4) === "PTST" ? asciiName(bytes, p + PATTERN_BANK.nameOffset, 16) : "");
+  }
+  return out;
+}
+
+/** Die Pattern-Bank des Geräts als `.e2sallpat` (4 161 792 Bytes) — direkt am Gerät und in TekkForge ladbar. */
+export function patternBankAusDump(bytes: Uint8Array): Uint8Array {
+  if (bytes.length !== FLASH_GROESSE) throw new Error("kein 16-MiB-Flash-Dump");
+  if (ascii(bytes, PATTERN_BANK.glst, 4) !== "GLST") throw new Error("bei 0x230000 steht kein GLST-Block — keine Pattern-Bank im Dump");
+  const out = new Uint8Array(ALLPAT_KOPF_GROESSE + PATTERN_BANK.glstGroesse + PATTERN_BANK.anzahl * PATTERN_BANK.stride);
+  out.fill(0xff, 0x24, ALLPAT_KOPF_GROESSE);
+  for (let i = 0; i < 4; i++) out[i] = "KORG".charCodeAt(i);
+  const id = "e2sampler";
+  for (let i = 0; i < id.length; i++) out[0x10 + i] = id.charCodeAt(i);
+  out[0x20] = 1;
+  out.set(bytes.subarray(PATTERN_BANK.glst, PATTERN_BANK.glst + PATTERN_BANK.glstGroesse), ALLPAT_KOPF_GROESSE);
+  out.set(bytes.subarray(PATTERN_BANK.patterns, PATTERN_BANK.patterns + PATTERN_BANK.anzahl * PATTERN_BANK.stride), ALLPAT_KOPF_GROESSE + PATTERN_BANK.glstGroesse);
+  return out;
+}
+
 export interface FlashRegion {
   name: string;
   selektor: number;
@@ -26,6 +71,8 @@ export interface FlashRegion {
 
 export interface FlashDumpBefund {
   ok: true;
+  /** Der Dump selbst (Sicht, keine Kopie). */
+  dump: Uint8Array;
   boot: BootSektorBefund;
   system: { vektorOk: boolean; familie: Familie | null; karte: string | null; nutzlast: Uint8Array };
   mainVersion: [number, number, number] | null;
@@ -90,11 +137,16 @@ export function liesFlashDump(bytes: Uint8Array): FlashDumpBefund | { ok: false;
     else if (s.vsb === "USER") befund = userIdentitaet ? `Stempel ${userIdentitaet} (${variante === "synth" ? "Synth 0x123" : "Sampler 0x124"})` : `kein Produktstempel bei +4 („${stempel.replace(/[^\x20-\x7e]/g, "?")}“)`;
     else if (s.vsb === "PCM") befund = pcm.magicOk ? `KORG ${pcm.format ?? fmt.replace(/[^\x20-\x7e]/g, "?")}` : "kein KORG-Magic";
     else if (s.selektor === 0x21) befund = mainVersion ? `Main ${mainVersion.map((x) => String(x).padStart(2, "0")).join(".")}` : "leer";
+    else if (s.selektor === 0x23) befund = ascii(bytes, PATTERN_BANK.glst, 4) === "GLST" ? "GLST-Block der Pattern-Bank" : "kein GLST";
+    else if (s.selektor === 0x24) {
+      const namen = patternNamenAusDump(bytes).filter((n) => n);
+      befund = namen.length ? `${namen.length} Patterns mit PTST, z. B. ${namen.slice(0, 3).map((n) => `„${n}“`).join(", ")}` : "keine PTST-Records";
+    }
     else befund = "belegt";
     return { name: s.inhalt, selektor: s.selektor, offset: s.offset, groesse: s.groesse, vsb: s.vsb, befund };
   });
 
-  return { ok: true, boot, system: { vektorOk, familie, karte, nutzlast }, mainVersion, userIdentitaet, variante, pcm, regionen };
+  return { ok: true, dump: bytes, boot, system: { vektorOk, familie, karte, nutzlast }, mainVersion, userIdentitaet, variante, pcm, regionen };
 }
 
 /**

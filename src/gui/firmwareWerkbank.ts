@@ -67,7 +67,7 @@ import { firmwareAblageZugang, sitzungsAblageAufnehmen, type AblageEintrag } fro
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
 import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GROESSE } from "../core/bootSektor";
 import { standardKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
-import { liesFlashDump, schneideRegion, type FlashDumpBefund } from "../core/flashKarte";
+import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
 import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett } from "../core/geraeteFlash";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
@@ -1637,6 +1637,18 @@ function bootRegionSichern(region: string): void {
     const b = flashDump.befund.boot;
     if (!b.ok) return bootStatus("Der Boot-Sektor des Dumps ist unbrauchbar — keine SBL.");
     void legeAb("SBL.bin", b.sbl, FIRMWARE_ORDNER).then((ab) => bootStatus(`SBL.bin gesichert (${b.sbl.length} Bytes, Speicherbild ab 0x80000000)${ab.pfad ? ` → ${ab.pfad}` : ""}.`));
+    return;
+  }
+  if (region === "PATTERNS") {
+    let bank: Uint8Array;
+    try {
+      bank = patternBankAusDump(flashDump.bytes);
+    } catch (e) {
+      return bootStatus(e instanceof Error ? e.message : String(e));
+    }
+    const namen = patternNamenAusDump(flashDump.bytes).filter((n) => n).length;
+    const name = `Patterns-vom-Geraet-${bootStempel()}.e2sallpat`;
+    void legeAb(name, bank, "Sets").then((ab) => bootStatus(`${name} gesichert (${bank.length} Bytes, ${namen} Patterns mit Namen)${ab.pfad ? ` → ${ab.pfad}` : ""} — die komplette Pattern-Bank des Geräts, ladbar in TekkForge (Pattern-Bibliothek) und am Gerät.`));
     return;
   }
   const art = region as VsbArt;
