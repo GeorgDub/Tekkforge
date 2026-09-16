@@ -17,3 +17,9 @@ examples/fx/
 
 # API-Key liegt lokal neben dem Repo — darf nie eingecheckt werden
 antropics_key .txt
+
+# Python-Bytecode
+scripts/__pycache__/
+
+# Korg-Firmware-Nutzlast (Lizenz) — nur lokal
+x/

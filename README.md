@@ -983,6 +983,19 @@ Part-Offset 0x08, 0-basiert) um — in .e2spat und in allen PTST-Slots einer
 stehen, ohne `--out` wird die Datei mit `.vorher`-Sicherung ersetzt. Ablauf
 am Geraet: Pattern Export All → umnummerieren → Import All.
 
+**Samples in den User-Bereich schieben** (Hacktribe kann nur 501+ laden, eine
+Bank mit Samples ab 19 kollidiert mit der Oszillator-Tabelle):
+`npx tsx scripts/samples-in-user-bereich.mjs --bank <e2sSample.all>
+[--patterns <.e2sallpat>] --out <ordner> [--ab 501]` nummeriert alle Samples in
+ihrer bisherigen Reihenfolge ab `--ab` durch (Default 501; `--ab 19` legt den
+KORG-Werkssatz aus `sampler_full.all` zurueck auf die Stock-Plaetze 19–421 —
+nur fuer Stock-Sampler-Firmware sinnvoll, unter Hacktribe sind 19–421
+Oszillatoren) (bitgenau, nur Tabellenindex und die drei
+Nummernfelder im korg/esli-Chunk aendern sich) und zieht in den BEARBEITETEN
+Init-Patterns (ab 151, vom unberuehrten Init abweichend) die Part-Verweise so
+nach, dass jeder Part dasselbe Sample trifft wie vorher; Verweise ins Leere
+bleiben stehen. Die Abbildung liegt als `<bank>.abbildung.json` daneben.
+
 **Die Oszillator-Grenze im Code (2026-09-03, Disassembly):** an drei
 Stellen (`0xC00787DC`, `0xC0078AB8`, `0xC00802E0`) steht `cmp r0, #N; bgt`
 — N = 17 in Stock (18 Synth-Modelle, dahinter Werks-Samples), 272 in
