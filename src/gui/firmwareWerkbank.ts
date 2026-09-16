@@ -69,7 +69,8 @@ import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GR
 import { standardKopf, pruefeVsbKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
 import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
-import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet, liesRegionVomGeraet } from "../core/geraeteFlash";
+import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet, liesRegionVomGeraet, liesGlobalVomGeraet } from "../core/geraeteFlash";
+import { globalBerichtZeilen } from "../core/globalFlash";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1784,8 +1785,19 @@ async function bootRegionVomGeraet(): Promise<void> {
   bootStatus(`${name} gesichert (${r.datei.length} Bytes in ${((Date.now() - t0) / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${k.variante ? `nach Gerätestempel (${VARIANTEN[k.variante].label})` : "aus der Vorlage"}, Prüfung: ${pruefung.ok ? "das Gerät nähme die Datei per SD-Update an" : pruefung.pruefungen.find((x) => !x.ok)?.detail ?? "nicht bestanden"}.`);
 }
 
+/** Global-Blöcke aus dem Flash des Geräts lesen und benannt zeigen. */
+async function bootGlobalVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  bootStatus("Lese Global-Blöcke aus dem Flash…");
+  const r = await liesGlobalVomGeraet(hooks.lesenFlash);
+  if (!r.ok) return bootStatus(`Global nicht gelesen: ${r.reason}`);
+  bootBerichtZeigen(globalBerichtZeilen(r.global, true));
+  bootStatus(r.global.gespeichert ? "Global aus dem Flash gelesen — gespeicherter Block und Werks-Vorgabe stehen im Bericht." : "Im Flash steht bei 0x230000 kein GLST-Block.");
+}
+
 function richteBootEin(): void {
   if (!document.getElementById("bootPanel")) return;
+  document.getElementById("bootGlobalGeraet")?.addEventListener("click", () => void bootGlobalVomGeraet());
   document.getElementById("bootRegionGeraet")?.addEventListener("click", () => void bootRegionVomGeraet());
   document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
   document.getElementById("bootPatternsGeraet")?.addEventListener("click", () => void bootPatternBankVomGeraet());

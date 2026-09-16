@@ -29,6 +29,11 @@ Flash-Karte, Ghidra-Export) steht in Omnitribe:
   (Selektor << 16, Länge laut REGION_SPANNE) und verpackt sie per `verpackeRegion`; am Gerät belegt
   (SYSTEM 13 s, PCM 50 s, SLICE 4 s, Nutzlast = Dump).
 
+- **Global im Flash:** 0x230000 = gespeicherter Global-Block (GLST…GLED, 0x100), 0x630000 = Werks-Global,
+  0x640000 = SQEZ (Kopf: u16 Version 9, u16 2, u32 entpackt 0x3E8000 = 250 × 0x4000 → komprimierte
+  Werks-Pattern-Bank für den Werksreset, Handler 0x11). `core/globalFlash.ts`, am Gerät belegt.
+  USER-Region 0x220000: nur der 16-Byte-Stempel, Rest 0xFF.
+
 ## Werkzeug
 `python scripts/make_bootsect.py build|vsb|check|extract …` — baut aus `bootloader.bin` den
 Boot-Sektor (AIS-Kopf + SBL + Jump + 16-Bit-Wortsumme, exakt wie `install_sbl_to_flash()`), verpackt

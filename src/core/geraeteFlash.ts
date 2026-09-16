@@ -10,6 +10,7 @@
 import { liesBootSektor, BOOTSEKTOR_GROESSE, type BootSektorBefund } from "./bootSektor";
 import { PATTERN_BANK, PATTERN_BANK_FLASH_GROESSE, baueE2sallpat, patternNamenAusBank, regionLage, verpackeRegion } from "./flashKarte";
 import type { VsbArt } from "./vsbKopf";
+import { GLOBAL_FLASH, liesSqezKopf, type GlobalImFlash } from "./globalFlash";
 import type { Variante } from "./crossgrade";
 
 /** Flash lesen; `chunk` (optional) = Bytes je SysEx-Anfrage, sonst der Standard 0x100. */
@@ -160,6 +161,18 @@ export async function liesRegionVomGeraet(lesen: LesenFlash, art: VsbArt, vorlag
   const r = await liesFlashKomplett(lesen, { ...opts, start: offset, gesamt: laenge });
   if (!r.ok) return { ok: false, reason: r.reason, gelesen: r.gelesen };
   return { ok: true, nutz: r.bytes, datei: verpackeRegion(r.bytes, art, vorlageKopf) };
+}
+
+/** Die beiden Global-Blöcke (gespeichert 0x230000, Werk 0x630000) und den SQEZ-Kopf vom Gerät lesen — drei kleine Anfragen. */
+export async function liesGlobalVomGeraet(lesen: LesenFlash): Promise<{ ok: true; global: GlobalImFlash } | { ok: false; reason: string }> {
+  const a = await lesen(GLOBAL_FLASH.gespeichert, GLOBAL_FLASH.groesse);
+  if (!a.ok) return { ok: false, reason: `Global 0x230000: ${a.reason}` };
+  const b = await lesen(GLOBAL_FLASH.werk, GLOBAL_FLASH.groesse);
+  if (!b.ok) return { ok: false, reason: `Werks-Global 0x630000: ${b.reason}` };
+  const s = await lesen(GLOBAL_FLASH.sqez, 16);
+  const magic = (x: Uint8Array) => String.fromCharCode(x[0], x[1], x[2], x[3]) === "GLST";
+  const sq = s.ok ? liesSqezKopf(s.bytes) : null;
+  return { ok: true, global: { gespeichert: magic(a.bytes) ? a.bytes.slice(0, GLOBAL_FLASH.groesse) : null, werk: magic(b.bytes) ? b.bytes.slice(0, GLOBAL_FLASH.groesse) : null, sqez: sq && sq.ok ? sq : null } };
 }
 
 export async function liesBootSektorVomGeraet(lesen: LesenFlash): Promise<{ ok: true; bytes: Uint8Array; befund: BootSektorBefund } | { ok: false; reason: string }> {
