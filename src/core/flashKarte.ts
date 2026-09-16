@@ -167,16 +167,25 @@ export function liesFlashDump(bytes: Uint8Array): FlashDumpBefund | { ok: false;
  * Schneidet eine Region aus dem Dump. Mit Vorlage-Kopf entsteht eine Update-Datei (VSB), ohne
  * Vorlage die rohe Nutzlast. USER/SLICE haben keine feste Länge — geliefert wird die volle Spanne.
  */
-export function schneideRegion(bytes: Uint8Array, art: VsbArt, vorlageKopf?: Uint8Array): Uint8Array {
-  if (bytes.length !== FLASH_GROESSE) throw new Error("kein 16-MiB-Flash-Dump");
+/** Flash-Lage einer Region: Offset (Selektor << 16) und Länge laut REGION_SPANNE. */
+export function regionLage(art: VsbArt): { offset: number; laenge: number } {
   const s = FLASH_SELEKTOREN.find((x) => x.vsb === art)!;
   const sp = REGION_SPANNE[art];
-  const laenge = sp.genau ?? sp.max!;
-  const nutz = bytes.slice(s.offset, s.offset + laenge);
+  return { offset: s.offset, laenge: sp.genau ?? sp.max! };
+}
+
+/** Nutzlast einer Region als Update-Datei verpacken (VSB-Kopf nach Vorlage); ohne Vorlage roh. */
+export function verpackeRegion(nutz: Uint8Array, art: VsbArt, vorlageKopf?: Uint8Array): Uint8Array {
   if (!vorlageKopf) return nutz;
   const idLow = vorlageKopf[0x2e] === VARIANTEN.synth.idLow ? VARIANTEN.synth.idLow : VARIANTEN.sampler.idLow;
-  const out = new Uint8Array(VSB_KOPF + laenge);
-  out.set(baueVsbKopf(vorlageKopf, { art, laenge, idLow }), 0);
+  const out = new Uint8Array(VSB_KOPF + nutz.length);
+  out.set(baueVsbKopf(vorlageKopf, { art, laenge: nutz.length, idLow }), 0);
   out.set(nutz, VSB_KOPF);
   return out;
+}
+
+export function schneideRegion(bytes: Uint8Array, art: VsbArt, vorlageKopf?: Uint8Array): Uint8Array {
+  if (bytes.length !== FLASH_GROESSE) throw new Error("kein 16-MiB-Flash-Dump");
+  const { offset, laenge } = regionLage(art);
+  return verpackeRegion(bytes.slice(offset, offset + laenge), art, vorlageKopf);
 }

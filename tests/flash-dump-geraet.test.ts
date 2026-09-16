@@ -68,3 +68,32 @@ describe("liesFlashKomplett", () => {
     expect(r.gelesen).toBe(0x20000);
   });
 });
+
+describe("liesRegionVomGeraet", () => {
+  it("liest genau die Region und verpackt sie mit Kopf nach Vorlage", async () => {
+    const { liesRegionVomGeraet } = await import("../src/core/geraeteFlash");
+    const { regionLage } = await import("../src/core/flashKarte");
+    const { standardKopf, liesVsbKopf, pruefeVsbKopf } = await import("../src/core/vsbKopf");
+    const flash = new Uint8Array(0x1000000).fill(0xff);
+    const { offset, laenge } = regionLage("SLICE");
+    for (let i = 0; i < laenge; i++) flash[offset + i] = (i * 7) & 0xff;
+    const anfragen: number[] = [];
+    const lesen = async (addr: number, len: number) => {
+      anfragen.push(addr);
+      return { ok: true as const, bytes: flash.slice(addr, addr + len) };
+    };
+    const r = await liesRegionVomGeraet(lesen, "SLICE", standardKopf("sampler", "SLICE"), { chunk: 0x400 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.nutz.length).toBe(laenge);
+    expect(r.datei.length).toBe(0x100 + laenge);
+    expect(Math.min(...anfragen)).toBe(offset);
+    expect(Math.max(...anfragen)).toBeLessThan(offset + laenge);
+    expect(liesVsbKopf(r.datei).name).toMatch(/^SLIC/);
+    expect(pruefeVsbKopf(r.datei, "sampler").ok).toBe(true);
+    expect(r.datei[0x100 + 3]).toBe(21);
+    const kaputt = async () => ({ ok: false as const, reason: "Timeout" });
+    const f = await liesRegionVomGeraet(kaputt, "BOOT");
+    expect(f.ok).toBe(false);
+  });
+});

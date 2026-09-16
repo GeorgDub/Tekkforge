@@ -66,10 +66,10 @@ import { freigabe, LAUFENDE_FIRMWARE, type LaufendeFirmware, type Freigabe } fro
 import { firmwareAblageZugang, sitzungsAblageAufnehmen, type AblageEintrag } from "./tekkFirmware";
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
 import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GROESSE } from "../core/bootSektor";
-import { standardKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
+import { standardKopf, pruefeVsbKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
 import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
-import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet } from "../core/geraeteFlash";
+import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet, liesRegionVomGeraet } from "../core/geraeteFlash";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1759,8 +1759,34 @@ async function bootPatternBankVomGeraet(): Promise<void> {
   bootStatus(`${name} gesichert (${((Date.now() - t0) / 1000).toFixed(0)} s, ${benannt.length} Patterns: ${benannt.slice(0, 3).map((n) => `„${n}“`).join(", ")}${benannt.length > 3 ? ", …" : ""})${ab.pfad ? ` → ${ab.pfad}` : ""} — ladbar in TekkForge (Import) und am Gerät (DATA UTILITY → LOAD ALL PATTERN).`);
 }
 
+/** Eine Flash-Region direkt vom Gerät als Update-Datei sichern; der Kopf folgt dem Gerätestempel. */
+async function bootRegionVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  const art = ((document.getElementById("bootRegionGeraetArt") as HTMLSelectElement | null)?.value ?? "SYSTEM") as VsbArt;
+  dumpAbbruch = false;
+  document.getElementById("bootDumpAbbrechen")?.classList.remove("hidden");
+  bootStatus("Lese Gerätestempel für den Kopf…");
+  const k = await liesFlashKennungen(lesen);
+  const kopf = k.variante ? standardKopf(k.variante, art) : bootKopfVorlage().kopf;
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const r = await liesRegionVomGeraet(lesen, art, kopf, {
+    chunk: probe.chunk,
+    abbruch: () => dumpAbbruch,
+    fortschritt: (f) => bootStatus(`${art} lesen: ${(f.gelesen / 1048576).toFixed(2)} / ${(f.gesamt / 1048576).toFixed(2)} MiB (${probe.hinweis}, ${((Date.now() - t0) / 1000).toFixed(0)} s) — Gerät nicht bedienen.`),
+  });
+  document.getElementById("bootDumpAbbrechen")?.classList.add("hidden");
+  if (!r.ok) return bootStatus(`${art} nicht gelesen: ${r.reason}${r.gelesen ? ` (nach ${r.gelesen} Bytes)` : ""}`);
+  const name = `${art}-vom-Geraet-${bootStempel()}.VSB`;
+  const pruefung = pruefeVsbKopf(r.datei, k.variante ?? "sampler");
+  const ab = await legeAb(name, r.datei, FIRMWARE_ORDNER);
+  bootStatus(`${name} gesichert (${r.datei.length} Bytes in ${((Date.now() - t0) / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${k.variante ? `nach Gerätestempel (${VARIANTEN[k.variante].label})` : "aus der Vorlage"}, Prüfung: ${pruefung.ok ? "das Gerät nähme die Datei per SD-Update an" : pruefung.pruefungen.find((x) => !x.ok)?.detail ?? "nicht bestanden"}.`);
+}
+
 function richteBootEin(): void {
   if (!document.getElementById("bootPanel")) return;
+  document.getElementById("bootRegionGeraet")?.addEventListener("click", () => void bootRegionVomGeraet());
   document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
   document.getElementById("bootPatternsGeraet")?.addEventListener("click", () => void bootPatternBankVomGeraet());
   document.getElementById("bootDumpAbbrechen")?.addEventListener("click", () => {

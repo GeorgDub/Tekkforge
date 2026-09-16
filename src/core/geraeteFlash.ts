@@ -8,7 +8,8 @@
  * einen Nachbau. Lage der Records wie in `flashKarte.ts` (electribe2-re, storage-and-updates.md).
  */
 import { liesBootSektor, BOOTSEKTOR_GROESSE, type BootSektorBefund } from "./bootSektor";
-import { PATTERN_BANK, PATTERN_BANK_FLASH_GROESSE, baueE2sallpat, patternNamenAusBank } from "./flashKarte";
+import { PATTERN_BANK, PATTERN_BANK_FLASH_GROESSE, baueE2sallpat, patternNamenAusBank, regionLage, verpackeRegion } from "./flashKarte";
+import type { VsbArt } from "./vsbKopf";
 import type { Variante } from "./crossgrade";
 
 /** Flash lesen; `chunk` (optional) = Bytes je SysEx-Anfrage, sonst der Standard 0x100. */
@@ -146,6 +147,19 @@ export async function liesPatternBankVomGeraet(lesen: LesenFlash, opts: Pick<Dum
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export type RegionErgebnis = { ok: true; nutz: Uint8Array; datei: Uint8Array } | { ok: false; reason: string; gelesen: number };
+
+/**
+ * Eine Flash-Region (SYSTEM 2 MiB, PCM 8 MiB, USER, SLICE, BOOT) direkt vom Gerät lesen und —
+ * mit Kopfvorlage — als Update-Datei (.VSB) verpacken. Ohne Vorlage kommt die rohe Nutzlast.
+ */
+export async function liesRegionVomGeraet(lesen: LesenFlash, art: VsbArt, vorlageKopf?: Uint8Array, opts: Pick<DumpOptionen, "fortschritt" | "abbruch" | "chunk"> = {}): Promise<RegionErgebnis> {
+  const { offset, laenge } = regionLage(art);
+  const r = await liesFlashKomplett(lesen, { ...opts, start: offset, gesamt: laenge });
+  if (!r.ok) return { ok: false, reason: r.reason, gelesen: r.gelesen };
+  return { ok: true, nutz: r.bytes, datei: verpackeRegion(r.bytes, art, vorlageKopf) };
 }
 
 export async function liesBootSektorVomGeraet(lesen: LesenFlash): Promise<{ ok: true; bytes: Uint8Array; befund: BootSektorBefund } | { ok: false; reason: string }> {

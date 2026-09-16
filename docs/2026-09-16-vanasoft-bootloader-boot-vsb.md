@@ -25,6 +25,10 @@ Flash-Karte, Ghidra-Export) steht in Omnitribe:
   0x240000 (Selektor 0x24, 250 × 0x4000 PTST) — TekkForge schneidet daraus die `.e2sallpat`
   (`patternBankAusDump`) oder liest sie direkt vom Gerät (`liesPatternBankVomGeraet`, 4 MiB in 25 s); am Gerät belegt (250 Records, byte-gleich mit dem Dump, Import in die App gelingt).
 
+- **Regionen einzeln vom Gerät:** `liesRegionVomGeraet(lesen, art, kopf)` liest nur SYSTEM/PCM/USER/SLICE/BOOT
+  (Selektor << 16, Länge laut REGION_SPANNE) und verpackt sie per `verpackeRegion`; am Gerät belegt
+  (SYSTEM 13 s, PCM 50 s, SLICE 4 s, Nutzlast = Dump).
+
 ## Werkzeug
 `python scripts/make_bootsect.py build|vsb|check|extract …` — baut aus `bootloader.bin` den
 Boot-Sektor (AIS-Kopf + SBL + Jump + 16-Bit-Wortsumme, exakt wie `install_sbl_to_flash()`), verpackt
