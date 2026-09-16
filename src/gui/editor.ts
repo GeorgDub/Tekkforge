@@ -72,6 +72,7 @@ import {
 import { initFxPresetPanel } from "./fxPreset";
 import { initPresetManager } from "./presetManager";
 import { initFirmwareWerkbank } from "./firmwareWerkbank";
+import { liesMonitor, liesSampleStand, monitorText, sampleStandText } from "../core/geraeteMonitor";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
@@ -1734,6 +1735,30 @@ function setupRamPanel(): void {
     // Bewusst über denselben Pfad inkl. Rückleseprobe: eine ungeprüfte
     // Wiederherstellung hätte dasselbe Problem wie ein ungeprüfter Write.
     void ramWriteVerified(addr, bytes, "Zurückschreiben");
+  });
+
+  // Geräte-Monitor: benannte Strukturen (Stimmen-Slots, Batterie, Sample-Katalog) nur lesen.
+  const monitorOut = (t: string) => {
+    const el = document.getElementById("ramMonitorOut");
+    if (el) el.textContent = t;
+  };
+  document.getElementById("ramMonitor")?.addEventListener("click", () => {
+    setRamStatus("Lese Stimmen-Slots und Batterie…");
+    void (async () => {
+      const b = await liesMonitor(ramReadBytes);
+      const liste = OSZ_LISTEN[oszListeWahl()];
+      monitorOut(`Gelesen ${new Date().toLocaleTimeString()} — gilt nur bei gestopptem Sequencer.
+` + monitorText(b, (n) => liste[n - 1]?.[0] ?? `Osz ${n}`));
+      setRamStatus(b.fehler.length ? `Monitor mit Fehlern: ${b.fehler[0]}` : "Monitor gelesen.");
+    })();
+  });
+  document.getElementById("ramMonitorSamples")?.addEventListener("click", () => {
+    setRamStatus("Lese User-Sample-Katalog 501–532 (35 KB)…");
+    void (async () => {
+      const r = await liesSampleStand(ramReadBytes, 500, 32);
+      monitorOut(r.fehler ? `Sample-Katalog: ${r.fehler}` : sampleStandText(r.stand));
+      setRamStatus(r.fehler ? `Katalog nicht gelesen: ${r.fehler}` : "Sample-Katalog gelesen.");
+    })();
   });
 
   // Der Preset-Editor benutzt denselben Lese- und Schreibpfad — ein Schreibweg,

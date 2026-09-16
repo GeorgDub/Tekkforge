@@ -1042,6 +1042,59 @@ Werksplaetze beschreibbar — dann baut die Sample-Pipeline auch dorthin.
 ⚠ Der Import ersetzt den User-Bereich 501–999; vorher exportieren, und
 KORGs Factory-Sample-Datei fuer den Rueckweg bereithalten.
 
+## Boot-Sektor, BOOT.VSB, Flash-Dump und Geräte-Monitor (2026-09-16, am Gerät belegt)
+
+Aus vanasoft23s Custom-Bootloader (freetribe, Branch `bootloader-mess`), seiner Firmware-
+Architekturkarte (electribe2-re) und dem Ghidra-Archiv der Sampler-Firmware sind vier
+Bausteine entstanden (Volltext: Omnitribe `docs/reverse/vanasoft23_bootloader_e2re_2026-09-16.md`,
+Kurzfassung `docs/2026-09-16-vanasoft-bootloader-boot-vsb.md`):
+
+- **`core/vsbKopf.ts`** — der 0x100-Byte-Kopf aller fünf Update-Dateien, so wie die Firmware ihn
+  **prüft** (Dekompilate `ValidateVsbResourceHeaderMagic`/`…Type`, `GetVsbPayloadLength`,
+  `Load*VsbToSerialFlash`): Magic, Name (SYSTEM 6 / BOOT 4 / PCM 3 / USER 4 / SLIC 4 Zeichen),
+  Identität `00 01 23|24` (Modus 0 = nur die laufende Variante; BOOT = Modus 1 = beide), Länge
+  u32 LE bei +0x3C (SYSTEM 0x200000, BOOT 0x20000, PCM 0x800000 exakt; USER ≤ 0x490000, SLICE
+  ≤ 0x90000 geklemmt), Revision ≥ 2.2 / 1.17 nur beim produktbewussten SYSTEM-Installer. Dazu
+  die Flash-Selektor-Karte (Selektor << 16).
+- **`core/bootSektor.ts`** — 128-KiB-Boot-Sektor bauen und lesen (AIS-Kopf 40 B, SBL 131022 B,
+  Jump 8 B, 16-Bit-Wortsumme), byte-gleich mit `scripts/make_bootsect.py` und mit dem, was das
+  Bootloader-Menü „Install bootloader“ nach Flash 0 schreibt; `baueBootVsb` verpackt ihn.
+- **`core/flashKarte.ts`** — 16-MiB-Flash-Dump (Bootloader-Menü „Dump flash to SD“, JTAG)
+  kartieren: Boot-Sektor, Firmware-Bauart, Main-Version (0x21FFF0), Gerätestempel
+  (`elec2USR`/`ele2sUSR` bei 0x220004), PCM-Kopf — und jede Region als Update-Datei ausschneiden.
+- **`core/e2Symbole.ts` + `core/geraeteMonitor.ts`** — benannte RAM-Adressen der Sampler-
+  Firmware (Stock, Hacktribe, TekkForge-Builds) mit Dekodern: 24 Stimmen-Slots
+  (`0xC06916A0`, +4 Zeiger auf `voice_t` → Part, +0x3A Oszillator-ID), Aktiv-Maske
+  `0xC06914EC`, Noten-/Release-Flags, Zuteilungs-Generation `0xC0691484`, Batterie-Client
+  (Zeigervariable `0xC03405C8` → +0x318 Schwellen-Zeiger, +0x320 Rohwert, +0x328 Stufe),
+  Laufzeit-Sample-Katalog `0xC036AD88` (999 × 0x45C).
+
+In der App: Firmware-Werkbank → Abschnitt **„Boot-Sektor, BOOT.VSB und Flash-Dump“**
+(`bootloader.bin` laden → Boot-Sektor / BOOT.VSB sichern; beliebige `.VSB` gegen Sampler- und
+Synth-Updater prüfen; Dump kartieren und zerlegen) und RAM-Panel → **„Geräte-Monitor“**
+(Stimmen & Batterie lesen, User-Samples 501–532). Nur Lesen und Dateien — nichts schreibt ins Gerät.
+
+### Erprobungsstand — am Gerät belegt (2026-09-16, Electribe 2 Sampler, MOD132-Build, Netzteil)
+
+| Lesung | Beobachtung |
+|---|---|
+| Monitor bei stehendem Gerät nach dem Einschalten | Maske 0, Generation 0, kein Slot; Batterie-Client vorhanden (Alkali-Tabelle 127/110/104/97, Rohwert 0, Stufe 0 = Netzteilbetrieb) |
+| Trigger-Note Part 1 über das Panel, danach lesen | Generation 0 → **2** (Note-On + Note-Off zählen je einmal), Slot nach 250 ms schon wieder frei |
+| Sequencer per MIDI-Start, Maske (4 B) während der Wiedergabe | `1E 00 00 00` — Slots 2–5 am DSP aktiv, zweimal gleich gelesen |
+| MIDI-Stop, dann Monitor | Maske `0x10`: Slot 5 = **Part 10, User-Sample 598, Note 60, „One-Shot läuft aus“**, Generation 76 |
+| User-Samples 501–532 (35 KB Katalog, ~6 s) | alle 32 geladen, 14 812–30 172 Bytes, **22 050 Hz** — die Bank war mit halber Rate gebaut (Rate nach Rolloff), der Katalog bestätigt es |
+
+Damit sind Slot-Maske, `voice_t`-Zeiger (Part-Zuordnung), Oszillator-ID, Notenzustand, Release-
+Flags und Generation live bestätigt. Die Batterie-Stufe ist am Netzteil 0 — das Update-Tor
+(Stufe ≥ 2) wird dann laut Firmware über den Listener-State umgangen; mit Batterien steht die
+Probe noch aus.
+
+**⚠ Zum Bootloader selbst:** Der Handoff des Bootloader-Stands `3a0581f` patcht `0xC0025E4F` — das
+passt nur zum Synth-Image; mit Sampler-/Hacktribe-Firmware stürzt „Boot from flash“ beim
+Sequencer-Stop ab (dort liegt das `ldmfd` von `DisableMidiClockPulseGeneration`). Installation
+ist ein Ein-Schuss-Weg (Rückweg nur JTAG). Gebaut und rundgeprüft, **nicht** ins Gerät gespielt:
+`Firmware\vanasoft-bootloader\BOOT-vanasoft-2026-09-16.VSB`.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über

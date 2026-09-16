@@ -63,6 +63,10 @@ import { analysiereFirmware, uebernehmeErweiterungen, type FirmwareAnalyse, type
 import { freigabe, LAUFENDE_FIRMWARE, type LaufendeFirmware, type Freigabe } from "../core/firmwareFreigabe";
 import { firmwareAblageZugang, sitzungsAblageAufnehmen, type AblageEintrag } from "./tekkFirmware";
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
+import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GROESSE } from "../core/bootSektor";
+import { standardKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
+import { liesFlashDump, schneideRegion, type FlashDumpBefund } from "../core/flashKarte";
+import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1534,6 +1538,127 @@ async function xgUmkoepfen(ziel: Variante): Promise<void> {
   );
 }
 
+// ─── Boot-Sektor, BOOT.VSB, Flash-Dump ──────────────────────────────────────
+let bootSektor: { name: string; bytes: Uint8Array } | null = null;
+let flashDump: { name: string; befund: FlashDumpBefund; bytes: Uint8Array } | null = null;
+
+function bootStatus(t: string): void {
+  const el = document.getElementById("bootStatus");
+  if (el) el.textContent = t;
+}
+function bootBerichtZeigen(zeilen: string[]): void {
+  const el = document.getElementById("bootBericht");
+  if (el) el.textContent = zeilen.join("\n");
+}
+/** Kopfvorlage: die geladene Basis, sonst ein Standardkopf der gewählten Identität. */
+function bootKopfVorlage(): { kopf: Uint8Array; woher: string; idLow: number } {
+  const wahl = (document.getElementById("bootIdentitaet") as HTMLSelectElement | null)?.value === "synth" ? "synth" : "sampler";
+  const idLow = VARIANTEN[wahl].idLow;
+  if (basis && basis.length >= VSB_KOPF_GROESSE) return { kopf: basis.subarray(0, VSB_KOPF_GROESSE), woher: "Kopf der geladenen Basis", idLow };
+  return { kopf: standardKopf(wahl, "SYSTEM"), woher: `Standardkopf (${VARIANTEN[wahl].label})`, idLow };
+}
+
+async function bootSblLaden(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const info = document.getElementById("bootSblInfo");
+  const sichern = document.getElementById("bootSektorSichern");
+  const vsb = document.getElementById("bootVsbSichern");
+  let sektor: Uint8Array;
+  let art: string;
+  if (bytes.length === BOOTSEKTOR_GROESSE && bytes[0] === 0x54 && bytes[1] === 0x49) {
+    sektor = bytes;
+    art = "fertiger Boot-Sektor";
+  } else if (bytes.length >= 0x1000 && bytes.length <= SBL_GROESSE) {
+    sektor = baueBootSektor(bytes);
+    art = `SBL ${bytes.length} Bytes → Boot-Sektor gebaut`;
+  } else {
+    bootSektor = null;
+    if (info) info.textContent = `${f.name}: ${bytes.length} Bytes — weder SBL (4 KiB … ${SBL_GROESSE} Bytes) noch Boot-Sektor (${BOOTSEKTOR_GROESSE})`;
+    sichern?.classList.add("hidden");
+    vsb?.classList.add("hidden");
+    return;
+  }
+  const b = liesBootSektor(sektor);
+  bootSektor = b.ok ? { name: f.name, bytes: sektor } : null;
+  if (info) info.textContent = `${f.name}: ${art}${b.ok ? "" : " — unbrauchbar"}`;
+  bootBerichtZeigen(berichtBootSektor(b));
+  sichern?.classList.toggle("hidden", !b.ok);
+  vsb?.classList.toggle("hidden", !b.ok);
+  bootStatus(b.ok ? "Boot-Sektor bereit. Als .bin (für JTAG/Bootloader-Install) oder als BOOT.VSB (für das SD-Update) sichern." : "Boot-Sektor unbrauchbar — siehe Bericht.");
+}
+
+async function bootVsbSichernKlick(): Promise<void> {
+  if (!bootSektor) return bootStatus("Erst bootloader.bin laden.");
+  const v = bootKopfVorlage();
+  const vsb = baueBootVsb(bootSektor.bytes, v.kopf, v.idLow);
+  const hash = await sha256Hex(vsb);
+  download(vsb, "BOOT.VSB", "application/octet-stream");
+  const r = berichtVsbPruefung(vsb, "BOOT.VSB");
+  bootBerichtZeigen([...berichtBootSektor(liesBootSektor(bootSektor.bytes)), "", ...r.zeilen]);
+  bootStatus(
+    `BOOT.VSB gesichert (${vsb.length} Bytes, ${v.woher}${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}).\n` +
+      "Weg: NUR diese Datei als KORG/hacktribe/System/BOOT.VSB (Stock-Sampler: KORG/electribe sampler/System, Synth: KORG/electribe/System) auf die SD, Batterien ≥ Stufe 2 oder Netzteil, DATA UTILITY → SOFTWARE UPDATE. " +
+      "Keine SYSTEM.VSB daneben legen, sonst wird die mitgeflasht. ⚠ Fehler = nur noch JTAG.",
+  );
+}
+
+async function bootVsbPruefen(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const r = berichtVsbPruefung(bytes, f.name);
+  bootBerichtZeigen(r.zeilen);
+  bootStatus(r.samplerOk && r.synthOk ? "Beide Updater nehmen die Datei an." : r.samplerOk ? "Nur der Sampler-Updater nimmt die Datei an." : r.synthOk ? "Nur der Synth-Updater nimmt die Datei an." : "Kein Updater nimmt die Datei an — siehe rote Zeilen.");
+}
+
+async function bootDumpLaden(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const r = liesFlashDump(bytes);
+  const knoepfe = document.getElementById("bootDumpKnoepfe");
+  if (!r.ok) {
+    flashDump = null;
+    knoepfe?.classList.add("hidden");
+    bootBerichtZeigen([]);
+    return bootStatus(`${f.name}: ${r.grund}`);
+  }
+  flashDump = { name: f.name, befund: r, bytes };
+  knoepfe?.classList.remove("hidden");
+  bootBerichtZeigen(berichtFlashDump(r));
+  bootStatus(`${f.name} kartiert. Regionen lassen sich als Update-Dateien sichern (Kopf-Identität nach dem Gerätestempel${r.variante ? ` = ${r.variante}` : ", sonst nach der Auswahl"}).`);
+}
+
+function bootRegionSichern(region: string): void {
+  if (!flashDump) return bootStatus("Erst einen Flash-Dump laden.");
+  if (region === "SBL") {
+    const b = flashDump.befund.boot;
+    if (!b.ok) return bootStatus("Der Boot-Sektor des Dumps ist unbrauchbar — keine SBL.");
+    download(b.sbl, "SBL.bin", "application/octet-stream");
+    return bootStatus(`SBL.bin gesichert (${b.sbl.length} Bytes, Ladeadresse 0x80000000).`);
+  }
+  const art = region as VsbArt;
+  const v = bootKopfVorlage();
+  const kopf = flashDump.befund.variante ? standardKopf(flashDump.befund.variante, art) : v.kopf;
+  const out = schneideRegion(flashDump.bytes, art, kopf);
+  download(out, `${art}.VSB`, "application/octet-stream");
+  bootStatus(`${art}.VSB gesichert (${out.length} Bytes). Kopf ${flashDump.befund.variante ? `nach Gerätestempel (${flashDump.befund.variante})` : v.woher}.`);
+}
+
+function richteBootEin(): void {
+  if (!document.getElementById("bootPanel")) return;
+  dateiKnopf("bootSblLaden", "bootSblIn", (f) => void bootSblLaden(f));
+  document.getElementById("bootSektorSichern")?.addEventListener("click", () => {
+    if (!bootSektor) return bootStatus("Erst bootloader.bin laden.");
+    download(bootSektor.bytes, "bootsect.bin", "application/octet-stream");
+    bootStatus("bootsect.bin gesichert (128 KiB) — das ist, was das Bootloader-Menü „Install bootloader“ nach Flash 0 schreibt.");
+  });
+  document.getElementById("bootVsbSichern")?.addEventListener("click", () => void bootVsbSichernKlick());
+  dateiKnopf("bootVsbPruefen", "bootVsbPruefIn", (f) => void bootVsbPruefen(f));
+  dateiKnopf("bootDumpLaden", "bootDumpIn", (f) => void bootDumpLaden(f));
+  document.getElementById("bootDumpKnoepfe")?.addEventListener("click", (ev) => {
+    const t = (ev as Event | undefined)?.target as HTMLElement | null | undefined;
+    const region = t?.dataset?.region;
+    if (region) bootRegionSichern(region);
+  });
+}
+
 function richteCrossgradeEin(): void {
   if (!document.getElementById("xgPanel")) return;
   dateiKnopf("xgLaden", "xgIn", (f) => void xgLaden(f));
@@ -1565,6 +1690,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   if (!document.getElementById("fwPanel")) return;
   dateiKnopf("fwBasisLaden", "fwBasisIn", (f) => void basisLaden(f));
   richteCrossgradeEin();
+  richteBootEin();
   richteAblageEin();
   dateiKnopf("fwGrooveLaden", "fwGrooveIn", (f) => void groovesLaden(f));
   dateiKnopf("fwInitLaden", "fwInitIn", (f) => void initLaden(f));

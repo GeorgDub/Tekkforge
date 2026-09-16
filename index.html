@@ -461,6 +461,13 @@
                   <button id="ramRead" class="ghost">Lesen</button>
                 </div>
                 <div id="ramNote" class="sub" style="margin:4px 0 0"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Geräte-Monitor (nur lesen):</b></span>
+                  <button id="ramMonitor" class="ghost" title="Stimmen-Slots (welcher Part spielt welchen Oszillator), Zuteilungs-Generation und Batterie-Stufe aus dem RAM lesen — Adressen aus dem Ghidra-Export der Sampler-Firmware. Gilt nur bei gestopptem Sequencer.">Stimmen &amp; Batterie lesen</button>
+                  <button id="ramMonitorSamples" class="ghost" title="Laufzeit-Katalog der User-Samples 501–532 lesen (geladen, Länge, Rate) — ~35 KB, dauert ein paar Sekunden">User-Samples 501–532</button>
+                  <span class="sub" style="margin:0">Sampler-Layout (Stock, Hacktribe, TekkForge); bei laufendem Sequencer sind Lesungen verschoben.</span>
+                </div>
+                <pre id="ramMonitorOut" class="sub" style="margin:4px 0 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
 
                 <div style="margin-top:8px">
                   <div style="color:var(--muted);font-size:10px;margin-bottom:2px">
@@ -770,6 +777,42 @@
                 </div>
                 <p class="sub" style="margin:6px 0 0">⚠ Vor dem Flashen die passende Werks-<code>SYSTEM.VSB</code> des Geräts als Rückweg auf der SD-Karte behalten. PCM-Instrumente stammen aus der geräteeigenen <code>PCM.VSB</code> und bleiben die des Samplers.</p>
                 <div id="xgStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit</div>
+              </details>
+              <details id="bootPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
+                <summary style="cursor:pointer;font-weight:600">🥾 Boot-Sektor, BOOT.VSB und Flash-Dump (Custom-Bootloader)</summary>
+                <p class="sub" style="margin:6px 0">Der erste 128-KiB-Block des Flash trägt das AIS-Bootskript und den Bootloader (SBL). Aus vanasoft23s Freetribe-Bootloader (<code>bootloader.bin</code>, lädt nach 0x80000000) wird hier der Boot-Sektor gebaut und als <code>BOOT.VSB</code> verpackt — die Update-Funktion des Geräts (DATA UTILITY → SOFTWARE UPDATE) nimmt eine <code>KORG/…/System/BOOT.VSB</code> auch ohne SYSTEM.VSB an und schreibt sie nach Flash-Offset 0. Dazu: jede <code>.VSB</code> so prüfen, wie die Firmware sie prüft, und einen 16-MiB-Flash-Dump (Bootloader-Menü „Dump flash to SD“) kartieren und zerlegen.</p>
+                <p class="sub" style="margin:6px 0;color:var(--warn,#c0392b)"><b>⚠ Ein-Schuss-Weg.</b> Ein falscher Boot-Sektor macht das Gerät nur noch über JTAG (J9) erreichbar. Erst flüchtig testen (SysEx <code>execute_freetribe.py</code> oder JTAG-Load), dann installieren. Der Handoff des Bootloaders (Stand <code>3a0581f</code>) patcht 0xC0025E4F — das passt nur zum Synth-Image; mit Sampler-/Hacktribe-Firmware stürzt „Boot from flash“ beim Sequencer-Stop ab. Nichts hier schreibt ins Gerät.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <span class="sub" style="margin:0"><b>Boot-Sektor bauen:</b></span>
+                  <button id="bootSblLaden" class="ghost" title="bootloader.bin (SBL-Image, max. 131022 Bytes) oder einen fertigen 128-KiB-Boot-Sektor laden">bootloader.bin / Boot-Sektor laden…</button>
+                  <input id="bootSblIn" type="file" accept=".bin,.BIN" class="hidden" />
+                  <span class="sub" id="bootSblInfo" style="margin:0">nichts geladen</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Kopf-Identität <select id="bootIdentitaet" style="font-size:11px;padding:2px 4px"><option value="sampler">Sampler (0x000124)</option><option value="synth">Synth (0x000123)</option></select></label>
+                  <button id="bootSektorSichern" class="ghost hidden" title="Die 128 KiB (AIS-Kopf + SBL + Jump + Prüfsumme) als Datei sichern">⬇ Boot-Sektor .bin</button>
+                  <button id="bootVsbSichern" class="primary hidden" title="Boot-Sektor mit Korg-Kopf (Name BOOT, Länge 0x20000) als BOOT.VSB sichern — Kopfvorlage ist die geladene Basis, sonst ein Standardkopf">⬇ BOOT.VSB</button>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>VSB-Kopf prüfen:</b></span>
+                  <button id="bootVsbPruefen" class="ghost" title="Eine beliebige .VSB (SYSTEM/BOOT/PCM/USER/SLICE) laden und den Kopf gegen die Regeln des Sampler- und des Synth-Updaters halten">.VSB laden und prüfen…</button>
+                  <input id="bootVsbPruefIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Flash-Dump (16 MiB):</b></span>
+                  <button id="bootDumpLaden" class="ghost" title="FLASHDMP.BIN aus dem Bootloader-Menü oder einen JTAG-Dump laden und kartieren">Dump laden…</button>
+                  <input id="bootDumpIn" type="file" accept=".bin,.BIN" class="hidden" />
+                  <span id="bootDumpKnoepfe" class="hidden" style="display:flex;gap:6px;flex-wrap:wrap">
+                    <button class="ghost" data-region="SYSTEM" style="padding:2px 8px;font-size:11px" title="2 MiB ab 0x20000 als SYSTEM.VSB">⬇ SYSTEM.VSB</button>
+                    <button class="ghost" data-region="PCM" style="padding:2px 8px;font-size:11px" title="8 MiB ab 0x800000 als PCM.VSB">⬇ PCM.VSB</button>
+                    <button class="ghost" data-region="BOOT" style="padding:2px 8px;font-size:11px" title="Boot-Sektor als BOOT.VSB (Rückweg zum Werks-SBL, wenn der Dump vom Werkszustand stammt)">⬇ BOOT.VSB</button>
+                    <button class="ghost" data-region="USER" style="padding:2px 8px;font-size:11px" title="User-Region ab 0x220000 als USER.VSB">⬇ USER.VSB</button>
+                    <button class="ghost" data-region="SLICE" style="padding:2px 8px;font-size:11px" title="Slice-Region ab 0x750000 als SLICE.VSB">⬇ SLICE.VSB</button>
+                    <button class="ghost" data-region="SBL" style="padding:2px 8px;font-size:11px" title="Den rohen SBL aus dem Boot-Sektor (für Ghidra/GDB)">⬇ SBL.bin</button>
+                  </span>
+                </div>
+                <pre id="bootBericht" class="sub" style="margin:6px 0 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
+                <div id="bootStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit</div>
               </details>
             </div>
             <button id="midiEnable" class="primary">MIDI aktivieren</button>
