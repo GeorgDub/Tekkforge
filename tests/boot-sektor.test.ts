@@ -60,6 +60,36 @@ describe("baueBootSektor / liesBootSektor", () => {
     expect(b.pruefsumme.ok).toBe(true);
     expect(b.kommandos.length).toBe(4); // SeqRead, FnExec 6, SectionLoad, Jump
     expect(b.kommandos[1]).toMatch(/Function Execute 6/);
+    expect(b.layout).toBe("vanasoft");
+    expect(b.sektionen).toEqual([{ addr: 0x80000000, size: SBL_GROESSE }]);
+  });
+  it("Korg-Werkslayout: drei Sektionen (0x80000000 / +0x40 / +0x55F0), keine Wortsumme → ok, layout werk, Speicherbild zusammengesetzt", () => {
+    const bs = new Uint8Array(BOOTSEKTOR_GROESSE).fill(0xff);
+    let p = 0;
+    bs.set(AIS_KOPF.subarray(0, 28), 0); // TIPA, SeqRead, FnExec 6
+    p = 28;
+    const sect = (addr: number, data: Uint8Array) => {
+      bs.set([0x01, 0x59, 0x53, 0x58], p);
+      bs.set([addr & 0xff, (addr >>> 8) & 0xff, (addr >>> 16) & 0xff, (addr >>> 24) & 0xff], p + 4);
+      bs.set([data.length & 0xff, (data.length >>> 8) & 0xff, 0, 0], p + 8);
+      bs.set(data, p + 12);
+      p += 12 + data.length;
+    };
+    sect(0x80000000, new Uint8Array(60).fill(0xe5));
+    sect(0x80000040, new Uint8Array(21924).fill(0xaa));
+    sect(0x800055f0, new Uint8Array(2124).fill(0xbb));
+    bs.set(AIS_SCHWANZ, p);
+    const b = liesBootSektor(bs);
+    expect(b.ok).toBe(true);
+    expect(b.layout).toBe("werk");
+    expect(b.sektionen.length).toBe(3);
+    expect(b.sblGroesse).toBe(60 + 21924 + 2124);
+    expect(b.sbl.length).toBe(0x55f0 + 2124);
+    expect(b.sbl[0x40]).toBe(0xaa);
+    expect(b.sbl[0x55f0]).toBe(0xbb);
+    expect(b.sbl[60]).toBe(0); // Lücke zwischen Vektoren und Code
+    expect(b.pruefsumme.ok).toBe(false);
+    expect(b.hinweise.join(" ")).toMatch(/Werkslayout/);
   });
   it("zu große SBL wird abgelehnt", () => {
     expect(() => baueBootSektor(new Uint8Array(SBL_GROESSE + 1))).toThrow(/zu groß/);
@@ -73,7 +103,8 @@ describe("baueBootSektor / liesBootSektor", () => {
     bs2[BOOTSEKTOR_GROESSE - 1] ^= 0xff;
     const b2 = liesBootSektor(bs2);
     expect(b2.pruefsumme.ok).toBe(false);
-    expect(b2.ok).toBe(true); // Korgs Werksflash trägt keine Summe — das ist ein Hinweis, kein Verbot
+    expect(b2.ok).toBe(true); // eine falsche Summe ist ein Hinweis, kein Verbot
+    expect(b2.layout).toBe("fremd");
     expect(b2.hinweise.join(" ")).toMatch(/Prüfsumme/);
   });
   it("nimmt auch einen ganzen Flash-Dump (mehr als 128 KiB) und liest nur den Anfang", () => {

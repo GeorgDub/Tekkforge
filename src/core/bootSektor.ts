@@ -22,6 +22,8 @@ import { VSB_KOPF, baueVsbKopf } from "./vsbKopf";
 
 export const BOOTSEKTOR_GROESSE = 0x20000;
 export const SBL_LADEADRESSE = 0x80000000;
+/** On-Chip-RAM des AM1802: 128 KiB ab 0x80000000 (die letzten 16 KiB trägt die MMU-Seitentabelle). */
+export const OC_RAM_GROESSE = 0x20000;
 
 /** AIS-Kopf ohne die abschließende Größe (die kommt beim Bauen dazu). */
 export const AIS_KOPF: Uint8Array = Uint8Array.from([
@@ -66,21 +68,33 @@ export function baueBootSektor(sbl: Uint8Array): Uint8Array {
   return out;
 }
 
+export interface BootSektion {
+  addr: number;
+  size: number;
+}
+
 export interface BootSektorBefund {
-  /** Struktur brauchbar: TIPA, Section Load nach 0x80000000, Jump nach 0x80000000. */
+  /** Struktur brauchbar: TIPA, alle Section Loads ins On-Chip-RAM, Jump ins On-Chip-RAM. */
   ok: boolean;
   kommandos: string[];
+  /** Section Loads in Reihenfolge. vanasoft: eine (0x80000000); Korg-Werk: drei (0x80000000 / +0x40 / +0x55F0). */
+  sektionen: BootSektion[];
+  /** Ladeadresse der ersten Sektion. */
   ladeAdresse?: number;
   einsprung?: number;
+  /** Speicherbild ab 0x80000000 bis zum Ende der letzten Sektion (Lücken 0) — bei vanasoft genau die bootloader.bin. */
   sbl: Uint8Array;
+  /** Summe der geladenen Bytes. */
   sblGroesse: number;
   pruefsumme: { gespeichert: number | null; berechnet: number; ok: boolean };
+  /** „werk“ = Korg-Layout (mehrere Sektionen, keine Wortsumme), „vanasoft“ = eine Sektion + Wortsumme, sonst „fremd“. */
+  layout: "werk" | "vanasoft" | "fremd";
   hinweise: string[];
 }
 
 /** Liest die ersten 128 KiB (auch aus einem größeren Flash-Dump). */
 export function liesBootSektor(bytes: Uint8Array): BootSektorBefund {
-  const leer = (h: string): BootSektorBefund => ({ ok: false, kommandos: [], sbl: new Uint8Array(0), sblGroesse: 0, pruefsumme: { gespeichert: null, berechnet: 0, ok: false }, hinweise: [h] });
+  const leer = (h: string): BootSektorBefund => ({ ok: false, kommandos: [], sektionen: [], sbl: new Uint8Array(0), sblGroesse: 0, pruefsumme: { gespeichert: null, berechnet: 0, ok: false }, layout: "fremd", hinweise: [h] });
   if (bytes.length < BOOTSEKTOR_GROESSE) return leer(`zu kurz: ${bytes.length} Bytes, ein Boot-Sektor hat ${BOOTSEKTOR_GROESSE}`);
   const b = bytes.subarray(0, BOOTSEKTOR_GROESSE);
   if (!(b[0] === 0x54 && b[1] === 0x49 && b[2] === 0x50 && b[3] === 0x41)) return leer("kein AIS-Magic „TIPA“ am Anfang — das ist kein AM1802-Boot-Sektor");
@@ -88,7 +102,10 @@ export function liesBootSektor(bytes: Uint8Array): BootSektorBefund {
   const hinweise: string[] = [];
   let ok = true;
   let pos = 4;
-  let sbl = new Uint8Array(0);
+  const sektionen: BootSektion[] = [];
+  const bild = new Uint8Array(OC_RAM_GROESSE);
+  let bildEnde = 0;
+  let geladen = 0;
   let ladeAdresse: number | undefined;
   let einsprung: number | undefined;
   while (pos + 4 <= b.length) {
@@ -109,27 +126,35 @@ export function liesBootSektor(bytes: Uint8Array): BootSektorBefund {
       kommandos.push(`@${hex(pos)}: Function Execute ${fn} (${args.join(", ")})`);
       pos += 8 + 4 * argc;
     } else if (code === 0x01) {
-      ladeAdresse = u32(b, pos + 4);
+      const addr = u32(b, pos + 4);
       const size = u32(b, pos + 8);
-      kommandos.push(`@${hex(pos)}: Section Load → ${hex(ladeAdresse)}, ${size} Bytes`);
-      if (ladeAdresse !== SBL_LADEADRESSE) {
+      kommandos.push(`@${hex(pos)}: Section Load → ${hex(addr)}, ${size} Bytes`);
+      if (ladeAdresse === undefined) ladeAdresse = addr;
+      const rel = addr - SBL_LADEADRESSE;
+      const imRam = rel >= 0 && rel + size <= OC_RAM_GROESSE;
+      if (!imRam) {
         ok = false;
-        hinweise.push(`Ladeadresse ${hex(ladeAdresse)} statt ${hex(SBL_LADEADRESSE)} (On-Chip-RAM)`);
+        hinweise.push(`Section Load ${hex(addr)} (+${size}) liegt nicht im On-Chip-RAM ${hex(SBL_LADEADRESSE)}…+0x20000`);
       }
       if (pos + 12 + size > b.length) {
         ok = false;
         hinweise.push("Section Load reicht über den Sektor hinaus");
         break;
       }
-      sbl = b.slice(pos + 12, pos + 12 + size);
+      if (imRam) {
+        bild.set(b.subarray(pos + 12, pos + 12 + size), rel);
+        bildEnde = Math.max(bildEnde, rel + size);
+      }
+      sektionen.push({ addr, size });
+      geladen += size;
       pos += 12 + size;
     } else if (code === 0x06) {
       einsprung = u32(b, pos + 4);
       kommandos.push(`@${hex(pos)}: Jump and Close → ${hex(einsprung)}`);
       pos += 8;
-      if (einsprung !== SBL_LADEADRESSE) {
+      if (einsprung < SBL_LADEADRESSE || einsprung >= SBL_LADEADRESSE + OC_RAM_GROESSE) {
         ok = false;
-        hinweise.push(`Einsprung ${hex(einsprung)} statt ${hex(SBL_LADEADRESSE)}`);
+        hinweise.push(`Einsprung ${hex(einsprung)} liegt nicht im On-Chip-RAM`);
       }
       break;
     } else {
@@ -138,15 +163,20 @@ export function liesBootSektor(bytes: Uint8Array): BootSektorBefund {
       break;
     }
   }
-  if (sbl.length === 0) {
+  if (sektionen.length === 0) {
     ok = false;
     hinweise.push("kein Section Load gefunden");
+  }
+  if (einsprung === undefined) {
+    ok = false;
+    hinweise.push("kein Jump and Close gefunden");
   }
   const berechnet = wortsumme16(b.subarray(0, pos));
   const gespeichert = pos + 2 <= b.length ? b[pos] | (b[pos + 1] << 8) : null;
   const summeOk = gespeichert === berechnet;
-  if (!summeOk) hinweise.push(`Prüfsumme ${gespeichert === null ? "fehlt" : hex(gespeichert)} ≠ berechnet ${hex(berechnet)} — bei Korgs Werksflash normal (dort gibt es diese Summe nicht), bei vanasofts Bootloader ein Fehler`);
-  return { ok, kommandos, ladeAdresse, einsprung, sbl, sblGroesse: sbl.length, pruefsumme: { gespeichert, berechnet, ok: summeOk }, hinweise };
+  const layout: BootSektorBefund["layout"] = !ok ? "fremd" : sektionen.length === 1 && sektionen[0].addr === SBL_LADEADRESSE && summeOk ? "vanasoft" : sektionen.length >= 2 && !summeOk ? "werk" : "fremd";
+  if (!summeOk) hinweise.push(layout === "werk" ? "keine vanasoft-Wortsumme — Korg-Werkslayout (mehrere Sektionen), das ist in Ordnung" : `Prüfsumme ${gespeichert === null ? "fehlt" : hex(gespeichert)} ≠ berechnet ${hex(berechnet)}`);
+  return { ok, kommandos, sektionen, ladeAdresse, einsprung, sbl: bild.slice(0, bildEnde), sblGroesse: geladen, pruefsumme: { gespeichert, berechnet, ok: summeOk }, layout, hinweise };
 }
 
 /**

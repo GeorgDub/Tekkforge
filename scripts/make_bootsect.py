@@ -77,6 +77,7 @@ def parse_bootsect(buf: bytes):
         return False, ["kein AIS-Magic 'TIPA' am Anfang"], b""
     pos = 4
     sbl = b""
+    sektionen = 0
     while pos + 4 <= len(buf):
         op = buf[pos:pos + 4]
         if op[1:4] != b"YSX":
@@ -94,18 +95,26 @@ def parse_bootsect(buf: bytes):
         elif code == 0x01:
             addr, size = struct.unpack_from("<II", buf, pos + 4)
             lines.append(f"  @0x{pos:05X}: Section Load → 0x{addr:08X}, {size} B (0x{size:X})")
-            sbl = buf[pos + 12:pos + 12 + size]
-            if addr != 0x80000000:
+            rel = addr - 0x80000000
+            if rel < 0 or rel + size > 0x20000:
                 ok = False
-                lines.append("    ⚠ Zieladresse ist nicht 0x80000000")
+                lines.append("    ⚠ Sektion liegt nicht im On-Chip-RAM 0x80000000…+0x20000")
+            else:
+                # Speicherbild ab 0x80000000 zusammensetzen (Korg-Werk: drei Sektionen; vanasoft: eine)
+                bild = bytearray(sbl) if sbl else bytearray()
+                if len(bild) < rel + size:
+                    bild += bytes(rel + size - len(bild))
+                bild[rel:rel + size] = buf[pos + 12:pos + 12 + size]
+                sbl = bytes(bild)
+                sektionen += 1
             pos += 12 + size
         elif code == 0x06:
             addr, = struct.unpack_from("<I", buf, pos + 4)
             lines.append(f"  @0x{pos:05X}: Jump and Close → 0x{addr:08X}")
             pos += 8
-            if addr != 0x80000000:
+            if not (0x80000000 <= addr < 0x80020000):
                 ok = False
-                lines.append("    ⚠ Einsprung ist nicht 0x80000000")
+                lines.append("    ⚠ Einsprung liegt nicht im On-Chip-RAM")
             break
         else:
             lines.append(f"  @0x{pos:05X}: AIS-Opcode 0x{code:02X} (nicht ausgewertet) — Abbruch")
@@ -114,10 +123,11 @@ def parse_bootsect(buf: bytes):
     stored = struct.unpack_from("<H", buf, pos)[0] if pos + 2 <= len(buf) else None
     calc = checksum16(buf[:pos])
     if stored == calc:
-        lines.append(f"  Prüfsumme @0x{pos:05X}: 0x{stored:04X} OK (vanasoft-Konvention)")
+        lines.append(f"  Prüfsumme @0x{pos:05X}: 0x{stored:04X} OK (vanasoft-Konvention, Custom-Bootloader)")
+    elif sektionen >= 2:
+        lines.append(f"  keine vanasoft-Wortsumme, {sektionen} Sektionen — Korg-Werkslayout (Vektoren 0x80000000, Code +0x40, Daten +0x55F0)")
     else:
-        lines.append(f"  Prüfsumme @0x{pos:05X}: gespeichert {stored!r}, berechnet 0x{calc:04X} — "
-                     "weicht ab (bei Korg-Werksflash normal: dort gibt es diese Summe nicht)")
+        lines.append(f"  Prüfsumme @0x{pos:05X}: gespeichert {stored!r}, berechnet 0x{calc:04X} — weicht ab")
     lines.append(f"  Rest nach dem Kommando-Ende: {BOOTSECT_SIZE - pos - 2} B")
     return ok, lines, sbl
 

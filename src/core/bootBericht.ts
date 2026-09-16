@@ -27,9 +27,13 @@ export function berichtVsbPruefung(bytes: Uint8Array, name: string): { zeilen: s
 }
 
 export function berichtBootSektor(b: BootSektorBefund): string[] {
-  const z = [b.ok ? "✅ Boot-Sektor brauchbar: AIS lädt die SBL nach 0x80000000 und springt hinein." : "❌ Boot-Sektor unbrauchbar."];
+  const z = [
+    b.ok
+      ? `✅ Boot-Sektor brauchbar (${b.layout === "werk" ? "Korg-Werkslayout: mehrere Sektionen, keine Wortsumme" : b.layout === "vanasoft" ? "vanasoft-Layout: eine Sektion + Wortsumme (Custom-Bootloader)" : "unbekanntes, aber gültiges Layout"}): ${b.sektionen.length} Section Load(s) ins On-Chip-RAM, Einsprung ${hex(b.einsprung ?? 0)}.`
+      : "❌ Boot-Sektor unbrauchbar.",
+  ];
   z.push(...b.kommandos.map((k) => ` ${k}`));
-  z.push(` SBL: ${b.sblGroesse} Bytes${b.sbl.length >= 4 ? `, beginnt ${Array.from(b.sbl.subarray(0, 4)).map((x) => x.toString(16).padStart(2, "0")).join(" ")}` : ""}`);
+  z.push(` SBL: ${b.sblGroesse} Bytes geladen, Speicherbild ${b.sbl.length} Bytes ab 0x80000000${b.sbl.length >= 4 ? `, beginnt ${Array.from(b.sbl.subarray(0, 4)).map((x) => x.toString(16).padStart(2, "0")).join(" ")}` : ""}`);
   z.push(` Prüfsumme: ${b.pruefsumme.gespeichert === null ? "fehlt" : hex(b.pruefsumme.gespeichert)} ${b.pruefsumme.ok ? "✓" : `≠ berechnet ${hex(b.pruefsumme.berechnet)}`}`);
   z.push(...b.hinweise.map((h) => ` ⚠ ${h}`));
   return z;
@@ -40,7 +44,7 @@ export function berichtFlashDump(d: FlashDumpBefund): string[] {
   z.push(`Gerätestempel: ${d.userIdentitaet ? `${d.userIdentitaet} → ${d.variante === "synth" ? "electribe 2 (Synth, 0x123)" : "electribe 2 sampler (0x124)"}` : "kein Produktstempel in der User-Region"}`);
   z.push(`Firmware: ${d.system.vektorOk ? "ARM-Vektortabelle OK" : "keine ARM-Vektortabelle"}${d.system.karte ? `, ${d.system.karte}` : d.system.familie ? `, ${d.system.familie === "sampler" ? "Sampler-Bauart" : "Synth-Bauart"} (Karte nicht erkannt)` : ""}${d.mainVersion ? `, Main ${d.mainVersion.map((x) => String(x).padStart(2, "0")).join(".")}` : ""}`);
   z.push(`PCM: ${d.pcm.magicOk ? `KORG ${d.pcm.format ?? "?"}` : "kein PCM-Image (kein KORG-Magic)"}`);
-  z.push(`Boot-Sektor: ${d.boot.ok ? `SBL ${d.boot.sblGroesse} Bytes${d.boot.pruefsumme.ok ? ", vanasoft-Prüfsumme OK (Custom-Bootloader)" : " (ohne vanasoft-Prüfsumme — Korg-Werks-SBL oder fremd)"}` : "unbrauchbar"}`);
+  z.push(`Boot-Sektor: ${d.boot.ok ? `SBL ${d.boot.sblGroesse} Bytes, ${d.boot.layout === "werk" ? "Korg-Werkslayout (drei Sektionen)" : d.boot.layout === "vanasoft" ? "Custom-Bootloader (vanasoft, Wortsumme OK)" : "fremdes Layout"}` : "unbrauchbar"}`);
   z.push("", " Sel.  Offset     Größe      Inhalt");
   for (const r of d.regionen) z.push(` ${hex(r.selektor).padStart(4)}  ${hex(r.offset).padStart(9)}  ${hex(r.groesse).padStart(9)}  ${r.name} — ${r.befund}`);
   return z;

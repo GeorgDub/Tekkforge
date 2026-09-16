@@ -71,6 +71,13 @@ TekkForge-Builds — Hacktribe patcht in-place); Synth-Layout wird als „nicht 
   (RAM-Lesen bei laufendem Sequencer liefert stumm falsche Daten — siehe Skill-Notiz), stattdessen
   ein bewusster Klick; der Text sagt, wann die Lesung gilt.
 
+### 1.6 Nachtrag: `core/hacktribeFlash.ts` + `core/geraeteFlash.ts` — Flash lesen (0x55)
+Während der Nacht ergänzt: Hacktribes Flash-Lese-Kommando (nur 0x55, kein Schreib-/Execute-Bauer)
+mit demselben Häppchen-/Timeout-Muster wie der RAM-Lesepfad; darauf `liesFlashKennungen`
+(Stempel, Main-Version, PCM-Kopf) und `liesBootSektorVomGeraet` (128 KiB). Die Werkbank sichert den
+gelesenen Sektor sofort als `.bin` + `BOOT.VSB` in den Firmware-Ordner. Der Boot-Sektor-Parser
+wurde dabei auf Korgs Werkslayout erweitert (drei Sektionen, keine Wortsumme) — am Gerät gemessen.
+
 ## 2. Test-Strategie
 - Vitest, offline: Kopfregeln (jeder Ablehnungsgrund einmal), Boot-Sektor-Rundlauf
   (bauen → lesen → gleiche SBL-Bytes), Python-Gleichheit (wenn `bootloader.bin` lokal liegt),

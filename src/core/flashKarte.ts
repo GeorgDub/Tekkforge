@@ -85,7 +85,7 @@ export function liesFlashDump(bytes: Uint8Array): FlashDumpBefund | { ok: false;
   const regionen: FlashRegion[] = FLASH_SELEKTOREN.map((s) => {
     let befund: string;
     if (leer(bytes, s.offset, Math.min(s.groesse, 0x100))) befund = "leer (0xFF)";
-    else if (s.vsb === "BOOT") befund = boot.ok ? `AIS + SBL, ${boot.sblGroesse} Bytes SBL${boot.pruefsumme.ok ? ", Prüfsumme OK" : ""}` : `unbrauchbar: ${boot.hinweise[0] ?? "?"}`;
+    else if (s.vsb === "BOOT") befund = boot.ok ? `AIS + SBL, ${boot.sblGroesse} Bytes in ${boot.sektionen.length} Sektion(en), ${boot.layout === "werk" ? "Korg-Werkslayout" : boot.layout === "vanasoft" ? "Custom-Bootloader (vanasoft)" : "fremdes Layout"}` : `unbrauchbar: ${boot.hinweise[0] ?? "?"}`;
     else if (s.vsb === "SYSTEM") befund = `${vektorOk ? "ARM-Vektortabelle OK" : "keine ARM-Vektortabelle"}${karte ? `, ${karte}` : ""}`;
     else if (s.vsb === "USER") befund = userIdentitaet ? `Stempel ${userIdentitaet} (${variante === "synth" ? "Synth 0x123" : "Sampler 0x124"})` : `kein Produktstempel bei +4 („${stempel.replace(/[^\x20-\x7e]/g, "?")}“)`;
     else if (s.vsb === "PCM") befund = pcm.magicOk ? `KORG ${pcm.format ?? fmt.replace(/[^\x20-\x7e]/g, "?")}` : "kein KORG-Magic";

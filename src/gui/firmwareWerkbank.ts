@@ -25,6 +25,8 @@ export interface WerkbankHooks {
   lesen?(addr: number, len: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
   /** RAM schreiben mit Rueckleseprobe (fuer die fluechtige Oszillator-Probe); fehlt ohne MIDI. */
   schreiben?(addr: number, bytes: Uint8Array, was: string): Promise<boolean>;
+  /** Flash lesen (Hacktribe 0x55, nur lesen) — für Kennungen und den Werks-Boot-Sektor; fehlt ohne MIDI. */
+  lesenFlash?(addr: number, len: number, chunk?: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
 }
 let hooks: WerkbankHooks | null = null;
 /** Eigene DSP-Patches aus Dateien oder Bauplaenen; das Register kommt dazu. */
@@ -67,6 +69,7 @@ import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GR
 import { standardKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
 import { liesFlashDump, schneideRegion, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
+import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett } from "../core/geraeteFlash";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1587,16 +1590,19 @@ async function bootSblLaden(f: File): Promise<void> {
   bootStatus(b.ok ? "Boot-Sektor bereit. Als .bin (für JTAG/Bootloader-Install) oder als BOOT.VSB (für das SD-Update) sichern." : "Boot-Sektor unbrauchbar — siehe Bericht.");
 }
 
+const bootStempel = (): string => new Date().toISOString().slice(0, 10);
+
 async function bootVsbSichernKlick(): Promise<void> {
-  if (!bootSektor) return bootStatus("Erst bootloader.bin laden.");
+  if (!bootSektor) return bootStatus("Erst bootloader.bin laden oder den Boot-Sektor vom Gerät lesen.");
   const v = bootKopfVorlage();
   const vsb = baueBootVsb(bootSektor.bytes, v.kopf, v.idLow);
   const hash = await sha256Hex(vsb);
-  download(vsb, "BOOT.VSB", "application/octet-stream");
-  const r = berichtVsbPruefung(vsb, "BOOT.VSB");
+  const name = bootSektor.name === "Gerät" ? `BOOT-vom-Geraet-${bootStempel()}.VSB` : "BOOT.VSB";
+  const ab = await legeAb(name, vsb, FIRMWARE_ORDNER);
+  const r = berichtVsbPruefung(vsb, name);
   bootBerichtZeigen([...berichtBootSektor(liesBootSektor(bootSektor.bytes)), "", ...r.zeilen]);
   bootStatus(
-    `BOOT.VSB gesichert (${vsb.length} Bytes, ${v.woher}${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}).\n` +
+    `${name} gesichert (${vsb.length} Bytes, ${v.woher}${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""})${ab.pfad ? ` → ${ab.pfad}` : " → Download"}.\n` +
       "Weg: NUR diese Datei als KORG/hacktribe/System/BOOT.VSB (Stock-Sampler: KORG/electribe sampler/System, Synth: KORG/electribe/System) auf die SD, Batterien ≥ Stufe 2 oder Netzteil, DATA UTILITY → SOFTWARE UPDATE. " +
       "Keine SYSTEM.VSB daneben legen, sonst wird die mitgeflasht. ⚠ Fehler = nur noch JTAG.",
   );
@@ -1630,27 +1636,114 @@ function bootRegionSichern(region: string): void {
   if (region === "SBL") {
     const b = flashDump.befund.boot;
     if (!b.ok) return bootStatus("Der Boot-Sektor des Dumps ist unbrauchbar — keine SBL.");
-    download(b.sbl, "SBL.bin", "application/octet-stream");
-    return bootStatus(`SBL.bin gesichert (${b.sbl.length} Bytes, Ladeadresse 0x80000000).`);
+    void legeAb("SBL.bin", b.sbl, FIRMWARE_ORDNER).then((ab) => bootStatus(`SBL.bin gesichert (${b.sbl.length} Bytes, Speicherbild ab 0x80000000)${ab.pfad ? ` → ${ab.pfad}` : ""}.`));
+    return;
   }
   const art = region as VsbArt;
   const v = bootKopfVorlage();
   const kopf = flashDump.befund.variante ? standardKopf(flashDump.befund.variante, art) : v.kopf;
   const out = schneideRegion(flashDump.bytes, art, kopf);
-  download(out, `${art}.VSB`, "application/octet-stream");
-  bootStatus(`${art}.VSB gesichert (${out.length} Bytes). Kopf ${flashDump.befund.variante ? `nach Gerätestempel (${flashDump.befund.variante})` : v.woher}.`);
+  void legeAb(`${art}-aus-Dump.VSB`, out, FIRMWARE_ORDNER).then((ab) =>
+    bootStatus(`${art}-aus-Dump.VSB gesichert (${out.length} Bytes)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${flashDump?.befund.variante ? `nach Gerätestempel (${flashDump.befund.variante})` : v.woher}.`),
+  );
+}
+
+async function bootKennungenVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  bootStatus("Lese Kennungen aus dem Flash…");
+  const k = await liesFlashKennungen(hooks.lesenFlash);
+  bootBerichtZeigen(kennungenText(k));
+  const info = document.getElementById("bootGeraetInfo");
+  if (info) info.textContent = k.variante ? `Gerät: ${VARIANTEN[k.variante].label}` : "";
+  if (k.variante) {
+    const sel = document.getElementById("bootIdentitaet") as HTMLSelectElement | null;
+    if (sel) sel.value = k.variante;
+  }
+  bootStatus(k.fehler.length ? `Kennungen mit Fehlern: ${k.fehler[0]}` : "Kennungen gelesen — die Kopf-Identität ist auf das Gerät gestellt.");
+}
+
+async function bootSektorVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  bootStatus("Lese Boot-Sektor (128 KiB) aus dem Flash — 512 Häppchen, bitte warten…");
+  const r = await liesBootSektorVomGeraet(hooks.lesenFlash);
+  if (!r.ok) return bootStatus(`Boot-Sektor nicht gelesen: ${r.reason}`);
+  bootSektor = r.befund.ok ? { name: "Gerät", bytes: r.bytes } : null;
+  const info = document.getElementById("bootSblInfo");
+  if (info) info.textContent = `vom Gerät: ${r.befund.ok ? `AIS + SBL ${r.befund.sblGroesse} Bytes — ${r.befund.layout === "vanasoft" ? "Custom-Bootloader (vanasoft) installiert" : r.befund.layout === "werk" ? "Korg-Werks-SBL" : "fremdes Layout"}` : "unbrauchbar"}`;
+  bootBerichtZeigen(berichtBootSektor(r.befund));
+  document.getElementById("bootSektorSichern")?.classList.toggle("hidden", !r.befund.ok);
+  document.getElementById("bootVsbSichern")?.classList.toggle("hidden", !r.befund.ok);
+  if (!r.befund.ok) return bootStatus("Boot-Sektor gelesen, aber unbrauchbar — siehe Bericht.");
+  // Sofort sichern: der Sektor, der JETZT im Gerät steht, ist der Rückweg — als rohe 128 KiB und
+  // als BOOT.VSB für das SD-Update (Identität nach dem Gerät, wenn die Kennungen gelesen wurden).
+  const stempel = bootStempel();
+  const v = bootKopfVorlage();
+  const vsb = baueBootVsb(r.bytes, v.kopf, v.idLow);
+  const ab1 = await legeAb(`Bootsektor-vom-Geraet-${stempel}.bin`, r.bytes, FIRMWARE_ORDNER);
+  const ab2 = await legeAb(`BOOT-vom-Geraet-${stempel}.VSB`, vsb, FIRMWARE_ORDNER);
+  bootStatus(
+    `Boot-Sektor des Geräts gelesen (${r.befund.layout === "werk" ? "Korg-Werks-SBL" : r.befund.layout === "vanasoft" ? "Custom-Bootloader" : "fremdes Layout"}) und gesichert: ${ab1.pfad ?? "Download"} und ${ab2.pfad ?? "Download"} (Kopf: ${v.woher}). Das ist der Rückweg zum jetzigen Bootloader — vor jeder Installation eines anderen aufheben.`,
+  );
+}
+
+let dumpAbbruch = false;
+
+/** Den ganzen 16-MiB-Flash lesen — Komplettsicherung des Geräts ohne JTAG und ohne Bootloader. */
+async function bootFlashKomplett(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  dumpAbbruch = false;
+  document.getElementById("bootDumpAbbrechen")?.classList.remove("hidden");
+  bootStatus("Prüfe, wie groß ein Häppchen sein darf…");
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const r = await liesFlashKomplett(lesen, {
+    chunk: probe.chunk,
+    abbruch: () => dumpAbbruch,
+    fortschritt: (f) => {
+      const s = (Date.now() - t0) / 1000;
+      const rest = f.gelesen ? ((f.gesamt - f.gelesen) * s) / f.gelesen : 0;
+      bootStatus(`Flash lesen: ${(f.gelesen / 1048576).toFixed(2)} / 16 MiB (${probe.hinweis}, ${s.toFixed(0)} s, noch ~${(rest / 60).toFixed(0)} min) — Gerät nicht bedienen.`);
+    },
+  });
+  document.getElementById("bootDumpAbbrechen")?.classList.add("hidden");
+  const stempel = bootStempel();
+  if (!r.ok) {
+    if (r.gelesen > 0) {
+      const ab = await legeAb(`Flash-vom-Geraet-${stempel}-TEIL-${r.gelesen}.bin`, r.teil, FIRMWARE_ORDNER);
+      return bootStatus(`Abgebrochen (${r.reason}) nach ${r.gelesen} Bytes — Teilstück gesichert${ab.pfad ? `: ${ab.pfad}` : ""}.`);
+    }
+    return bootStatus(`Flash nicht gelesen: ${r.reason}`);
+  }
+  const ab = await legeAb(`Flash-vom-Geraet-${stempel}.bin`, r.bytes, FIRMWARE_ORDNER);
+  const befund = liesFlashDump(r.bytes);
+  if (befund.ok) {
+    flashDump = { name: `Flash-vom-Geraet-${stempel}.bin`, befund, bytes: r.bytes };
+    document.getElementById("bootDumpKnoepfe")?.classList.remove("hidden");
+    bootBerichtZeigen(berichtFlashDump(befund));
+  }
+  bootStatus(`Flash komplett gelesen (16 MiB in ${((Date.now() - t0) / 60000).toFixed(1)} min)${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Das ist die vollständige Sicherung des Geräts (Bootloader, Firmware, User-Daten, Pattern, PCM, Slices) — Regionen lassen sich unten als Update-Dateien ausschneiden.`);
 }
 
 function richteBootEin(): void {
   if (!document.getElementById("bootPanel")) return;
+  document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
+  document.getElementById("bootDumpAbbrechen")?.addEventListener("click", () => {
+    dumpAbbruch = true;
+    bootStatus("Abbruch angefordert — der laufende 64-KiB-Block wird noch beendet.");
+  });
   dateiKnopf("bootSblLaden", "bootSblIn", (f) => void bootSblLaden(f));
   document.getElementById("bootSektorSichern")?.addEventListener("click", () => {
-    if (!bootSektor) return bootStatus("Erst bootloader.bin laden.");
-    download(bootSektor.bytes, "bootsect.bin", "application/octet-stream");
-    bootStatus("bootsect.bin gesichert (128 KiB) — das ist, was das Bootloader-Menü „Install bootloader“ nach Flash 0 schreibt.");
+    if (!bootSektor) return bootStatus("Erst bootloader.bin laden oder den Boot-Sektor vom Gerät lesen.");
+    const name = bootSektor.name === "Gerät" ? `Bootsektor-vom-Geraet-${bootStempel()}.bin` : "bootsect.bin";
+    void legeAb(name, bootSektor.bytes, FIRMWARE_ORDNER).then((ab) =>
+      bootStatus(`${name} gesichert (128 KiB)${ab.pfad ? ` → ${ab.pfad}` : " → Download"} — das ist, was das Bootloader-Menü „Install bootloader“ nach Flash 0 schreibt bzw. was jetzt im Gerät steht.`),
+    );
   });
   document.getElementById("bootVsbSichern")?.addEventListener("click", () => void bootVsbSichernKlick());
   dateiKnopf("bootVsbPruefen", "bootVsbPruefIn", (f) => void bootVsbPruefen(f));
+  document.getElementById("bootKennungenGeraet")?.addEventListener("click", () => void bootKennungenVomGeraet());
+  document.getElementById("bootSektorGeraet")?.addEventListener("click", () => void bootSektorVomGeraet());
   dateiKnopf("bootDumpLaden", "bootDumpIn", (f) => void bootDumpLaden(f));
   document.getElementById("bootDumpKnoepfe")?.addEventListener("click", (ev) => {
     const t = (ev as Event | undefined)?.target as HTMLElement | null | undefined;

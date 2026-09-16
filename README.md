@@ -1069,10 +1069,18 @@ Kurzfassung `docs/2026-09-16-vanasoft-bootloader-boot-vsb.md`):
   (Zeigervariable `0xC03405C8` → +0x318 Schwellen-Zeiger, +0x320 Rohwert, +0x328 Stufe),
   Laufzeit-Sample-Katalog `0xC036AD88` (999 × 0x45C).
 
+- **`core/hacktribeFlash.ts` + `core/geraeteFlash.ts`** — Hacktribes Flash-**Lese**-Kommando 0x55
+  (bewusst ohne 0x56/0x57): Kennungen (Gerätestempel 0x220004, Main-Version 0x21FFF0, PCM-Kopf
+  0x800000) und der 128-KiB-Boot-Sektor direkt aus dem Gerät. `scripts/flash_lesen.py` macht
+  dasselbe ohne die App (mido, braucht python-rtmidi).
+
 In der App: Firmware-Werkbank → Abschnitt **„Boot-Sektor, BOOT.VSB und Flash-Dump“**
 (`bootloader.bin` laden → Boot-Sektor / BOOT.VSB sichern; beliebige `.VSB` gegen Sampler- und
-Synth-Updater prüfen; Dump kartieren und zerlegen) und RAM-Panel → **„Geräte-Monitor“**
-(Stimmen & Batterie lesen, User-Samples 501–532). Nur Lesen und Dateien — nichts schreibt ins Gerät.
+Synth-Updater prüfen; Dump kartieren und zerlegen; **Kennungen und Boot-Sektor vom Gerät lesen** —
+der Werks-Boot-Sektor landet sofort als `Bootsektor-vom-Geraet-<Datum>.bin` und
+`BOOT-vom-Geraet-<Datum>.VSB` im Ordner `Downloads\TekkForge\Firmware`, das ist der Rückweg vor
+jeder Bootloader-Installation) und RAM-Panel → **„Geräte-Monitor“** (Stimmen & Batterie lesen,
+User-Samples 501–532). Nur Lesen und Dateien — nichts schreibt ins Gerät.
 
 ### Erprobungsstand — am Gerät belegt (2026-09-16, Electribe 2 Sampler, MOD132-Build, Netzteil)
 
@@ -1082,6 +1090,8 @@ Synth-Updater prüfen; Dump kartieren und zerlegen) und RAM-Panel → **„Gerä
 | Trigger-Note Part 1 über das Panel, danach lesen | Generation 0 → **2** (Note-On + Note-Off zählen je einmal), Slot nach 250 ms schon wieder frei |
 | Sequencer per MIDI-Start, Maske (4 B) während der Wiedergabe | `1E 00 00 00` — Slots 2–5 am DSP aktiv, zweimal gleich gelesen |
 | MIDI-Stop, dann Monitor | Maske `0x10`: Slot 5 = **Part 10, User-Sample 598, Note 60, „One-Shot läuft aus“**, Generation 76 |
+| **Flash lesen (Hacktribe 0x55)**: Kennungen | Antwortformat wie bei 0x52 (Echo 0x55 an Index 7, Daten ab 9); Gerätestempel `ele2sUSR` (Sampler 0x124), Main-Version 02.02.00, PCM-Kopf `KORG elec2PCM` (= die eingespielte Synth-Werks-PCM) |
+| **Flash lesen**: Boot-Sektor (128 KiB, 512 Häppchen, ~60 s) | Korgs Werks-Boot-Sektor lädt **drei** Sektionen: 60 B Vektoren → 0x80000000, **21 924 B Code → 0x80000040** (exakt die Größe des SBL-Programms im Ghidra-Archiv, 0x80000040–0x800055E3), 2 124 B Daten → 0x800055F0, dann Jump 0x80000000; keine Wortsumme (0xFFFF). Der Parser kennt seither beide Layouts (Werk / vanasoft) |
 | User-Samples 501–532 (35 KB Katalog, ~6 s) | alle 32 geladen, 14 812–30 172 Bytes, **22 050 Hz** — die Bank war mit halber Rate gebaut (Rate nach Rolloff), der Katalog bestätigt es |
 
 Damit sind Slot-Maske, `voice_t`-Zeiger (Part-Zuordnung), Oszillator-ID, Notenzustand, Release-
