@@ -37,6 +37,8 @@ export const OTP_PAYLOAD_MAX = 0x3fff;
 export const OtpCmd = {
   IDENTITY: 0x01,
   PARAM: 0x02,
+  /** Sprint 183: Modul-Lader. SUB 0x01 = Block senden, SUB 0x03 = ACK (Gerät → Host). */
+  MODULE: 0x05,
   /** Sprint 141: 0x07 ist TELEMETRY (der C-Code ist die Autorität; SONG wich auf 0x11 aus). */
   TELEMETRY: 0x07,
   FIRMWARE_INFO: 0x09,
@@ -58,6 +60,9 @@ export const OtpSub = {
   TRANSPORT_PLAY: 0x00,
   TRANSPORT_STOP: 0x01,
   TRANSPORT_POSITION: 0x0a,
+  /** Sprint 183: Modul-Block (Host → Gerät) und ACK (Gerät → Host). */
+  MODULE_BLOCK: 0x01,
+  MODULE_ACK: 0x03,
 } as const;
 
 export const OTP_PART_MIN = 1;
@@ -957,3 +962,140 @@ export function firmwareInfoText(fw: OtpFirmwareInfo): string {
     `Module [${(fw.moduleIds ?? []).join(", ")}], Flags 0x${fw.featureFlags.toString(16).padStart(8, "0")}${flags.length ? ` (${flags.join(", ")})` : ""}`
   );
 }
+
+// ─── Modul-Lader Stufe 1 (CMD 0x05) ──────────────────────────────────────────
+//
+// Gegenstelle: `handle_module_block_stage1` in Omnitribes
+// `src/firmware/bsdiff_stubs/sysex_layer1_hook.c` (Sprint 183). STUFE 1 empfängt
+// einen Modul-Block, dekodiert und VALIDIERT nur den 44-Byte-Header und schickt
+// einen ACK zurück. Der Stub kopiert NICHTS nach 0xC6100000 und ruft WEDER
+// init() NOCH deinit() auf — es wird kein empfangener Code ausgeführt. Ausführung
+// wäre Stufe 2 (am Gerät zu vermessendes freies DDR), hier bewusst nicht dabei.
+
+/** Länge des OTMR-Modul-Headers (Spiegel von `OmniTribeModule` auf 32-Bit-ARM). */
+export const OTP_MODULE_HEADER_LEN = 44;
+/** „OTMR“ als u32 little-endian (Bytes 0x52 0x4D 0x54 0x4F ab Offset 0). */
+export const OTP_MODULE_MAGIC = 0x4f544d52;
+export const OTP_MODULE_API_VERSION = 1;
+/** Der Stub akzeptiert module_id 0..15. */
+export const OTP_MODULE_MAX_ID = 16;
+
+/** Felder für einen synthetischen 44-Byte-Header (Test/Sonde). */
+export interface OtpModuleHeaderFelder {
+  moduleId: number;
+  name?: string;
+  /** api-Zeiger als Wert. 0 ⇒ der Stub weist mit Status 0x07 ab. Default 1 (gültig, wird NIE dereferenziert). */
+  apiPtr?: number;
+  /** Überschreibbar für Negativ-Sonden (Default OTP_MODULE_MAGIC). */
+  magic?: number;
+  /** Überschreibbar für Negativ-Sonden (Default OTP_MODULE_API_VERSION). */
+  apiVersion?: number;
+  /** module_id im Header; weicht sie von `moduleId` ab, weist der Stub mit 0x06 ab (Default = moduleId). */
+  headerId?: number;
+  codeSize?: number;
+  bssSize?: number;
+  flags?: number;
+  userData?: number;
+}
+
+function u32le(v: number): [number, number, number, number] {
+  const x = v >>> 0;
+  return [x & 0xff, (x >>> 8) & 0xff, (x >>> 16) & 0xff, (x >>> 24) & 0xff];
+}
+function u16le(v: number): [number, number] {
+  const x = v & 0xffff;
+  return [x & 0xff, (x >>> 8) & 0xff];
+}
+
+/**
+ * Baut einen rohen 44-Byte-OTMR-Header (8-Bit, noch NICHT 7-of-8-kodiert).
+ * Layout: magic@0 · api_version@4 · module_id@6 · name@8[16] · code_size@24 ·
+ * bss_size@28 · flags@32 · user_data@36 · api@40.
+ */
+export function buildModuleHeader(f: OtpModuleHeaderFelder): Uint8Array {
+  const h = new Uint8Array(OTP_MODULE_HEADER_LEN);
+  h.set(u32le(f.magic ?? OTP_MODULE_MAGIC), 0);
+  h.set(u16le(f.apiVersion ?? OTP_MODULE_API_VERSION), 4);
+  h.set(u16le(f.headerId ?? f.moduleId), 6);
+  const name = (f.name ?? "").slice(0, 15);
+  for (let i = 0; i < name.length; i++) h[8 + i] = name.charCodeAt(i) & 0x7f;
+  h.set(u32le(f.codeSize ?? 0), 24);
+  h.set(u32le(f.bssSize ?? 0), 28);
+  h.set(u32le(f.flags ?? 0), 32);
+  h.set(u32le(f.userData ?? 0), 36);
+  h.set(u32le(f.apiPtr ?? 1), 40);
+  return h;
+}
+
+/**
+ * Modul-Block-Rahmen (CMD 0x05 SUB 0x01). Nutzlast:
+ * `[module_id][enc_len_hi][enc_len_lo][7-of-8-Daten…]`. `moduleBytes` sind die
+ * rohen 8-Bit-Modulbytes (mindestens der 44-Byte-Header); sie werden mit
+ * `encode7Bit` (= `syx_dec_minimal`-Gegenstelle) kodiert.
+ */
+export function buildModuleBlock(moduleId: number, moduleBytes: Uint8Array | readonly number[]): Uint8Array {
+  const enc = encode7Bit(moduleBytes);
+  return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_BLOCK, [
+    moduleId & 0x7f,
+    (enc.length >> 7) & 0x7f,
+    enc.length & 0x7f,
+    ...enc,
+  ]);
+}
+
+/** Bequem: einen synthetischen Modul-Header direkt als 0x05-Block. */
+export function buildModuleHeaderBlock(f: OtpModuleHeaderFelder): Uint8Array {
+  return buildModuleBlock(f.moduleId, buildModuleHeader(f));
+}
+
+/** Status-Codes des Stubs (Modul-ACK, Payload-Byte 0). Deckungsgleich mit `handle_module_block_stage1`. */
+export const OTP_MODULE_STATUS: Readonly<Record<number, string>> = {
+  0x00: "gültig — Header angenommen (nicht ausgeführt)",
+  0x01: "Nutzlast zu kurz (< 3 Byte)",
+  0x02: "module_id ≥ 16 abgewiesen",
+  0x03: "Block abgeschnitten (enc_len > Nutzlast)",
+  0x04: "falsche Magic (kein OTMR)",
+  0x05: "falsche API-Version",
+  0x06: "module_id ≠ Header-id",
+  0x07: "api-Zeiger ist 0",
+  0x08: "Header zu kurz (< 44 Byte dekodiert)",
+} as const;
+
+export interface OtpModuleAck {
+  status: number;
+  /** True nur bei Status 0x00. */
+  ok: boolean;
+  moduleId: number;
+  /** Laufender Zähler der bisher gesehenen 0x05-Blöcke (unteres Byte). */
+  blockCount: number;
+  text: string;
+}
+
+/** CMD 0x05 SUB 0x03: Payload `[status, module_id, block_count_lo]`. */
+export function parseModuleAck(payload: Uint8Array): OtpModuleAck | null {
+  if (payload.length < 3) return null;
+  const status = payload[0] & 0x7f;
+  return {
+    status,
+    ok: status === 0x00,
+    moduleId: payload[1] & 0x7f,
+    blockCount: payload[2] & 0x7f,
+    text: OTP_MODULE_STATUS[status] ?? `unbekannter Status 0x${status.toString(16).padStart(2, "0")}`,
+  };
+}
+
+export function moduleAckText(a: OtpModuleAck): string {
+  return `Modul ${a.moduleId}: Status 0x${a.status.toString(16).padStart(2, "0")} — ${a.text} (Block #${a.blockCount})`;
+}
+
+/**
+ * Vier Sonden für den Testabend: ein gültiges Test-Modul und drei
+ * Negativ-Fälle, die je einen anderen Validierungszweig des Stubs treffen.
+ * Alle tragen einen api-Zeiger als WERT; der Stub prüft ihn nie durch Sprung.
+ */
+export const OTP_MODULE_PROBES: readonly { key: string; label: string; erwarteterStatus: number; bytes: () => Uint8Array }[] = [
+  { key: "gueltig", label: "Gültiges Test-Modul (id 0)", erwarteterStatus: 0x00, bytes: () => buildModuleHeaderBlock({ moduleId: 0, name: "stage1-probe", apiPtr: 1 }) },
+  { key: "magic", label: "Falsche Magic", erwarteterStatus: 0x04, bytes: () => buildModuleHeaderBlock({ moduleId: 0, magic: 0xdeadbeef, apiPtr: 1 }) },
+  { key: "noapi", label: "Kein api-Zeiger", erwarteterStatus: 0x07, bytes: () => buildModuleHeaderBlock({ moduleId: 0, apiPtr: 0 }) },
+  { key: "idmix", label: "Falsche Header-id", erwarteterStatus: 0x06, bytes: () => buildModuleHeaderBlock({ moduleId: 0, headerId: 5, apiPtr: 1 }) },
+] as const;

@@ -42,6 +42,9 @@ import {
   belegText,
   paramWertText,
   type OtpIdentity,
+  OTP_MODULE_PROBES,
+  parseModuleAck,
+  moduleAckText,
 } from "../core/otp";
 
 export interface OtpHooks {
@@ -278,6 +281,50 @@ function belegSymbol(p: OtpParamDef): string {
   return p.beleg === "gerätebewiesen" ? "✔" : p.beleg === "statisch" ? "◐" : "?";
 }
 
+// ─── Modul-Lader Stufe 1 (CMD 0x05) ──────────────────────────────────────────
+// Sendet eine Sonde (0x05-Block) und wartet auf den Modul-ACK (0x05 SUB 0x03).
+// Der Stub validiert nur den Header und führt NICHTS aus — der ACK-Status zeigt,
+// welcher Validierungszweig gegriffen hat. Nichts hier flasht oder platziert.
+
+async function moduleProbeSenden(index: number): Promise<void> {
+  const sonde = OTP_MODULE_PROBES[index];
+  if (!sonde) return;
+  if (!hooks) {
+    setStatus("Kein MIDI-Weg — erst MIDI aktivieren.");
+    return;
+  }
+  const frame = sonde.bytes();
+  const antwort = await frage(frame, OtpCmd.MODULE, OtpSub.MODULE_ACK);
+  if (!antwort) {
+    setStatus(
+      `Modul-Sonde „${sonde.label}“ gesendet (${hex(frame)}) — keine ACK-Antwort. ` +
+        `Entweder kennt der geladene Stub CMD 0x05 nicht (älteres Abbild ohne Modul-Lader → stumm, nur error_count), ` +
+        `oder der KORG-Port reicht die 0x7D-Antwort nicht durch. Erst „Gerät fragen“ prüfen.`,
+    );
+    return;
+  }
+  const p = parseFrame(antwort);
+  const ack = p.ok ? parseModuleAck(p.payload) : null;
+  if (!ack) {
+    setStatus(`Modul-Sonde „${sonde.label}“: ACK unlesbar (${hex(antwort)}).`);
+    return;
+  }
+  const passt = ack.status === sonde.erwarteterStatus;
+  setStatus(
+    `${passt ? "✔" : "✘"} Modul-Sonde „${sonde.label}“: ${moduleAckText(ack)}. ` +
+      `Erwartet 0x${sonde.erwarteterStatus.toString(16).padStart(2, "0")}${passt ? "" : " — Abweichung"}. ` +
+      `Header validiert, NICHT ausgeführt (Stufe 1).`,
+  );
+}
+
+/** Knöpfe für die vier Modul-Sonden. */
+function modulMarkup(): string {
+  return OTP_MODULE_PROBES.map((s, i) => {
+    const titel = escapeHtml(`${s.label} — erwarteter Stub-Status 0x${s.erwarteterStatus.toString(16).padStart(2, "0")}`);
+    return `<button id="otpModul${i}" class="ghost" style="padding:2px 8px;font-size:11px" title="${titel}">${escapeHtml(s.label)}</button>`;
+  }).join(" ");
+}
+
 /** Eine Zeile je Parameter: Name · Regler · Wert · Lesen · Beleg. */
 function zeilenMarkup(): string {
   return OTP_PARAMS.map((p) => {
@@ -339,4 +386,10 @@ export function initOtpPanel(h: OtpHooks): void {
   el("otpPosTakt")?.addEventListener("input", positionAnzeigen);
   el("otpPosStep")?.addEventListener("input", positionAnzeigen);
   positionAnzeigen();
+
+  const modul = el("otpModulKnoepfe");
+  if (modul && !modul.innerHTML) modul.innerHTML = modulMarkup();
+  OTP_MODULE_PROBES.forEach((_, i) => {
+    el(`otpModul${i}`)?.addEventListener("click", () => void moduleProbeSenden(i));
+  });
 }

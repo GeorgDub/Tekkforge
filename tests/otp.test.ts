@@ -46,6 +46,15 @@ import {
   OTP_USBDX_MAGIC,
   OTP_CTX_MAGIC,
   OTP_TELEMETRIE_FELDER,
+  OTP_MODULE_HEADER_LEN,
+  OTP_MODULE_MAGIC,
+  OTP_MODULE_API_VERSION,
+  buildModuleHeader,
+  buildModuleBlock,
+  buildModuleHeaderBlock,
+  parseModuleAck,
+  OTP_MODULE_STATUS,
+  OTP_MODULE_PROBES,
 } from "../src/core/otp";
 
 /**
@@ -616,5 +625,96 @@ describe("OTP: TRANSPORT (CMD 0x0E)", () => {
     expect(() => positionAusTaktStep(0, 1)).toThrow(RangeError);
     expect(() => positionAusTaktStep(1, 17)).toThrow(RangeError);
     expect(() => positionAusTaktStep(1, 0)).toThrow(RangeError);
+  });
+});
+
+describe("OTP: Modul-Lader Stufe 1 (CMD 0x05)", () => {
+  it("baut einen 44-Byte-Header mit OTMR-Magic little-endian", () => {
+    const h = buildModuleHeader({ moduleId: 3, name: "granular", apiPtr: 0x12345678 });
+    expect(h.length).toBe(OTP_MODULE_HEADER_LEN);
+    // Magic 0x4F544D52 als LE-Bytes 0x52 0x4D 0x54 0x4F ("RMTO" im Speicher).
+    expect(Array.from(h.slice(0, 4))).toEqual([0x52, 0x4d, 0x54, 0x4f]);
+    const magic = h[0] | (h[1] << 8) | (h[2] << 16) | (h[3] << 24);
+    expect(magic >>> 0).toBe(OTP_MODULE_MAGIC);
+    expect(h[4] | (h[5] << 8)).toBe(OTP_MODULE_API_VERSION);
+    expect(h[6] | (h[7] << 8)).toBe(3); // module_id
+    expect(String.fromCharCode(...h.slice(8, 16))).toBe("granular");
+    // api-Zeiger @40 little-endian.
+    expect(h[40] | (h[41] << 8) | (h[42] << 16) | (h[43] << 24)).toBe(0x12345678);
+  });
+
+  it("0x05-Block: Nutzlast [id][enc_len_hi][enc_len_lo][7-of-8], Stub-dekodierbar", () => {
+    const header = buildModuleHeader({ moduleId: 0, name: "probe", apiPtr: 1 });
+    const frame = buildModuleBlock(0, header);
+    const p = parseFrame(frame);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.cmd).toBe(OtpCmd.MODULE);
+    expect(p.sub).toBe(OtpSub.MODULE_BLOCK);
+    expect(p.payload[0]).toBe(0); // module_id
+    const encLen = (p.payload[1] << 7) | p.payload[2];
+    const enc = p.payload.slice(3);
+    expect(enc.length).toBe(encLen);
+    // Die 7-of-8-Daten müssen exakt den 44-Byte-Header zurückgeben (Stub-Weg).
+    expect(Array.from(decode7Bit(enc).slice(0, OTP_MODULE_HEADER_LEN))).toEqual(Array.from(header));
+    // Jedes Nutzlast-Byte ist 7-Bit-sauber (SysEx-Datenbyte).
+    for (const b of p.payload) expect(b).toBeLessThan(0x80);
+  });
+
+  it("parseModuleAck deutet Payload [status, id, block] und den Status-Text", () => {
+    const okFrame = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 0x03, 0x07]);
+    const p = parseFrame(okFrame);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    const ack = parseModuleAck(p.payload);
+    expect(ack).not.toBeNull();
+    expect(ack!.ok).toBe(true);
+    expect(ack!.status).toBe(0x00);
+    expect(ack!.moduleId).toBe(3);
+    expect(ack!.blockCount).toBe(7);
+    expect(ack!.text).toBe(OTP_MODULE_STATUS[0x00]);
+
+    const badFrame = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x04, 0x00, 0x01]);
+    const q = parseFrame(badFrame);
+    if (!q.ok) throw new Error("Rahmen");
+    const bad = parseModuleAck(q.payload)!;
+    expect(bad.ok).toBe(false);
+    expect(bad.status).toBe(0x04);
+    expect(bad.text).toContain("Magic");
+
+    expect(parseModuleAck(Uint8Array.from([0x00, 0x00]))).toBeNull(); // < 3 Byte
+  });
+
+  it("Negativ-Header treffen genau den Validierungszweig des Stubs (Header-Bytes stimmen)", () => {
+    // Falsche Magic → 0x04: Magic-Bytes weichen ab, Rest (api_version, id, api) gültig.
+    const magicH = buildModuleHeader({ moduleId: 0, magic: 0xdeadbeef, apiPtr: 1 });
+    expect((magicH[0] | (magicH[1] << 8) | (magicH[2] << 16) | (magicH[3] << 24)) >>> 0).toBe(0xdeadbeef);
+    // Kein api-Zeiger → 0x07: api@40 == 0, Magic gültig.
+    const noapiH = buildModuleHeader({ moduleId: 0, apiPtr: 0 });
+    expect(noapiH[40] | noapiH[41] | noapiH[42] | noapiH[43]).toBe(0);
+    expect((noapiH[0] | (noapiH[1] << 8) | (noapiH[2] << 16) | (noapiH[3] << 24)) >>> 0).toBe(OTP_MODULE_MAGIC);
+    // Falsche Header-id → 0x06: headerId@6 ≠ block-id.
+    const idH = buildModuleHeader({ moduleId: 0, headerId: 5, apiPtr: 1 });
+    expect(idH[6] | (idH[7] << 8)).toBe(5);
+  });
+
+  it("OTP_MODULE_PROBES: vier Sonden, jede mit erwartetem Status und sauberem Block", () => {
+    expect(OTP_MODULE_PROBES.map((s) => s.erwarteterStatus)).toEqual([0x00, 0x04, 0x07, 0x06]);
+    for (const sonde of OTP_MODULE_PROBES) {
+      const frame = sonde.bytes();
+      const p = parseFrame(frame);
+      expect(p.ok, sonde.key).toBe(true);
+      if (!p.ok) continue;
+      expect(p.cmd).toBe(OtpCmd.MODULE);
+      expect(p.sub).toBe(OtpSub.MODULE_BLOCK);
+      for (const b of frame) expect(b).toBeLessThan(0x100);
+    }
+  });
+
+  it("buildModuleHeaderBlock == buildModuleBlock(id, buildModuleHeader(...))", () => {
+    const felder = { moduleId: 2, name: "wavetable", apiPtr: 1 } as const;
+    expect(Array.from(buildModuleHeaderBlock(felder))).toEqual(
+      Array.from(buildModuleBlock(2, buildModuleHeader(felder))),
+    );
   });
 });

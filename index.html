@@ -879,6 +879,11 @@
                       <button id="otpPosSenden" class="ghost" title="SUB 0x0A → Song-Position-Pointer F2 lsb msb aus (Takt−1)·16 + (Step−1) Beats; über 0x3FFF wird hier abgewiesen. Omnitribe 2026-08-13: eingespeist, aber die E2S wertet den SPP nicht aus">Position senden</button>
                     </div>
                   </div>
+                  <div style="margin-top:8px;border-top:1px solid var(--line,#3333);padding-top:6px">
+                    <div class="sub" style="margin:0 0 4px;font-weight:600">Modul-Lader Stufe 1 (CMD 0x05) — Header empfangen und prüfen, nichts ausführen</div>
+                    <p class="sub" style="margin:0 0 4px;opacity:.8">Sendet ein Test-Modul als 0x05-Block; der Stub dekodiert und validiert nur den 44-Byte-OTMR-Header und schickt einen ACK mit Status zurück. Er kopiert nichts nach 0xC6100000 und ruft weder <code>init()</code> noch <code>deinit()</code> auf — es läuft kein empfangener Code. Ausführung wäre Stufe 2 (erst nach Geräte-DDR-Vermessung). Antwortet nichts, kennt der geladene Stub CMD 0x05 nicht (älteres Abbild) — dann bleibt der Modul-Lader stumm.</p>
+                    <div id="otpModulKnoepfe" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+                  </div>
                 </div>
                 <div id="otpStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit — noch nichts gesendet</div>
               </details>
