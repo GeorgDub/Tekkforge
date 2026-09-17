@@ -13,6 +13,8 @@ import { liesSqezKopfDaten, SQEZ_KOPF } from "./sqez";
 import { GLOBAL_FLASH } from "./globalFlash";
 import { PATTERN_BANK, patternNamenAusBank } from "./flashKarte";
 import { SLICE_FLASH, sliceKarte, sliceZeile } from "./sliceFlash";
+import { liesBootSektor, BOOTSEKTOR_GROESSE } from "./bootSektor";
+import { berichtBootSektor } from "./bootBericht";
 import { liesMonitor, liesSampleStandBisLeer, monitorText, sampleStandText, type Lesen } from "./geraeteMonitor";
 
 export interface GeraeteBerichtQuellen {
@@ -84,6 +86,14 @@ export async function erstelleGeraeteBericht(q: GeraeteBerichtQuellen, stempel =
       } else z.push(`- Werksbank: SQEZ-Strom nicht lesbar (${strom.reason})`);
     } else z.push("- Werksbank: kein SQEZ-Strom oder kein Werks-Global");
   } else z.push(`- Pattern-Bank nicht lesbar: ${pb.reason}`);
+
+  schritt("Boot-Sektor (128 KiB)");
+  z.push(h2("Boot-Sektor (Flash 0x000000)"));
+  const bs = await liesFlashKomplett(q.lesenFlash, { start: 0, gesamt: BOOTSEKTOR_GROESSE, chunk });
+  if (bs.ok) {
+    const b = liesBootSektor(bs.bytes);
+    z.push(`- ${b.layout === "werk" ? "Korgs Werks-Bootloader" : b.layout === "vanasoft" ? "⚠ Custom-Bootloader (vanasoft-Layout)" : "unbekanntes Layout"} — ${berichtBootSektor(b)[0]}`);
+  } else z.push(`- Boot-Sektor nicht lesbar: ${bs.reason}`);
 
   schritt("Slices");
   z.push(h2("Slice-Region (Flash 0x750000)"));

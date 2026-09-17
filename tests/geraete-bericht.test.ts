@@ -14,6 +14,7 @@ describe("erstelleGeraeteBericht", () => {
     expect(t).toMatch(/Global nicht lesbar: Global 0x230000: Timeout/);
     expect(t).toMatch(/Pattern-Bank nicht lesbar/);
     expect(t).toMatch(/Slice-Region nicht lesbar/);
+    expect(t).toMatch(/Boot-Sektor nicht lesbar/);
     expect(r.patternBank).toBeNull();
   });
   it.skipIf(!existsSync(pfad))("aus dem echten Dump: Kennungen, Global, Werksbank-Abweichungen, Slices", async () => {
@@ -31,7 +32,8 @@ describe("erstelleGeraeteBericht", () => {
     expect(t).toMatch(/Pattern 240: im Gerät „Init Pattern“ \(Inhalt geändert, Name gleich\)/);
     expect(t).toMatch(/404 von 540 Records beschrieben/);
     expect(t).toMatch(/Sample 337: 8 Slices, 32 Schritte, Beat 0/);
-    expect(schritte).toEqual(["Kennungen", "Global", "Pattern-Bank (4 MiB)", "Slices"]);
+    expect(schritte).toEqual(["Kennungen", "Global", "Pattern-Bank (4 MiB)", "Boot-Sektor (128 KiB)", "Slices"]);
+    expect(t).toMatch(/- Korgs Werks-Bootloader — ✅ Boot-Sektor brauchbar \(Korg-Werkslayout/);
     expect(r.patternBank?.length).toBe(4161792);
     expect(t).not.toMatch(/Stimmen, Ereignisse/);
   });
