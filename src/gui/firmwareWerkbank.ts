@@ -76,6 +76,8 @@ import { globalBerichtZeilen, globalLiveZeile } from "../core/globalFlash";
 import { werksbankAusDump, liesWerksbankVomGeraet, werksbankZeile } from "../core/werksbank";
 import { sliceKarte, sliceZeile } from "../core/sliceFlash";
 import { erstelleGeraeteBericht } from "../core/geraeteBericht";
+import { baueSdPaket } from "../core/sdPaket";
+import { md5Hex } from "../core/md5";
 import { OSZ_LISTEN, oszListeWahl } from "../core/oszNamen";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
@@ -1799,6 +1801,38 @@ async function bootRegionVomGeraet(): Promise<void> {
   bootStatus(`${name} gesichert (${r.datei.length} Bytes in ${((Date.now() - t0) / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${k.variante ? `nach Gerätestempel (${VARIANTEN[k.variante].label})` : "aus der Vorlage"}, Prüfung: ${pruefung.ok ? "das Gerät nähme die Datei per SD-Update an" : pruefung.pruefungen.find((x) => !x.ok)?.detail ?? "nicht bestanden"}.`);
 }
 
+/** SD-Update-Paket: SYSTEM vom Gerät + gewählte PCM.VSB, geprüft, als KORG\Hacktribe\System abgelegt. */
+async function bootSdPaket(pcmDatei: File): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  const pcm = new Uint8Array(await pcmDatei.arrayBuffer());
+  bootStatus("Lese Gerätestempel…");
+  const k = await liesFlashKennungen(lesen);
+  const variante = k.variante ?? ((document.getElementById("bootIdentitaet") as HTMLSelectElement | null)?.value === "synth" ? "synth" : "sampler");
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const sys = await liesRegionVomGeraet(lesen, "SYSTEM", standardKopf(variante, "SYSTEM"), {
+    chunk: probe.chunk,
+    fortschritt: (f) => bootStatus(`SYSTEM vom Gerät lesen: ${(f.gelesen / 1048576).toFixed(2)} / 2 MiB (${((Date.now() - t0) / 1000).toFixed(0)} s) — Gerät nicht bedienen.`),
+  });
+  if (!sys.ok) return bootStatus(`SYSTEM nicht gelesen: ${sys.reason}`);
+  const paket = baueSdPaket(
+    [
+      { art: "SYSTEM", bytes: sys.datei, herkunft: `aus dem Gerät gelesen (${bootStempel()})` },
+      { art: "PCM", bytes: pcm, herkunft: pcmDatei.name },
+    ],
+    variante,
+    { stempel: bootStempel(), md5: md5Hex },
+  );
+  for (const d of paket.dateien) {
+    const i = d.pfad.lastIndexOf("\\");
+    await legeAb(d.pfad.slice(i + 1), d.bytes, d.pfad.slice(0, i));
+  }
+  const ab = await legeAb("LIESMICH.md", paket.liesmich, paket.ordner, "text/markdown");
+  bootBerichtZeigen(paket.liesmich.split(/\r?\n/));
+  bootStatus(paket.alleOk ? `SD-Update-Paket gebaut${ab.pfad ? ` → ${ab.pfad.replace(/LIESMICH\.md$/, "")}` : ""} — den Ordner KORG auf die SD kopieren, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` : "SD-Update-Paket gebaut, aber mindestens eine Datei fällt bei der Kopfprüfung durch — siehe LIESMICH. NICHT einspielen.");
+}
+
 /** Der ganze Gerätezustand in einem Lauf — Markdown in den Firmware-Ordner, Pattern-Bank in Sets. */
 async function bootGeraeteBericht(): Promise<void> {
   if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
@@ -1861,6 +1895,7 @@ function richteBootEin(): void {
   document.getElementById("bootGlobalGeraet")?.addEventListener("click", () => void bootGlobalVomGeraet());
   document.getElementById("bootWerksbankGeraet")?.addEventListener("click", () => void bootWerksbankVomGeraet());
   document.getElementById("bootGeraeteBericht")?.addEventListener("click", () => void bootGeraeteBericht());
+  dateiKnopf("bootSdPaket", "bootSdPcmIn", (f) => void bootSdPaket(f));
   document.getElementById("bootRegionGeraet")?.addEventListener("click", () => void bootRegionVomGeraet());
   document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
   document.getElementById("bootPatternsGeraet")?.addEventListener("click", () => void bootPatternBankVomGeraet());
