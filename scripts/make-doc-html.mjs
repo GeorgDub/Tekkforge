@@ -121,6 +121,7 @@ const abschnitte = [
       "<b>Master-Effekt</b> — an/aus und die X/Y-Fläche fernsteuern.",
       "<b>Pads des Geräts</b> — Parts anspielen, chromatisch spielen, Steps löschen.",
       "<b>Panik</b> — Stopp, dann alle Töne auf allen Kanälen aus, dazu die selbst angespielten Noten einzeln. Wichtig dabei: die üblichen Sammelbefehle beenden nur Töne aus eingehenden Noten — den internen Sequencer stoppt erst der Stopp-Befehl.",
+      "<b>Omnitribe fragen</b> — läuft auf dem Gerät die Omnitribe-Erweiterung (eine Firmware-Ergänzung aus einem Schwesterprojekt, die neben der gewohnten Firmware mitläuft), meldet sie sich auf Knopfdruck mit Version und einer Selbstdiagnose in fünf Stufen; dann lassen sich Tonhöhe, Filter und Resonanz je Part direkt setzen. Ohne diese Erweiterung sagt die App das klar — und sonst nichts. Neu (September 2026) und aus TekkForge heraus am Gerät noch nicht gehört.",
     ],
     bild: ["panel", "Das Panel: Geräteanbindung, Program Change, Regler-Spiegel und Transport."],
     extra:

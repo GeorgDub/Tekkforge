@@ -1115,6 +1115,53 @@ Sequencer-Stop ab (dort liegt das `ldmfd` von `DisableMidiClockPulseGeneration`)
 ist ein Ein-Schuss-Weg (Rückweg nur JTAG). Gebaut und rundgeprüft, **nicht** ins Gerät gespielt:
 `Firmware\vanasoft-bootloader\BOOT-vanasoft-2026-09-16.VSB`.
 
+## Omnitribe (OTP) — Stand 2026-09-17, am Gerät aus TekkForge ungetestet
+
+Omnitribe (`G:\IdeaProjects\Omnitribe`) ist eine Firmware-Erweiterung für den Sampler, die als
+BSDIFF-Stub neben Stock oder Hacktribe läuft und ein eigenes SysEx-Protokoll spricht — OTP,
+Hersteller-ID `7D 01 02`, Rahmen `F0 7D 01 02 CMD SUB LEN_H LEN_L DATA… CHK F7` (Prüfsumme =
+XOR nur über DATA, 7 Bit). TekkForge kann das jetzt auch, als Client:
+
+- **`core/otp.ts`** — Rahmenbauer und -parser ohne DOM/MIDI, portiert aus SynthStudios
+  `OmniTribeBridge.ts` (nur der Kern): XOR-Prüfsumme, 7-of-8-Kodierung, `pack32_7bit`, 14- und
+  21-Bit-Werte; Anfragen `IDENTITY` (0x01), `FIRMWARE_INFO` (0x09), `TELEMETRY` (0x07/0x01),
+  `PARAM` SET/GET (0x02) für **Osc-Pitch (ID 0x0001, −64..63), Cutoff (0x0002, 0..127),
+  Resonance (0x0003, 0..127)** je Part 1–16 (auf dem Draht 0-basiert); Antwort-Parser mit
+  Fehlercodes (`zu-kurz`, `kein-sysex`, `fremder-hersteller`, `laenge`, `pruefsumme` — die
+  letzten beiden zählt das Gerät als `error_count` bzw. `chk_fail_count`). Die Telemetrie
+  (29 × u32, USB-/DIN-Akkumulator + Hook-Kontext) wird wie Omnitribes `telemetry_read.py` in
+  fünf Stufen gedeutet: Hook-Aufrufe → F0 → erkannte Frames → Dispatch → gesendete Antworten,
+  Verdikt `LÄUFT` / `HÄNGT BEI …` / `GUARD HÄNGT` / `USB-STRUCT UNGÜLTIG`.
+- **Panel „Omnitribe (OTP)“** (Firmware-Werkbank, unter dem Boot-Sektor): ein Knopf fragt
+  IDENTITY + FIRMWARE_INFO + TELEMETRY nacheinander und zeigt die Antworten benannt; antwortet
+  das Gerät, erscheinen Part-Wahl und drei Regler, die beim Loslassen `PARAM SET` senden, dazu
+  „Werte vom Gerät lesen“ (`PARAM GET`). Kommt auf IDENTITY nichts: **„Kein OTP — auf dem Gerät
+  läuft keine Omnitribe-Coexist-Firmware (Stock/Hacktribe ohne Hook antworten nicht)“**. Nichts
+  sendet beim Start; nur Klick und Regler.
+
+Was die Bytes bestimmt hat — und was davon **Omnitribes** Befund ist, nicht unserer:
+
+| Punkt | Quelle |
+|---|---|
+| Am Gerät läuft der Stub `sysex_layer1_hook.c`, nicht der Loader; er antwortet auf IDENTITY und FIRMWARE_INFO mit derselben 15-Byte-Minimalform `00 01 00 00 00` (v0.1.0, keine Flags). Der Parser kennt zusätzlich das volle Loader-Layout (Git-Hash, Module, Flags) | Omnitribe Stub-Quelle; `docs/midi/otp_firmware_info.md` |
+| TELEMETRY-Antwort ist SUB 0x02 (143 Bytes), **nicht** die 0x7F-Form aus `sysex_schema.json` (Loader) | Stub `otp_send_telemetry`, `otp_codec.py` |
+| PARAM: Wert 14 Bit, das Gerät nimmt die unteren 8 Bit (Osc-Pitch als int8); die GET-Antwort liefert das Byte als 0..255 — −24 kommt als 232 und wird hier als int8 gedeutet, nicht 14-Bit-signed wie im Python-Codec | Stub `otp_param_clamp` / `otp_send_param_response` |
+| Osc-Pitch schreibt ins Live-Fenster (beim Part-/Pattern-Wechsel weg); Cutoff/Resonance gehen seit Sprint 159 als CC 74/71 durch die Firmware, der Part ist der MIDI-Kanal | Omnitribe 2026-08-06/08 |
+| Unbekannte SUBs = Stille (nur Timeout), SET hat keine Bestätigung — die Telemetrie zählt es in `otp_response_sent_count` | `otp_protocol.md` §Silence-Policy |
+
+**Bewusst weggelassen:** STATE_DUMP (mehrteilig, im Per-Byte-Hook bewusst übersprungen), PATTERN,
+STREAM, WAVETABLE, TRANSPORT, FX/Groove (0x10), Chord-Slots, Echo-Schutz und Throttle-Queue der
+Bridge (hier gibt es keinen Notify-Strom und keinen Sweep — gesendet wird beim Loslassen).
+Level (0x0004) und Pan (0x0005) fehlen, weil Omnitribe ihren Speicherort als instabil bzw. nicht
+gefunden führt.
+
+**Claim-Boundary:** 44 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
+SynthStudio-Testvektoren und den Beispielrahmen der Spezifikation — byte-genau, aber
+**noch keine Antwort aus TekkForge am Gerät gehört**. Offen, nur am Gerät prüfbar: ob der KORG-Port
+die 0x7D-Antworten unverändert durchreicht, ob 1,5 s Wartezeit reichen, die Kennlinie der Regler
+(Osc-Pitch −24 = zwei Oktaven ist Omnitribes Befund), und ob `requestSysex` die Antwort neben
+laufendem Korg-Verkehr sauber herausfischt. Der Nutzer testet selbst; der Port ist Single-Client.
+
 ## Step-Record-Layout (verifiziert)
 
 TekkForge korrigiert das aus Synthstudio übernommene Step-Encoding. Byte-Histogramme über

@@ -72,6 +72,7 @@ import {
 import { initFxPresetPanel } from "./fxPreset";
 import { initPresetManager } from "./presetManager";
 import { initFirmwareWerkbank } from "./firmwareWerkbank";
+import { initOtpPanel } from "./otpPanel";
 import { liesMonitor, liesSampleStand, monitorText, sampleStandText } from "../core/geraeteMonitor";
 import { buildFlashReadRequest, parseFlashResponse, splitFlashRead, validateFlashRange } from "../core/hacktribeFlash";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
@@ -1820,6 +1821,14 @@ function setupRamPanel(): void {
     // Roher SysEx-Weg für den flüchtigen Bootloader-Start (execute_freetribe-Protokoll).
     // Der Inhalt der Antwort wird im Loader-Kern (bootloaderStart.ts) geprüft, darum matcht
     // requestSysex hier den ersten eingehenden Frame (() => true).
+    sysexSenden: async (frame: Uint8Array) => {
+      await midi.sendAsync(frame);
+    },
+    sysexAnfrage: (frame: Uint8Array, akzeptiere: (b: Uint8Array) => boolean, timeoutMs: number) =>
+      requestSysex(midi, frame, akzeptiere, timeoutMs),
+  });
+  // Omnitribe (OTP): derselbe rohe SysEx-Weg. Sendet nur auf Klick, nie beim Start.
+  initOtpPanel({
     sysexSenden: async (frame: Uint8Array) => {
       await midi.sendAsync(frame);
     },
