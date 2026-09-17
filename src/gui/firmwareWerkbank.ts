@@ -27,6 +27,8 @@ export interface WerkbankHooks {
   schreiben?(addr: number, bytes: Uint8Array, was: string): Promise<boolean>;
   /** Flash lesen (Hacktribe 0x55, nur lesen) — für Kennungen und den Werks-Boot-Sektor; fehlt ohne MIDI. */
   lesenFlash?(addr: number, len: number, chunk?: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
+  /** Der laufende Global-Block per SysEx 0x51 (256 B) — zum Vergleich mit dem im Flash gespeicherten. */
+  globalLive?(): Promise<Uint8Array | null>;
 }
 let hooks: WerkbankHooks | null = null;
 /** Eigene DSP-Patches aus Dateien oder Bauplaenen; das Register kommt dazu. */
@@ -70,8 +72,9 @@ import { standardKopf, pruefeVsbKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt 
 import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
 import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet, liesRegionVomGeraet, liesGlobalVomGeraet } from "../core/geraeteFlash";
-import { globalBerichtZeilen } from "../core/globalFlash";
+import { globalBerichtZeilen, globalLiveZeile } from "../core/globalFlash";
 import { werksbankAusDump, liesWerksbankVomGeraet, werksbankZeile } from "../core/werksbank";
+import { sliceKarte, sliceZeile } from "../core/sliceFlash";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1788,6 +1791,7 @@ async function bootRegionVomGeraet(): Promise<void> {
   document.getElementById("bootDumpAbbrechen")?.classList.add("hidden");
   if (!r.ok) return bootStatus(`${art} nicht gelesen: ${r.reason}${r.gelesen ? ` (nach ${r.gelesen} Bytes)` : ""}`);
   const name = `${art}-vom-Geraet-${bootStempel()}.VSB`;
+  if (art === "SLICE") bootBerichtZeigen([sliceZeile(sliceKarte(r.nutz))]);
   const pruefung = pruefeVsbKopf(r.datei, k.variante ?? "sampler");
   const ab = await legeAb(name, r.datei, FIRMWARE_ORDNER);
   bootStatus(`${name} gesichert (${r.datei.length} Bytes in ${((Date.now() - t0) / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${k.variante ? `nach Gerätestempel (${VARIANTEN[k.variante].label})` : "aus der Vorlage"}, Prüfung: ${pruefung.ok ? "das Gerät nähme die Datei per SD-Update an" : pruefung.pruefungen.find((x) => !x.ok)?.detail ?? "nicht bestanden"}.`);
@@ -1813,8 +1817,18 @@ async function bootGlobalVomGeraet(): Promise<void> {
   bootStatus("Lese Global-Blöcke aus dem Flash…");
   const r = await liesGlobalVomGeraet(hooks.lesenFlash);
   if (!r.ok) return bootStatus(`Global nicht gelesen: ${r.reason}`);
-  bootBerichtZeigen(globalBerichtZeilen(r.global, true));
-  bootStatus(r.global.gespeichert ? "Global aus dem Flash gelesen — gespeicherter Block und Werks-Vorgabe stehen im Bericht." : "Im Flash steht bei 0x230000 kein GLST-Block.");
+  const zeilen = globalBerichtZeilen(r.global, true);
+  if (hooks.globalLive && r.global.gespeichert) {
+    let live: Uint8Array | null = null;
+    try {
+      live = await hooks.globalLive();
+    } catch {
+      live = null;
+    }
+    zeilen.push(globalLiveZeile(r.global.gespeichert, live));
+  }
+  bootBerichtZeigen(zeilen);
+  bootStatus(r.global.gespeichert ? "Global aus dem Flash gelesen — gespeicherter Block, Werks-Vorgabe und der laufende Block stehen im Bericht." : "Im Flash steht bei 0x230000 kein GLST-Block.");
 }
 
 function richteBootEin(): void {

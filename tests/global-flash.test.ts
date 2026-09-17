@@ -96,3 +96,15 @@ describe("Global im echten Gerätedump (nur wenn er lokal liegt)", () => {
     expect(g.sqez?.entpackt).toBe(250 * 0x4000);
   });
 });
+
+describe("globalLiveZeile", () => {
+  it("meldet identisch, Abweichungen oder keine Antwort", async () => {
+    const { globalLiveZeile } = await import("../src/core/globalFlash");
+    const a = globalBlock();
+    expect(globalLiveZeile(a, null)).toMatch(/keine Antwort/);
+    expect(globalLiveZeile(a, globalBlock())).toMatch(/identisch/);
+    const b = globalBlock();
+    b[E2_GLOBAL_CHAIN_MODE_OFF] = 1;
+    expect(globalLiveZeile(a, b)).toMatch(/1 Byte\(s\) ab: Chain Mode gespeichert off → live on/);
+  });
+});

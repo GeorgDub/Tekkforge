@@ -1806,7 +1806,16 @@ function setupRamPanel(): void {
   // Der Preset-Manager teilt sich Lese- und Schreibweg mit dem Editor.
   initPresetManager(fxHooks);
   // Die Firmware-Werkbank holt sich das aktuelle Pattern als Init-Pattern.
-  initFirmwareWerkbank({ aktuellesPattern: aktuellesPatternDatei, lesen: ramReadBytes, schreiben: fxHooks.schreiben, lesenFlash: flashReadBytes });
+  initFirmwareWerkbank({
+    aktuellesPattern: aktuellesPatternDatei,
+    lesen: ramReadBytes,
+    schreiben: fxHooks.schreiben,
+    lesenFlash: flashReadBytes,
+    globalLive: async () => {
+      const reply = await requestSysex(midi, buildGlobalRequest(midiOpts()), (b) => decodeGlobalDump(b) !== null, 4000);
+      return decodeGlobalDump(reply);
+    },
+  });
 }
 
 /**

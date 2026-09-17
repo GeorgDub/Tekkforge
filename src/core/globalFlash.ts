@@ -159,6 +159,14 @@ export function globalAusDump(dump: Uint8Array): GlobalImFlash {
   return { gespeichert: nimm(GLOBAL_FLASH.gespeichert), werk: nimm(GLOBAL_FLASH.werk), sqez: sq && sq.ok ? sq : null };
 }
 
+/** Vergleich des gespeicherten Blocks mit dem laufenden (SysEx 0x51). */
+export function globalLiveZeile(gespeichert: Uint8Array, live: Uint8Array | null): string {
+  if (!live) return "Laufender Global-Block (SysEx 0x51): keine Antwort";
+  const u = vergleicheGlobal(gespeichert, live);
+  if (!u.length) return "Laufender Global-Block (SysEx 0x51): identisch mit dem gespeicherten — nichts Ungespeichertes";
+  return `Laufender Global-Block (SysEx 0x51) weicht vom gespeicherten in ${u.length} Byte(s) ab: ${u.map((d) => `${d.name ?? `+0x${d.off.toString(16).toUpperCase()}`} gespeichert ${d.anzeigeA} → live ${d.anzeigeB}`).join("; ")}`;
+}
+
 /** Berichtzeilen zu Global und SQEZ, wie sie der Dump-Bericht und der Geräte-Knopf zeigen. */
 export function globalBerichtZeilen(g: GlobalImFlash, ausfuehrlich = false): string[] {
   const z: string[] = [];

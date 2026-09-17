@@ -32,7 +32,7 @@ Flash-Karte, Ghidra-Export) steht in Omnitribe:
 - **Global im Flash:** 0x230000 = gespeicherter Global-Block (GLST…GLED, 0x100), 0x630000 = Werks-Global,
   0x640000 = SQEZ (Kopf: u16 Version 9, u16 2, u32 entpackt 0x3E8000 = 250 × 0x4000 → komprimierte
   Werks-Pattern-Bank für den Werksreset, Handler 0x11). `core/globalFlash.ts`, am Gerät belegt.
-  USER-Region 0x220000: nur der 16-Byte-Stempel, Rest 0xFF.
+  USER-Region 0x220000: nur der 16-Byte-Stempel, Rest 0xFF. Laufender Global (0x51) = 0x230000 byteweise (belegt).
 
 - **SQEZ nachgebaut** (`core/sqez.ts`, Omnitribe `tools/formats/sqez.py`): Kopf „SQEZ“ | u32 Stromlänge | u32
   entpackt | u16 CRC-16/ARC | Bitstrom ab +0x0E (MSB zuerst). Blöcke: u16 Symbolzahl, 19er-Längentabelle
