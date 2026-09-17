@@ -15,7 +15,7 @@ import { PATTERN_BANK, patternNamenAusBank } from "./flashKarte";
 import { SLICE_FLASH, sliceKarte, sliceZeile } from "./sliceFlash";
 import { liesBootSektor, BOOTSEKTOR_GROESSE } from "./bootSektor";
 import { berichtBootSektor } from "./bootBericht";
-import { liesMonitor, liesSampleStandBisLeer, monitorText, sampleStandText, type Lesen } from "./geraeteMonitor";
+import { liesMonitor, liesSampleStandBisLeer, monitorText, sampleStandText, sampleLuecken, type Lesen } from "./geraeteMonitor";
 
 export interface GeraeteBerichtQuellen {
   lesenFlash: LesenFlash;
@@ -119,6 +119,8 @@ export async function erstelleGeraeteBericht(q: GeraeteBerichtQuellen, stempel =
     const st = await liesSampleStandBisLeer(q.lesenRam, ab, block, (bis) => schritt(`Sample-Katalog bis ${bis}`));
     z.push(h2(`Sample-Katalog (RAM, User-Samples ab ${ab + 1}, gelesen bis ${ab + st.stand.length})`));
     z.push(`- ${st.geladen} geladen, zusammen ${(st.bytes / 1048576).toFixed(2)} MB${st.fehler ? ` — Lesefehler: ${st.fehler}` : ""}`);
+    const lk = sampleLuecken(st.stand);
+    if (lk.anzahl) z.push(`- ${lk.anzahl} Lücke(n) im belegten Bereich (nicht geladen): ${lk.luecken}`);
     if (st.stand.length) z.push(...sampleStandText(st.stand).split("\n").map((s) => (s.trim() ? `    ${s}` : "")));
   }
 

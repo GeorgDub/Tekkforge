@@ -137,3 +137,14 @@ describe("liesSampleStandBisLeer", () => {
     expect((await liesSampleStandBisLeer(kaputt)).fehler).toBe("Timeout");
   });
 });
+
+describe("sampleLuecken", () => {
+  it("nennt fehlende Nummern zwischen erstem und letztem geladenen Sample als Bereiche", async () => {
+    const { sampleLuecken } = await import("../src/core/geraeteMonitor");
+    const mk = (anzeige: number, geladen: boolean) => ({ index: anzeige - 1, anzeige, geladen, laengeBytes: 0, rate: 0, stereoRolle: 0 });
+    const stand = [501, 502, 503, 504, 505, 506, 507, 508, 509, 510].map((n) => mk(n, ![503, 506, 507, 508].includes(n)));
+    expect(sampleLuecken(stand)).toEqual({ luecken: "503, 506–508", anzahl: 4 });
+    expect(sampleLuecken([mk(501, true)])).toEqual({ luecken: "", anzahl: 0 });
+    expect(sampleLuecken([mk(501, true), mk(502, false), mk(503, false)])).toEqual({ luecken: "", anzahl: 0 });
+  });
+});

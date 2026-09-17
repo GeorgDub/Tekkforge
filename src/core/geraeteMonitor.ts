@@ -105,6 +105,25 @@ export async function liesSampleStandBisLeer(lesen: Lesen, abIndex = 500, block 
   return { stand, geladen: stand.filter((s) => s.geladen).length, bytes: stand.reduce((a, s) => a + (s.geladen ? s.laengeBytes : 0), 0) };
 }
 
+/** Nicht geladene Nummern zwischen dem ersten und dem letzten geladenen Sample, als Bereiche („512, 530–533“). */
+export function sampleLuecken(stand: SampleStand[]): { luecken: string; anzahl: number } {
+  const geladen = stand.filter((s) => s.geladen).map((s) => s.anzeige);
+  if (geladen.length < 2) return { luecken: "", anzahl: 0 };
+  const von = geladen[0];
+  const bis = geladen[geladen.length - 1];
+  const set = new Set(geladen);
+  const fehlend: number[] = [];
+  for (let n = von; n <= bis; n++) if (!set.has(n)) fehlend.push(n);
+  const bereiche: string[] = [];
+  for (let i = 0; i < fehlend.length; i++) {
+    let j = i;
+    while (j + 1 < fehlend.length && fehlend[j + 1] === fehlend[j] + 1) j++;
+    bereiche.push(j > i ? `${fehlend[i]}–${fehlend[j]}` : `${fehlend[i]}`);
+    i = j;
+  }
+  return { luecken: bereiche.join(", "), anzahl: fehlend.length };
+}
+
 const pad = (s: string | number, n: number): string => String(s).padStart(n, " ");
 
 /** Der Bericht als Text fürs `<pre>`; `oszName` liefert den Anzeigenamen zur Oszillator-Nummer (ID + 1). */
