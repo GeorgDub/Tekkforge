@@ -1247,6 +1247,13 @@ passt; das ist der Beleg „der Modul-Lader läuft“, ohne je empfangenen Code 
 ist am 2026-09-17 in der echten Electron-App gegengeprüft (`scripts/otp-render-check.mjs`, ohne MIDI/Port).
 Gegenstelle: `buildModuleBlock` / `parseModuleAck` in `core/otp.ts`, Stub `handle_module_block_stage1`.
 
+**Stufe 2 ist vorgebaut, aber nicht aktiv** (hinter dem Firmware-Flag `OMNITRIBE_MODULE_STAGE2`, in keinem
+gebooteten Build): sie lädt ein ganzes Modul chunk-weise ins DDR (`buildModuleChunk`/`buildModuleCommit`/
+`buildModuleUpload`), reloziert die base-0-Zeiger (api, user_data, sieben Funktionszeiger) auf absolute
+DDR-Adressen und kann es ausführen. Ausführung hängt an einem zweiten Flag hinter einem `#error`; die
+DDR-Zieladresse hat keinen Default und kommt erst aus `ddr_survey.py`. Plan und Freigabe-Reihenfolge:
+Omnitribe `docs/firmware/modul_lader_stufe2_2026-09-17.md`.
+
 **Bewusst weggelassen:** STATE_DUMP, PATTERN, STREAM, WAVETABLE, FX/Groove (0x10), Chord-Slots,
 Echo-Schutz und Throttle-Queue der Bridge — der Stub hat dafür keinen Handler
 (hier gibt es keinen Notify-Strom und keinen Sweep; gesendet wird beim Loslassen).
