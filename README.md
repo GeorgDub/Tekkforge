@@ -1141,24 +1141,77 @@ antwortet (oder nur über TRS), und ob Windows das DFU-Interface ohne Zadig herg
 Omnitribe (`G:\IdeaProjects\Omnitribe`) ist eine Firmware-Erweiterung für den Sampler, die als
 BSDIFF-Stub neben Stock oder Hacktribe läuft und ein eigenes SysEx-Protokoll spricht — OTP,
 Hersteller-ID `7D 01 02`, Rahmen `F0 7D 01 02 CMD SUB LEN_H LEN_L DATA… CHK F7` (Prüfsumme =
-XOR nur über DATA, 7 Bit). TekkForge kann das jetzt auch, als Client:
+XOR nur über DATA, 7 Bit). TekkForge kann das als Client — und zwar genau das, was der Stub
+(`src/firmware/bsdiff_stubs/sysex_layer1_hook.c`, die Quelle der Wahrheit) im Dispatch kennt:
 
-- **`core/otp.ts`** — Rahmenbauer und -parser ohne DOM/MIDI, portiert aus SynthStudios
-  `OmniTribeBridge.ts` (nur der Kern): XOR-Prüfsumme, 7-of-8-Kodierung, `pack32_7bit`, 14- und
-  21-Bit-Werte; Anfragen `IDENTITY` (0x01), `FIRMWARE_INFO` (0x09), `TELEMETRY` (0x07/0x01),
-  `PARAM` SET/GET (0x02) für **Osc-Pitch (ID 0x0001, −64..63), Cutoff (0x0002, 0..127),
-  Resonance (0x0003, 0..127)** je Part 1–16 (auf dem Draht 0-basiert); Antwort-Parser mit
-  Fehlercodes (`zu-kurz`, `kein-sysex`, `fremder-hersteller`, `laenge`, `pruefsumme` — die
-  letzten beiden zählt das Gerät als `error_count` bzw. `chk_fail_count`). Die Telemetrie
-  (29 × u32, USB-/DIN-Akkumulator + Hook-Kontext) wird wie Omnitribes `telemetry_read.py` in
-  fünf Stufen gedeutet: Hook-Aufrufe → F0 → erkannte Frames → Dispatch → gesendete Antworten,
-  Verdikt `LÄUFT` / `HÄNGT BEI …` / `GUARD HÄNGT` / `USB-STRUCT UNGÜLTIG`.
+- **`core/otp.ts`** — Rahmenbauer und -parser ohne DOM/MIDI: XOR-Prüfsumme, 7-of-8-Kodierung,
+  `pack32_7bit`, 14- und 21-Bit-Werte; Anfragen `IDENTITY` (0x01/0x00), `FIRMWARE_INFO` (0x09/0x00),
+  `TELEMETRY` (0x07/0x01), `PARAM` SET/GET (0x02/0x00, 0x02/0x01) für **alle 16 Einträge der
+  Stub-Registry** je Part 1–16 (auf dem Draht 0-basiert), **`TRANSPORT`** (0x0E: Play 0x00, Stop 0x01,
+  Position 0x0A). Antwort-Parser mit Fehlercodes (`zu-kurz`, `kein-sysex`, `fremder-hersteller`,
+  `laenge`, `pruefsumme` — die letzten beiden zählt das Gerät als `error_count` bzw.
+  `chk_fail_count`). Die Telemetrie (29 × u32) wird wie Omnitribes `telemetry_read.py` in fünf
+  Stufen gedeutet: Hook-Aufrufe → F0 → erkannte Frames → Dispatch → gesendete Antworten, Verdikt
+  `LÄUFT` / `HÄNGT BEI …` / `GUARD HÄNGT` / `USB-STRUCT UNGÜLTIG`.
 - **Panel „Omnitribe (OTP)“** (Firmware-Werkbank, unter dem Boot-Sektor): ein Knopf fragt
   IDENTITY + FIRMWARE_INFO + TELEMETRY nacheinander und zeigt die Antworten benannt; antwortet
-  das Gerät, erscheinen Part-Wahl und drei Regler, die beim Loslassen `PARAM SET` senden, dazu
-  „Werte vom Gerät lesen“ (`PARAM GET`). Kommt auf IDENTITY nichts: **„Kein OTP — auf dem Gerät
-  läuft keine Omnitribe-Coexist-Firmware (Stock/Hacktribe ohne Hook antworten nicht)“**. Nichts
-  sendet beim Start; nur Klick und Regler.
+  das Gerät, erscheinen Part-Wahl und **16 Regler** (aus der Registry erzeugt), die beim Loslassen
+  `PARAM SET` senden, je Regler ein **„Lesen“** (`PARAM GET`, signed als int8 gedeutet, Aufzählungen
+  mit Stufenname) und **„Alle Werte vom Gerät lesen“**; **je Parameter sichtbar der Beleg-Status**
+  (✔ bewiesen / ◐ statisch, Maus darüber nennt die Quelle). Darunter der **TRANSPORT-Block**: Play,
+  Stop, Position als Takt · Step (16 Steps je Takt → Beats). Kommt auf IDENTITY nichts: **„Kein OTP —
+  auf dem Gerät läuft keine Omnitribe-Coexist-Firmware (Stock/Hacktribe ohne Hook antworten
+  nicht)“**. Nichts sendet beim Start; nur Klick und Regler.
+
+### Parameter-Registry (Beleg-Status wörtlich aus den C-Kommentaren des Stubs)
+
+„✔ bewiesen“ heisst: **Omnitribe** hat diesen Weg am Gerät gemessen oder gehört — nicht TekkForge.
+„◐ statisch“ heisst: Adresse und CC aus TABLE 6 / Opcodes hergeleitet, und der C-Kommentar sagt
+selbst „NICHT gemessen“. Auf dem OTP-Draht steht immer der Parameterwert selbst (14 Bit, das Gerät
+nimmt die unteren 8); `cc_bias`/`cc_scale` rechnet der Stub erst für die eingespeiste CC.
+
+| ID | Parameter | Bereich | signed | Weg im Stub | Fenster | Beleg | Quelle (C-Kommentar) |
+|---|---|---|---|---|---|---|---|
+| 0x0001 | Osc-Pitch | −64..63 Halbtöne | ja | Schreibzugriff | Live | ✔ | A/B/A-Hörprobe Part 6 (2026-08-01), 16 Adressen 2026-08-02 ausgemessen |
+| 0x0002 | Cutoff | 0..127 | – | CC 74 eingespeist | Live | ✔ | hörbar 2026-08-06 (20 = dumpfer); CC-Weg 2026-08-08 gemessen (Sprint 159) |
+| 0x0003 | Resonance | 0..127 | – | CC 71 eingespeist | Live | ✔ | 16 Adressen 2026-08-06 bei gestopptem Sequencer; CC-Weg 2026-08-08 |
+| 0x0004 | Level | 0..127 | – | CC 7 eingespeist | Pattern | ✔ | Schreibzugriff am Gerät NICHT hörbar (2026-08-07) → CC; 2026-08-08 end-to-end, Pegelverlauf gehört (Sprint 153) |
+| 0x0005 | Pan | −63..63 | ja (CC = Wert + 64) | CC 10 eingespeist | Pattern | ✔ | Adressen 2026-08-07 per 14-Punkt-CC-Reihe; Versatz 64 nach Fehlmessung 2026-08-08 (Sprint 157) — Kennlinie gemessen, korrigierter SET nicht als nachgemessen vermerkt |
+| 0x0006 | Voice Assign | 0..3 (Mono 1/Mono 2/Poly 1/Poly 2), Aufzählung | – | Schreibzugriff | Pattern | ◐ | Lesen hörbar belegt (Part 11), aber „dass unser SCHREIBZUGRIFF dort ankommt, ist NICHT gemessen“ (Sprint 172); Chord Set/Gate Arp abgewiesen |
+| 0x0007 | EG Attack | 0..127 | – | CC 73 eingespeist | Pattern | ◐ | Offset +0x14 aus TABLE 6; eingespeiste CC „NICHT gemessen“ (Sprint 174) |
+| 0x0008 | EG Decay/Release | 0..127 | – | CC 72 eingespeist | Pattern | ◐ | Offset +0x15 über den Dateiweg belegt; CC „NICHT gemessen“ (Sprint 174) |
+| 0x0009 | Osc Edit | 0..127 | – | CC 82 eingespeist | Pattern | ◐ | TABLE 6 +0x0B; „keiner der fünf ist am Gerät gemessen“ (Sprint 175) |
+| 0x000A | EG Int | −63..63 | ja (CC = Wert + 64) | CC 83 eingespeist | Pattern | ◐ | TABLE 6 +0x0F; Versatz 64 von Pan übernommen, nicht gemessen (Sprint 175) |
+| 0x000B | Mod Speed | 0..127 | – | CC 86 eingespeist | Pattern | ◐ | TABLE 6 +0x11 (Sprint 175) |
+| 0x000C | Mod Depth | 0..127 | – | CC 85 eingespeist | Pattern | ◐ | TABLE 6 +0x12 (Sprint 175) |
+| 0x000D | Glide | 0..127 | – | CC 81 eingespeist | Pattern | ◐ | TABLE 6 +0x25 (Sprint 175) |
+| 0x000E | IFX Edit | 0..127 | – | CC 87 eingespeist | Pattern | ◐ | TABLE 6 +0x22; „nichts davon am Gerät gemessen“ (Sprint 176) |
+| 0x000F | MFX Send | 0..1 (Off/On), Aufzählung | – | CC 105 eingespeist (CC = Wert × 127) | Pattern | ✔ | Schalter „am 2026-08-22 nativ belegt“: Anzeige OFF/ON, Byte 0x00/0x01, CC 105 0→0 / ≥10→1 (Sprint 181) — Byte-Beleg, keine Hörprobe |
+| 0x0010 | IFX On/Off | 0..1 (Off/On), Aufzählung | – | CC 104 eingespeist (CC = Wert × 127) | Pattern | ◐ | TABLE 6 +0x20; weder CC 104 → Byte noch Schwelle 64 gemessen (Sprint 177) |
+
+Aufzählungen (Voice Assign, MFX Send, IFX On/Off) klemmt der Stub nicht, sondern verwirft den SET
+**stumm** (kein Zähler); der Client wirft deshalb vorher. Stetige Werte klemmt das Gerät selbst.
+GET liest bei allen 16 direkt die Tabellenadresse — bei den CC-Weg-Parametern das Byte, das die
+Firmware nach der Einspeisung selbst pflegt. Hinweis: Omnitribes Sitzungsprotokoll
+`docs/hwtest/sitzung_2026-08-22.md` meldet für die ◐-Parameter nachträglich Byte- und teils
+Hörbelege; die Tabelle folgt bewusst dem C-Kommentar, nicht dem Protokoll.
+
+### TRANSPORT (CMD 0x0E, Sprint 166)
+
+Der Stub speist die MIDI-Nachricht in den Empfangsweg der Firmware ein; es gibt **keine Antwort**,
+Erfolg zählt in `otp_response_sent_count`, Absage in `error_count`.
+
+| Rahmen | Bytes | Was der Stub tut |
+|---|---|---|
+| Play | `F0 7D 01 02 0E 00 00 00 00 F7` | 0xFA (MIDI-Start) eingespeist |
+| Stop | `F0 7D 01 02 0E 01 00 00 00 F7` | 0xFC (MIDI-Stop) eingespeist |
+| Position (25 Beats = Takt 2 · Step 10) | `F0 7D 01 02 0E 0A 00 03 00 00 19 19 F7` | Song-Position-Pointer `F2 19 00` aus 21-Bit-Payload (MSB zuerst) |
+| Position 0x3FFF | `… 0E 0A 00 03 00 7F 7F 00 F7` | Grenzwert, wird angenommen |
+| Position 0x4000 | `… 0E 0A 00 03 01 00 00 01 F7` | **Stub sagt ab** (error_count) — TekkForge weist schon vorher ab, mit Meldung |
+
+Andere SUBs (Record, Tempo, Abfragen) zählt der Stub als `error_count`. Omnitribes Befund
+(2026-08-13, mit eigenen Werkzeugen): Play und Stop wirken am Gerät; Position wird eingespeist,
+aber die E2S wertet den Song-Position-Pointer nicht aus.
 
 Was die Bytes bestimmt hat — und was davon **Omnitribes** Befund ist, nicht unserer:
 
@@ -1166,22 +1219,20 @@ Was die Bytes bestimmt hat — und was davon **Omnitribes** Befund ist, nicht un
 |---|---|
 | Am Gerät läuft der Stub `sysex_layer1_hook.c`, nicht der Loader; er antwortet auf IDENTITY und FIRMWARE_INFO mit derselben 15-Byte-Minimalform `00 01 00 00 00` (v0.1.0, keine Flags). Der Parser kennt zusätzlich das volle Loader-Layout (Git-Hash, Module, Flags) | Omnitribe Stub-Quelle; `docs/midi/otp_firmware_info.md` |
 | TELEMETRY-Antwort ist SUB 0x02 (143 Bytes), **nicht** die 0x7F-Form aus `sysex_schema.json` (Loader) | Stub `otp_send_telemetry`, `otp_codec.py` |
-| PARAM: Wert 14 Bit, das Gerät nimmt die unteren 8 Bit (Osc-Pitch als int8); die GET-Antwort liefert das Byte als 0..255 — −24 kommt als 232 und wird hier als int8 gedeutet, nicht 14-Bit-signed wie im Python-Codec | Stub `otp_param_clamp` / `otp_send_param_response` |
+| PARAM: Wert 14 Bit, das Gerät nimmt die unteren 8 Bit (signed als int8); die GET-Antwort liefert das Byte als 0..255 — −24 kommt als 232 und wird hier als int8 gedeutet, nicht 14-Bit-signed wie im Python-Codec | Stub `otp_param_clamp` / `otp_send_param_response` |
 | Osc-Pitch schreibt ins Live-Fenster (beim Part-/Pattern-Wechsel weg); Cutoff/Resonance gehen seit Sprint 159 als CC 74/71 durch die Firmware, der Part ist der MIDI-Kanal | Omnitribe 2026-08-06/08 |
-| Unbekannte SUBs = Stille (nur Timeout), SET hat keine Bestätigung — die Telemetrie zählt es in `otp_response_sent_count` | `otp_protocol.md` §Silence-Policy |
+| Unbekannte SUBs = Stille (nur Timeout), SET/TRANSPORT haben keine Bestätigung — die Telemetrie zählt sie in `otp_response_sent_count` | `otp_protocol.md` §Silence-Policy, Stub-Dispatch |
 
-**Bewusst weggelassen:** STATE_DUMP (mehrteilig, im Per-Byte-Hook bewusst übersprungen), PATTERN,
-STREAM, WAVETABLE, TRANSPORT, FX/Groove (0x10), Chord-Slots, Echo-Schutz und Throttle-Queue der
-Bridge (hier gibt es keinen Notify-Strom und keinen Sweep — gesendet wird beim Loslassen).
-Level (0x0004) und Pan (0x0005) fehlen, weil Omnitribe ihren Speicherort als instabil bzw. nicht
-gefunden führt.
+**Bewusst weggelassen:** STATE_DUMP, PATTERN, STREAM, WAVETABLE, FX/Groove (0x10), Modul-Lader
+(0x05), Chord-Slots, Echo-Schutz und Throttle-Queue der Bridge — der Stub hat dafür keinen Handler
+(hier gibt es keinen Notify-Strom und keinen Sweep; gesendet wird beim Loslassen).
 
-**Claim-Boundary:** 44 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
-SynthStudio-Testvektoren und den Beispielrahmen der Spezifikation — byte-genau, aber
-**noch keine Antwort aus TekkForge am Gerät gehört**. Offen, nur am Gerät prüfbar: ob der KORG-Port
-die 0x7D-Antworten unverändert durchreicht, ob 1,5 s Wartezeit reichen, die Kennlinie der Regler
-(Osc-Pitch −24 = zwei Oktaven ist Omnitribes Befund), und ob `requestSysex` die Antwort neben
-laufendem Korg-Verkehr sauber herausfischt. Der Nutzer testet selbst; der Port ist Single-Client.
+**Claim-Boundary:** 59 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
+SynthStudio-Testvektoren, den Beispielrahmen der Spezifikation und je einem festen Byte-Vektor pro
+Parameter und TRANSPORT-Kommando — byte-genau, aber **noch keine Antwort aus TekkForge am Gerät
+gehört**. Offen, nur am Gerät prüfbar: ob der KORG-Port die 0x7D-Antworten unverändert durchreicht,
+ob 1,5 s Wartezeit reichen, ob die ◐-Parameter hörbar wirken, und ob `requestSysex` die Antwort
+neben laufendem Korg-Verkehr sauber herausfischt. Der Nutzer testet selbst; der Port ist Single-Client.
 
 ## Step-Record-Layout (verifiziert)
 

@@ -12,8 +12,8 @@
  *   - Omnitribe `tools/midi/otp_codec.py` (Telemetrie-Feldnamen, Feldreihenfolge)
  *   - SynthStudio `client/src/audio/OmniTribeBridge.ts` (Host-Kern, Testvektoren)
  *
- * Bewusst NICHT hier: STATE_DUMP, PATTERN, STREAM, TRANSPORT, FX — am Gerät
- * unbelegt oder bewusst übersprungen (Omnitribe-README „Am Geraet bestaetigt“).
+ * Bewusst NICHT hier: STATE_DUMP, PATTERN, STREAM, FX, Modul-Lader (0x05) — der
+ * Stub hat dafür keinen Handler (unbekannte CMD/SUB = Stille bzw. error_count).
  *
  * Rahmen:  F0 7D 01 02 [CMD] [SUB] [LEN_H] [LEN_L] [DATA…] [CHK] F7
  *   LEN = 14 Bit (2 × 7), CHK = XOR über DATA, auf 7 Bit maskiert.
@@ -40,6 +40,8 @@ export const OtpCmd = {
   /** Sprint 141: 0x07 ist TELEMETRY (der C-Code ist die Autorität; SONG wich auf 0x11 aus). */
   TELEMETRY: 0x07,
   FIRMWARE_INFO: 0x09,
+  /** Sprint 166: Play/Stop/Position als eingespeiste MIDI-Nachricht (0xFA/0xFC/0xF2). Keine Antwort. */
+  TRANSPORT: 0x0e,
 } as const;
 
 export const OtpSub = {
@@ -53,26 +55,77 @@ export const OtpSub = {
   TELEMETRY_REPORT: 0x02,
   FW_INFO_REQUEST: 0x00,
   FW_INFO_RESPONSE: 0x01,
+  TRANSPORT_PLAY: 0x00,
+  TRANSPORT_STOP: 0x01,
+  TRANSPORT_POSITION: 0x0a,
 } as const;
 
 export const OTP_PART_MIN = 1;
 export const OTP_PART_MAX = 16;
 
-// ─── Parameter-Registry (nur die drei am Gerät hörbar belegten) ──────────────
+// ─── Parameter-Registry (alle 16 Einträge von `g_otp_param_registry`) ────────
+
+/**
+ * Beleg-Status je Parameter — WÖRTLICH aus den Kommentaren im Stub-C-Code
+ * (`sysex_layer1_hook.c`, Registry ab ~Zeile 1224), nicht aus späteren
+ * Sitzungsprotokollen und nicht aus TekkForge:
+ *   „gerätebewiesen“  der C-Kommentar weist eine Messung/Hörprobe am Gerät für
+ *                     genau diesen Weg (Schreibzugriff bzw. eingespeiste CC) aus
+ *   „statisch“        Adresse/CC aus Tabellen oder Opcodes hergeleitet; der
+ *                     C-Kommentar sagt selbst „NICHT gemessen“
+ *   „unbestimmt“      der Kommentar trifft keine Aussage
+ */
+export type OtpBeleg = "gerätebewiesen" | "statisch" | "unbestimmt";
+
+export type OtpParamKey =
+  | "oscPitch"
+  | "cutoff"
+  | "resonance"
+  | "level"
+  | "pan"
+  | "voiceAssign"
+  | "egAttack"
+  | "egDecay"
+  | "oscEdit"
+  | "egInt"
+  | "modSpeed"
+  | "modDepth"
+  | "glide"
+  | "ifxEdit"
+  | "mfxSend"
+  | "ifxOnOff";
 
 export interface OtpParamDef {
-  readonly key: "oscPitch" | "cutoff" | "resonance";
+  readonly key: OtpParamKey;
   readonly name: string;
   /** Param-ID = (hi << 8) | lo, so wie `otp_param_entry()` im Stub sie nachschlägt. */
   readonly hi: number;
   readonly lo: number;
   readonly min: number;
   readonly max: number;
-  /** Signed: das Gerät deutet das untere Byte als int8. */
+  /** Signed: das Gerät deutet das untere Byte als int8 (`otp_param_clamp`, `is_signed`). */
   readonly signed: boolean;
   readonly einheit: string;
-  /** Beleg aus Omnitribe — NICHT aus TekkForge. */
-  readonly beleg: string;
+  /**
+   * `is_enum` im Stub: Wert ausserhalb min..max wird NICHT geklemmt, sondern
+   * der ganze SET still verworfen (kein Zähler). Stetige Parameter klemmt das Gerät.
+   */
+  readonly enum: boolean;
+  /** Anzeigenamen der Stufen bei enum (Index = Wert). */
+  readonly stufen?: readonly string[];
+  /**
+   * Wie der Stub den SET ausführt: „schreib“ = nackter Schreibzugriff auf die
+   * Tabellenadresse; „cc N“ = der Wert geht als Control-Change N auf Kanal =
+   * Part in den Empfangsweg der Firmware (`cc_bias`/`cc_scale` rechnet der Stub;
+   * auf dem OTP-Draht steht immer der Parameterwert selbst). GET liest in
+   * beiden Fällen direkt die Tabellenadresse.
+   */
+  readonly weg: string;
+  /** Live-Fenster (0xC069xxxx, beim Part-/Pattern-Wechsel weg) oder Pattern-Block (0xC06Bxxxx, PTST). */
+  readonly fenster: "live" | "pattern";
+  readonly beleg: OtpBeleg;
+  /** Kurzbegründung mit Datum/Sprint, aus dem C-Kommentar. */
+  readonly quelle: string;
 }
 
 export const OTP_PARAMS: readonly OtpParamDef[] = [
@@ -85,7 +138,12 @@ export const OTP_PARAMS: readonly OtpParamDef[] = [
     max: 63,
     signed: true,
     einheit: "Halbtöne",
-    beleg: "Omnitribe 2026-08-01 A/B/A-Hörprobe Part 6, alle 16 Adressen 2026-08-02 ausgemessen",
+    enum: false,
+    weg: "schreib",
+    fenster: "live",
+    beleg: "gerätebewiesen",
+    quelle:
+      "Hörbar bestätigt an Part 6 (A/B/A mit −24, 2026-08-01); alle 16 Adressen 2026-08-02 mit map_all_parts.py ausgemessen (Sprint 136/145)",
   },
   {
     key: "cutoff",
@@ -96,7 +154,11 @@ export const OTP_PARAMS: readonly OtpParamDef[] = [
     max: 127,
     signed: false,
     einheit: "",
-    beleg: "Omnitribe 2026-08-06 hörbar (Wert 20 = dumpfer); seit Sprint 159 über CC 74 eingespeist",
+    enum: false,
+    weg: "cc 74",
+    fenster: "live",
+    beleg: "gerätebewiesen",
+    quelle: "Hörbar bestätigt 2026-08-06 (Wert 20 = dumpfer); CC-Weg 2026-08-08 gemessen, Gerät pflegt Live- und Pattern-Kopie (Sprint 159)",
   },
   {
     key: "resonance",
@@ -107,11 +169,235 @@ export const OTP_PARAMS: readonly OtpParamDef[] = [
     max: 127,
     signed: false,
     einheit: "",
-    beleg: "Omnitribe 2026-08-06 Sweep bei gestopptem Sequencer; seit Sprint 159 über CC 71 eingespeist",
+    enum: false,
+    weg: "cc 71",
+    fenster: "live",
+    beleg: "gerätebewiesen",
+    quelle: "HW-ausgemessen 2026-08-06, 16 Adressen bei gestopptem Sequencer; CC-Weg 2026-08-08 gemessen (Sprint 159)",
+  },
+  {
+    key: "level",
+    name: "Level",
+    hi: 0x00,
+    lo: 0x04,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 7",
+    fenster: "pattern",
+    beleg: "gerätebewiesen",
+    quelle:
+      "Nackter Schreibzugriff am Gerät NICHT hörbar (2026-08-07) → CC 7 eingespeist; 2026-08-08 end-to-end: GET 16/16, Einspeisung 3/3, Pegelverlauf gehört (Sprint 153)",
+  },
+  {
+    key: "pan",
+    name: "Pan",
+    hi: 0x00,
+    lo: 0x05,
+    min: -63,
+    max: 63,
+    signed: true,
+    einheit: "",
+    enum: false,
+    weg: "cc 10 (Stub: CC = Wert + 64)",
+    fenster: "pattern",
+    beleg: "gerätebewiesen",
+    quelle:
+      "Adressen 2026-08-07 per 14-Punkt-CC-Reihe bestätigt (pan = CC − 64); Versatz 64 nach Fehlmessung 2026-08-08 nachgezogen (Sprint 157) — die Kennlinie ist gemessen, der korrigierte SET selbst steht im Kommentar nicht als nachgemessen",
+  },
+  {
+    key: "voiceAssign",
+    name: "Voice Assign",
+    hi: 0x00,
+    lo: 0x06,
+    min: 0,
+    max: 3,
+    signed: false,
+    einheit: "",
+    enum: true,
+    stufen: ["Mono 1", "Mono 2", "Poly 1", "Poly 2"],
+    weg: "schreib",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle:
+      "Adresse aus Part-Basis (Sprint 171 statisch, Sprint 151 live), Werte 0–3 am Gerät abgelesen, Lesen hörbar belegt (Part 11) — aber „dass unser SCHREIBZUGRIFF dort ankommt, ist NICHT gemessen“ (Sprint 172); Chord Set/Gate Arp abgewiesen",
+  },
+  {
+    key: "egAttack",
+    name: "EG Attack",
+    hi: 0x00,
+    lo: 0x07,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 73",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset aus TABLE 6 (+0x14), CC aus der offiziellen Liste — „dass die EINGESPEISTE CC 73 am Gerät ankommt und hörbar wirkt, ist NICHT gemessen“ (Sprint 174)",
+  },
+  {
+    key: "egDecay",
+    name: "EG Decay/Release",
+    hi: 0x00,
+    lo: 0x08,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 72",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x15 zusätzlich über den Dateiweg belegt (Synthstudio-ESX-Import), CC 72 eingespeist „NICHT gemessen“ (Sprint 174)",
+  },
+  {
+    key: "oscEdit",
+    name: "Osc Edit",
+    hi: 0x00,
+    lo: 0x09,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 82",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x0B aus TABLE 6, CC 82 — „keiner der fünf ist am Gerät gemessen — weder das Byte noch die eingespeiste CC“ (Sprint 175)",
+  },
+  {
+    key: "egInt",
+    name: "EG Int",
+    hi: 0x00,
+    lo: 0x0a,
+    min: -63,
+    max: 63,
+    signed: true,
+    einheit: "",
+    enum: false,
+    weg: "cc 83 (Stub: CC = Wert + 64)",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x0F aus TABLE 6, CC 83; Versatz 64 von Pan ÜBERNOMMEN, nicht gemessen (Sprint 175)",
+  },
+  {
+    key: "modSpeed",
+    name: "Mod Speed",
+    hi: 0x00,
+    lo: 0x0b,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 86",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x11 aus TABLE 6, CC 86 — nicht am Gerät gemessen (Sprint 175)",
+  },
+  {
+    key: "modDepth",
+    name: "Mod Depth",
+    hi: 0x00,
+    lo: 0x0c,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 85",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x12 aus TABLE 6, CC 85 — nicht am Gerät gemessen (Sprint 175)",
+  },
+  {
+    key: "glide",
+    name: "Glide",
+    hi: 0x00,
+    lo: 0x0d,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 81",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x25 aus TABLE 6, CC 81 — nicht am Gerät gemessen (Sprint 175)",
+  },
+  {
+    key: "ifxEdit",
+    name: "IFX Edit",
+    hi: 0x00,
+    lo: 0x0e,
+    min: 0,
+    max: 127,
+    signed: false,
+    einheit: "",
+    enum: false,
+    weg: "cc 87",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x22 aus TABLE 6, CC 87 — „nichts davon am Gerät gemessen“ (Sprint 176)",
+  },
+  {
+    key: "mfxSend",
+    name: "MFX Send",
+    hi: 0x00,
+    lo: 0x0f,
+    min: 0,
+    max: 1,
+    signed: false,
+    einheit: "",
+    enum: true,
+    stufen: ["Off", "On"],
+    weg: "cc 105 (Stub: CC = Wert × 127)",
+    fenster: "pattern",
+    beleg: "gerätebewiesen",
+    quelle:
+      "Schalter, „am 2026-08-22 nativ belegt“: Anzeige OFF/ON, Byte +0x1B 0x00/0x01, CC 105 liefert 0→0 und ≥10→1 (Sprint 181; Sprint 176 hatte den Typ falsch) — Byte-Beleg, keine Hörprobe",
+  },
+  {
+    key: "ifxOnOff",
+    name: "IFX On/Off",
+    hi: 0x00,
+    lo: 0x10,
+    min: 0,
+    max: 1,
+    signed: false,
+    einheit: "",
+    enum: true,
+    stufen: ["Off", "On"],
+    weg: "cc 104 (Stub: CC = Wert × 127)",
+    fenster: "pattern",
+    beleg: "statisch",
+    quelle: "Offset +0x20 aus TABLE 6, CC 104 als Schwellwert — „weder dass CC 104 das Byte setzt noch die Schwelle 64 ist am Gerät gemessen“ (Sprint 177)",
   },
 ];
 
-export function otpParam(key: OtpParamDef["key"]): OtpParamDef {
+/** Anzeige-Kürzel für den Beleg-Status (Panel, README). */
+export function belegText(b: OtpBeleg): string {
+  switch (b) {
+    case "gerätebewiesen":
+      return "✔ am Gerät bewiesen (Omnitribe)";
+    case "statisch":
+      return "◐ statisch hergeleitet, heute zu hören";
+    default:
+      return "? unbestimmt";
+  }
+}
+
+/** Wert als Text: Stufenname bei enum, sonst Zahl mit Einheit. */
+export function paramWertText(p: OtpParamDef, wert: number): string {
+  if (p.enum && p.stufen && wert >= 0 && wert < p.stufen.length) return `${wert} = ${p.stufen[wert]}`;
+  return `${wert}${p.einheit ? " " + p.einheit : ""}`;
+}
+
+export function otpParam(key: OtpParamKey): OtpParamDef {
   const p = OTP_PARAMS.find((e) => e.key === key);
   if (!p) throw new Error(`unbekannter OTP-Parameter ${key}`);
   return p;
@@ -325,6 +611,59 @@ export function buildParamSet(part: number, param: OtpParamDef, wert: number): U
 
 export function buildParamGet(part: number, param: OtpParamDef): Uint8Array {
   return buildParamGetRoh(pruefePart(part), param.hi, param.lo);
+}
+
+// ─── TRANSPORT (CMD 0x0E, Sprint 166) ────────────────────────────────────────
+//
+// Der Stub speist die MIDI-Nachricht in den Empfangsweg der Firmware ein:
+// SUB 0x00 → 0xFA (Start), SUB 0x01 → 0xFC (Stop), SUB 0x0A → F2 lsb msb
+// (Song-Position-Pointer). Es gibt KEINE Antwort; Erfolg zählt in
+// otp_response_sent_count, eine Absage in error_count. Alle anderen SUBs
+// (Record, Tempo, Abfragen) zählt der Stub als error_count.
+
+/** Beats > 0x3FFF sagt der Stub ab (error_count) — der SPP trägt nur 14 Bit. */
+export const OTP_TRANSPORT_BEATS_MAX = 0x3fff;
+
+/** `F0 7D 01 02 0E 00 00 00 00 F7` */
+export function buildTransportPlay(): Uint8Array {
+  return buildFrame(OtpCmd.TRANSPORT, OtpSub.TRANSPORT_PLAY, []);
+}
+
+/** `F0 7D 01 02 0E 01 00 00 00 F7` */
+export function buildTransportStop(): Uint8Array {
+  return buildFrame(OtpCmd.TRANSPORT, OtpSub.TRANSPORT_STOP, []);
+}
+
+/**
+ * Rohform ohne Grenzprüfung: 21 Bit als 3 × 7 Bit, MSB zuerst — genau so liest
+ * der Stub `frame[8..10]`. Nur für Tests, die die Absage des Geräts nachstellen
+ * (Beat 0x4000 → `0E 0A 00 03 01 00 00 01`, Omnitribe-HW-Sitzung 2026-08-13).
+ */
+export function buildTransportPositionRoh(beats: number): Uint8Array {
+  return buildFrame(OtpCmd.TRANSPORT, OtpSub.TRANSPORT_POSITION, encode21Bit(beats));
+}
+
+/**
+ * Position in MIDI-Beats (1 Beat = 1 Sechzehntel = 6 Clocks) setzen. Werte über
+ * 0x3FFF weist der Client ab — der Stub täte es auch, aber stumm (nur error_count).
+ */
+export function buildTransportPosition(beats: number): Uint8Array {
+  if (!Number.isInteger(beats) || beats < 0 || beats > OTP_TRANSPORT_BEATS_MAX) {
+    throw new RangeError(
+      `Position ${beats} liegt ausserhalb 0..${OTP_TRANSPORT_BEATS_MAX} Beats — der Song-Position-Pointer trägt 14 Bit; der Stub sagt grössere Werte stumm ab (nur error_count)`,
+    );
+  }
+  return buildTransportPositionRoh(beats);
+}
+
+/**
+ * Takt (ab 1) und Step (1..stepsProTakt) → Beats für den SPP. Die Electribe
+ * zählt 16 Steps je Takt (Sechzehntel), also Takt 2 · Step 10 = 25 Beats.
+ */
+export function positionAusTaktStep(takt: number, step: number, stepsProTakt = 16): number {
+  if (!Number.isInteger(takt) || takt < 1) throw new RangeError(`Takt ${takt} — erlaubt ab 1`);
+  if (!Number.isInteger(step) || step < 1 || step > stepsProTakt) throw new RangeError(`Step ${step} — erlaubt 1..${stepsProTakt}`);
+  return (takt - 1) * stepsProTakt + (step - 1);
 }
 
 // ─── Antworten (Gerät → Host) ────────────────────────────────────────────────

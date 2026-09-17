@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { initOtpPanel, otpZustand, OTP_KEIN_GERAET } from "../src/gui/otpPanel";
+import { initOtpPanel, otpZustand, reglerId, OTP_KEIN_GERAET } from "../src/gui/otpPanel";
 import {
   OtpCmd,
   OtpSub,
+  OTP_PARAMS,
+  otpParam,
   buildFrame,
   buildTelemetryReport,
   parseFrame,
@@ -13,7 +15,9 @@ import {
 /**
  * Das OTP-Panel über den DOM-Stub: ohne Antwort die klare „Kein OTP“-Meldung
  * und keine Regler; mit Antwort der benannte Bericht, dann PARAM SET vom Regler
- * mit Part 1–16 auf dem Draht 0-basiert. Nichts wird beim Init gesendet.
+ * (alle 16 Registry-Parameter) mit Part 1–16 auf dem Draht 0-basiert, PARAM GET
+ * je Parameter und für alle, sichtbarer Beleg-Status, TRANSPORT Play/Stop/Position.
+ * Nichts wird beim Init gesendet.
  */
 
 type Listener = () => void;
@@ -59,10 +63,14 @@ const el = (id: string): StubElement => {
 };
 const g = globalThis as unknown as { document?: unknown };
 
-/** Klick feuern und die Promise-Kette dahinter abwarten (drei Anfragen nacheinander). */
-async function klickUndWarte(id: string): Promise<void> {
+/** Klick feuern und die Promise-Kette dahinter abwarten (bis zu 16 Anfragen nacheinander). */
+async function klickUndWarte(id: string, runden = 40): Promise<void> {
   el(id).feuere("click");
-  for (let i = 0; i < 12; i++) await new Promise((r) => setTimeout(r, 0));
+  for (let i = 0; i < runden; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+async function tick(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 let gesendet: Uint8Array[] = [];
@@ -85,7 +93,32 @@ const stubTelemetrie = buildTelemetryReport({
   otp_last_cmd: 0x09,
 });
 
-/** Antwortet wie der Coexist-Stub auf alle drei Anfragen und auf GET. */
+/**
+ * Was der Stub je ID als (uint8)*slot liefert: Osc-Pitch −24 = 232, Cutoff 20,
+ * Resonance 100, Level 100, Pan −60 = 196, Voice Assign 3, EG Attack 10,
+ * EG Decay 20, Osc Edit 30, EG Int −63 = 193, Mod Speed 40, Mod Depth 50,
+ * Glide 60, IFX Edit 70, MFX Send 1, IFX On/Off 0.
+ */
+const geraeteWerte: Record<number, number> = {
+  1: 232,
+  2: 20,
+  3: 100,
+  4: 100,
+  5: 196,
+  6: 3,
+  7: 10,
+  8: 20,
+  9: 30,
+  10: 193,
+  11: 40,
+  12: 50,
+  13: 60,
+  14: 70,
+  15: 1,
+  16: 0,
+};
+
+/** Antwortet wie der Coexist-Stub auf alle drei Anfragen und auf GET jeder Registry-ID. */
 function stubGeraet(frame: Uint8Array): Uint8Array | null {
   const f = parseFrame(frame);
   if (!f.ok) return null;
@@ -93,8 +126,8 @@ function stubGeraet(frame: Uint8Array): Uint8Array | null {
   if (f.cmd === OtpCmd.FIRMWARE_INFO && f.sub === OtpSub.FW_INFO_REQUEST) return stubFwInfo;
   if (f.cmd === OtpCmd.TELEMETRY && f.sub === OtpSub.TELEMETRY_REQUEST) return stubTelemetrie;
   if (f.cmd === OtpCmd.PARAM && f.sub === OtpSub.PARAM_GET) {
-    // Osc-Pitch −24 als (uint8) 232, Cutoff 20, Resonance 100
-    const wert = f.payload[2] === 1 ? 232 : f.payload[2] === 2 ? 20 : 100;
+    const wert = geraeteWerte[(f.payload[1] << 8) | f.payload[2]];
+    if (wert === undefined) return null;
     return buildFrame(OtpCmd.PARAM, OtpSub.PARAM_RESPONSE, [f.payload[0], f.payload[1], f.payload[2], (wert >> 7) & 0x7f, wert & 0x7f]);
   }
   return null;
@@ -106,6 +139,8 @@ beforeEach(() => {
   angefragt = [];
   antwortStub = () => null;
   g.document = { getElementById: (id: string) => el(id) };
+  el("otpPosTakt").value = "1";
+  el("otpPosStep").value = "1";
   initOtpPanel({
     sysexSenden: async (frame) => {
       gesendet.push(frame);
@@ -124,12 +159,30 @@ afterEach(() => {
 });
 
 describe("OTP-Panel", () => {
-  it("beim Init wird nichts gesendet; Part-Liste 1–16 steht", () => {
+  it("beim Init wird nichts gesendet; Part-Liste 1–16 und 16 Parameterzeilen mit Beleg stehen", () => {
     expect(gesendet).toEqual([]);
     expect(angefragt).toEqual([]);
     expect(el("otpPart").innerHTML).toContain('value="16">Part 16');
     expect(el("otpPart").innerHTML).not.toContain('value="17"');
     expect(otpZustand().verbunden).toBe(false);
+    const tabelle = el("otpReglerTabelle").innerHTML;
+    for (const p of OTP_PARAMS) {
+      expect(tabelle).toContain(`id="${reglerId(p.key)}"`);
+      expect(tabelle).toContain(`id="${reglerId(p.key)}Lesen"`);
+      expect(tabelle).toContain(`id="${reglerId(p.key)}Beleg"`);
+    }
+    expect(reglerId("oscPitch")).toBe("otpOscPitch");
+    expect(reglerId("ifxOnOff")).toBe("otpIfxOnOff");
+    // Beleg-Status sichtbar und ehrlich: Level bewiesen, EG Attack statisch
+    expect(tabelle).toContain('id="otpLevelBeleg"');
+    expect(tabelle).toMatch(/id="otpLevelBeleg"[^>]*>✔ bewiesen</);
+    expect(tabelle).toMatch(/id="otpEgAttackBeleg"[^>]*>◐ statisch</);
+    expect(tabelle).toMatch(/id="otpVoiceAssignBeleg"[^>]*>◐ statisch</);
+    expect(tabelle).toContain("NICHT gemessen");
+    // Enum-Regler zeigen ihre Stufen
+    expect(el("otpVoiceAssignWert").textContent).toBe("0 = Mono 1");
+    expect(el("otpMfxSendWert").textContent).toBe("0 = Off");
+    expect(el("otpPosBeats").textContent).toBe("0 Beats (SPP)");
   });
 
   it("ohne Antwort: genau eine Anfrage (IDENTITY), klare Meldung, keine Regler", async () => {
@@ -180,39 +233,182 @@ describe("OTP-Panel", () => {
     expect(gesendet.length).toBe(0);
     expect(el("otpOscPitchWert").textContent).toBe("-24 Halbtöne");
     el("otpOscPitch").feuere("change");
-    await new Promise((r) => setTimeout(r, 0));
+    await tick();
     expect(gesendet.length).toBe(1);
     expect(Array.from(gesendet[0])).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 5, 0x00, 0x01, 0x7f, 0x68, 5 ^ 1 ^ 0x7f ^ 0x68, 0xf7]);
-    expect(el("otpStatus").textContent).toContain("Osc-Pitch Part 6 = -24 gesendet");
+    expect(el("otpStatus").textContent).toContain("Osc-Pitch Part 6 = -24 Halbtöne gesendet");
+    expect(el("otpStatus").textContent).toContain("✔ am Gerät bewiesen");
 
     el("otpPart").value = "16";
     el("otpCutoff").value = "20";
     el("otpCutoff").feuere("change");
-    await new Promise((r) => setTimeout(r, 0));
+    await tick();
     expect(Array.from(gesendet[1].slice(8, 13))).toEqual([15, 0x00, 0x02, 0x00, 20]);
 
     el("otpResonance").value = "999"; // ausserhalb → geklemmt auf 127, kein Wurf
     el("otpResonance").feuere("change");
-    await new Promise((r) => setTimeout(r, 0));
+    await tick();
     expect(Array.from(gesendet[2].slice(8, 13))).toEqual([15, 0x00, 0x03, 0x00, 127]);
     expect(el("otpResonanceWert").textContent).toBe("127");
   });
 
-  it("Werte lesen: drei GETs, Regler springen auf die Antworten (Osc-Pitch int8-gedeutet)", async () => {
+  it("jeder der 13 weiteren Parameter sendet seinen eigenen SET-Rahmen (ID, Part, Wert), Enums mit Stufenname", async () => {
+    antwortStub = stubGeraet;
+    await klickUndWarte("otpFragen");
+    const faelle: [string, number, number, number[]][] = [
+      ["level", 1, 100, [0x00, 0x00, 0x04, 0x00, 0x64]],
+      ["pan", 2, -60, [0x01, 0x00, 0x05, 0x7f, 0x44]],
+      ["voiceAssign", 11, 3, [0x0a, 0x00, 0x06, 0x00, 0x03]],
+      ["egAttack", 6, 100, [0x05, 0x00, 0x07, 0x00, 0x64]],
+      ["egDecay", 6, 20, [0x05, 0x00, 0x08, 0x00, 0x14]],
+      ["oscEdit", 6, 127, [0x05, 0x00, 0x09, 0x00, 0x7f]],
+      ["egInt", 6, -63, [0x05, 0x00, 0x0a, 0x7f, 0x41]],
+      ["modSpeed", 1, 64, [0x00, 0x00, 0x0b, 0x00, 0x40]],
+      ["modDepth", 1, 1, [0x00, 0x00, 0x0c, 0x00, 0x01]],
+      ["glide", 1, 127, [0x00, 0x00, 0x0d, 0x00, 0x7f]],
+      ["ifxEdit", 1, 50, [0x00, 0x00, 0x0e, 0x00, 0x32]],
+      ["mfxSend", 6, 1, [0x05, 0x00, 0x0f, 0x00, 0x01]],
+      ["ifxOnOff", 16, 1, [0x0f, 0x00, 0x10, 0x00, 0x01]],
+    ];
+    for (const [key, part, wert, nutzlast] of faelle) {
+      const vorher = gesendet.length;
+      el("otpPart").value = String(part);
+      el(reglerId(key as never)).value = String(wert);
+      el(reglerId(key as never)).feuere("change");
+      await tick();
+      expect(gesendet.length, key).toBe(vorher + 1);
+      const f = gesendet[vorher];
+      expect(f.length).toBe(15);
+      expect(Array.from(f.slice(4, 8))).toEqual([0x02, 0x00, 0x00, 0x05]);
+      expect(Array.from(f.slice(8, 13)), key).toEqual(nutzlast);
+      expect(f[13]).toBe(nutzlast.reduce((a, b) => a ^ b, 0) & 0x7f);
+    }
+    expect(el("otpStatus").textContent).toContain("IFX On/Off Part 16 = 1 = On gesendet");
+    expect(el("otpStatus").textContent).toContain("◐ statisch hergeleitet");
+    expect(el("otpVoiceAssignWert").textContent).toBe("3 = Poly 2");
+    expect(el("otpPanWert").textContent).toBe("-60");
+  });
+
+  it("Enum-Regler klemmen clientseitig auf die letzte Stufe (Voice Assign 7 → 3), nichts ausserhalb geht raus", async () => {
+    antwortStub = stubGeraet;
+    await klickUndWarte("otpFragen");
+    el("otpPart").value = "1";
+    el("otpVoiceAssign").value = "7";
+    el("otpVoiceAssign").feuere("change");
+    await tick();
+    expect(gesendet.length).toBe(1);
+    expect(Array.from(gesendet[0].slice(8, 13))).toEqual([0, 0x00, 0x06, 0x00, 0x03]);
+    expect(el("otpStatus").textContent).toContain("ausserhalb der Stufen würde der Stub stumm abweisen");
+  });
+
+  it("„Alle lesen“: 16 GETs in Registry-Reihenfolge, Regler springen auf die Antworten (signed int8-gedeutet)", async () => {
     antwortStub = stubGeraet;
     await klickUndWarte("otpFragen");
     angefragt = [];
     el("otpPart").value = "3";
-    await klickUndWarte("otpLesen");
-    expect(angefragt.map((f) => Array.from(f.slice(8, 11)))).toEqual([
-      [2, 0, 1],
-      [2, 0, 2],
-      [2, 0, 3],
-    ]);
+    await klickUndWarte("otpLesen", 60);
+    expect(angefragt.length).toBe(16);
+    expect(angefragt.map((f) => Array.from(f.slice(8, 11)))).toEqual(OTP_PARAMS.map((p) => [2, p.hi, p.lo]));
+    expect(angefragt.every((f) => f.length === 13 && f[4] === 0x02 && f[5] === 0x01)).toBe(true);
     expect(el("otpOscPitch").value).toBe("-24");
     expect(el("otpCutoff").value).toBe("20");
     expect(el("otpResonance").value).toBe("100");
-    expect(el("otpStatus").textContent).toContain("Part 3 gelesen: Osc-Pitch -24, Cutoff 20, Resonance 100");
+    expect(el("otpLevel").value).toBe("100");
+    expect(el("otpPan").value).toBe("-60");
+    expect(el("otpVoiceAssign").value).toBe("3");
+    expect(el("otpVoiceAssignWert").textContent).toBe("3 = Poly 2");
+    expect(el("otpEgInt").value).toBe("-63");
+    expect(el("otpMfxSend").value).toBe("1");
+    expect(el("otpMfxSendWert").textContent).toBe("1 = On");
+    expect(el("otpIfxOnOff").value).toBe("0");
+    const s = el("otpStatus").textContent;
+    expect(s).toContain("Part 3 gelesen: Osc-Pitch -24, Cutoff 20, Resonance 100, Level 100, Pan -60, Voice Assign 3");
+    expect(s).toContain("IFX On/Off 0");
     expect(gesendet).toEqual([]);
+  });
+
+  it("„Lesen“ je Parameter: genau ein GET, Wert mit Stufenname; ohne Antwort eine ehrliche Meldung", async () => {
+    antwortStub = stubGeraet;
+    await klickUndWarte("otpFragen");
+    angefragt = [];
+    el("otpPart").value = "11";
+    await klickUndWarte("otpVoiceAssignLesen", 5);
+    expect(angefragt.length).toBe(1);
+    expect(Array.from(angefragt[0])).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x02, 0x01, 0x00, 0x03, 0x0a, 0x00, 0x06, 0x0c, 0xf7]);
+    expect(el("otpStatus").textContent).toContain("Voice Assign Part 11 = 3 = Poly 2 gelesen");
+    expect(el("otpStatus").textContent).toContain("Pattern-Block");
+
+    await klickUndWarte("otpPanLesen", 5);
+    expect(el("otpStatus").textContent).toContain("Pan Part 11 = -60 gelesen");
+    expect(el("otpStatus").textContent).toContain("int8-gedeutet");
+
+    // Stub kennt eine ID nicht (älteres Abbild): keine Antwort, Meldung nennt error_count
+    delete geraeteWerte[13];
+    try {
+      await klickUndWarte("otpGlideLesen", 5);
+      expect(el("otpStatus").textContent).toContain("Glide Part 11: keine Antwort");
+      expect(el("otpStatus").textContent).toContain("error_count");
+    } finally {
+      geraeteWerte[13] = 60;
+    }
+    expect(gesendet).toEqual([]);
+  });
+
+  it("TRANSPORT: Play und Stop senden die 10-Byte-Rahmen, nur auf Klick", async () => {
+    antwortStub = stubGeraet;
+    await klickUndWarte("otpFragen");
+    expect(gesendet).toEqual([]);
+    await klickUndWarte("otpPlay", 3);
+    expect(Array.from(gesendet[0])).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x00, 0x00, 0x00, 0x00, 0xf7]);
+    expect(el("otpStatus").textContent).toContain("TRANSPORT Play (0xFA eingespeist) gesendet");
+    await klickUndWarte("otpStop", 3);
+    expect(Array.from(gesendet[1])).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x01, 0x00, 0x00, 0x00, 0xf7]);
+    expect(el("otpStatus").textContent).toContain("keine Bestätigung");
+  });
+
+  it("TRANSPORT Position: Takt 2 · Step 10 = 25 Beats → 0E 0A 00 03 00 00 19 19; Takt 1025 wird abgewiesen", async () => {
+    antwortStub = stubGeraet;
+    await klickUndWarte("otpFragen");
+    el("otpPosTakt").value = "2";
+    el("otpPosStep").value = "10";
+    el("otpPosStep").feuere("input");
+    expect(el("otpPosBeats").textContent).toBe("25 Beats (SPP)");
+    expect(gesendet).toEqual([]);
+    await klickUndWarte("otpPosSenden", 3);
+    expect(gesendet.length).toBe(1);
+    expect(Array.from(gesendet[0])).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x0a, 0x00, 0x03, 0x00, 0x00, 0x19, 0x19, 0xf7]);
+    expect(el("otpStatus").textContent).toContain("Position Takt 2 · Step 10 = 25 Beats gesendet");
+
+    // Grenzwert: Takt 1024 · Step 16 = 16383 geht noch
+    el("otpPosTakt").value = "1024";
+    el("otpPosStep").value = "16";
+    await klickUndWarte("otpPosSenden", 3);
+    expect(gesendet.length).toBe(2);
+    expect(Array.from(gesendet[1].slice(8, 12))).toEqual([0x00, 0x7f, 0x7f, 0x00]);
+
+    // Takt 1025 = 16384 Beats: clientseitig abgewiesen, nichts gesendet
+    el("otpPosTakt").value = "1025";
+    el("otpPosStep").value = "1";
+    el("otpPosTakt").feuere("input");
+    expect(el("otpPosBeats").textContent).toContain("über 0x3FFF");
+    await klickUndWarte("otpPosSenden", 3);
+    expect(gesendet.length).toBe(2);
+    expect(el("otpStatus").textContent).toContain("Position nicht gesendet");
+    expect(el("otpStatus").textContent).toContain("error_count");
+
+    // Step 0: Eingabefehler, nichts gesendet
+    el("otpPosTakt").value = "1";
+    el("otpPosStep").value = "0";
+    await klickUndWarte("otpPosSenden", 3);
+    expect(gesendet.length).toBe(2);
+    expect(el("otpStatus").textContent).toContain("Step 0");
+  });
+
+  it("Registry und Panel stimmen überein: jeder Parameter hat Regler-Grenzen aus der Registry", () => {
+    for (const p of OTP_PARAMS) {
+      const r = el(reglerId(p.key));
+      expect([r.min, r.max, r.step], p.key).toEqual([String(p.min), String(p.max), "1"]);
+    }
+    expect(el(reglerId(otpParam("pan").key)).min).toBe("-63");
   });
 });

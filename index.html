@@ -854,9 +854,9 @@
                 <div id="bootStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit</div>
               </details>
               <details id="otpPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
-                <summary style="cursor:pointer;font-weight:600">🛰 Omnitribe (OTP) — Coexist-Firmware fragen, drei Parameter je Part setzen</summary>
-                <p class="sub" style="margin:6px 0">Omnitribe ist eine Firmware-Erweiterung für den Sampler, die neben Stock oder Hacktribe läuft und ein eigenes SysEx-Protokoll spricht (Hersteller-ID 0x7D „OTP“). Antwortet das Gerät, kennt es <code>IDENTITY</code>, <code>FIRMWARE_INFO</code> und eine <code>TELEMETRY</code>, die den Zustand des Hooks in fünf Stufen erklärt — und <code>PARAM</code> für die drei Parameter, die Omnitribe am Gerät hörbar belegt hat: Osc-Pitch, Cutoff, Resonance, je Part 1–16. Stock- und Hacktribe-Firmware ohne Hook antworten nicht; dann steht hier „Kein OTP“ und sonst nichts. Nichts sendet von allein — nur der Knopf und die Regler.</p>
-                <p class="sub" style="margin:6px 0;opacity:.8"><b>Stand 2026-09-17:</b> Rahmen und Antworten nach Omnitribes Spezifikation und Gerätebefunden gebaut, aus TekkForge heraus am Gerät noch nicht gehört. Osc-Pitch schreibt ins Live-Fenster (beim nächsten Part-/Pattern-Wechsel weg); Cutoff und Resonance gehen als Control-Change durch die Firmware und bleiben.</p>
+                <summary style="cursor:pointer;font-weight:600">🛰 Omnitribe (OTP) — Coexist-Firmware fragen, 16 Parameter je Part setzen, Transport</summary>
+                <p class="sub" style="margin:6px 0">Omnitribe ist eine Firmware-Erweiterung für den Sampler, die neben Stock oder Hacktribe läuft und ein eigenes SysEx-Protokoll spricht (Hersteller-ID 0x7D „OTP“). Antwortet das Gerät, kennt es <code>IDENTITY</code>, <code>FIRMWARE_INFO</code> und eine <code>TELEMETRY</code>, die den Zustand des Hooks in fünf Stufen erklärt — dazu <code>PARAM</code> für alle 16 Parameter der Stub-Registry je Part 1–16 und <code>TRANSPORT</code> (Play, Stop, Position). Stock- und Hacktribe-Firmware ohne Hook antworten nicht; dann steht hier „Kein OTP“ und sonst nichts. Nichts sendet von allein — nur Knöpfe und Regler.</p>
+                <p class="sub" style="margin:6px 0;opacity:.8"><b>Beleg-Status je Parameter</b> (aus den Kommentaren im Stub-C-Code, nicht aus TekkForge): <b>✔ bewiesen</b> = Omnitribe hat diesen Weg am Gerät gemessen oder gehört; <b>◐ statisch</b> = Adresse/CC aus Tabellen hergeleitet, „nicht am Gerät gemessen“ — heute zu hören. Maus über den Status zeigt die Quelle. <b>Stand 2026-09-17:</b> aus TekkForge heraus am Gerät noch nichts davon gehört.</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
                   <button id="otpFragen" class="primary" style="padding:2px 10px" title="Drei Anfragen nacheinander: IDENTITY (CMD 0x01), FIRMWARE_INFO (CMD 0x09), TELEMETRY (CMD 0x07); je 1,5 s Wartezeit. Braucht aktives MIDI und einen freien KORG-Port">Gerät fragen (IDENTITY + FIRMWARE_INFO + TELEMETRY)</button>
                 </div>
@@ -864,19 +864,20 @@
                 <div id="otpRegler" class="hidden" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
                   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                     <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Part <select id="otpPart" style="font-size:11px;padding:2px 4px"></select></label>
-                    <button id="otpLesen" class="ghost" title="PARAM GET für alle drei Parameter dieses Parts; die Regler springen auf die gelesenen Werte">Werte vom Gerät lesen</button>
-                    <span class="sub" style="margin:0;opacity:.75">Regler loslassen = PARAM SET senden</span>
+                    <button id="otpLesen" class="ghost" title="PARAM GET für alle 16 Parameter dieses Parts nacheinander; die Regler springen auf die gelesenen Werte">Alle Werte vom Gerät lesen</button>
+                    <span class="sub" style="margin:0;opacity:.75">Regler loslassen = PARAM SET senden · „Lesen“ = PARAM GET für diesen Parameter</span>
                   </div>
-                  <div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:center;margin-top:6px;max-width:520px">
-                    <label class="sub" for="otpOscPitch" style="margin:0">Osc-Pitch</label>
-                    <input id="otpOscPitch" type="range" min="-64" max="63" step="1" value="0" title="Halbtöne −64..+63, signed; ID 0x0001" />
-                    <span id="otpOscPitchWert" class="sub" style="margin:0;min-width:7em;text-align:right">0 Halbtöne</span>
-                    <label class="sub" for="otpCutoff" style="margin:0">Cutoff</label>
-                    <input id="otpCutoff" type="range" min="0" max="127" step="1" value="127" title="0..127, geht als CC 74 durch die Firmware; ID 0x0002" />
-                    <span id="otpCutoffWert" class="sub" style="margin:0;min-width:7em;text-align:right">127</span>
-                    <label class="sub" for="otpResonance" style="margin:0">Resonance</label>
-                    <input id="otpResonance" type="range" min="0" max="127" step="1" value="0" title="0..127, geht als CC 71 durch die Firmware; ID 0x0003" />
-                    <span id="otpResonanceWert" class="sub" style="margin:0;min-width:7em;text-align:right">0</span>
+                  <div id="otpReglerTabelle" style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:5px 10px;align-items:center;margin-top:6px;max-width:720px"></div>
+                  <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
+                    <div class="sub" style="margin:0 0 4px;font-weight:600">TRANSPORT (CMD 0x0E) — der Stub speist die MIDI-Nachricht in die Firmware ein</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                      <button id="otpPlay" class="ghost" title="SUB 0x00 → MIDI-Start 0xFA eingespeist. Omnitribe 2026-08-13: wirkt am Gerät">▶ Play</button>
+                      <button id="otpStop" class="ghost" title="SUB 0x01 → MIDI-Stop 0xFC eingespeist. Omnitribe 2026-08-13: wirkt am Gerät">■ Stop</button>
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Takt <input id="otpPosTakt" type="number" min="1" max="1024" step="1" value="1" style="width:5em;font-size:11px;padding:2px 4px" /></label>
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Step <input id="otpPosStep" type="number" min="1" max="16" step="1" value="1" style="width:4em;font-size:11px;padding:2px 4px" /></label>
+                      <span id="otpPosBeats" class="sub" style="margin:0;min-width:9em"></span>
+                      <button id="otpPosSenden" class="ghost" title="SUB 0x0A → Song-Position-Pointer F2 lsb msb aus (Takt−1)·16 + (Step−1) Beats; über 0x3FFF wird hier abgewiesen. Omnitribe 2026-08-13: eingespeist, aber die E2S wertet den SPP nicht aus">Position senden</button>
+                    </div>
                   </div>
                 </div>
                 <div id="otpStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit — noch nichts gesendet</div>

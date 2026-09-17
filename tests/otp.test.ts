@@ -25,6 +25,14 @@ import {
   buildParamGetRoh,
   buildParamSet,
   buildParamGet,
+  buildTransportPlay,
+  buildTransportStop,
+  buildTransportPosition,
+  buildTransportPositionRoh,
+  positionAusTaktStep,
+  OTP_TRANSPORT_BEATS_MAX,
+  belegText,
+  paramWertText,
   parseIdentityResponse,
   parseFirmwareInfoResponse,
   parseParamAntwort,
@@ -232,15 +240,31 @@ describe("OTP: PARAM set/get", () => {
     expect(() => buildParamGet(0, cutoff)).toThrow(RangeError);
   });
 
-  it("Param-IDs der Registry: Osc-Pitch 0x0001, Cutoff 0x0002, Resonance 0x0003", () => {
-    expect(OTP_PARAMS.map((p) => [p.hi, p.lo])).toEqual([
-      [0, 1],
-      [0, 2],
-      [0, 3],
+  it("Param-IDs der Registry: 16 Einträge 0x0001..0x0010 in Stub-Reihenfolge", () => {
+    expect(OTP_PARAMS.length).toBe(16);
+    expect(OTP_PARAMS.map((p) => (p.hi << 8) | p.lo)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1));
+    expect(OTP_PARAMS.map((p) => p.key)).toEqual([
+      "oscPitch",
+      "cutoff",
+      "resonance",
+      "level",
+      "pan",
+      "voiceAssign",
+      "egAttack",
+      "egDecay",
+      "oscEdit",
+      "egInt",
+      "modSpeed",
+      "modDepth",
+      "glide",
+      "ifxEdit",
+      "mfxSend",
+      "ifxOnOff",
     ]);
     expect(otpParamVonId(0, 3)?.key).toBe("resonance");
-    expect(otpParamVonId(0, 4)).toBeNull(); // Level: Registry-Eintrag am Gerät instabil, hier bewusst nicht
-    expect(() => otpParam("level" as never)).toThrow();
+    expect(otpParamVonId(0, 0x10)?.key).toBe("ifxOnOff");
+    expect(otpParamVonId(0, 0x11)).toBeNull(); // hinter dem Sweep-Ende: der Stub kennt keine ID 0x0011
+    expect(() => otpParam("chordSet" as never)).toThrow();
   });
 
   it("Wertebereiche: Osc-Pitch −64..63 signed, Cutoff/Resonance 0..127", () => {
@@ -441,5 +465,156 @@ describe("OTP: TELEMETRY (CMD 0x07)", () => {
     expect(t.felder.chk_fail_count).toBe(25);
     expect(telemetrieText(t)).not.toContain("Hook-Kontext");
     expect(parseTelemetryReport(encode7Bit(roh.slice(0, 24 * 4)))).toBeNull();
+  });
+});
+
+/**
+ * Die 13 Registry-Parameter jenseits der ersten drei: je ein fester SET-Vektor
+ * (15 Bytes, wie `otp_send_param_response` sie spiegelt), GET-Rahmen und die
+ * int8-Deutung der Antwort bei signed. Bereiche, signed/enum und der
+ * Beleg-Status stammen aus `g_otp_param_registry` und den C-Kommentaren.
+ */
+describe("OTP: Registry-Parameter 0x0004..0x0010 (SET-Vektoren, GET-Deutung, Beleg)", () => {
+  it("Bereiche, Vorzeichen, Aufzählung und Weg wie im Stub", () => {
+    const erwartet: [string, number, number, boolean, boolean, string][] = [
+      ["level", 0, 127, false, false, "cc 7"],
+      ["pan", -63, 63, true, false, "cc 10 (Stub: CC = Wert + 64)"],
+      ["voiceAssign", 0, 3, false, true, "schreib"],
+      ["egAttack", 0, 127, false, false, "cc 73"],
+      ["egDecay", 0, 127, false, false, "cc 72"],
+      ["oscEdit", 0, 127, false, false, "cc 82"],
+      ["egInt", -63, 63, true, false, "cc 83 (Stub: CC = Wert + 64)"],
+      ["modSpeed", 0, 127, false, false, "cc 86"],
+      ["modDepth", 0, 127, false, false, "cc 85"],
+      ["glide", 0, 127, false, false, "cc 81"],
+      ["ifxEdit", 0, 127, false, false, "cc 87"],
+      ["mfxSend", 0, 1, false, true, "cc 105 (Stub: CC = Wert × 127)"],
+      ["ifxOnOff", 0, 1, false, true, "cc 104 (Stub: CC = Wert × 127)"],
+    ];
+    for (const [key, min, max, signed, en, weg] of erwartet) {
+      const p = otpParam(key as never);
+      expect([p.key, p.min, p.max, p.signed, p.enum, p.weg]).toEqual([key, min, max, signed, en, weg]);
+    }
+    // Nur Osc-Pitch, Cutoff, Resonance liegen im Live-Fenster; der Rest im Pattern-Block
+    expect(OTP_PARAMS.filter((p) => p.fenster === "live").map((p) => p.key)).toEqual(["oscPitch", "cutoff", "resonance"]);
+  });
+
+  it("Beleg-Status wörtlich nach C-Kommentar: 6 × gerätebewiesen, 10 × statisch, nichts unbestimmt", () => {
+    const bewiesen = OTP_PARAMS.filter((p) => p.beleg === "gerätebewiesen").map((p) => p.key);
+    expect(bewiesen).toEqual(["oscPitch", "cutoff", "resonance", "level", "pan", "mfxSend"]);
+    const statisch = OTP_PARAMS.filter((p) => p.beleg === "statisch").map((p) => p.key);
+    expect(statisch).toEqual(["voiceAssign", "egAttack", "egDecay", "oscEdit", "egInt", "modSpeed", "modDepth", "glide", "ifxEdit", "ifxOnOff"]);
+    expect(OTP_PARAMS.some((p) => p.beleg === "unbestimmt")).toBe(false);
+    // Jede Quelle nennt Sprint oder Datum
+    for (const p of OTP_PARAMS) expect(p.quelle).toMatch(/Sprint \d+|2026-0\d-\d\d/);
+    expect(otpParam("voiceAssign").quelle).toContain("NICHT gemessen");
+    expect(otpParam("egAttack").quelle).toContain("NICHT gemessen");
+    expect(otpParam("mfxSend").quelle).toContain("2026-08-22");
+    expect(belegText("gerätebewiesen")).toContain("✔");
+    expect(belegText("statisch")).toContain("◐");
+    expect(belegText("unbestimmt")).toContain("?");
+  });
+
+  it("SET-Vektoren, byte-genau (Part 0-basiert, Wert 14 Bit, XOR über die Nutzlast)", () => {
+    const faelle: [string, number, number, number[]][] = [
+      ["level", 1, 100, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00, 0x04, 0x00, 0x64, 0x60, 0xf7]],
+      ["pan", 2, -60, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x01, 0x00, 0x05, 0x7f, 0x44, 0x3f, 0xf7]], // 0x3FC4, Byte 0xC4 = −60
+      ["pan", 1, 63, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00, 0x05, 0x00, 0x3f, 0x3a, 0xf7]],
+      ["voiceAssign", 11, 3, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x0a, 0x00, 0x06, 0x00, 0x03, 0x0f, 0xf7]], // Poly 2
+      ["egAttack", 6, 100, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x05, 0x00, 0x07, 0x00, 0x64, 0x66, 0xf7]],
+      ["egDecay", 6, 20, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x05, 0x00, 0x08, 0x00, 0x14, 0x19, 0xf7]],
+      ["oscEdit", 6, 127, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x05, 0x00, 0x09, 0x00, 0x7f, 0x73, 0xf7]],
+      ["egInt", 6, -63, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x05, 0x00, 0x0a, 0x7f, 0x41, 0x31, 0xf7]], // Byte 0xC1 = −63
+      ["egInt", 6, 63, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x05, 0x00, 0x0a, 0x00, 0x3f, 0x30, 0xf7]],
+      ["modSpeed", 1, 64, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00, 0x0b, 0x00, 0x40, 0x4b, 0xf7]],
+      ["modDepth", 1, 1, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00, 0x0c, 0x00, 0x01, 0x0d, 0xf7]],
+      ["glide", 1, 127, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00, 0x0d, 0x00, 0x7f, 0x72, 0xf7]],
+      ["ifxEdit", 1, 50, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00, 0x0e, 0x00, 0x32, 0x3c, 0xf7]],
+      ["mfxSend", 6, 1, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x05, 0x00, 0x0f, 0x00, 0x01, 0x0b, 0xf7]],
+      ["ifxOnOff", 16, 1, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x0f, 0x00, 0x10, 0x00, 0x01, 0x1e, 0xf7]],
+      ["ifxOnOff", 16, 0, [0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 0x0f, 0x00, 0x10, 0x00, 0x00, 0x1f, 0xf7]],
+    ];
+    for (const [key, part, wert, bytesErwartet] of faelle) {
+      expect(arr(buildParamSet(part, otpParam(key as never), wert)), `${key} Part ${part} = ${wert}`).toEqual(bytesErwartet);
+    }
+  });
+
+  it("Grenzen: stetige Werte ausserhalb werfen; Aufzählungen (Stub: is_enum → stille Absage) werfen hier laut", () => {
+    expect(() => buildParamSet(1, otpParam("pan"), -64)).toThrow(RangeError); // Anschlag −63 gemessen, nicht −64
+    expect(() => buildParamSet(1, otpParam("pan"), 64)).toThrow(RangeError);
+    expect(() => buildParamSet(1, otpParam("egInt"), -64)).toThrow(RangeError);
+    expect(() => buildParamSet(1, otpParam("level"), 128)).toThrow(RangeError);
+    expect(() => buildParamSet(1, otpParam("voiceAssign"), 4)).toThrow(/Voice Assign: 4/); // Chord Set 1: der Stub weist ab
+    expect(() => buildParamSet(1, otpParam("mfxSend"), 2)).toThrow(RangeError);
+    expect(() => buildParamSet(1, otpParam("ifxOnOff"), 2)).toThrow(RangeError);
+    expect(() => buildParamSet(1, otpParam("glide"), 0.5)).toThrow(RangeError);
+  });
+
+  it("GET-Rahmen 13 Bytes je Parameter; Antwort int8-gedeutet bei Pan/EG Int, uint8 sonst", () => {
+    expect(arr(buildParamGet(3, otpParam("level")))).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x02, 0x01, 0x00, 0x03, 0x02, 0x00, 0x04, 0x06, 0xf7]);
+    expect(arr(buildParamGet(3, otpParam("pan")))).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x02, 0x01, 0x00, 0x03, 0x02, 0x00, 0x05, 0x07, 0xf7]);
+    expect(arr(buildParamGet(3, otpParam("egInt")))).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x02, 0x01, 0x00, 0x03, 0x02, 0x00, 0x0a, 0x08, 0xf7]);
+    for (const p of OTP_PARAMS) expect(buildParamGet(16, p).length).toBe(13);
+
+    // Der Stub sendet (uint8)*slot: Pan −60 → Byte 0xC4 = 196 → 0x01 0x44 auf dem Draht
+    const pan = parseParamAntwort(bytes(2, 0x00, 0x05, 0x01, 0x44))!;
+    expect(pan.param?.key).toBe("pan");
+    expect(pan.roh14).toBe(196);
+    expect(pan.wert).toBe(-60);
+    // EG Int −63 → 0xC1 = 193; +63 → 63
+    expect(parseParamAntwort(bytes(5, 0x00, 0x0a, 0x01, 0x41))!.wert).toBe(-63);
+    expect(parseParamAntwort(bytes(5, 0x00, 0x0a, 0x00, 0x3f))!.wert).toBe(63);
+    // unsigned: Level 100, Voice Assign 3 = Poly 2, MFX Send 1 = On
+    expect(parseParamAntwort(bytes(0, 0x00, 0x04, 0x00, 0x64))!.wert).toBe(100);
+    const va = parseParamAntwort(bytes(10, 0x00, 0x06, 0x00, 0x03))!;
+    expect(va.part).toBe(11);
+    expect(va.wert).toBe(3);
+    expect(paramWertText(va.param!, va.wert)).toBe("3 = Poly 2");
+    expect(paramWertText(otpParam("mfxSend"), 1)).toBe("1 = On");
+    expect(paramWertText(otpParam("oscPitch"), -24)).toBe("-24 Halbtöne");
+    expect(paramWertText(otpParam("glide"), 5)).toBe("5");
+    // alle 16 IDs werden in der Antwort erkannt
+    for (const p of OTP_PARAMS) expect(parseParamAntwort(bytes(0, p.hi, p.lo, 0, 0))!.param?.key).toBe(p.key);
+  });
+});
+
+/**
+ * TRANSPORT (CMD 0x0E, Sprint 166): Play/Stop ohne Nutzlast, Position als
+ * 21 Bit MSB-zuerst; der Stub sagt Beats > 0x3FFF ab (error_count), der
+ * Client davor. Vektoren aus dem Stub-Code und der Omnitribe-HW-Sitzung 2026-08-13.
+ */
+describe("OTP: TRANSPORT (CMD 0x0E)", () => {
+  it("Play und Stop: 10-Byte-Rahmen ohne Nutzlast", () => {
+    expect(arr(buildTransportPlay())).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x00, 0x00, 0x00, 0x00, 0xf7]);
+    expect(arr(buildTransportStop())).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x01, 0x00, 0x00, 0x00, 0xf7]);
+    expect(OtpCmd.TRANSPORT).toBe(0x0e);
+    expect([OtpSub.TRANSPORT_PLAY, OtpSub.TRANSPORT_STOP, OtpSub.TRANSPORT_POSITION]).toEqual([0x00, 0x01, 0x0a]);
+  });
+
+  it("Position: Beat 25 → 0E 0A 00 03 00 00 19 19 (der echte Rahmen der Sitzung 2026-08-13)", () => {
+    expect(arr(buildTransportPosition(25))).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x0a, 0x00, 0x03, 0x00, 0x00, 0x19, 0x19, 0xf7]);
+    expect(arr(buildTransportPosition(0))).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x0a, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0xf7]);
+  });
+
+  it("Grenzwert 0x3FFF wird angenommen (00 7F 7F, CHK 0), 0x4000 abgewiesen — der Stub täte es nur stumm", () => {
+    expect(OTP_TRANSPORT_BEATS_MAX).toBe(0x3fff);
+    expect(arr(buildTransportPosition(0x3fff))).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x0a, 0x00, 0x03, 0x00, 0x7f, 0x7f, 0x00, 0xf7]);
+    expect(() => buildTransportPosition(0x4000)).toThrow(/0\.\.16383/);
+    expect(() => buildTransportPosition(0x4000)).toThrow(/error_count/);
+    expect(() => buildTransportPosition(-1)).toThrow(RangeError);
+    expect(() => buildTransportPosition(2.5)).toThrow(RangeError);
+    // Die Rohform baut den Rahmen, den die Sitzung an der CLI vorbei geschickt hat: 01 00 00, CHK 01
+    expect(arr(buildTransportPositionRoh(0x4000))).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x0e, 0x0a, 0x00, 0x03, 0x01, 0x00, 0x00, 0x01, 0xf7]);
+    expect(arr(buildTransportPositionRoh(0x1fffff).slice(8, 11))).toEqual([0x7f, 0x7f, 0x7f]);
+  });
+
+  it("Takt·Step → Beats: 16 Steps je Takt, Takt 2 · Step 10 = 25", () => {
+    expect(positionAusTaktStep(1, 1)).toBe(0);
+    expect(positionAusTaktStep(2, 10)).toBe(25);
+    expect(positionAusTaktStep(1024, 16)).toBe(16383);
+    expect(positionAusTaktStep(1025, 1)).toBe(16384); // → buildTransportPosition wirft
+    expect(() => positionAusTaktStep(0, 1)).toThrow(RangeError);
+    expect(() => positionAusTaktStep(1, 17)).toThrow(RangeError);
+    expect(() => positionAusTaktStep(1, 0)).toThrow(RangeError);
   });
 });

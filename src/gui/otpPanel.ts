@@ -1,10 +1,14 @@
 /**
  * otpPanel.ts (GUI) — Omnitribe (OTP): das Gerät nach seiner Coexist-Firmware
- * fragen und die drei am Gerät belegten Parameter je Part setzen.
+ * fragen, alle 16 Registry-Parameter je Part setzen/lesen und den Transport
+ * (Play/Stop/Position) über den Stub auslösen.
  *
  * Der Transport kommt als Hooks herein (derselbe rohe SysEx-Weg wie beim
  * Bootloader-Start): senden, senden-und-warten. Rahmen bauen und deuten macht
  * `core/otp.ts`. Nichts hier sendet von allein — nur auf Klick oder Regler.
+ *
+ * Die Parameterzeilen werden aus `OTP_PARAMS` erzeugt (eine Quelle: der Stub),
+ * je Zeile sichtbar der Beleg-Status aus dem C-Kommentar des Stubs.
  *
  * Stand 2026-09-17: aus TekkForge heraus am Gerät ungetestet.
  */
@@ -14,12 +18,18 @@ import {
   OTP_PARAMS,
   OTP_PART_MIN,
   OTP_PART_MAX,
+  OTP_TRANSPORT_BEATS_MAX,
   type OtpParamDef,
+  type OtpParamKey,
   buildIdentityRequest,
   buildFirmwareInfoRequest,
   buildTelemetryRequest,
   buildParamSet,
   buildParamGet,
+  buildTransportPlay,
+  buildTransportStop,
+  buildTransportPosition,
+  positionAusTaktStep,
   istOtpAntwort,
   parseFrame,
   parseIdentityResponse,
@@ -29,6 +39,8 @@ import {
   identityText,
   firmwareInfoText,
   telemetrieText,
+  belegText,
+  paramWertText,
   type OtpIdentity,
 } from "../core/otp";
 
@@ -45,8 +57,10 @@ export const OTP_KEIN_GERAET =
 /** Der Stub antwortet in Millisekunden; 1,5 s lassen dem USB-Treiber Luft. */
 const TIMEOUT_MS = 1500;
 
-/** Regler-IDs je Parameter (Markup in index.html). */
-const REGLER: Record<OtpParamDef["key"], string> = { oscPitch: "otpOscPitch", cutoff: "otpCutoff", resonance: "otpResonance" };
+/** Regler-ID je Parameter: `otp` + Key mit grossem Anfangsbuchstaben (otpOscPitch, otpLevel, …). */
+export function reglerId(key: OtpParamKey): string {
+  return "otp" + key.charAt(0).toUpperCase() + key.slice(1);
+}
 
 let hooks: OtpHooks | null = null;
 let identity: OtpIdentity | null = null;
@@ -64,6 +78,8 @@ const hex = (b: Uint8Array): string =>
   Array.from(b)
     .map((x) => x.toString(16).toUpperCase().padStart(2, "0"))
     .join(" ");
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** Für Tests: hat das Gerät auf IDENTITY geantwortet? */
 export function otpZustand(): { verbunden: boolean; identity: OtpIdentity | null } {
@@ -81,16 +97,17 @@ function reglerZeigen(an: boolean): void {
 }
 
 function reglerWert(p: OtpParamDef): number {
-  const r = el(REGLER[p.key]) as HTMLInputElement | null;
+  const r = el(reglerId(p.key)) as HTMLInputElement | null;
   const n = Math.round(Number(r?.value ?? "0"));
   return Math.max(p.min, Math.min(p.max, Number.isFinite(n) ? n : 0));
 }
 
 function reglerSetzen(p: OtpParamDef, wert: number): void {
-  const r = el(REGLER[p.key]) as HTMLInputElement | null;
+  const id = reglerId(p.key);
+  const r = el(id) as HTMLInputElement | null;
   if (r) r.value = String(wert);
-  const w = el(`${REGLER[p.key]}Wert`);
-  if (w) w.textContent = `${wert}${p.einheit ? " " + p.einheit : ""}`;
+  const w = el(`${id}Wert`);
+  if (w) w.textContent = paramWertText(p, wert);
 }
 
 /** Eine Anfrage, eine Antwort — null, wenn nichts (Passendes) kam. */
@@ -147,8 +164,8 @@ async function geraetFragen(): Promise<void> {
   setBericht(zeilen.join("\n"));
   reglerZeigen(true);
   setStatus(
-    `OTP antwortet — ${identityText(id)}. Regler senden PARAM SET an Part ${gewaehlterPart()} (Cutoff/Resonance wirken sofort; ` +
-      `Osc-Pitch nur, solange der Part nicht neu geladen wird).`,
+    `OTP antwortet — ${identityText(id)}. Regler senden PARAM SET an Part ${gewaehlterPart()}; „Lesen“ holt den Wert per PARAM GET. ` +
+      `SET und TRANSPORT haben keine Bestätigung — die Telemetrie zählt Erfolg in response_sent_count, Absagen in error_count.`,
   );
 }
 
@@ -166,29 +183,123 @@ async function paramSenden(p: OtpParamDef): Promise<void> {
   }
   try {
     await hooks.sysexSenden(frame);
-    setStatus(`${p.name} Part ${part} = ${wert} gesendet (${hex(frame)}) — SET hat keine Bestätigung; die Telemetrie zählt es in response_sent_count.`);
+    const wegText = p.weg === "schreib" ? "Schreibzugriff" : `als ${p.weg.toUpperCase()} eingespeist`;
+    setStatus(
+      `${p.name} Part ${part} = ${paramWertText(p, wert)} gesendet (${hex(frame)}) — ${wegText}; ${belegText(p.beleg)}. ` +
+        `SET hat keine Bestätigung${p.enum ? "; ausserhalb der Stufen würde der Stub stumm abweisen" : ""}.`,
+    );
   } catch (e) {
     setStatus(`${p.name} nicht gesendet: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-async function werteLesen(): Promise<void> {
+/** Ein PARAM GET; liefert den gedeuteten Wert oder null (keine/unpassende Antwort). */
+async function paramLesen(part: number, p: OtpParamDef): Promise<number | null> {
+  const raw = await frage(buildParamGet(part, p), OtpCmd.PARAM, OtpSub.PARAM_RESPONSE);
+  const f = raw ? parseFrame(raw) : null;
+  const a = f?.ok ? parseParamAntwort(f.payload) : null;
+  if (!a || a.hi !== p.hi || a.lo !== p.lo) return null;
+  const wert = Math.max(p.min, Math.min(p.max, a.wert));
+  reglerSetzen(p, wert);
+  return a.wert;
+}
+
+async function einenLesen(p: OtpParamDef): Promise<void> {
   if (!hooks) return;
   const part = gewaehlterPart();
-  setStatus(`Lese Part ${part}…`);
+  setStatus(`Lese ${p.name} Part ${part}…`);
+  const w = await paramLesen(part, p);
+  setStatus(
+    w === null
+      ? `${p.name} Part ${part}: keine Antwort — ${identity ? "Registry-Eintrag im geflashten Stub unbekannt oder unvermessen (error_count zählt)" : OTP_KEIN_GERAET}.`
+      : `${p.name} Part ${part} = ${paramWertText(p, w)} gelesen (GET liest die Tabellenadresse im ${p.fenster === "live" ? "Live-Fenster" : "Pattern-Block"}${p.signed ? ", int8-gedeutet" : ""}).`,
+  );
+}
+
+async function alleLesen(): Promise<void> {
+  if (!hooks) return;
+  const part = gewaehlterPart();
+  setStatus(`Lese Part ${part} (${OTP_PARAMS.length} × PARAM GET)…`);
   const ergebnis: string[] = [];
   for (const p of OTP_PARAMS) {
-    const raw = await frage(buildParamGet(part, p), OtpCmd.PARAM, OtpSub.PARAM_RESPONSE);
-    const f = raw ? parseFrame(raw) : null;
-    const a = f?.ok ? parseParamAntwort(f.payload) : null;
-    if (a && a.hi === p.hi && a.lo === p.lo) {
-      reglerSetzen(p, Math.max(p.min, Math.min(p.max, a.wert)));
-      ergebnis.push(`${p.name} ${a.wert}`);
-    } else {
-      ergebnis.push(`${p.name} –`);
-    }
+    const w = await paramLesen(part, p);
+    ergebnis.push(w === null ? `${p.name} –` : `${p.name} ${w}`);
   }
-  setStatus(`Part ${part} gelesen: ${ergebnis.join(", ")} (GET liest das Live-Fenster; „–“ = keine Antwort).`);
+  setStatus(`Part ${part} gelesen: ${ergebnis.join(", ")} (GET liest die Tabellenadressen; „–“ = keine Antwort).`);
+}
+
+// ─── TRANSPORT ──────────────────────────────────────────────────────────────
+
+async function transportSenden(frame: Uint8Array, was: string): Promise<void> {
+  if (!hooks) return;
+  try {
+    await hooks.sysexSenden(frame);
+    setStatus(`TRANSPORT ${was} gesendet (${hex(frame)}) — keine Bestätigung; Erfolg zählt in response_sent_count, Absage in error_count.`);
+  } catch (e) {
+    setStatus(`TRANSPORT ${was} nicht gesendet: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+function positionEingabe(): { takt: number; step: number } {
+  const takt = Number((el("otpPosTakt") as HTMLInputElement | null)?.value ?? "1");
+  const step = Number((el("otpPosStep") as HTMLInputElement | null)?.value ?? "1");
+  return { takt, step };
+}
+
+function positionAnzeigen(): void {
+  const z = el("otpPosBeats");
+  if (!z) return;
+  const { takt, step } = positionEingabe();
+  try {
+    const beats = positionAusTaktStep(takt, step);
+    z.textContent = beats > OTP_TRANSPORT_BEATS_MAX ? `${beats} Beats — über 0x3FFF, wird abgewiesen` : `${beats} Beats (SPP)`;
+  } catch (e) {
+    z.textContent = e instanceof Error ? e.message : String(e);
+  }
+}
+
+async function positionSenden(): Promise<void> {
+  const { takt, step } = positionEingabe();
+  let frame: Uint8Array;
+  let beats: number;
+  try {
+    beats = positionAusTaktStep(takt, step);
+    frame = buildTransportPosition(beats);
+  } catch (e) {
+    setStatus(`Position nicht gesendet: ${e instanceof Error ? e.message : String(e)}`);
+    return;
+  }
+  await transportSenden(frame, `Position Takt ${takt} · Step ${step} = ${beats} Beats`);
+}
+
+// ─── Aufbau ──────────────────────────────────────────────────────────────────
+
+function belegSymbol(p: OtpParamDef): string {
+  return p.beleg === "gerätebewiesen" ? "✔" : p.beleg === "statisch" ? "◐" : "?";
+}
+
+/** Eine Zeile je Parameter: Name · Regler · Wert · Lesen · Beleg. */
+function zeilenMarkup(): string {
+  return OTP_PARAMS.map((p) => {
+    const id = reglerId(p.key);
+    const idHex = `0x${((p.hi << 8) | p.lo).toString(16).toUpperCase().padStart(4, "0")}`;
+    const wegText = p.weg === "schreib" ? "nackter Schreibzugriff" : `eingespeiste ${p.weg.toUpperCase()}`;
+    const titel = escapeHtml(
+      `${p.name} — ID ${idHex}, ${p.min}..${p.max}${p.signed ? " signed (int8)" : ""}${p.enum ? ", Aufzählung (ausserhalb = Absage)" : ""}; ` +
+        `Weg: ${wegText}; ${p.fenster === "live" ? "Live-Fenster" : "Pattern-Block"}`,
+    );
+    const belegTitel = escapeHtml(`${belegText(p.beleg)} — ${p.quelle}`);
+    const stufen = p.enum && p.stufen ? ` (${p.stufen.map((s, i) => `${i}=${s}`).join(", ")})` : "";
+    return (
+      `<label class="sub" for="${id}" style="margin:0" title="${titel}">${escapeHtml(p.name)}</label>` +
+      `<input id="${id}" type="range" min="${p.min}" max="${p.max}" step="1" value="${p.min < 0 ? 0 : p.min}" title="${titel}${escapeHtml(stufen)}" />` +
+      `<span id="${id}Wert" class="sub" style="margin:0;min-width:7em;text-align:right"></span>` +
+      `<button id="${id}Lesen" class="ghost" style="padding:1px 6px;font-size:11px" title="PARAM GET ${idHex} für den gewählten Part">Lesen</button>` +
+      `<span id="${id}Beleg" class="sub" style="margin:0;cursor:help" title="${belegTitel}">${belegSymbol(p)} ${escapeHtml(
+        p.beleg === "gerätebewiesen" ? "bewiesen" : p.beleg === "statisch" ? "statisch" : "unbestimmt",
+      )}</span>`
+    );
+  }).join("");
 }
 
 export function initOtpPanel(h: OtpHooks): void {
@@ -199,12 +310,15 @@ export function initOtpPanel(h: OtpHooks): void {
   if (part && !part.innerHTML) {
     part.innerHTML = Array.from({ length: OTP_PART_MAX }, (_, i) => `<option value="${i + 1}">Part ${i + 1}</option>`).join("");
   }
+  const tabelle = el("otpReglerTabelle");
+  if (tabelle && !tabelle.innerHTML) tabelle.innerHTML = zeilenMarkup();
 
   el("otpFragen")?.addEventListener("click", () => void geraetFragen());
-  el("otpLesen")?.addEventListener("click", () => void werteLesen());
+  el("otpLesen")?.addEventListener("click", () => void alleLesen());
 
   for (const p of OTP_PARAMS) {
-    const r = el(REGLER[p.key]) as HTMLInputElement | null;
+    const id = reglerId(p.key);
+    const r = el(id) as HTMLInputElement | null;
     if (!r) continue;
     r.min = String(p.min);
     r.max = String(p.max);
@@ -214,5 +328,15 @@ export function initOtpPanel(h: OtpHooks): void {
     // hundert Rahmen pro Sekunde in den Stub, der pro MIDI-Byte läuft.
     r.addEventListener("input", () => reglerSetzen(p, reglerWert(p)));
     r.addEventListener("change", () => void paramSenden(p));
+    el(`${id}Lesen`)?.addEventListener("click", () => void einenLesen(p));
+    const b = el(`${id}Beleg`);
+    if (b && !b.textContent) b.textContent = `${belegSymbol(p)} ${p.beleg}`;
   }
+
+  el("otpPlay")?.addEventListener("click", () => void transportSenden(buildTransportPlay(), "Play (0xFA eingespeist)"));
+  el("otpStop")?.addEventListener("click", () => void transportSenden(buildTransportStop(), "Stop (0xFC eingespeist)"));
+  el("otpPosSenden")?.addEventListener("click", () => void positionSenden());
+  el("otpPosTakt")?.addEventListener("input", positionAnzeigen);
+  el("otpPosStep")?.addEventListener("input", positionAnzeigen);
+  positionAnzeigen();
 }
