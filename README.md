@@ -1109,11 +1109,32 @@ Flags und Generation live bestätigt. Die Batterie-Stufe ist am Netzteil 0 — d
 (Stufe ≥ 2) wird dann laut Firmware über den Listener-State umgangen; mit Batterien steht die
 Probe noch aus.
 
-**⚠ Zum Bootloader selbst:** Der Handoff des Bootloader-Stands `3a0581f` patcht `0xC0025E4F` — das
-passt nur zum Synth-Image; mit Sampler-/Hacktribe-Firmware stürzt „Boot from flash“ beim
-Sequencer-Stop ab (dort liegt das `ldmfd` von `DisableMidiClockPulseGeneration`). Installation
-ist ein Ein-Schuss-Weg (Rückweg nur JTAG). Gebaut und rundgeprüft, **nicht** ins Gerät gespielt:
-`Firmware\vanasoft-bootloader\BOOT-vanasoft-2026-09-16.VSB`.
+**Zum Bootloader selbst (Stand 2026-09-17):** Der Handoff des vanasoft-Stands `3a0581f` patchte
+`0xC0025E4F` bedingungslos — im Synth-Image das `BEQ` des Produkt-ID-Tors, im Sampler-Image aber
+das `ldmfd` von `DisableMidiClockPulseGeneration` → Absturz beim Sequencer-Stop. Der eigene Umbau
+(Freetribe-Klon, Commits `c3172e4`/`44acb7f`/`ec3342e`) erkennt das Image am „PTST“-Marker
+(Sampler 0xC00CFF58, Synth 0xC00BA8B0) und patcht nur beim Synth-Image; der SD-Datei-Boot
+überspringt den VSB-Kopf; und der Bootloader kann jede KORG-`.VSB` (SYSTEM/BOOT/PCM/USER/SLICE)
+aus seinem Datei-Browser direkt in ihre Flash-Region schreiben (Dialog „Boot / Flash“ bzw. „Write to
+flash?“, Nutzlast erst komplett ins DDR, dann ein Schreiblauf mit Rücklesen). Alles kompiliert und im
+ELF geprüft, **am Gerät noch nicht gebootet.** Installation bleibt ein Ein-Schuss-Weg (Rückweg nur
+JTAG). Build: `Firmware\bootloader-flashinstall-2026-09-17\` (bin/elf/map, Boot-Sektor, BOOT.VSB).
+
+## Bootloader aus TekkForge heraus (2026-09-17, am Gerät ungetestet)
+
+Vier Knöpfe im Boot-Sektor-Bereich der Firmware-Werkbank, alle hinter einer getippten Bestätigung
+(„JA“), keiner schreibt Flash:
+
+| Knopf | Was passiert | Kern |
+|---|---|---|
+| **▶ Über SysEx starten (bootloader.bin, flüchtig)** | Hacktribes Loader-Weg nachgebaut (`execute_freetribe.py`): Pivot 0x58 → Magic `64 01 23 45 67` / Antwort `76 54 32 10` → 256-Byte-Häppchen 0x54 → Execute 0x57 an 0x80000000. Ohne Magic-Bestätigung fließt kein Häppchen. Das Gerät ist danach Bootloader, bis es aus/ein geht. | `core/bootloaderStart.ts` |
+| **Firmware per USB-DFU starten (flüchtig)** | Läuft der Bootloader (USB e2fb:1802), lädt TekkForge eine SYSTEM.VSB per DFU 1.1 (Alt 3 „Debug Firmware“, 4096-B-Blöcke, GETSTATUS-Polling) ins DDR; das Manifest löst den Sprung aus — der USB-Abriss dabei ist der Erfolgsfall. Keine SD nötig. WebUSB; `main.cjs` gibt nur e2fb:1802 frei. **Windows:** einmalig WinUSB (Zadig) auf das DFU-Interface. | `core/dfu.ts`, `gui/dfuUsb.ts` |
+| **Bootloader-SD vorbereiten (Dateien wählen…)** | Ordnet die Auswahl ein (SYSTEM → Boot/Flash, BOOT/PCM/USER/SLICE → Flash, rohes 2-MiB-Image → Boot), sortiert aus, was nicht auf die Karte gehört (bootloader.bin, Boot-Sektor, .syx), legt `Bootloader-SD-<Datum>` mit LIESMICH (Menü-Legende, Regeln, Rückweg, MD5) an. | `core/bootloaderSd.ts` |
+| **SysEx-Datei senden (.syx)** | Zerlegt und prüft die Datei (F0…F7, Datenbytes < 0x80), zählt OTP-/KORG-Frames, sendet frameweise mit Pause; bei OTP-Frames 300 ms Warten auf die Quittung `05 03`, eine Fehlerantwort stoppt. Für Omnitribes Modul-Bündel. | `core/syxDatei.ts` |
+
+Tests: `tests/bootloader-start.test.ts`, `dfu.test.ts`, `bootloader-sd.test.ts`, `syx-datei.test.ts`
+(Fake-Transporte). Offen, nur am Gerät prüfbar: ob der Hacktribe-Loader nach dem Pivot über USB-MIDI
+antwortet (oder nur über TRS), und ob Windows das DFU-Interface ohne Zadig hergibt.
 
 ## Omnitribe (OTP) — Stand 2026-09-17, am Gerät aus TekkForge ungetestet
 

@@ -800,6 +800,15 @@
                   <span class="sub" style="margin:0;opacity:.75">kapert das Gerät bis zum Neustart — nur klicken, wenn du am Gerät bist</span>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Wenn der Bootloader läuft (Menü am Display, USB e2fb:1802):</b></span>
+                  <button id="bootDfuStart" class="ghost" title="Eine SYSTEM.VSB (oder ein rohes 2-MiB-Image) per USB-DFU (Alt 3 „Debug Firmware“) in den laufenden Bootloader laden; der startet sie flüchtig aus dem DDR. Keine SD-Karte nötig, nichts wird geflasht. Windows: braucht den WinUSB-Treiber auf dem DFU-Interface (einmalig mit Zadig).">Firmware per USB-DFU starten (flüchtig)…</button>
+                  <input id="bootDfuIn" type="file" accept=".vsb,.VSB,.bin,.BIN" class="hidden" />
+                  <button id="bootSdVorbereiten" class="ghost" title="Dateien wählen (SYSTEM/PCM/BOOT/USER/SLICE.VSB, rohe Images, gern bootloader.bin dazu): TekkForge ordnet sie ein, legt Downloads\TekkForge\Bootloader-SD-<Datum> mit LIESMICH an und sagt, was nicht auf die Karte gehört. Schreibt nichts auf die SD.">Bootloader-SD vorbereiten (Dateien wählen…)</button>
+                  <input id="bootSdVorbereitenIn" type="file" multiple class="hidden" />
+                  <button id="bootSyxSenden" class="ghost" title="Eine .syx-Datei (z. B. Omnitribes Modul-Bündel) frameweise an die LAUFENDE Firmware senden — 20 ms Pause je Frame, bei OTP-Frames wird auf die Quittung gewartet, eine Fehlerantwort stoppt. Module landen im RAM, nichts wird geflasht.">SysEx-Datei senden (.syx)…</button>
+                  <input id="bootSyxIn" type="file" accept=".syx,.SYX" class="hidden" />
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
                   <span class="sub" style="margin:0"><b>Vom Gerät lesen (Hacktribe, nur lesen):</b></span>
                   <button id="bootKennungenGeraet" class="ghost" title="Gerätestempel (elec2USR/ele2sUSR), Main-Version und PCM-Kopf direkt aus dem Flash lesen — SysEx 0x55, ein paar Dutzend Bytes">Kennungen</button>
                   <button id="bootSektorGeraet" class="ghost" title="Den ersten 128-KiB-Block (AIS + Werks-SBL) aus dem Flash lesen — der Rückweg, BEVOR ein eigener Bootloader installiert wird; wird sofort als .bin und BOOT.VSB in Downloads\TekkForge\Firmware gesichert (512 Häppchen, ~60 s)">Boot-Sektor (128 KiB)</button>
