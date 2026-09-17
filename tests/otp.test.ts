@@ -58,6 +58,10 @@ import {
   OTP_MODULE_REAL_PROBES,
   OTP_MODULE_REAL_HEADERS,
   OTP_MODULE_MAX_ID,
+  buildModuleChunk,
+  buildModuleCommit,
+  buildModuleUpload,
+  OTP_MODULE_CHUNK_RAW,
 } from "../src/core/otp";
 
 /**
@@ -712,6 +716,46 @@ describe("OTP: Modul-Lader Stufe 1 (CMD 0x05)", () => {
       expect(p.sub).toBe(OtpSub.MODULE_BLOCK);
       for (const b of frame) expect(b).toBeLessThan(0x100);
     }
+  });
+
+  it("Stufe 2: buildModuleChunk trägt 21-Bit-Offset und 7-of-8-Daten, dekodierbar", () => {
+    const roh = Uint8Array.from({ length: 50 }, (_, i) => (i * 7) & 0xff);
+    const f = buildModuleChunk(3, 0x12345, roh);
+    const p = parseFrame(f);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.cmd).toBe(OtpCmd.MODULE);
+    expect(p.sub).toBe(OtpSub.MODULE_CHUNK);
+    expect(p.payload[0]).toBe(3);
+    const off = (p.payload[1] << 14) | (p.payload[2] << 7) | p.payload[3];
+    expect(off).toBe(0x12345);
+    expect(Array.from(decode7Bit(p.payload.slice(4)))).toEqual(Array.from(roh));
+    for (const b of p.payload) expect(b).toBeLessThan(0x80); // Nutzlast 7-Bit-sauber
+    expect(() => buildModuleChunk(0, 0x200000, roh)).toThrow(RangeError); // > 21 Bit
+  });
+
+  it("Stufe 2: buildModuleUpload = N lückenlose Chunks + Commit, reassembliert zum Original", () => {
+    const modul = Uint8Array.from({ length: 500 }, (_, i) => (i * 13 + 7) & 0xff);
+    const frames = buildModuleUpload(2, modul);
+    expect(frames.length).toBe(Math.ceil(500 / OTP_MODULE_CHUNK_RAW) + 1); // Chunks + Commit
+    // letzter Frame = Commit
+    const commit = parseFrame(frames[frames.length - 1]);
+    expect(commit.ok && commit.sub).toBe(OtpSub.MODULE_COMMIT);
+    if (commit.ok) expect(commit.payload[0]).toBe(2);
+    // Chunks lückenlos zusammensetzen und mit dem Original vergleichen
+    const slot: number[] = [];
+    let erwartet = 0;
+    for (let i = 0; i < frames.length - 1; i++) {
+      const p = parseFrame(frames[i]);
+      if (!p.ok) throw new Error("Chunk");
+      const off = (p.payload[1] << 14) | (p.payload[2] << 7) | p.payload[3];
+      expect(off).toBe(erwartet); // lückenlos
+      const dec = decode7Bit(p.payload.slice(4));
+      for (let k = 0; k < dec.length; k++) slot[off + k] = dec[k];
+      erwartet = off + dec.length;
+    }
+    expect(erwartet).toBe(500);
+    expect(slot).toEqual(Array.from(modul));
   });
 
   it("buildModuleHeaderBlock == buildModuleBlock(id, buildModuleHeader(...))", () => {

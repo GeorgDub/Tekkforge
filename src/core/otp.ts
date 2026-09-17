@@ -63,6 +63,9 @@ export const OtpSub = {
   /** Sprint 183: Modul-Block (Host → Gerät) und ACK (Gerät → Host). */
   MODULE_BLOCK: 0x01,
   MODULE_ACK: 0x03,
+  /** Sprint 184 (Stufe 2, hinter Firmware-Flag): Chunk ins DDR und Commit. */
+  MODULE_CHUNK: 0x02,
+  MODULE_COMMIT: 0x04,
 } as const;
 
 export const OTP_PART_MIN = 1;
@@ -1059,6 +1062,10 @@ export const OTP_MODULE_STATUS: Readonly<Record<number, string>> = {
   0x06: "module_id ≠ Header-id",
   0x07: "api-Zeiger ist 0",
   0x08: "Header zu kurz (< 44 Byte dekodiert)",
+  // Stufe 2 (Chunk/Commit):
+  0x09: "unvollständig — Gesamtlänge ≠ code_size (Chunk verloren?)",
+  0x0a: "passt nicht in den Slot (code+bss > Slot-Größe)",
+  0x0b: "Chunk nicht lückenlos (Offset ≠ bisher empfangen)",
 } as const;
 
 export interface OtpModuleAck {
@@ -1146,3 +1153,47 @@ export const OTP_MODULE_REAL_PROBES: readonly OtpModuleProbe[] = OTP_MODULE_REAL
   erwarteterStatus: m.id < OTP_MODULE_MAX_ID ? 0x00 : 0x02,
   bytes: () => buildModuleBlock(m.id, m.header),
 }));
+
+// ─── Modul-Lader Stufe 2 (CMD 0x05 SUB 0x02/0x04) ────────────────────────────
+//
+// Gegenstelle: `handle_module_chunk` / `handle_module_commit` in Omnitribes
+// `sysex_layer1_hook.c`, NUR unter -DOMNITRIBE_MODULE_STAGE2 kompiliert. Diese
+// Builder sind die Host-Vorbereitung: ein ganzes Modul wird chunk-weise ins DDR
+// geladen (der 264-B-Stub-Puffer fasst kein volles Modul) und dann committet.
+// Der Stub führt nichts aus, solange nicht zusätzlich das EXEC-Flag frei ist.
+
+/** Empfohlene rohe Chunk-Größe: 7-of-8 davon plus Rahmen bleibt unter dem 264-B-Puffer. */
+export const OTP_MODULE_CHUNK_RAW = 180;
+
+/** Ein Chunk: SUB 0x02, Payload `[module_id][off_hi7][off_mid7][off_lo7][7-of-8 data]` (21-Bit-Offset). */
+export function buildModuleChunk(moduleId: number, offset: number, rawChunk: Uint8Array | readonly number[]): Uint8Array {
+  if (offset < 0 || offset > 0x1fffff) throw new RangeError(`Chunk-Offset ${offset} ausserhalb 0..0x1FFFFF (21 Bit)`);
+  const enc = encode7Bit(rawChunk);
+  return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_CHUNK, [
+    moduleId & 0x7f,
+    (offset >> 14) & 0x7f,
+    (offset >> 7) & 0x7f,
+    offset & 0x7f,
+    ...enc,
+  ]);
+}
+
+/** Commit: SUB 0x04, Payload `[module_id]` — platziert/reloziert das empfangene Modul. */
+export function buildModuleCommit(moduleId: number): Uint8Array {
+  return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_COMMIT, [moduleId & 0x7f]);
+}
+
+/**
+ * Ein ganzes Modul als Frame-Folge: N Chunks (lückenlos, in Reihenfolge) plus
+ * ein abschliessender Commit. `moduleBytes` sind die rohen Modul-Bytes aus
+ * `build/modules/<name>.bin` (Header + code + data; die BSS füllt der Stub).
+ */
+export function buildModuleUpload(moduleId: number, moduleBytes: Uint8Array | readonly number[], rawPerChunk = OTP_MODULE_CHUNK_RAW): Uint8Array[] {
+  const data = moduleBytes instanceof Uint8Array ? moduleBytes : Uint8Array.from(moduleBytes);
+  const frames: Uint8Array[] = [];
+  for (let off = 0; off < data.length; off += rawPerChunk) {
+    frames.push(buildModuleChunk(moduleId, off, data.subarray(off, off + rawPerChunk)));
+  }
+  frames.push(buildModuleCommit(moduleId));
+  return frames;
+}
