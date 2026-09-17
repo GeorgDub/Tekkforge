@@ -1223,11 +1223,29 @@ Was die Bytes bestimmt hat — und was davon **Omnitribes** Befund ist, nicht un
 | Osc-Pitch schreibt ins Live-Fenster (beim Part-/Pattern-Wechsel weg); Cutoff/Resonance gehen seit Sprint 159 als CC 74/71 durch die Firmware, der Part ist der MIDI-Kanal | Omnitribe 2026-08-06/08 |
 | Unbekannte SUBs = Stille (nur Timeout), SET/TRANSPORT haben keine Bestätigung — die Telemetrie zählt sie in `otp_response_sent_count` | `otp_protocol.md` §Silence-Policy, Stub-Dispatch |
 
-**Bewusst weggelassen:** STATE_DUMP, PATTERN, STREAM, WAVETABLE, FX/Groove (0x10), Modul-Lader
-(0x05), Chord-Slots, Echo-Schutz und Throttle-Queue der Bridge — der Stub hat dafür keinen Handler
+### Modul-Lader Stufe 1 (CMD 0x05, Sprint 183)
+
+Seit dem 2026-09-17 hat der Stub einen **Modul-Lader Stufe 1**: der Dispatch-Zweig `0x05` SUB `0x01`
+empfängt einen Modul-Block, dekodiert den 44-Byte-**OTMR**-Header (7-of-8, wie `encode7Bit`) und
+**validiert ihn nur** — Magic, API-Version, `module_id`, api-Zeiger ≠ 0 —, setzt Statuszähler und
+antwortet mit einem ACK (`0x05` SUB `0x03`, Nutzlast `[status, id, block]`). Stufe 1 **führt nichts
+aus** (kein `init()`/`deinit()`, kein Sprung auf den empfangenen api-Zeiger) und kopiert **nichts** nach
+`0xC6100000` — diese DDR-Region ist laut Omnitribes Speicherkarte BF523-Audio-Abbild plus Mailbox und am
+laufenden MOD132 nicht als frei vermessen. Damit ist ein Build mit diesem Zweig gefahrlos flüchtig
+bootbar. Modul-Ausführung wäre Stufe 2 (freies DDR erst per read-only `0x52`-Vermessung, dann `on_nrpn`
+im MIDI-Kontext) und hängt an einem Compile-Flag, das standardmäßig aus ist.
+
+Das Panel „Omnitribe (OTP)“ hat dafür vier Sonden-Knöpfe: **Gültiges Test-Modul** (erwartet Status
+`0x00`), **Falsche Magic** (`0x04`), **Kein api-Zeiger** (`0x07`), **Falsche Header-id** (`0x06`). Jeder
+Knopf zeigt den zurückgemeldeten Status und ob er zum erwarteten passt — das ist der Beleg „der
+Modul-Lader läuft“, ohne je empfangenen Code auszuführen. Gegenstelle: `buildModuleBlock` /
+`parseModuleAck` in `core/otp.ts`, Stub `handle_module_block_stage1`.
+
+**Bewusst weggelassen:** STATE_DUMP, PATTERN, STREAM, WAVETABLE, FX/Groove (0x10), Chord-Slots,
+Echo-Schutz und Throttle-Queue der Bridge — der Stub hat dafür keinen Handler
 (hier gibt es keinen Notify-Strom und keinen Sweep; gesendet wird beim Loslassen).
 
-**Claim-Boundary:** 59 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
+**Claim-Boundary:** 65 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
 SynthStudio-Testvektoren, den Beispielrahmen der Spezifikation und je einem festen Byte-Vektor pro
 Parameter und TRANSPORT-Kommando — byte-genau, aber **noch keine Antwort aus TekkForge am Gerät
 gehört**. Offen, nur am Gerät prüfbar: ob der KORG-Port die 0x7D-Antworten unverändert durchreicht,
