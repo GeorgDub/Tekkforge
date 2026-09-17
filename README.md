@@ -1235,17 +1235,22 @@ laufenden MOD132 nicht als frei vermessen. Damit ist ein Build mit diesem Zweig 
 bootbar. Modul-Ausführung wäre Stufe 2 (freies DDR erst per read-only `0x52`-Vermessung, dann `on_nrpn`
 im MIDI-Kontext) und hängt an einem Compile-Flag, das standardmäßig aus ist.
 
-Das Panel „Omnitribe (OTP)“ hat dafür vier Sonden-Knöpfe: **Gültiges Test-Modul** (erwartet Status
-`0x00`), **Falsche Magic** (`0x04`), **Kein api-Zeiger** (`0x07`), **Falsche Header-id** (`0x06`). Jeder
-Knopf zeigt den zurückgemeldeten Status und ob er zum erwarteten passt — das ist der Beleg „der
-Modul-Lader läuft“, ohne je empfangenen Code auszuführen. Gegenstelle: `buildModuleBlock` /
-`parseModuleAck` in `core/otp.ts`, Stub `handle_module_block_stage1`.
+Das Panel „Omnitribe (OTP)“ hat dafür zwei Knopfreihen. **Synthetische Sonden** treffen je einen
+Validierungszweig: **Gültiges Test-Modul** (`0x00`), **Falsche Magic** (`0x04`), **Kein api-Zeiger**
+(`0x07`), **Falsche Header-id** (`0x06`). **Echte kompilierte Modul-Header** aus `build/modules/*.bin`
+(modmatrix, arpeggiator, granular, wavetable, chord → `0x00`; `audio_input_routing` id 21 → `0x02`, zeigt
+die Stub-Grenze `MAX_ID=16` an echten Daten) belegen den stärkeren Anspruch: der Stub validiert einen
+echten Modul-Header. Nur der 44-B-Kopf wird gesendet — ein ganzes Modul (140–2508 B) passt nicht in den
+264-B-Stub-Puffer, das kann erst Stufe 2 mit Chunk-Empfang ins DDR. Jeder Knopf zeigt Status und ob er
+passt; das ist der Beleg „der Modul-Lader läuft“, ohne je empfangenen Code auszuführen. Das Panel-Layout
+ist am 2026-09-17 in der echten Electron-App gegengeprüft (`scripts/otp-render-check.mjs`, ohne MIDI/Port).
+Gegenstelle: `buildModuleBlock` / `parseModuleAck` in `core/otp.ts`, Stub `handle_module_block_stage1`.
 
 **Bewusst weggelassen:** STATE_DUMP, PATTERN, STREAM, WAVETABLE, FX/Groove (0x10), Chord-Slots,
 Echo-Schutz und Throttle-Queue der Bridge — der Stub hat dafür keinen Handler
 (hier gibt es keinen Notify-Strom und keinen Sweep; gesendet wird beim Loslassen).
 
-**Claim-Boundary:** 65 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
+**Claim-Boundary:** 73 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
 SynthStudio-Testvektoren, den Beispielrahmen der Spezifikation und je einem festen Byte-Vektor pro
 Parameter und TRANSPORT-Kommando — byte-genau, aber **noch keine Antwort aus TekkForge am Gerät
 gehört**. Offen, nur am Gerät prüfbar: ob der KORG-Port die 0x7D-Antworten unverändert durchreicht,
