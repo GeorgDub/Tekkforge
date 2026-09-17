@@ -431,7 +431,7 @@ describe("OTP-Panel", () => {
 });
 
 describe("OTP-Panel: Modul-Lader Stufe 1", () => {
-  it("beide Knopfreihen werden erzeugt: 4 synthetische + 6 echte, mit Labels", () => {
+  it("beide Knopfreihen werden erzeugt: 5 synthetische + 20 echte, mit Labels", () => {
     const html = el("otpModulKnoepfe").innerHTML;
     // Alle synthetischen und echten Knopf-ids sind da.
     OTP_MODULE_PROBES.forEach((_, i) => expect(html).toContain(`id="otpModulSyn${i}"`));
@@ -463,13 +463,18 @@ describe("OTP-Panel: Modul-Lader Stufe 1", () => {
     expect(s).toContain("NICHT ausgeführt");
   });
 
-  it("echtes Modul jenseits der id-Grenze (audio_input_routing, id 21) → ACK 0x02 abgewiesen", async () => {
+  it("synthetische Grenzsonde id 32 → ACK 0x02 abgewiesen; audio_input_routing (id 21) ist jetzt gültig", async () => {
     antwortStub = stubGeraet;
-    const idx = OTP_MODULE_REAL_PROBES.findIndex((p) => p.key === "real-audio_input_routing");
-    await klickUndWarte(`otpModulReal${idx}`, 5);
-    const s = el("otpStatus").textContent;
+    const g = OTP_MODULE_PROBES.findIndex((p) => p.key === "idgrenze");
+    await klickUndWarte(`otpModulSyn${g}`, 5);
+    let s = el("otpStatus").textContent;
     expect(s).toContain("✔"); // erwartet 0x02 und bekommt 0x02 → passt
     expect(s).toContain("abgewiesen");
+    const r = OTP_MODULE_REAL_PROBES.findIndex((p) => p.key === "real-audio_input_routing");
+    await klickUndWarte(`otpModulReal${r}`, 5);
+    s = el("otpStatus").textContent;
+    expect(s).toContain("✔");
+    expect(s).toContain("gültig");
   });
 
   it("synthetische Sonde „Falsche Magic“ → ACK 0x04", async () => {

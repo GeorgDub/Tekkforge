@@ -35,12 +35,14 @@ try {
   });
   console.log(`Modul-Knoepfe: ${info.count}   Container ${info.docW}px, Inhalt ${info.scrollW}px`);
   for (const b of info.buttons) console.log(`  ${b.id.padEnd(16)} "${b.label}"  ${b.w}x${b.h}px${b.disabled?" DISABLED":""}`);
-  if (info.count !== 10) fail(`erwartet 10 Knoepfe, gefunden ${info.count}`);
+  if (info.count !== 25) fail(`erwartet 25 Knoepfe (5 synthetisch + 20 echt), gefunden ${info.count}`);
   for (const b of info.buttons) { if (b.w<=0||b.h<=0) fail(`${b.id} nicht sichtbar (${b.w}x${b.h})`); if (b.disabled) fail(`${b.id} disabled`); }
   if (info.overflow) fail(`Modul-Container laeuft ueber (Inhalt ${info.scrollW} > ${info.docW})`);
   const labels = info.buttons.map(b=>b.label).join("|");
   if (!/modmatrix/.test(labels)) fail("modmatrix fehlt");
   if (!/audio_input_routing/.test(labels)) fail("audio_input_routing fehlt");
+  if (!/audio_test/.test(labels)) fail("audio_test (id 30, hoechste id) fehlt");
+  if (!/id 32/.test(labels)) fail("Grenzsonde id 32 fehlt");
   const box = await win.$("#otpModulKnoepfe");
   if (box) await box.screenshot({ path: OUT }).then(()=>console.log(`Screenshot: ${OUT}`)).catch(e=>fail("Screenshot: "+e.message));
   console.log(code===0 ? "RENDER-CHECK: OK" : "RENDER-CHECK: FEHLER");

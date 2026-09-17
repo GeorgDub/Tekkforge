@@ -1237,9 +1237,10 @@ im MIDI-Kontext) und hängt an einem Compile-Flag, das standardmäßig aus ist.
 
 Das Panel „Omnitribe (OTP)“ hat dafür zwei Knopfreihen. **Synthetische Sonden** treffen je einen
 Validierungszweig: **Gültiges Test-Modul** (`0x00`), **Falsche Magic** (`0x04`), **Kein api-Zeiger**
-(`0x07`), **Falsche Header-id** (`0x06`). **Echte kompilierte Modul-Header** aus `build/modules/*.bin`
-(modmatrix, arpeggiator, granular, wavetable, chord → `0x00`; `audio_input_routing` id 21 → `0x02`, zeigt
-die Stub-Grenze `MAX_ID=16` an echten Daten) belegen den stärkeren Anspruch: der Stub validiert einen
+(`0x07`), **Falsche Header-id** (`0x06`). Eine fünfte synthetische Sonde, **id 32**, zeigt die Stub-Grenze
+(`MAX_ID=32`, die Breite des Bitfelds; die frühere 16 war ein Planungswert des Loaders, der mit dem
+Modulbestand nicht mitgewachsen war). **Echte kompilierte Modul-Header** aus `build/modules/*.bin`, alle
+zwanzig gebauten Module (ids 0–30) → `0x00`, belegen den stärkeren Anspruch: der Stub validiert einen
 echten Modul-Header. Nur der 44-B-Kopf wird gesendet — ein ganzes Modul (140–2508 B) passt nicht in den
 264-B-Stub-Puffer, das kann erst Stufe 2 mit Chunk-Empfang ins DDR. Jeder Knopf zeigt Status und ob er
 passt; das ist der Beleg „der Modul-Lader läuft“, ohne je empfangenen Code auszuführen. Das Panel-Layout

@@ -701,8 +701,8 @@ describe("OTP: Modul-Lader Stufe 1 (CMD 0x05)", () => {
     expect(idH[6] | (idH[7] << 8)).toBe(5);
   });
 
-  it("OTP_MODULE_PROBES: vier Sonden, jede mit erwartetem Status und sauberem Block", () => {
-    expect(OTP_MODULE_PROBES.map((s) => s.erwarteterStatus)).toEqual([0x00, 0x04, 0x07, 0x06]);
+  it("OTP_MODULE_PROBES: fünf Sonden (inkl. Grenze id 32), jede mit erwartetem Status und sauberem Block", () => {
+    expect(OTP_MODULE_PROBES.map((s) => s.erwarteterStatus)).toEqual([0x00, 0x04, 0x07, 0x06, 0x02]);
     for (const sonde of OTP_MODULE_PROBES) {
       const frame = sonde.bytes();
       const p = parseFrame(frame);
@@ -724,7 +724,7 @@ describe("OTP: Modul-Lader Stufe 1 (CMD 0x05)", () => {
 
 describe("OTP: Echte Modul-Header-Sonden (OTP_MODULE_REAL_PROBES)", () => {
   it("jeder echte Header ist 44 B, OTMR-Magic, id passt, api ≠ 0", () => {
-    expect(OTP_MODULE_REAL_HEADERS.length).toBe(6);
+    expect(OTP_MODULE_REAL_HEADERS.length).toBe(20);
     for (const m of OTP_MODULE_REAL_HEADERS) {
       const h = m.header;
       expect(h.length).toBe(44);
@@ -735,14 +735,18 @@ describe("OTP: Echte Modul-Header-Sonden (OTP_MODULE_REAL_PROBES)", () => {
     }
   });
 
-  it("erwarteter Status folgt der MAX_ID-Grenze: id<16 → 0x00, id≥16 → 0x02", () => {
+  it("alle 20 echten Module liegen unter der Grenze 32 → 0x00; die Grenze zeigt die synthetische Sonde id 32", () => {
+    expect(OTP_MODULE_MAX_ID).toBe(32);
     for (const s of OTP_MODULE_REAL_PROBES) {
       const m = OTP_MODULE_REAL_HEADERS.find((x) => `real-${x.name}` === s.key)!;
-      expect(s.erwarteterStatus).toBe(m.id < OTP_MODULE_MAX_ID ? 0x00 : 0x02);
+      expect(m.id).toBeLessThan(OTP_MODULE_MAX_ID);
+      expect(s.erwarteterStatus).toBe(0x00);
     }
-    // Genau eine Sonde jenseits der Grenze (audio_input_routing, id 21).
-    const jenseits = OTP_MODULE_REAL_PROBES.filter((s) => s.erwarteterStatus === 0x02);
-    expect(jenseits.map((s) => s.key)).toEqual(["real-audio_input_routing"]);
+    expect(OTP_MODULE_REAL_HEADERS.map((m) => m.id)).toContain(30); // audio_test, hoechste id
+    const grenze = OTP_MODULE_PROBES.find((s) => s.key === "idgrenze")!;
+    expect(grenze.erwarteterStatus).toBe(0x02);
+    const p = parseFrame(grenze.bytes());
+    expect(p.ok && p.payload[0]).toBe(32);
   });
 
   it("jede echte Sonde baut einen gültigen 0x05-Block, dekodiert zum Header zurück", () => {
