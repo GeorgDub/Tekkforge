@@ -37,7 +37,7 @@ const REIHENFOLGE: VsbArt[] = ["SYSTEM", "BOOT", "PCM", "USER", "SLICE"];
 const hex2 = (b: Uint8Array): string => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 /** Prüft die Dateien gegen die Variante des Geräts und baut Pfade + LIESMICH. */
-export function baueSdPaket(dateien: PaketDatei[], variante: Variante, opts: { sdOrdner?: string; stempel?: string; md5?: (b: Uint8Array) => string } = {}): SdPaket {
+export function baueSdPaket(dateien: PaketDatei[], variante: Variante, opts: { sdOrdner?: string; stempel?: string; md5?: (b: Uint8Array) => string; identitaetQuelle?: "Gerätestempel" | "Auswahl"; hinweis?: string } = {}): SdPaket {
   const sdOrdner = opts.sdOrdner ?? "Hacktribe";
   const stempel = opts.stempel ?? new Date().toISOString().slice(0, 10);
   const basis = `SD-Update-${stempel}`;
@@ -54,14 +54,17 @@ export function baueSdPaket(dateien: PaketDatei[], variante: Variante, opts: { s
     out.push({ pfad: `${basis}\\KORG\\${sdOrdner}\\System\\${dateiname}`, bytes: d.bytes });
   }
   const alleOk = pruefungen.every((p) => p.ok);
+  const quelle = opts.identitaetQuelle ?? "Gerätestempel";
+  const dateiListe = pruefungen.map((p) => `\`${p.dateiname}\``).join(" und ");
   const z: string[] = [
     `# SD-Update-Paket — ${stempel}`,
     "",
-    `Den Ordner \`KORG\` komplett auf die SD-Karte kopieren (Ziel: \`KORG\\${sdOrdner}\\System\\\`; vorhandene Dateien gleichen Namens vorher wegsichern).`,
+    ...(opts.hinweis ? [opts.hinweis, ""] : []),
+    `Kopiere aus diesem Ordner die Datei${pruefungen.length > 1 ? "en" : ""} ${dateiListe} nach \`KORG\\${sdOrdner}\\System\\\` auf der SD-Karte (vorhandene Dateien gleichen Namens vorher wegsichern). Einen etwaigen \`backups\\\`-Unterordner NICHT mitkopieren — er gehört nicht aufs Gerät.`,
     "Dann am Gerät: DATA UTILITY → SOFTWARE UPDATE. Das Gerät flasht in der Reihenfolge System → BOOT → PCM → USER → SLICE, fehlende Dateien werden übersprungen.",
     "Gerät am Netzteil lassen und nicht ausschalten; die Batterie-Stufe muss ≥ 2 sein (am Netzteil zählt der Listener-State).",
     "",
-    `Geprüft für: ${variante === "synth" ? "electribe 2 (Synth, Identität 0x123)" : "electribe 2 sampler (Identität 0x124)"} — ${alleOk ? "alle Dateien bestehen die Kopfprüfung, das Gerät nähme sie an." : "⚠ mindestens eine Datei fällt durch (siehe Tabelle) — NICHT einspielen."}`,
+    `Geprüft für: ${variante === "synth" ? "electribe 2 (Synth, Identität 0x123)" : "electribe 2 sampler (Identität 0x124)"} (Variante ${quelle === "Gerätestempel" ? "aus dem Gerätestempel gelesen" : "⚠ aus der Auswahl gewählt, NICHT vom Gerät gelesen — vor dem Flashen bestätigen"}) — ${alleOk ? "alle Dateien bestehen die Kopfprüfung, das Gerät nähme sie an." : "⚠ mindestens eine Datei fällt durch (siehe Tabelle) — NICHT einspielen."}`,
     "",
     "| Datei | Kopf-Name | Identität | Länge | Prüfung | Herkunft" + (opts.md5 ? " | MD5" : "") + " |",
     "|---|---|---|---|---|---" + (opts.md5 ? "|---" : "") + "|",

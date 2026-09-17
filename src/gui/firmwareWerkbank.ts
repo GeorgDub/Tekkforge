@@ -1809,6 +1809,7 @@ async function bootSdPaket(pcmDatei: File): Promise<void> {
   bootStatus("Lese Gerätestempel…");
   const k = await liesFlashKennungen(lesen);
   const variante = k.variante ?? ((document.getElementById("bootIdentitaet") as HTMLSelectElement | null)?.value === "synth" ? "synth" : "sampler");
+  const identitaetQuelle = k.variante ? "Gerätestempel" : "Auswahl";
   const probe = await probeHaeppchen(lesen);
   const t0 = Date.now();
   const sys = await liesRegionVomGeraet(lesen, "SYSTEM", standardKopf(variante, "SYSTEM"), {
@@ -1822,7 +1823,12 @@ async function bootSdPaket(pcmDatei: File): Promise<void> {
       { art: "PCM", bytes: pcm, herkunft: pcmDatei.name },
     ],
     variante,
-    { stempel: bootStempel(), md5: md5Hex },
+    {
+      stempel: bootStempel(),
+      md5: md5Hex,
+      identitaetQuelle,
+      hinweis: `Zweck: die im Flash liegende Klangdatei durch \`${pcmDatei.name}\` ersetzen. Die App liest nur; geflasht wird ausschließlich am Gerät. Prüfe die Tabelle unten (Länge, MD5), bevor du kopierst.`,
+    },
   );
   for (const d of paket.dateien) {
     const i = d.pfad.lastIndexOf("\\");

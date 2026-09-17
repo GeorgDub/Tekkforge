@@ -27,6 +27,7 @@ describe("baueSdPaket", () => {
     ]);
     expect(p.pruefungen.map((x) => x.art)).toEqual(["SYSTEM", "PCM"]);
     expect(p.liesmich).toMatch(/DATA UTILITY → SOFTWARE UPDATE/);
+    expect(p.liesmich).toMatch(/aus dem Gerätestempel gelesen/);
     expect(p.liesmich).toMatch(/electribe 2 sampler/);
     expect(p.liesmich).toMatch(/✅ ok/);
   });
@@ -41,5 +42,11 @@ describe("baueSdPaket", () => {
     const p = baueSdPaket([{ art: "SLICE", bytes: datei("SLICE", "sampler", 0x1000), herkunft: "Gerät" }], "sampler", { stempel: "2026-09-17", md5: () => "abc123" });
     expect(p.liesmich).toMatch(/`abc123`/);
     expect(p.dateien[0].pfad).toMatch(/SLICE\.VSB$/);
+  });
+  it("markiert eine geratene Identität und trägt den Hinweis oben ein", () => {
+    const p = baueSdPaket([{ art: "SYSTEM", bytes: datei("SYSTEM", "sampler", 0x200000), herkunft: "Gerät" }], "sampler", { stempel: "2026-09-17", identitaetQuelle: "Auswahl", hinweis: "Zweck: TEST-PCM ersetzen." });
+    expect(p.liesmich).toMatch(/Zweck: TEST-PCM ersetzen\./);
+    expect(p.liesmich).toMatch(/aus der Auswahl gewählt, NICHT vom Gerät gelesen/);
+    expect(p.liesmich).toMatch(/backups.*NICHT mitkopieren/);
   });
 });
