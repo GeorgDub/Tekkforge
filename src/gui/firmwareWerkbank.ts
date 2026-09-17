@@ -31,8 +31,8 @@ export interface WerkbankHooks {
   globalLive?(): Promise<Uint8Array | null>;
   /** Rohen SysEx-Frame senden, ohne auf Antwort zu warten (Loader-Pivot/-Execute). */
   sysexSenden?(frame: Uint8Array): Promise<void>;
-  /** Rohen SysEx-Frame senden und auf die erste Antwort warten (Loader-Magic/-Häppchen). */
-  sysexAnfrage?(frame: Uint8Array, timeoutMs: number): Promise<Uint8Array>;
+  /** Rohen SysEx-Frame senden und auf die erste Antwort warten, die `akzeptiere` erfüllt (Loader-Magic/-Häppchen). */
+  sysexAnfrage?(frame: Uint8Array, akzeptiere: (b: Uint8Array) => boolean, timeoutMs: number): Promise<Uint8Array>;
 }
 let hooks: WerkbankHooks | null = null;
 /** Eigene DSP-Patches aus Dateien oder Bauplaenen; das Register kommt dazu. */
@@ -1876,7 +1876,7 @@ async function bootStartFluechtig(f: File): Promise<void> {
 
   const io: LoaderIO = {
     sende: (frame) => hooks!.sysexSenden!(frame),
-    sendeUndEmpfange: (frame, timeoutMs) => hooks!.sysexAnfrage!(frame, timeoutMs),
+    sendeUndEmpfange: (frame, akzeptiere, timeoutMs) => hooks!.sysexAnfrage!(frame, akzeptiere, timeoutMs),
     warte: (ms) => new Promise((r) => setTimeout(r, ms)),
   };
   bootStatus("Pivot gesendet — warte auf den Loader-Handshake…");

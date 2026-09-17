@@ -25,7 +25,7 @@
  * 4-Byte-Folge irgendwo im Frame gesucht, der Häppchen-ACK als 0x21 im Frame. Die AUSGEHENDEN
  * Frames sind dagegen voll über `buildFrame`/`syxEnc` (e2sysex.ts) belegt und getestet.
  */
-import { buildFrame, syxEnc, E2_PRODUCT_ID_SAMPLER, type E2SysexOptions } from "./e2sysex";
+import { buildFrame, syxEnc, parseAck, E2_PRODUCT_ID_SAMPLER, type E2SysexOptions } from "./e2sysex";
 
 export const LOADER_CMD = { pivot: 0x58, data: 0x54, execute: 0x57, magic: 0x64 } as const;
 /** Magic-Handshake: gesendet wird `64 01 23 45 67`. */
@@ -68,10 +68,17 @@ export function istMagicAntwort(bytes: Uint8Array | number[] | null | undefined)
   return false;
 }
 
-/** True, wenn der Häppchen-ACK 0x21 im Antwort-Frame steht (nach dem Kopf, vor F7). */
+/**
+ * True, wenn der Frame den Häppchen-ACK 0x21 trägt. Zuerst an der msgId-Position (Index 6) über
+ * parseAck — so quittiert ein KORG-E2-Frame eindeutig, statt dass irgendein 0x21-Datenbyte irgendwo
+ * im Frame fälschlich als ACK gilt. Nur wenn parseAck den Frame nicht als E2-Rahmen erkennt, wird
+ * ersatzweise nach 0x21 gesucht (der Loader nutzt evtl. eine andere Rahmung als KORG).
+ */
 export function istHaeppchenAck(bytes: Uint8Array | number[] | null | undefined): boolean {
   if (!bytes || bytes.length === 0) return false;
   const b = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+  const ack = parseAck(b);
+  if (ack !== null) return ack === LOADER_ACK;
   for (let i = 0; i < b.length; i++) if (b[i] === LOADER_ACK) return true;
   return false;
 }
@@ -104,8 +111,13 @@ export function buildExecute(addr: number = OC_RAM_START, opts?: LoaderOpts): Ui
 
 /** Ein-/Ausgabe-Kanal zum Gerät; die GUI reicht hier den echten MIDI-Transport herein. */
 export interface LoaderIO {
-  /** Frame senden und auf EINE Antwort warten (Timeout in ms). */
-  sendeUndEmpfange(frame: Uint8Array, timeoutMs: number): Promise<Uint8Array>;
+  /**
+   * Frame senden und auf die erste Antwort warten, die `akzeptiere` erfüllt (Timeout in ms).
+   * WICHTIG: Der Transport muss Frames, die `akzeptiere` NICHT erfüllen, überspringen (weiterhören),
+   * nicht mit ihnen auflösen — sonst quittiert ein Streu-Frame (z. B. Firmware-Ausgabe aus dem
+   * Pivot-Fenster) fälschlich den Schritt. Wirft/rejectet bei Timeout.
+   */
+  sendeUndEmpfange(frame: Uint8Array, akzeptiere: (b: Uint8Array) => boolean, timeoutMs: number): Promise<Uint8Array>;
   /** Frame senden, ohne auf Antwort zu warten (Pivot, Execute — danach verschwindet das Gerät). */
   sende(frame: Uint8Array): Promise<void>;
   /** Warten (ms). */
@@ -162,31 +174,24 @@ export async function starteBootloaderFluechtig(
   await io.sende(buildPivot(opts));
   await io.warte(opts.pivotWarteMs ?? 1000);
 
-  // 2. Magic-Handshake. Ohne Bestätigung wird NICHTS weiter geschickt.
-  let antwort: Uint8Array;
+  // 2. Magic-Handshake. Der Transport wartet gezielt auf das Magic-Wort und überspringt Streu-Frames
+  //    (z. B. Firmware-Ausgabe, die noch aus dem Pivot-Fenster in der Eingangs-Warteschlange liegt).
+  //    Ohne Bestätigung wird NICHTS weiter geschickt.
   try {
-    antwort = await io.sendeUndEmpfange(buildMagicTest(opts), timeout);
+    await io.sendeUndEmpfange(buildMagicTest(opts), istMagicAntwort, timeout);
   } catch {
-    return fail("magic", "Keine Antwort auf den Magic-Test. Pivot hat vermutlich nicht gegriffen; "
-      + "es wurde NICHTS weiter gesendet. Gerät aus- und wieder einschalten stellt die Firmware her.");
-  }
-  if (!istMagicAntwort(antwort)) {
-    return fail("magic", "Magic-Antwort `76 54 32 10` fehlt — Gerät ist NICHT im Loader. "
-      + "Kein Häppchen gesendet. Gerät aus- und wieder einschalten stellt die Firmware her.");
+    return fail("magic", "Keine Magic-Antwort `76 54 32 10` — Gerät ist NICHT im Loader (Pivot hat "
+      + "vermutlich nicht gegriffen). Es wurde KEIN Häppchen gesendet. "
+      + "Gerät aus- und wieder einschalten stellt die Firmware her.");
   }
 
-  // 3. Häppchen fortlaufend laden.
+  // 3. Häppchen fortlaufend laden; je Häppchen gezielt auf den 0x21-ACK warten.
   for (let i = 0; i < gesamt; i++) {
-    let ack: Uint8Array;
     try {
-      ack = await io.sendeUndEmpfange(buildDataChunk(haeppchen[i], opts), timeout);
+      await io.sendeUndEmpfange(buildDataChunk(haeppchen[i], opts), istHaeppchenAck, timeout);
     } catch {
-      return fail("daten", `Keine Antwort auf Häppchen ${i + 1}/${gesamt}. Übertragung abgebrochen; `
-        + "Gerät hängt im Loader, bis es aus- und wieder eingeschaltet wird.", i);
-    }
-    if (!istHaeppchenAck(ack)) {
-      return fail("daten", `Häppchen ${i + 1}/${gesamt} nicht mit 0x21 quittiert. Abgebrochen; `
-        + "Gerät hängt im Loader, bis es aus- und wieder eingeschaltet wird.", i);
+      return fail("daten", `Häppchen ${i + 1}/${gesamt} nicht mit 0x21 quittiert (Timeout/Fehler). `
+        + "Übertragung abgebrochen; Gerät hängt im Loader, bis es aus- und wieder eingeschaltet wird.", i);
     }
     opts.fortschritt?.(i + 1, gesamt);
   }

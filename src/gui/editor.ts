@@ -1823,7 +1823,8 @@ function setupRamPanel(): void {
     sysexSenden: async (frame: Uint8Array) => {
       await midi.sendAsync(frame);
     },
-    sysexAnfrage: (frame: Uint8Array, timeoutMs: number) => requestSysex(midi, frame, () => true, timeoutMs),
+    sysexAnfrage: (frame: Uint8Array, akzeptiere: (b: Uint8Array) => boolean, timeoutMs: number) =>
+      requestSysex(midi, frame, akzeptiere, timeoutMs),
   });
 }
 

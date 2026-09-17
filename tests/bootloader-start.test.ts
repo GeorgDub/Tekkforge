@@ -60,9 +60,13 @@ describe("Antwort-Prüfung (tolerant)", () => {
     expect(istMagicAntwort(new Uint8Array())).toBe(false);
     expect(istMagicAntwort(null)).toBe(false);
   });
-  it("erkennt den Häppchen-ACK 0x21", () => {
+  it("erkennt den Häppchen-ACK 0x21 an der msgId-Position", () => {
     expect(istHaeppchenAck(Uint8Array.from([0xf0, 0x42, 0x30, 0x00, 0x01, 0x24, 0x21, 0xf7]))).toBe(true);
-    expect(istHaeppchenAck(Uint8Array.from([0xf0, 0x42, 0x22, 0xf7]))).toBe(false); // 0x22 = Fehler
+    expect(istHaeppchenAck(Uint8Array.from([0xf0, 0x42, 0x30, 0x00, 0x01, 0x24, 0x22, 0xf7]))).toBe(false); // 0x22 = Fehler
+  });
+  it("lässt sich NICHT von einem 0x21-Datenbyte an falscher Stelle täuschen", () => {
+    // Gültiger E2-Frame, msgId 0x40, 0x21 nur als Datenbyte weiter hinten → KEIN ACK.
+    expect(istHaeppchenAck(Uint8Array.from([0xf0, 0x42, 0x30, 0x00, 0x01, 0x24, 0x40, 0x21, 0x21, 0xf7]))).toBe(false);
   });
 });
 
@@ -92,13 +96,19 @@ function fakeIO(antworten: { magic?: Uint8Array; ack?: Uint8Array; magicWirft?: 
   const io: LoaderIO = {
     async sende(f) { gesendet.push(f); },
     async warte() { /* kein echtes Warten im Test */ },
-    async sendeUndEmpfange(f) {
+    // Modelliert den echten Transport: wartet auf einen Frame, der `akzeptiere` erfüllt; erfüllt die
+    // vorgegebene Antwort das Prädikat nicht, kam kein passender Frame → Timeout (throw).
+    async sendeUndEmpfange(f, akzeptiere) {
       gefragt.push(f);
       if (f[6] === LOADER_MAGIC[0]) {
         if (antworten.magicWirft) throw new Error("timeout");
-        return antworten.magic ?? new Uint8Array();
+        const a = antworten.magic ?? new Uint8Array();
+        if (!akzeptiere(a)) throw new Error("kein passender Frame");
+        return a;
       }
-      return antworten.ack ?? new Uint8Array();
+      const a = antworten.ack ?? new Uint8Array();
+      if (!akzeptiere(a)) throw new Error("kein passender Frame");
+      return a;
     },
   };
   return { io, gesendet, gefragt };
