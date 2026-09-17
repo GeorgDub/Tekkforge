@@ -1172,7 +1172,7 @@ nimmt die unteren 8); `cc_bias`/`cc_scale` rechnet der Stub erst für die einges
 
 | ID | Parameter | Bereich | signed | Weg im Stub | Fenster | Beleg | Quelle (C-Kommentar) |
 |---|---|---|---|---|---|---|---|
-| 0x0001 | Osc-Pitch | −64..63 Halbtöne | ja | Schreibzugriff | Live | ✔ | A/B/A-Hörprobe Part 6 (2026-08-01), 16 Adressen 2026-08-02 ausgemessen |
+| 0x0001 | Osc-Pitch | −64..63 Halbtöne | ja | Schreibzugriff | Live | ◐ | **2026-09-17 am Coexist NICHT live-wirksam:** 16 Adressen neu ausgemessen (Part 2 = 0xC0693E5E), Schreibzugriff landet (per 0x52 verifiziert), aber die Engine spielt aus einer berechneten Playback-Rate — nur die Panel-Funktion rechnet neu, Osc-Pitch hat weder CC noch NRPN. Firmware-Grenze, kein Adressfehler → statisch |
 | 0x0002 | Cutoff | 0..127 | – | CC 74 eingespeist | Live | ✔ | hörbar 2026-08-06 (20 = dumpfer); CC-Weg 2026-08-08 gemessen (Sprint 159) |
 | 0x0003 | Resonance | 0..127 | – | CC 71 eingespeist | Live | ✔ | 16 Adressen 2026-08-06 bei gestopptem Sequencer; CC-Weg 2026-08-08 |
 | 0x0004 | Level | 0..127 | – | CC 7 eingespeist | Pattern | ✔ | Schreibzugriff am Gerät NICHT hörbar (2026-08-07) → CC; 2026-08-08 end-to-end, Pegelverlauf gehört (Sprint 153) |
@@ -1220,7 +1220,7 @@ Was die Bytes bestimmt hat — und was davon **Omnitribes** Befund ist, nicht un
 | Am Gerät läuft der Stub `sysex_layer1_hook.c`, nicht der Loader; er antwortet auf IDENTITY und FIRMWARE_INFO mit derselben 15-Byte-Minimalform `00 01 00 00 00` (v0.1.0, keine Flags). Der Parser kennt zusätzlich das volle Loader-Layout (Git-Hash, Module, Flags) | Omnitribe Stub-Quelle; `docs/midi/otp_firmware_info.md` |
 | TELEMETRY-Antwort ist SUB 0x02 (143 Bytes), **nicht** die 0x7F-Form aus `sysex_schema.json` (Loader) | Stub `otp_send_telemetry`, `otp_codec.py` |
 | PARAM: Wert 14 Bit, das Gerät nimmt die unteren 8 Bit (signed als int8); die GET-Antwort liefert das Byte als 0..255 — −24 kommt als 232 und wird hier als int8 gedeutet, nicht 14-Bit-signed wie im Python-Codec | Stub `otp_param_clamp` / `otp_send_param_response` |
-| Osc-Pitch schreibt ins Live-Fenster (beim Part-/Pattern-Wechsel weg); Cutoff/Resonance gehen seit Sprint 159 als CC 74/71 durch die Firmware, der Part ist der MIDI-Kanal | Omnitribe 2026-08-06/08 |
+| Osc-Pitch schreibt ins Live-Fenster, aber **2026-09-17 am Coexist nicht hörbar** (Engine liest berechnete Playback-Rate, kein CC/NRPN → über Speicher nicht live-modulierbar); Cutoff/Resonance gehen seit Sprint 159 als CC 74/71 durch die Firmware, der Part ist der MIDI-Kanal | Omnitribe 2026-08-06/08, Testabend 2026-09-17 |
 | Unbekannte SUBs = Stille (nur Timeout), SET/TRANSPORT haben keine Bestätigung — die Telemetrie zählt sie in `otp_response_sent_count` | `otp_protocol.md` §Silence-Policy, Stub-Dispatch |
 
 ### Modul-Lader Stufe 1 (CMD 0x05, Sprint 183)
@@ -1258,12 +1258,13 @@ Omnitribe `docs/firmware/modul_lader_stufe2_2026-09-17.md`.
 Echo-Schutz und Throttle-Queue der Bridge — der Stub hat dafür keinen Handler
 (hier gibt es keinen Notify-Strom und keinen Sweep; gesendet wird beim Loslassen).
 
-**Claim-Boundary:** 73 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
+**Claim-Boundary:** 75 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
 SynthStudio-Testvektoren, den Beispielrahmen der Spezifikation und je einem festen Byte-Vektor pro
-Parameter und TRANSPORT-Kommando — byte-genau, aber **noch keine Antwort aus TekkForge am Gerät
-gehört**. Offen, nur am Gerät prüfbar: ob der KORG-Port die 0x7D-Antworten unverändert durchreicht,
-ob 1,5 s Wartezeit reichen, ob die ◐-Parameter hörbar wirken, und ob `requestSysex` die Antwort
-neben laufendem Korg-Verkehr sauber herausfischt. Der Nutzer testet selbst; der Port ist Single-Client.
+Parameter und TRANSPORT-Kommando — byte-genau. **Am 2026-09-17 erstmals TekkForge-Werkzeuge am
+Gerät gelaufen** (Coexist-Build, USB-MIDI): der KORG-Port reicht die 0x7D-Antworten durch,
+Cutoff/Resonance sind hörbar, Osc-Pitch ist als nicht live-wirksam entlarvt (s. Tabelle), und der
+Modul-Lader Stufe 1+2 ist am Gerät bewiesen (Ausführung hing — Module nicht selbst-tragend). Voller
+Bericht: Omnitribe `docs/hwtest/testabend_2026-09-17.md`. Der Port ist Single-Client.
 
 ## Step-Record-Layout (verifiziert)
 
