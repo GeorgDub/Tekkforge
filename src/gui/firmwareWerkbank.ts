@@ -75,6 +75,8 @@ import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppc
 import { globalBerichtZeilen, globalLiveZeile } from "../core/globalFlash";
 import { werksbankAusDump, liesWerksbankVomGeraet, werksbankZeile } from "../core/werksbank";
 import { sliceKarte, sliceZeile } from "../core/sliceFlash";
+import { erstelleGeraeteBericht } from "../core/geraeteBericht";
+import { OSZ_LISTEN, oszListeWahl } from "../core/oszNamen";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1797,6 +1799,29 @@ async function bootRegionVomGeraet(): Promise<void> {
   bootStatus(`${name} gesichert (${r.datei.length} Bytes in ${((Date.now() - t0) / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${k.variante ? `nach Gerätestempel (${VARIANTEN[k.variante].label})` : "aus der Vorlage"}, Prüfung: ${pruefung.ok ? "das Gerät nähme die Datei per SD-Update an" : pruefung.pruefungen.find((x) => !x.ok)?.detail ?? "nicht bestanden"}.`);
 }
 
+/** Der ganze Gerätezustand in einem Lauf — Markdown in den Firmware-Ordner, Pattern-Bank in Sets. */
+async function bootGeraeteBericht(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const stempelDatei = bootStempel();
+  const liste = OSZ_LISTEN[oszListeWahl()] ?? [];
+  const r = await erstelleGeraeteBericht({
+    lesenFlash: hooks.lesenFlash,
+    lesenRam: hooks.lesen,
+    globalLive: hooks.globalLive,
+    oszName: (n) => liste[n - 1]?.[0] ?? `Osz ${n}`,
+    fortschritt: (s) => bootStatus(`Gerätebericht: ${s} … (Gerät nicht bedienen)`),
+  });
+  const md = r.zeilen.join("\n") + "\n";
+  const ab = await legeAb(`Geraetebericht-${stempelDatei}.md`, new TextEncoder().encode(md), FIRMWARE_ORDNER);
+  let bankHinweis = "";
+  if (r.patternBank) {
+    const pb = await legeAb(`Patterns-vom-Geraet-${stempelDatei}.e2sallpat`, r.patternBank, "Sets");
+    bankHinweis = pb.pfad ? `; Pattern-Bank → ${pb.pfad}` : "";
+  }
+  bootBerichtZeigen(r.zeilen);
+  bootStatus(`Gerätebericht fertig (${(r.dauerMs / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}${bankHinweis}.`);
+}
+
 /** Werks-Pattern-Bank direkt vom Gerät (Werks-Global + SQEZ-Strom, ~128 KiB). */
 async function bootWerksbankVomGeraet(): Promise<void> {
   if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
@@ -1835,6 +1860,7 @@ function richteBootEin(): void {
   if (!document.getElementById("bootPanel")) return;
   document.getElementById("bootGlobalGeraet")?.addEventListener("click", () => void bootGlobalVomGeraet());
   document.getElementById("bootWerksbankGeraet")?.addEventListener("click", () => void bootWerksbankVomGeraet());
+  document.getElementById("bootGeraeteBericht")?.addEventListener("click", () => void bootGeraeteBericht());
   document.getElementById("bootRegionGeraet")?.addEventListener("click", () => void bootRegionVomGeraet());
   document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
   document.getElementById("bootPatternsGeraet")?.addEventListener("click", () => void bootPatternBankVomGeraet());
