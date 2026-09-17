@@ -107,3 +107,33 @@ describe("liesSampleStand", () => {
     expect(r2.fehler).toMatch(/außerhalb/);
   });
 });
+
+describe("liesSampleStandBisLeer", () => {
+  it("liest blockweise und hört nach dem ersten leeren Block auf", async () => {
+    const { liesSampleStandBisLeer } = await import("../src/core/geraeteMonitor");
+    const { SAMPLE_LAUFZEIT } = await import("../src/core/e2Symbole");
+    const anfragen: number[] = [];
+    const lesen = async (addr: number, len: number) => {
+      anfragen.push(addr);
+      const out = new Uint8Array(len);
+      for (let o = 0; o + SAMPLE_LAUFZEIT.stride <= len; o += SAMPLE_LAUFZEIT.stride) {
+        const idx = (addr - SAMPLE_LAUFZEIT.base) / SAMPLE_LAUFZEIT.stride + o / SAMPLE_LAUFZEIT.stride;
+        if (idx >= 500 && idx < 540) {
+          out[o + SAMPLE_LAUFZEIT.offLadezustand] = 1;
+          out[o + SAMPLE_LAUFZEIT.offLaenge] = 0x10;
+          out[o + SAMPLE_LAUFZEIT.offLaenge + 1] = 0x27; // 10000 Bytes
+        }
+      }
+      return { ok: true as const, bytes: out };
+    };
+    const bis: number[] = [];
+    const r = await liesSampleStandBisLeer(lesen, 500, 32, (b) => bis.push(b));
+    expect(anfragen.length).toBe(3);
+    expect(r.stand.length).toBe(96);
+    expect(r.geladen).toBe(40);
+    expect(r.bytes).toBe(400000);
+    expect(bis).toEqual([532, 564, 596]);
+    const kaputt = async () => ({ ok: false as const, reason: "Timeout" });
+    expect((await liesSampleStandBisLeer(kaputt)).fehler).toBe("Timeout");
+  });
+});

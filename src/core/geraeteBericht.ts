@@ -13,7 +13,7 @@ import { liesSqezKopfDaten, SQEZ_KOPF } from "./sqez";
 import { GLOBAL_FLASH } from "./globalFlash";
 import { PATTERN_BANK, patternNamenAusBank } from "./flashKarte";
 import { SLICE_FLASH, sliceKarte, sliceZeile } from "./sliceFlash";
-import { liesMonitor, liesSampleStand, monitorText, sampleStandText, type Lesen } from "./geraeteMonitor";
+import { liesMonitor, liesSampleStandBisLeer, monitorText, sampleStandText, type Lesen } from "./geraeteMonitor";
 
 export interface GeraeteBerichtQuellen {
   lesenFlash: LesenFlash;
@@ -105,11 +105,11 @@ export async function erstelleGeraeteBericht(q: GeraeteBerichtQuellen, stempel =
     }
     schritt("Sample-Katalog");
     const ab = q.samples?.abIndex ?? 500;
-    const n = q.samples?.anzahl ?? 32;
-    z.push(h2(`Sample-Katalog (RAM, Samples ${ab + 1}–${ab + n})`));
-    const st = await liesSampleStand(q.lesenRam, ab, n);
-    if (st.fehler) z.push(`- ${st.fehler}`);
-    else z.push(...sampleStandText(st.stand).split("\n").map((s) => (s.trim() ? `    ${s}` : "")));
+    const block = q.samples?.anzahl ?? 32;
+    const st = await liesSampleStandBisLeer(q.lesenRam, ab, block, (bis) => schritt(`Sample-Katalog bis ${bis}`));
+    z.push(h2(`Sample-Katalog (RAM, User-Samples ab ${ab + 1}, gelesen bis ${ab + st.stand.length})`));
+    z.push(`- ${st.geladen} geladen, zusammen ${(st.bytes / 1048576).toFixed(2)} MB${st.fehler ? ` — Lesefehler: ${st.fehler}` : ""}`);
+    if (st.stand.length) z.push(...sampleStandText(st.stand).split("\n").map((s) => (s.trim() ? `    ${s}` : "")));
   }
 
   const dauerMs = Date.now() - t0;

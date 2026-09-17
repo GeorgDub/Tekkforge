@@ -87,6 +87,24 @@ export async function liesSampleStand(lesen: Lesen, abIndex = 500, anzahl = 32):
   return { stand: dekodiereSampleStand(r.bytes, max, abIndex) };
 }
 
+/**
+ * Liest den User-Katalog blockweise (je `block` Records) ab `abIndex`, bis ein Block ohne geladenes
+ * Sample kommt oder der Katalog endet — so kommt die ganze belegte User-Bank ohne 999 Records zu lesen.
+ */
+export async function liesSampleStandBisLeer(lesen: Lesen, abIndex = 500, block = 32, fortschritt?: (gelesenBis: number) => void): Promise<{ stand: SampleStand[]; fehler?: string; geladen: number; bytes: number }> {
+  const stand: SampleStand[] = [];
+  let i = abIndex;
+  while (i < SAMPLE_LAUFZEIT.count) {
+    const r = await liesSampleStand(lesen, i, block);
+    if (r.fehler) return { stand, fehler: r.fehler, geladen: stand.filter((s) => s.geladen).length, bytes: stand.reduce((a, s) => a + (s.geladen ? s.laengeBytes : 0), 0) };
+    stand.push(...r.stand);
+    i += r.stand.length;
+    fortschritt?.(i);
+    if (!r.stand.some((s) => s.geladen) || r.stand.length < block) break;
+  }
+  return { stand, geladen: stand.filter((s) => s.geladen).length, bytes: stand.reduce((a, s) => a + (s.geladen ? s.laengeBytes : 0), 0) };
+}
+
 const pad = (s: string | number, n: number): string => String(s).padStart(n, " ");
 
 /** Der Bericht als Text fürs `<pre>`; `oszName` liefert den Anzeigenamen zur Oszillator-Nummer (ID + 1). */
