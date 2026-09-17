@@ -781,7 +781,7 @@
               <details id="bootPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
                 <summary style="cursor:pointer;font-weight:600">🥾 Boot-Sektor, BOOT.VSB und Flash-Dump (Custom-Bootloader)</summary>
                 <p class="sub" style="margin:6px 0">Der erste 128-KiB-Block des Flash trägt das AIS-Bootskript und den Bootloader (SBL). Aus vanasoft23s Freetribe-Bootloader (<code>bootloader.bin</code>, lädt nach 0x80000000) wird hier der Boot-Sektor gebaut und als <code>BOOT.VSB</code> verpackt — die Update-Funktion des Geräts (DATA UTILITY → SOFTWARE UPDATE) nimmt eine <code>KORG/…/System/BOOT.VSB</code> auch ohne SYSTEM.VSB an und schreibt sie nach Flash-Offset 0. Dazu: jede <code>.VSB</code> so prüfen, wie die Firmware sie prüft, und einen 16-MiB-Flash-Dump (Bootloader-Menü „Dump flash to SD“) kartieren und zerlegen.</p>
-                <p class="sub" style="margin:6px 0;color:var(--warn,#c0392b)"><b>⚠ Ein-Schuss-Weg.</b> Ein falscher Boot-Sektor macht das Gerät nur noch über JTAG (J9) erreichbar. Erst flüchtig testen (SysEx <code>execute_freetribe.py</code> oder JTAG-Load), dann installieren. Der Handoff des Bootloaders (Stand <code>3a0581f</code>) patcht 0xC0025E4F — das passt nur zum Synth-Image; mit Sampler-/Hacktribe-Firmware stürzt „Boot from flash“ beim Sequencer-Stop ab. Nichts hier schreibt ins Gerät.</p>
+                <p class="sub" style="margin:6px 0;color:var(--warn,#c0392b)"><b>⚠ Ein-Schuss-Weg.</b> Ein falscher Boot-Sektor macht das Gerät nur noch über JTAG (J9) erreichbar. Erst flüchtig testen (Knopf „▶ Über SysEx starten“ oder JTAG-Load), dann installieren. <b>Sampler-tauglich seit 2026-09-17:</b> der Handoff erkennt jetzt das Firmware-Image am „PTST“-Marker und patcht 0xC0025E4F nur beim Synth-Image — auf Sampler-/Hacktribe-Firmware bleibt „Boot from flash“ unangetastet (der frühere Stand <code>3a0581f</code> stürzte dort beim Sequencer-Stop ab). Nichts hier schreibt ins Gerät.</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
                   <span class="sub" style="margin:0"><b>Boot-Sektor bauen:</b></span>
                   <button id="bootSblLaden" class="ghost" title="bootloader.bin (SBL-Image, max. 131022 Bytes) oder einen fertigen 128-KiB-Boot-Sektor laden">bootloader.bin / Boot-Sektor laden…</button>
@@ -792,6 +792,12 @@
                   <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Kopf-Identität <select id="bootIdentitaet" style="font-size:11px;padding:2px 4px"><option value="sampler">Sampler (0x000124)</option><option value="synth">Synth (0x000123)</option></select></label>
                   <button id="bootSektorSichern" class="ghost hidden" title="Die 128 KiB (AIS-Kopf + SBL + Jump + Prüfsumme) als Datei sichern">⬇ Boot-Sektor .bin</button>
                   <button id="bootVsbSichern" class="primary hidden" title="Boot-Sektor mit Korg-Kopf (Name BOOT, Länge 0x20000) als BOOT.VSB sichern — Kopfvorlage ist die geladene Basis, sonst ein Standardkopf">⬇ BOOT.VSB</button>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Flüchtig testen (SysEx, schreibt NICHTS ins Flash):</b></span>
+                  <button id="bootStartFluechtig" class="ghost" title="Die ROHE bootloader.bin (max. 131072 Bytes, läuft an 0x80000000) über den Hacktribe-SysEx-Loader flüchtig starten: Pivot 0x58 → Magic-Handshake → 0x54-Häppchen → 0x57 Execute. Das Gerät wird zum Loader, bis es aus- und wieder eingeschaltet wird; nichts wird geflasht. Braucht aktives MIDI und einen freien KORG-Port.">▶ Über SysEx starten (bootloader.bin, flüchtig)…</button>
+                  <input id="bootStartIn" type="file" accept=".bin,.BIN" class="hidden" />
+                  <span class="sub" style="margin:0;opacity:.75">kapert das Gerät bis zum Neustart — nur klicken, wenn du am Gerät bist</span>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
                   <span class="sub" style="margin:0"><b>Vom Gerät lesen (Hacktribe, nur lesen):</b></span>

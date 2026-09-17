@@ -29,6 +29,10 @@ export interface WerkbankHooks {
   lesenFlash?(addr: number, len: number, chunk?: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
   /** Der laufende Global-Block per SysEx 0x51 (256 B) — zum Vergleich mit dem im Flash gespeicherten. */
   globalLive?(): Promise<Uint8Array | null>;
+  /** Rohen SysEx-Frame senden, ohne auf Antwort zu warten (Loader-Pivot/-Execute). */
+  sysexSenden?(frame: Uint8Array): Promise<void>;
+  /** Rohen SysEx-Frame senden und auf die erste Antwort warten (Loader-Magic/-Häppchen). */
+  sysexAnfrage?(frame: Uint8Array, timeoutMs: number): Promise<Uint8Array>;
 }
 let hooks: WerkbankHooks | null = null;
 /** Eigene DSP-Patches aus Dateien oder Bauplaenen; das Register kommt dazu. */
@@ -68,6 +72,7 @@ import { freigabe, LAUFENDE_FIRMWARE, type LaufendeFirmware, type Freigabe } fro
 import { firmwareAblageZugang, sitzungsAblageAufnehmen, type AblageEintrag } from "./tekkFirmware";
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
 import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GROESSE } from "../core/bootSektor";
+import { starteBootloaderFluechtig, OC_RAM_SIZE, type LoaderIO } from "../core/bootloaderStart";
 import { standardKopf, pruefeVsbKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
 import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
@@ -1839,6 +1844,57 @@ async function bootSdPaket(pcmDatei: File): Promise<void> {
   bootStatus(paket.alleOk ? `SD-Update-Paket gebaut${ab.pfad ? ` → ${ab.pfad.replace(/LIESMICH\.md$/, "")}` : ""} — den Ordner KORG auf die SD kopieren, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` : "SD-Update-Paket gebaut, aber mindestens eine Datei fällt bei der Kopfprüfung durch — siehe LIESMICH. NICHT einspielen.");
 }
 
+/**
+ * Bootloader (oder ein anderes 0x80000000-Image) FLÜCHTIG über SysEx starten — nichts wird geflasht.
+ * Kapert das laufende Gerät: ab dem Pivot ist es ein Loader, nur ein Aus-/Einschalten holt die
+ * Firmware zurück. Darum hinter einer Tipp-Bestätigung und nur mit angebundenem MIDI-Sendeweg.
+ */
+async function bootStartFluechtig(f: File): Promise<void> {
+  if (!hooks?.sysexSenden || !hooks.sysexAnfrage) {
+    return bootStatus("Kein SysEx-Sendeweg — MIDI aktivieren (und den KORG-Port frei lassen, er ist Single-Client).");
+  }
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  // Es muss das ROHE SBL-Image sein (läuft an 0x80000000), NICHT eine BOOT.VSB (0x100-Korg-Kopf)
+  // und NICHT der 128-KiB-Boot-Sektor (AIS-Kopf „TIPA“). Beide würden an 0x80000000 nicht starten.
+  const kopf = new TextDecoder("latin1").decode(bytes.subarray(0, 16));
+  if (kopf.startsWith("KORG SYSTEM FILE")) {
+    return bootStatus("Das ist eine .VSB (Korg-Kopf). Für den SysEx-Start die ROHE bootloader.bin laden, nicht die BOOT.VSB.");
+  }
+  if (bytes.length >= 4 && bytes[0] === 0x54 && bytes[1] === 0x49 && bytes[2] === 0x50 && bytes[3] === 0x41) {
+    return bootStatus("Das ist ein Boot-Sektor (AIS-Kopf „TIPA“). Für den SysEx-Start die ROHE bootloader.bin laden, nicht den Boot-Sektor.");
+  }
+  if (bytes.length === 0 || bytes.length > OC_RAM_SIZE) {
+    return bootStatus(`Image ${bytes.length} B passt nicht in ${OC_RAM_SIZE} B On-Chip-RAM (bootloader.bin = 131022 B).`);
+  }
+  const antwort = await frageText(
+    `„${f.name}" (${bytes.length} B) FLÜCHTIG über SysEx an 0x80000000 starten?\n\n` +
+      "Das Gerät wird ab jetzt zum Loader — die laufende Firmware ist weg, bis du es AUS- und wieder EINSCHALTEST. " +
+      "Es wird NICHTS ins Flash geschrieben. Zum Starten JA eintippen.",
+    "",
+  );
+  if ((antwort ?? "").trim().toUpperCase() !== "JA") return bootStatus("Abgebrochen — nichts gesendet.");
+
+  const io: LoaderIO = {
+    sende: (frame) => hooks!.sysexSenden!(frame),
+    sendeUndEmpfange: (frame, timeoutMs) => hooks!.sysexAnfrage!(frame, timeoutMs),
+    warte: (ms) => new Promise((r) => setTimeout(r, ms)),
+  };
+  bootStatus("Pivot gesendet — warte auf den Loader-Handshake…");
+  const r = await starteBootloaderFluechtig(bytes, io, {
+    fortschritt: (g, ges) => {
+      if (g === 1 || g === ges || g % 32 === 0) bootStatus(`Loader lädt: Häppchen ${g}/${ges} (${((g / ges) * 100).toFixed(0)} %)…`);
+    },
+  });
+  bootBerichtZeigen([
+    r.ok ? "✅ Bootloader flüchtig gestartet." : `❌ Abbruch im Schritt „${r.schritt}“.`,
+    r.nachricht,
+    `Häppchen: ${r.haeppchenGesendet}/${r.haeppchenGesamt}.`,
+  ]);
+  bootStatus(r.ok
+    ? "Bootloader läuft (flüchtig). Das USB-Gerät meldet sich als e2fb:1802 neu an. Aus-/Einschalten kehrt zur Firmware zurück."
+    : `Nicht gestartet: ${r.nachricht}`);
+}
+
 /** Der ganze Gerätezustand in einem Lauf — Markdown in den Firmware-Ordner, Pattern-Bank in Sets. */
 async function bootGeraeteBericht(): Promise<void> {
   if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
@@ -1910,6 +1966,7 @@ function richteBootEin(): void {
     bootStatus("Abbruch angefordert — der laufende 64-KiB-Block wird noch beendet.");
   });
   dateiKnopf("bootSblLaden", "bootSblIn", (f) => void bootSblLaden(f));
+  dateiKnopf("bootStartFluechtig", "bootStartIn", (f) => void bootStartFluechtig(f));
   document.getElementById("bootSektorSichern")?.addEventListener("click", () => {
     if (!bootSektor) return bootStatus("Erst bootloader.bin laden oder den Boot-Sektor vom Gerät lesen.");
     const name = bootSektor.name === "Gerät" ? `Bootsektor-vom-Geraet-${bootStempel()}.bin` : "bootsect.bin";

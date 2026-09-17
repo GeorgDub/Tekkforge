@@ -1817,6 +1817,13 @@ function setupRamPanel(): void {
       const reply = await requestSysex(midi, buildGlobalRequest(midiOpts()), (b) => decodeGlobalDump(b) !== null, 4000);
       return decodeGlobalDump(reply);
     },
+    // Roher SysEx-Weg für den flüchtigen Bootloader-Start (execute_freetribe-Protokoll).
+    // Der Inhalt der Antwort wird im Loader-Kern (bootloaderStart.ts) geprüft, darum matcht
+    // requestSysex hier den ersten eingehenden Frame (() => true).
+    sysexSenden: async (frame: Uint8Array) => {
+      await midi.sendAsync(frame);
+    },
+    sysexAnfrage: (frame: Uint8Array, timeoutMs: number) => requestSysex(midi, frame, () => true, timeoutMs),
   });
 }
 
