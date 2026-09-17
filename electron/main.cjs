@@ -985,11 +985,26 @@ protocol.registerSchemesAsPrivileged([
 /** Web-MIDI (inkl. SysEx) für den Pattern-Transfer zum Electribe 2 erlauben. */
 function grantMidiPermissions() {
   const ses = session.defaultSession;
-  const allowed = new Set(["midi", "midiSysex"]);
+  const allowed = new Set(["midi", "midiSysex", "usb"]);
   ses.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(allowed.has(permission));
   });
   ses.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
+
+  // WebUSB, ausschließlich für den Freetribe-Bootloader (e2fb:1802): flüchtiger DFU-Start einer
+  // Firmware aus der Werkbank. Der Renderer bekommt nur dieses eine Gerät zur Wahl; alles andere
+  // wird gar nicht erst angeboten.
+  const BOOTLOADER_VID = 0xe2fb;
+  const BOOTLOADER_PID = 0x1802;
+  ses.on("select-usb-device", (event, details, callback) => {
+    event.preventDefault();
+    const dev = (details.deviceList || []).find((d) => d.vendorId === BOOTLOADER_VID && d.productId === BOOTLOADER_PID);
+    callback(dev ? dev.deviceId : undefined);
+  });
+  ses.setDevicePermissionHandler((details) => {
+    if (details.deviceType !== "usb" || !details.device) return false;
+    return details.device.vendorId === BOOTLOADER_VID && details.device.productId === BOOTLOADER_PID;
+  });
 }
 
 /** Bedient app://… — die App ist eine einzige selbsttragende HTML-Datei. */

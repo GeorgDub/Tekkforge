@@ -73,6 +73,10 @@ import { firmwareAblageZugang, sitzungsAblageAufnehmen, type AblageEintrag } fro
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
 import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GROESSE } from "../core/bootSektor";
 import { starteBootloaderFluechtig, OC_RAM_SIZE, type LoaderIO } from "../core/bootloaderStart";
+import { baueBootloaderSd } from "../core/bootloaderSd";
+import { pruefeDfuImage, dfuFirmwareStarten } from "../core/dfu";
+import { verbindeBootloaderUsb, dfuTransportUsb, trenneBootloaderUsb } from "./dfuUsb";
+import { zerlegeSyx, beschreibeSyx, sendeSyxFrames, type SyxSendeIO } from "../core/syxDatei";
 import { standardKopf, pruefeVsbKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
 import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
 import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
@@ -1895,6 +1899,86 @@ async function bootStartFluechtig(f: File): Promise<void> {
     : `Nicht gestartet: ${r.nachricht}`);
 }
 
+/** Bootloader-SD vorbereiten: gewählte Dateien einordnen, Ordner + LIESMICH am PC anlegen. Schreibt nichts auf die SD. */
+async function bootSdVorbereiten(dateien: File[]): Promise<void> {
+  const eingang = await Promise.all(dateien.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+  const paket = baueBootloaderSd(eingang, { stempel: bootStempel(), md5: md5Hex, bootloaderName: eingang.find((e) => e.bytes.length === 131022)?.name });
+  let letzterPfad: string | null = null;
+  for (const d of paket.dateien) {
+    if (!d.aufSd) continue;
+    const ab = await legeAb(d.name, d.bytes, paket.ordner);
+    letzterPfad = ab.pfad;
+  }
+  const ab = await legeAb("LIESMICH.md", paket.liesmich, paket.ordner, "text/markdown");
+  bootBerichtZeigen(paket.liesmich.split(/\r?\n/));
+  const n = paket.dateien.filter((d) => d.aufSd).length;
+  bootStatus(`Bootloader-SD vorbereitet: ${n} Datei(en) für die SD${paket.warnungen.length ? `, ${paket.warnungen.length} Warnung(en) (siehe LIESMICH)` : ""}${ab.pfad ? ` → ${ab.pfad.replace(/LIESMICH\.md$/, "")}` : letzterPfad ? ` → ${letzterPfad}` : ""}. Inhalt (ohne LIESMICH) ins Wurzelverzeichnis der SD kopieren.`);
+}
+
+/**
+ * Firmware per USB-DFU (Alt 3 „Debug Firmware") in den laufenden Bootloader laden und starten —
+ * flüchtig, ohne SD-Karte, ohne Flash. Voraussetzung: der Bootloader läuft (USB e2fb:1802).
+ */
+async function bootDfuStart(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const p = pruefeDfuImage(bytes);
+  if (!p.ok) return bootStatus(`DFU: Image abgelehnt — ${p.grund}.`);
+  const antwort = await frageText(
+    `„${f.name}“ (${p.art}, ${bytes.length} B) per USB-DFU in den Bootloader laden und FLÜCHTIG starten?\n\n` +
+      "Voraussetzung: der Bootloader läuft gerade (Display zeigt sein Menü, USB e2fb:1802). Es wird NICHTS geflasht; " +
+      "Aus/Ein stellt den Flash-Stand wieder her. Zum Starten JA eintippen.",
+    "",
+  );
+  if ((antwort ?? "").trim().toUpperCase() !== "JA") return bootStatus("Abgebrochen — nichts gesendet.");
+  bootStatus("USB: Bootloader wählen (Systemdialog)…");
+  let v;
+  try {
+    v = await verbindeBootloaderUsb();
+  } catch (e) {
+    return bootStatus(`DFU: keine Verbindung — ${e instanceof Error ? e.message : String(e)}`);
+  }
+  bootStatus(`Verbunden: ${v.geraet.productName ?? "Bootloader"}, Interface ${v.interfaceNr}, ${v.altName}. Lade…`);
+  const r = await dfuFirmwareStarten(bytes, dfuTransportUsb(v), {
+    fortschritt: (b, ges) => { if (b === 1 || b === ges || b % 32 === 0) bootStatus(`DFU: Block ${b}/${ges} (${((b / ges) * 100).toFixed(0)} %)…`); },
+  });
+  await trenneBootloaderUsb(v);
+  bootBerichtZeigen([r.ok ? "✅ DFU-Start ausgelöst." : "❌ DFU abgebrochen.", r.nachricht, `Blöcke: ${r.bloecke}/${r.bloeckeGesamt}.`]);
+  bootStatus(r.ok ? `DFU: ${r.nachricht}` : `DFU fehlgeschlagen: ${r.nachricht}`);
+}
+
+/** Eine .syx-Datei (z. B. Omnitribes Modul-Bündel) frameweise an die laufende Firmware senden. Kein Flash. */
+async function bootSyxSenden(f: File): Promise<void> {
+  if (!hooks?.sysexSenden || !hooks.sysexAnfrage) return bootStatus("Kein SysEx-Sendeweg — MIDI aktivieren (KORG-Port frei lassen, er ist Single-Client).");
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const z = zerlegeSyx(bytes);
+  if (z.fehler.length) {
+    bootBerichtZeigen([`❌ „${f.name}“ ist keine saubere SysEx-Datei:`, ...z.fehler.slice(0, 20)]);
+    return bootStatus(`SysEx-Datei abgelehnt: ${z.fehler.length} Problem(e), nichts gesendet.`);
+  }
+  const b = beschreibeSyx(z.frames);
+  const kommandos = Object.entries(b.otpKommandos).map(([k, n]) => `${k}×${n}`).join(", ");
+  const antwort = await frageText(
+    `„${f.name}“: ${b.anzahl} Frames (${b.otp} Omnitribe-OTP${kommandos ? ` [${kommandos}]` : ""}, ${b.korg} KORG, ${b.andere} andere; größter ${b.groessterFrame} B) an das Gerät senden?\n\n` +
+      "Geht an die LAUFENDE Firmware (Module landen im RAM, nichts wird geflasht). Zum Senden JA eintippen.",
+    "",
+  );
+  if ((antwort ?? "").trim().toUpperCase() !== "JA") return bootStatus("Abgebrochen — nichts gesendet.");
+  const io: SyxSendeIO = {
+    sende: (fr) => hooks!.sysexSenden!(fr),
+    sendeUndEmpfange: (fr, akzeptiere, t) => hooks!.sysexAnfrage!(fr, akzeptiere, t),
+    warte: (ms) => new Promise((r) => setTimeout(r, ms)),
+  };
+  const r = await sendeSyxFrames(z.frames, io, {
+    pauseMs: 20,
+    antwortTimeoutMs: b.otp > 0 ? 300 : 0, // OTP quittiert Block-Transfers; Timeouts sind kein Abbruch
+    // OTP-Fehlerantwort: F0 7D 01 02 <cmd> 03 <code≠0> …  — Sample-Transfer-ACK/Error laut otp_protocol.md
+    istFehlerAntwort: (a) => a.length >= 8 && a[1] === 0x7d && a[5] === 0x03 && a[6] !== 0x00,
+    fortschritt: (g, ges) => { if (g === 1 || g === ges || g % 10 === 0) bootStatus(`SysEx: Frame ${g}/${ges}…`); },
+  });
+  bootBerichtZeigen([r.ok ? "✅ SysEx-Datei gesendet." : "❌ Versand gestoppt.", r.nachricht, ...(r.fehlerAntwort ? [`Antwort: ${Array.from(r.fehlerAntwort).map((x) => x.toString(16).padStart(2, "0")).join(" ")}`] : [])]);
+  bootStatus(r.ok ? `SysEx: ${r.nachricht}` : `SysEx: ${r.nachricht}`);
+}
+
 /** Der ganze Gerätezustand in einem Lauf — Markdown in den Firmware-Ordner, Pattern-Bank in Sets. */
 async function bootGeraeteBericht(): Promise<void> {
   if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
@@ -1967,6 +2051,9 @@ function richteBootEin(): void {
   });
   dateiKnopf("bootSblLaden", "bootSblIn", (f) => void bootSblLaden(f));
   dateiKnopf("bootStartFluechtig", "bootStartIn", (f) => void bootStartFluechtig(f));
+  dateiKnopf("bootDfuStart", "bootDfuIn", (f) => void bootDfuStart(f));
+  dateiKnopfMehrere("bootSdVorbereiten", "bootSdVorbereitenIn", (dateien) => void bootSdVorbereiten(dateien));
+  dateiKnopf("bootSyxSenden", "bootSyxIn", (f) => void bootSyxSenden(f));
   document.getElementById("bootSektorSichern")?.addEventListener("click", () => {
     if (!bootSektor) return bootStatus("Erst bootloader.bin laden oder den Boot-Sektor vom Gerät lesen.");
     const name = bootSektor.name === "Gerät" ? `Bootsektor-vom-Geraet-${bootStempel()}.bin` : "bootsect.bin";
