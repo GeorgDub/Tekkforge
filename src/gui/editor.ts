@@ -1506,6 +1506,7 @@ async function ramReadBytes(
     out.set(parsed.data.subarray(0, c.len), off);
     off += c.len;
   }
+  if (chunks.length > 1) setRamStatus(`${chunks.length} Häppchen gelesen (${len} Bytes).`);
   return { ok: true, bytes: out };
 }
 
@@ -1536,6 +1537,7 @@ async function flashReadBytes(
     out.set(data.subarray(0, c.len), off);
     off += c.len;
   }
+  if (chunks.length > 1) setRamStatus(`${chunks.length} Häppchen gelesen (${len} Bytes).`);
   return { ok: true, bytes: out };
 }
 
