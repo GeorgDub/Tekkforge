@@ -8,8 +8,12 @@ import {
   buildFrame,
   buildTelemetryReport,
   parseFrame,
+  decode7Bit,
   OTP_LAYER1_MAGIC,
   OTP_USBDX_MAGIC,
+  OTP_MODULE_MAX_ID,
+  OTP_MODULE_PROBES,
+  OTP_MODULE_REAL_PROBES,
 } from "../src/core/otp";
 
 /**
@@ -129,6 +133,19 @@ function stubGeraet(frame: Uint8Array): Uint8Array | null {
     const wert = geraeteWerte[(f.payload[1] << 8) | f.payload[2]];
     if (wert === undefined) return null;
     return buildFrame(OtpCmd.PARAM, OtpSub.PARAM_RESPONSE, [f.payload[0], f.payload[1], f.payload[2], (wert >> 7) & 0x7f, wert & 0x7f]);
+  }
+  // Modul-Block: spiegelt handle_module_block_stage1 — Header prüfen, ACK zurück.
+  if (f.cmd === OtpCmd.MODULE && f.sub === OtpSub.MODULE_BLOCK) {
+    const modId = f.payload[0];
+    const enc = f.payload.slice(3);
+    const hdr = decode7Bit(enc);
+    let status = 0x00;
+    if (modId >= OTP_MODULE_MAX_ID) status = 0x02;
+    else if (hdr.length < 44) status = 0x08;
+    else if ((hdr[0] | (hdr[1] << 8) | (hdr[2] << 16) | (hdr[3] << 24)) >>> 0 !== 0x4f544d52) status = 0x04;
+    else if ((hdr[6] | (hdr[7] << 8)) !== modId) status = 0x06;
+    else if ((hdr[40] | (hdr[41] << 8) | (hdr[42] << 16) | (hdr[43] << 24)) === 0) status = 0x07;
+    return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [status, modId & 0x7f, 1]);
   }
   return null;
 }
@@ -410,5 +427,65 @@ describe("OTP-Panel", () => {
       expect([r.min, r.max, r.step], p.key).toEqual([String(p.min), String(p.max), "1"]);
     }
     expect(el(reglerId(otpParam("pan").key)).min).toBe("-63");
+  });
+});
+
+describe("OTP-Panel: Modul-Lader Stufe 1", () => {
+  it("beide Knopfreihen werden erzeugt: 4 synthetische + 6 echte, mit Labels", () => {
+    const html = el("otpModulKnoepfe").innerHTML;
+    // Alle synthetischen und echten Knopf-ids sind da.
+    OTP_MODULE_PROBES.forEach((_, i) => expect(html).toContain(`id="otpModulSyn${i}"`));
+    OTP_MODULE_REAL_PROBES.forEach((_, i) => expect(html).toContain(`id="otpModulReal${i}"`));
+    // Echte Modul-Namen als Label und die beiden Zwischenüberschriften.
+    expect(html).toContain("modmatrix");
+    expect(html).toContain("audio_input_routing");
+    expect(html).toContain("Echte kompilierte Modul-Header");
+    expect(html).toContain("Synthetische Sonden");
+    // Nichts beim Init gesendet.
+    expect(angefragt).toEqual([]);
+  });
+
+  it("echtes gültiges Modul (modmatrix, id 0) → 0x05-Block gesendet, ACK 0x00 angezeigt", async () => {
+    antwortStub = stubGeraet;
+    await klickUndWarte("otpModulReal0", 5);
+    expect(angefragt.length).toBe(1);
+    const f = parseFrame(angefragt[0]);
+    expect(f.ok).toBe(true);
+    if (f.ok) {
+      expect(f.cmd).toBe(OtpCmd.MODULE);
+      expect(f.sub).toBe(OtpSub.MODULE_BLOCK);
+      expect(f.payload[0]).toBe(0); // module_id
+    }
+    const s = el("otpStatus").textContent;
+    expect(s).toContain("✔");
+    expect(s).toContain("modmatrix");
+    expect(s).toContain("gültig");
+    expect(s).toContain("NICHT ausgeführt");
+  });
+
+  it("echtes Modul jenseits der id-Grenze (audio_input_routing, id 21) → ACK 0x02 abgewiesen", async () => {
+    antwortStub = stubGeraet;
+    const idx = OTP_MODULE_REAL_PROBES.findIndex((p) => p.key === "real-audio_input_routing");
+    await klickUndWarte(`otpModulReal${idx}`, 5);
+    const s = el("otpStatus").textContent;
+    expect(s).toContain("✔"); // erwartet 0x02 und bekommt 0x02 → passt
+    expect(s).toContain("abgewiesen");
+  });
+
+  it("synthetische Sonde „Falsche Magic“ → ACK 0x04", async () => {
+    antwortStub = stubGeraet;
+    const idx = OTP_MODULE_PROBES.findIndex((p) => p.key === "magic");
+    await klickUndWarte(`otpModulSyn${idx}`, 5);
+    const s = el("otpStatus").textContent;
+    expect(s).toContain("✔");
+    expect(s).toContain("Magic");
+  });
+
+  it("ohne ACK (älterer Stub ohne 0x05) → klare Meldung, kein Absturz", async () => {
+    antwortStub = () => null;
+    await klickUndWarte("otpModulReal0", 5);
+    const s = el("otpStatus").textContent;
+    expect(s).toContain("keine ACK-Antwort");
+    expect(s).toContain("älteres Abbild");
   });
 });

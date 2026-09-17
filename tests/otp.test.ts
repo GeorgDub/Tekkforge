@@ -55,6 +55,9 @@ import {
   parseModuleAck,
   OTP_MODULE_STATUS,
   OTP_MODULE_PROBES,
+  OTP_MODULE_REAL_PROBES,
+  OTP_MODULE_REAL_HEADERS,
+  OTP_MODULE_MAX_ID,
 } from "../src/core/otp";
 
 /**
@@ -716,5 +719,47 @@ describe("OTP: Modul-Lader Stufe 1 (CMD 0x05)", () => {
     expect(Array.from(buildModuleHeaderBlock(felder))).toEqual(
       Array.from(buildModuleBlock(2, buildModuleHeader(felder))),
     );
+  });
+});
+
+describe("OTP: Echte Modul-Header-Sonden (OTP_MODULE_REAL_PROBES)", () => {
+  it("jeder echte Header ist 44 B, OTMR-Magic, id passt, api ≠ 0", () => {
+    expect(OTP_MODULE_REAL_HEADERS.length).toBe(6);
+    for (const m of OTP_MODULE_REAL_HEADERS) {
+      const h = m.header;
+      expect(h.length).toBe(44);
+      expect(Array.from(h.slice(0, 4))).toEqual([0x52, 0x4d, 0x54, 0x4f]); // "OTMR" LE
+      expect(h[4] | (h[5] << 8)).toBe(1); // api_version
+      expect(h[6] | (h[7] << 8)).toBe(m.id); // header-id == Katalog-id
+      expect(h[40] | (h[41] << 8) | (h[42] << 16) | (h[43] << 24)).not.toBe(0); // api ≠ 0
+    }
+  });
+
+  it("erwarteter Status folgt der MAX_ID-Grenze: id<16 → 0x00, id≥16 → 0x02", () => {
+    for (const s of OTP_MODULE_REAL_PROBES) {
+      const m = OTP_MODULE_REAL_HEADERS.find((x) => `real-${x.name}` === s.key)!;
+      expect(s.erwarteterStatus).toBe(m.id < OTP_MODULE_MAX_ID ? 0x00 : 0x02);
+    }
+    // Genau eine Sonde jenseits der Grenze (audio_input_routing, id 21).
+    const jenseits = OTP_MODULE_REAL_PROBES.filter((s) => s.erwarteterStatus === 0x02);
+    expect(jenseits.map((s) => s.key)).toEqual(["real-audio_input_routing"]);
+  });
+
+  it("jede echte Sonde baut einen gültigen 0x05-Block, dekodiert zum Header zurück", () => {
+    for (const s of OTP_MODULE_REAL_PROBES) {
+      const m = OTP_MODULE_REAL_HEADERS.find((x) => `real-${x.name}` === s.key)!;
+      const frame = s.bytes();
+      const p = parseFrame(frame);
+      expect(p.ok, s.key).toBe(true);
+      if (!p.ok) continue;
+      expect(p.cmd).toBe(OtpCmd.MODULE);
+      expect(p.sub).toBe(OtpSub.MODULE_BLOCK);
+      expect(p.payload[0]).toBe(m.id & 0x7f); // module_id auf dem Draht
+      const encLen = (p.payload[1] << 7) | p.payload[2];
+      const enc = p.payload.slice(3);
+      expect(enc.length).toBe(encLen);
+      expect(Array.from(decode7Bit(enc).slice(0, 44))).toEqual(Array.from(m.header));
+      for (const b of frame) expect(b).toBeLessThan(0x100);
+    }
   });
 });

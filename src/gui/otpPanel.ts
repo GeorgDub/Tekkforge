@@ -43,6 +43,8 @@ import {
   paramWertText,
   type OtpIdentity,
   OTP_MODULE_PROBES,
+  OTP_MODULE_REAL_PROBES,
+  type OtpModuleProbe,
   parseModuleAck,
   moduleAckText,
 } from "../core/otp";
@@ -286,8 +288,7 @@ function belegSymbol(p: OtpParamDef): string {
 // Der Stub validiert nur den Header und führt NICHTS aus — der ACK-Status zeigt,
 // welcher Validierungszweig gegriffen hat. Nichts hier flasht oder platziert.
 
-async function moduleProbeSenden(index: number): Promise<void> {
-  const sonde = OTP_MODULE_PROBES[index];
+async function moduleProbeSenden(sonde: OtpModuleProbe | undefined): Promise<void> {
   if (!sonde) return;
   if (!hooks) {
     setStatus("Kein MIDI-Weg — erst MIDI aktivieren.");
@@ -317,12 +318,21 @@ async function moduleProbeSenden(index: number): Promise<void> {
   );
 }
 
-/** Knöpfe für die vier Modul-Sonden. */
+function modulKnopf(id: string, s: OtpModuleProbe): string {
+  const titel = escapeHtml(`${s.label} — erwarteter Stub-Status 0x${s.erwarteterStatus.toString(16).padStart(2, "0")}`);
+  return `<button id="${id}" class="ghost" style="padding:2px 8px;font-size:11px" title="${titel}">${escapeHtml(s.label)}</button>`;
+}
+
+/** Zwei Knopfreihen: synthetische Validierungs-Sonden und echte Modul-Header. */
 function modulMarkup(): string {
-  return OTP_MODULE_PROBES.map((s, i) => {
-    const titel = escapeHtml(`${s.label} — erwarteter Stub-Status 0x${s.erwarteterStatus.toString(16).padStart(2, "0")}`);
-    return `<button id="otpModul${i}" class="ghost" style="padding:2px 8px;font-size:11px" title="${titel}">${escapeHtml(s.label)}</button>`;
-  }).join(" ");
+  const syn = OTP_MODULE_PROBES.map((s, i) => modulKnopf(`otpModulSyn${i}`, s)).join(" ");
+  const real = OTP_MODULE_REAL_PROBES.map((s, i) => modulKnopf(`otpModulReal${i}`, s)).join(" ");
+  return (
+    `<div class="sub" style="margin:0 0 3px;opacity:.7">Synthetische Sonden (je ein Validierungszweig):</div>` +
+    `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${syn}</div>` +
+    `<div class="sub" style="margin:0 0 3px;opacity:.7">Echte kompilierte Modul-Header (nur der 44-B-Kopf, nicht das ganze Modul):</div>` +
+    `<div style="display:flex;gap:6px;flex-wrap:wrap">${real}</div>`
+  );
 }
 
 /** Eine Zeile je Parameter: Name · Regler · Wert · Lesen · Beleg. */
@@ -389,7 +399,10 @@ export function initOtpPanel(h: OtpHooks): void {
 
   const modul = el("otpModulKnoepfe");
   if (modul && !modul.innerHTML) modul.innerHTML = modulMarkup();
-  OTP_MODULE_PROBES.forEach((_, i) => {
-    el(`otpModul${i}`)?.addEventListener("click", () => void moduleProbeSenden(i));
+  OTP_MODULE_PROBES.forEach((s, i) => {
+    el(`otpModulSyn${i}`)?.addEventListener("click", () => void moduleProbeSenden(s));
+  });
+  OTP_MODULE_REAL_PROBES.forEach((s, i) => {
+    el(`otpModulReal${i}`)?.addEventListener("click", () => void moduleProbeSenden(s));
   });
 }
