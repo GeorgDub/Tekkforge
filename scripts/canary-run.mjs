@@ -54,9 +54,14 @@ async function rd(a, l) { rx = []; out.sendMessage(peek(a, l)); const t = Date.n
   console.log(`  id=${id}, ${bin.length} B, flags=${hx(flags)} ${(flags & 0x10) ? "(ABS_LINKED ✓)" : "(NICHT ABS_LINKED ✗ — falscher Build!)"}`);
   console.log(`  Slot 0x${slot.toString(16).toUpperCase()}, Postfach 0x${mailbox.toString(16).toUpperCase()}`);
 
-  // Postfach vorher loeschen? Nur lesen — wir wollen sehen, ob der Commit es fuellt.
+  // Postfach VORHER lesen. DDR haelt Inhalt ueber Laeufe — ohne Host-Schreibweg
+  // (0x53/0x54 landen auf MOD132 nicht) koennen wir es nicht loeschen. Deshalb
+  // gilt ein Erfolg nur, wenn der Commit das Postfach GEAENDERT hat.
   const pre = await rd(mailbox, 8);
-  console.log(`  Postfach vorher: ${pre ? hx(rd32(pre, 0)) + " " + hx(rd32(pre, 4)) : "(nicht lesbar)"}`);
+  const preA = pre ? rd32(pre, 0) : 0, preB = pre ? rd32(pre, 4) : 0;
+  const preVoll = preA === MAGIC_A && preB === MAGIC_B;
+  console.log(`  Postfach vorher: ${pre ? hx(preA) + " " + hx(preB) : "(nicht lesbar)"}` +
+    (preVoll ? "  ⚠ schon gefuellt (Altlast) — Gerät aus/ein fuer eine saubere Aussage" : ""));
 
   console.log("=== Chunks senden ===");
   let ok = true;
@@ -87,7 +92,9 @@ async function rd(a, l) { rx = []; out.sendMessage(peek(a, l)); const t = Date.n
     const a = rd32(mb, 0), b = rd32(mb, 4);
     console.log(`  [0x8000] = ${hx(a)} ${a === MAGIC_A ? "= MAGIC_A ✓ (init erreicht)" : ""}`);
     console.log(`  [0x8004] = ${hx(b)} ${b === MAGIC_B ? "= MAGIC_B ✓ (init durchgelaufen)" : ""}`);
-    if (a === MAGIC_A && b === MAGIC_B) console.log("\n=== ✓✓ MODUL LIEF: canary_init() erreicht UND zurueckgekehrt ===");
+    const voll = a === MAGIC_A && b === MAGIC_B;
+    if (voll && preVoll) console.log("\n=== ⚠ AUSSAGE NICHT MOEGLICH: Postfach war schon vor dem Commit gefuellt (Altlast im DDR). Gerät AUS/EIN, sicheren Build booten, dann erneut fahren. ===");
+    else if (voll) console.log("\n=== ✓✓ MODUL LIEF: canary_init() erreicht UND zurueckgekehrt (Postfach durch DIESEN Commit gefuellt) ===");
     else if (a === MAGIC_A) console.log("\n=== ⚠ init erreicht, aber MAGIC_B fehlt (nicht durchgelaufen) ===");
     else console.log("\n=== Postfach leer/anders — init hat (noch) nicht geschrieben (sicherer Build oder Haenger) ===");
   }
