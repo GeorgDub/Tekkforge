@@ -149,9 +149,9 @@ export const OTP_PARAMS: readonly OtpParamDef[] = [
     enum: false,
     weg: "schreib",
     fenster: "live",
-    beleg: "gerätebewiesen",
+    beleg: "statisch",
     quelle:
-      "Hörbar bestätigt an Part 6 (A/B/A mit −24, 2026-08-01); alle 16 Adressen 2026-08-02 mit map_all_parts.py ausgemessen (Sprint 136/145)",
+      "Am Coexist 2026-09-17 am Gerät NICHT live-hörbar: der Schreibzugriff landet an der echten Einstellungs-Adresse (Part 2 = 0xC0693E5E, per Differenz-Scan gemessen und per 0x52 verifiziert), aber die Engine spielt aus einer daraus berechneten Playback-Rate — nur die Firmware-Funktion (Panel) löst die Neuberechnung aus. Kein CC/NRPN → über den Stub-Speicherweg nicht modulierbar (Firmware-Grenze). Cutoff/Resonance wirken, weil sie CC sind.",
   },
   {
     key: "cutoff",

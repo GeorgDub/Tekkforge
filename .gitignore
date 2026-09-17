@@ -23,3 +23,8 @@ scripts/__pycache__/
 
 # Korg-Firmware-Nutzlast (Lizenz) — nur lokal
 x/
+
+# Flüchtige Session-Live-Logs (Testabend-Sonden, nicht versioniert)
+.bootlog.txt
+.probelog.txt
+.webmidilog.txt

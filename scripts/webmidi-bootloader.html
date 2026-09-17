@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>WebMIDI Bootloader</title></head>
+<body><pre id="out">bereit</pre>
+<script>
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const contains = (buf, seq) => { for (let i=0;i+seq.length<=buf.length;i++){let ok=1;for(let j=0;j<seq.length;j++)if(buf[i+j]!==seq[j]){ok=0;break;}if(ok)return 1;} return 0; };
+// syxEnc WÖRTLICH aus e2Sysex.ts
+function syxEnc(byt){const l=byt.length,out=[];let tmp=[],b=0,cnt=7,lim=0;for(let i=0;i<l;i++){const e=byt[i];if(l<7)lim=7-l;tmp.push(e&0x7f);b|=(e&0x80)>>cnt;cnt--;if(cnt===lim){out.push(b);for(const t of tmp)out.push(t);tmp=[];b=0;cnt=7;if(l-i<7)lim=7-(l-i)+1;}}if(tmp.length){out.push(b);for(const t of tmp)out.push(t);}return out;}
+const HEAD=[0xf0,0x42,0x30,0x00,0x01,0x24];
+const frame=(id,body)=>[...HEAD,id&0x7f,...body,0xf7];
+
+window.startBootloader = async function(binArray){
+  const log=(s)=>{ console.log(s); document.getElementById("out").textContent += "\n"+s; };
+  try{
+    log("WebMIDI (WinRT) — requestMIDIAccess…");
+    const access = await navigator.requestMIDIAccess({sysex:true});
+    let out=null, inp=null;
+    for(const o of access.outputs.values()) if(o.name.toLowerCase().includes("electribe")) out=o;
+    for(const i of access.inputs.values())  if(i.name.toLowerCase().includes("electribe")) inp=i;
+    if(!out||!inp){ log("FEHLER: electribe-Port nicht gefunden"); return; }
+    log("Port: OUT "+out.name+" | IN "+inp.name);
+    let rx=[];
+    inp.onmidimessage=(e)=>{ rx.push(Array.from(e.data)); };
+
+    log("1) Pivot…");
+    out.send(frame(0x58, syxEnc(new Array(8).fill(0))));
+    await sleep(1000);
+
+    log("2) Magic (Wiederholung), warte 76 54 32 10…");
+    let magicOk=false;
+    for(let v=1;v<=8 && !magicOk;v++){
+      rx=[];
+      out.send(frame(0x64,[0x01,0x23,0x45,0x67]));
+      await sleep(500);
+      for(const m of rx) if(contains(m,[0x76,0x54,0x32,0x10])){ magicOk=true; break; }
+      if(!magicOk) log("   magic "+v+": keine Antwort ("+rx.length+" empfangen)");
+    }
+    if(!magicOk){ log("FEHLER: keine Magic-Antwort"); return; }
+    log("   ✓ Magic bestätigt — Loader spricht über WinRT-MIDI!");
+
+    const chunks=[];
+    for(let i=0;i<binArray.length;i+=256){ const c=binArray.slice(i,i+256); while(c.length<256)c.push(0); chunks.push(c); }
+    log("3) "+chunks.length+" Häppchen…");
+    for(let i=0;i<chunks.length;i++){
+      rx=[];
+      out.send(frame(0x54, syxEnc(chunks[i])));
+      let a=false;
+      for(let w=0;w<60 && !a;w++){ await sleep(15); for(const m of rx) if(m.includes(0x21)){ a=true; break; } }
+      if(!a){ log("FEHLER: Häppchen "+i+" kein 0x21-ACK"); return; }
+      if((i+1)%64===0 || i===chunks.length-1) log("   "+(i+1)+"/"+chunks.length);
+    }
+
+    log("4) Execute an 0x80000000…");
+    out.send(frame(0x57, syxEnc([0x00,0x00,0x00,0x80,0,0,0,0])));
+    await sleep(200);
+    log("DONE — Bootloader sollte am Display sein.");
+  }catch(e){ log("FEHLER: "+(e&&e.message?e.message:e)); }
+};
+</script></body></html>

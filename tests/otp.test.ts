@@ -515,11 +515,11 @@ describe("OTP: Registry-Parameter 0x0004..0x0010 (SET-Vektoren, GET-Deutung, Bel
     expect(OTP_PARAMS.filter((p) => p.fenster === "live").map((p) => p.key)).toEqual(["oscPitch", "cutoff", "resonance"]);
   });
 
-  it("Beleg-Status wörtlich nach C-Kommentar: 6 × gerätebewiesen, 10 × statisch, nichts unbestimmt", () => {
+  it("Beleg-Status: 5 × gerätebewiesen, 11 × statisch (Osc-Pitch am Gerät 2026-09-17 als nicht live-wirksam belegt), nichts unbestimmt", () => {
     const bewiesen = OTP_PARAMS.filter((p) => p.beleg === "gerätebewiesen").map((p) => p.key);
-    expect(bewiesen).toEqual(["oscPitch", "cutoff", "resonance", "level", "pan", "mfxSend"]);
+    expect(bewiesen).toEqual(["cutoff", "resonance", "level", "pan", "mfxSend"]);
     const statisch = OTP_PARAMS.filter((p) => p.beleg === "statisch").map((p) => p.key);
-    expect(statisch).toEqual(["voiceAssign", "egAttack", "egDecay", "oscEdit", "egInt", "modSpeed", "modDepth", "glide", "ifxEdit", "ifxOnOff"]);
+    expect(statisch).toEqual(["oscPitch", "voiceAssign", "egAttack", "egDecay", "oscEdit", "egInt", "modSpeed", "modDepth", "glide", "ifxEdit", "ifxOnOff"]);
     expect(OTP_PARAMS.some((p) => p.beleg === "unbestimmt")).toBe(false);
     // Jede Quelle nennt Sprint oder Datum
     for (const p of OTP_PARAMS) expect(p.quelle).toMatch(/Sprint \d+|2026-0\d-\d\d/);

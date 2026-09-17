@@ -254,7 +254,8 @@ describe("OTP-Panel", () => {
     expect(gesendet.length).toBe(1);
     expect(Array.from(gesendet[0])).toEqual([0xf0, 0x7d, 0x01, 0x02, 0x02, 0x00, 0x00, 0x05, 5, 0x00, 0x01, 0x7f, 0x68, 5 ^ 1 ^ 0x7f ^ 0x68, 0xf7]);
     expect(el("otpStatus").textContent).toContain("Osc-Pitch Part 6 = -24 Halbtöne gesendet");
-    expect(el("otpStatus").textContent).toContain("✔ am Gerät bewiesen");
+    // Osc-Pitch am Gerät 2026-09-17 als nicht live-wirksam belegt → statisch
+    expect(el("otpStatus").textContent).toContain("◐ statisch hergeleitet");
 
     el("otpPart").value = "16";
     el("otpCutoff").value = "20";
