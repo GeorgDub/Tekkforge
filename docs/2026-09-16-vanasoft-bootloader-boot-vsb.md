@@ -42,6 +42,10 @@ Flash-Karte, Ghidra-Export) steht in Omnitribe:
   Distanz d → 0 bzw. (d−1) Extra-Bits + 2^(d−1), Quelle = Pos − 1 − Distanz (8-KiB-Fenster). Am Gerät: CRC
   stimmt, 243/250 Records = Flash. → `core/werksbank.ts`: Werks-Pattern-Bank als .e2sallpat, vom Gerät in 1,4 s.
 
+- **Slice-Records (0x750000, 0x444):** = ESLI ab +0x58 (nicht +0x50 wie electribe2-re schreibt): 64 × {start, length,
+  attack, amplitude} LE32, 64 Steps (0xFF = leer), u8 Schritte, u8 Beat, u8 aktive Slices, 1 Byte Rest. Record i
+  ↔ Sample i+1 (mutmaßlich). Gerät: 0–402 und 420 beschrieben, 32 mit Slices. `core/sliceFlash.ts`.
+
 ## Werkzeug
 `python scripts/make_bootsect.py build|vsb|check|extract …` — baut aus `bootloader.bin` den
 Boot-Sektor (AIS-Kopf + SBL + Jump + 16-Bit-Wortsumme, exakt wie `install_sbl_to_flash()`), verpackt

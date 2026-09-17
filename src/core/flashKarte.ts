@@ -13,6 +13,8 @@ import { FLASH_SELEKTOREN, REGION_SPANNE, VSB_KOPF, baueVsbKopf, standardKopf, t
 import { VARIANTEN, type Variante } from "./crossgrade";
 import { erkenneKarte, type Familie } from "./firmwareKarte";
 
+import { sliceKarte } from "./sliceFlash";
+
 export const FLASH_GROESSE = 0x1000000;
 
 /**
@@ -151,6 +153,7 @@ export function liesFlashDump(bytes: Uint8Array): FlashDumpBefund | { ok: false;
     else if (s.vsb === "USER") befund = userIdentitaet ? `Stempel ${userIdentitaet} (${variante === "synth" ? "Synth 0x123" : "Sampler 0x124"})` : `kein Produktstempel bei +4 („${stempel.replace(/[^\x20-\x7e]/g, "?")}“)`;
     else if (s.vsb === "PCM") befund = pcm.magicOk ? `KORG ${pcm.format ?? fmt.replace(/[^\x20-\x7e]/g, "?")}` : "kein KORG-Magic";
     else if (s.selektor === 0x21) befund = mainVersion ? `Main ${mainVersion.map((x) => String(x).padStart(2, "0")).join(".")}` : "leer";
+    else if (s.selektor === 0x75) { const k = sliceKarte(bytes); befund = k.beschrieben ? `${k.beschrieben} Sample-Records, ${k.mitSlices.length} mit Slices` : "leer"; }
     else if (s.selektor === 0x63) befund = ascii(bytes, 0x630000, 4) === "GLST" ? "Werks-Global (GLST, Vorlage für den Werksreset)" : "kein GLST";
     else if (s.selektor === 0x64) befund = ascii(bytes, 0x640000, 4) === "SQEZ" ? "SQEZ-Strom: Werks-Pattern-Bank komprimiert" : "kein SQEZ";
     else if (s.selektor === 0x23) befund = ascii(bytes, PATTERN_BANK.glst, 4) === "GLST" ? "GLST-Block der Pattern-Bank" : "kein GLST";

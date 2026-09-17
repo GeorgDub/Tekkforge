@@ -8,6 +8,7 @@ import type { BootSektorBefund } from "./bootSektor";
 import { patternNamenAusDump, type FlashDumpBefund } from "./flashKarte";
 import { globalAusDump, globalBerichtZeilen } from "./globalFlash";
 import { werksbankAusDump, werksbankZeile } from "./werksbank";
+import { sliceKarte, sliceZeile } from "./sliceFlash";
 
 const hex = (n: number): string => `0x${n.toString(16).toUpperCase()}`;
 
@@ -51,6 +52,7 @@ export function berichtFlashDump(d: FlashDumpBefund): string[] {
   z.push(`Pattern-Bank: ${namen.length} von 250 Slots mit Pattern${namen.length ? ` (${namen.slice(0, 5).map((n) => `„${n}“`).join(", ")}${namen.length > 5 ? ", …" : ""})` : ""} — als .e2sallpat ausschneidbar`);
   z.push(...globalBerichtZeilen(globalAusDump(d.dump)));
   z.push(werksbankZeile(werksbankAusDump(d.dump)));
+  z.push(sliceZeile(sliceKarte(d.dump)));
   z.push("", " Sel.  Offset     Größe      Inhalt");
   for (const r of d.regionen) z.push(` ${hex(r.selektor).padStart(4)}  ${hex(r.offset).padStart(9)}  ${hex(r.groesse).padStart(9)}  ${r.name} — ${r.befund}`);
   return z;
