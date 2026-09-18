@@ -12,6 +12,7 @@
 //   node scripts/event-routing-test.mjs load <modul>        (abs .bin hochladen + commit)
 //   node scripts/event-routing-test.mjs note <ch> <note> <vel> [ms]   (echte MIDI-Note ans Geraet)
 //   node scripts/event-routing-test.mjs arp-demo <divClock> [sekunden]   (Note halten, Drain-Schleife)
+//   node scripts/event-routing-test.mjs chord-demo [typ] [sekunden]      (Part 1 Akkord, Note halten, Release pruefen)
 import midi from "@julusian/midi"; import fs from "node:fs";
 const H = [0xf0, 0x7d, 0x01, 0x02], END = 0xf7;
 const enc7 = (d) => { const o = []; for (let i = 0; i < d.length; i += 7) { let k = 0; const e = Math.min(i + 7, d.length); for (let j = i; j < e; j++) if (d[j] & 0x80) k |= 1 << (j - i); o.push(k & 0x7f); for (let j = i; j < e; j++) o.push(d[j] & 0x7f); } return o; };
@@ -109,6 +110,25 @@ const [, , op, ...args] = process.argv;
       const s1 = await status();
       if (s0 && s1) console.log(`\nclock_ticks +${s1.clock_ticks - s0.clock_ticks}, egress_frames +${s1.egress_frames - s0.egress_frames} (injizierte Noten), refused +${s1.egress_refused - s0.egress_refused}, dropped +${s1.egress_dropped - s0.egress_dropped}`);
     }
+    else if (op === "chord-demo") {
+      // Review 2026-09-18b: chord bekam on_note_off (vorher hingen alle Akkordnoten) und
+      // triggert den gespielten Grundton nicht mehr doppelt. Erwartung: Note 60 auf ch0 ->
+      // zwei Zusatznoten (Maj: 64, 67) klingen, alle enden beim Loslassen; egress_frames +4.
+      const type = +(args[0] || 0), secs = +(args[1] || 3);
+      if (!(await load("chord"))) return;
+      const nrpn = (msb, lsb, val) => { out.sendMessage([0xb0, 99, msb]); out.sendMessage([0xb0, 98, lsb]); out.sendMessage([0xb0, 6, (val >> 7) & 0x7f]); out.sendMessage([0xb0, 38, val & 0x7f]); };
+      nrpn(0x1E, 0x03, 1); await sleep(30); nrpn(0x1E, 0x00, type); await sleep(100);   // Part 0: enabled, Typ
+      const s0 = await status();
+      console.log(`chord Part 1 Typ ${type}: Note 60 ${secs} s halten — Akkord hoerbar, danach alles still...`);
+      out.sendMessage([0x90, 60, 100]);
+      const tEnd = Date.now() + secs * 1000;
+      while (Date.now() < tEnd) { out.sendMessage(frame(0x05, 0x06, [])); await sleep(20); }
+      out.sendMessage([0x80, 60, 0]);
+      for (let i = 0; i < 10; i++) { out.sendMessage(frame(0x05, 0x06, [])); await sleep(20); }
+      rx = [];
+      const s1 = await status();
+      if (s0 && s1) console.log(`\nev_nrpn +${s1.ev_nrpn - s0.ev_nrpn} (erwartet 2), ev_note_on +${s1.ev_note_on - s0.ev_note_on}, egress_frames +${s1.egress_frames - s0.egress_frames} (erwartet 4: 2 On + 2 Off), refused +${s1.egress_refused - s0.egress_refused}, dropped +${s1.egress_dropped - s0.egress_dropped}`);
+    }
     else if (op === "modmatrix-lfo") {
       // Slot 0 von Part 0: Source LFO1_SIN (1) → Target FILTER_CUTOFF (4), Depth 100.
       // NRPN per plain CC 99/98/6/38 auf ch0 — der Ingress-Parser routet MSB 0x13/0x14/0x15
@@ -126,6 +146,6 @@ const [, , op, ...args] = process.argv;
       const s1 = await status();
       if (s0 && s1) console.log(`\nev_nrpn +${s1.ev_nrpn - s0.ev_nrpn} (erwartet 3), audio_ticks +${s1.audio_ticks - s0.audio_ticks}, egress_frames +${s1.egress_frames - s0.egress_frames} (CC-74-Injektionen)`);
     }
-    else console.log("Befehle: status | peek | install | rate | config | restore | drain | load | unplace [id|all] | note | arp-demo | modmatrix-lfo");
+    else console.log("Befehle: status | peek | install | rate | config | restore | drain | load | unplace [id|all] | note | arp-demo | chord-demo | modmatrix-lfo");
   } finally { out.closePort(); inp.closePort(); }
 })();
