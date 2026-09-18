@@ -132,12 +132,12 @@ silent after release → chord player → filter sweep on part 1 → switch ever
 
 - **MOD132 / OSZ88:** the hacktribe sampler firmware, extended so that its modulation-type
   table and the code limits around it carry 132 entries instead of 72, plus 88 additional
-  oscillator-table entries. Important caveat: the extended modulation types (72-131) are
-  **not yet reachable from the device's panel** -- the encoder still stops at 72. TekkForge can
-  write them into a pattern, but whether they actually sound on the device is **not yet
-  confirmed**; a way to activate them on the device is in development (see below). The 88
-  extra oscillator entries, by contrast, are heard and confirmed on the device. The running
-  device uses this build with the Omnitribe add-on inside.
+  oscillator-table entries. The extended modulation types (72-131) are now **settable,
+  audible and correctly named on the device** via Omnitribe: the add-on calls the firmware's
+  own mod-type setter, so all 132 types are reachable live even though the panel's own encoder
+  knob still stops at 72 (confirmed 18 Sept -- type 121 shows "S&H Filter" and sounds distinct).
+  The 88 extra oscillator entries are likewise heard and confirmed. The running device uses
+  this build with the Omnitribe add-on inside.
 - **Synth ↔ Sampler crossgrade** confirmed on the device with the product check handled; the
   factory sound file remains the boundary between the two.
 - **Flash backup and finding:** a full 16 MB dump showed that a test sound file from an
@@ -183,7 +183,7 @@ nothing is written. Only after that does "install" become a decision.
 | Omnitribe standalone (no computer), pads, on-device pages | planned | main-loop hook, then modules built into the firmware |
 | Bootloader with SD boot and flash installer | built | volatile run over the debug connector, then install decision |
 | Oscillator table +88 (OSZ88), crossgrade | works | — |
-| Extended modulation types 72-131 (MOD132) | built | not reachable from the panel; activation on the device in development |
+| Extended modulation types 72-131 (MOD132) | works | settable/audible/named on the device via the Omnitribe add-on (panel knob still stops at 72) |
 
 ## 7 · How we work
 
