@@ -62,6 +62,16 @@ import {
   buildModuleCommit,
   buildModuleUpload,
   OTP_MODULE_CHUNK_RAW,
+  OTP_MODULE_CB,
+  OTP_IRQ_STATUS_FIELDS,
+  buildModuleCallback,
+  buildModuleDrain,
+  buildIrqPeek,
+  buildIrqInstall,
+  buildIrqRestore,
+  buildIrqStatus,
+  buildIrqConfig,
+  parseIrqReport,
 } from "../src/core/otp";
 
 /**
@@ -809,5 +819,84 @@ describe("OTP: Echte Modul-Header-Sonden (OTP_MODULE_REAL_PROBES)", () => {
       expect(Array.from(decode7Bit(enc).slice(0, 44))).toEqual(Array.from(m.header));
       for (const b of frame) expect(b).toBeLessThan(0x100);
     }
+  });
+});
+
+/**
+ * Sprint 185/186 — Callback-Aufruf, Egress-Drain, Periodik-Hook (nur EXEC-Build).
+ * Draht-Formate wörtlich aus dem Stub (`handle_module_callback`, `handle_irq_hook`,
+ * `otp_ev_send_report`). Der Report kodiert jeden u32 als 7-of-8-Gruppe zu genau
+ * vier Bytes — identisch mit encode7Bit über ein 4-Byte-LE-Wort.
+ */
+describe("OTP Sprint 186: Callback, Drain, Periodik-Hook", () => {
+  const le32 = (v: number) => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
+  const payloadOf = (f: Uint8Array) => Array.from(f.slice(8, f.length - 2));
+
+  it("buildModuleCallback: [id, cb, 7-of-8(args)] — on_clock_tick(6) beim Arpeggiator", () => {
+    const f = buildModuleCallback(1, OTP_MODULE_CB.ON_CLOCK_TICK, le32(6));
+    expect([f[4], f[5]]).toEqual([0x05, 0x05]);
+    expect(payloadOf(f)).toEqual([1, 2, 0, 6, 0, 0, 0]);
+    expect(f[f.length - 1]).toBe(0xf7);
+  });
+
+  it("buildModuleDrain: SUB 0x06 ohne Nutzlast", () => {
+    const f = buildModuleDrain();
+    expect([f[4], f[5]]).toEqual([0x05, 0x06]);
+    expect(payloadOf(f)).toEqual([]);
+  });
+
+  it("Status-Texte 0x0C..0x10 sind benannt (Pre-Call, nicht-ABS, nicht platziert, cb-Index, Callback 0)", () => {
+    expect(OTP_MODULE_STATUS[0x0c]).toContain("Pre-Call");
+    expect(OTP_MODULE_STATUS[0x0d]).toContain("absolut");
+    expect(OTP_MODULE_STATUS[0x0e]).toContain("platziert");
+    expect(OTP_MODULE_STATUS[0x0f]).toContain("Index");
+    expect(OTP_MODULE_STATUS[0x10]).toContain("0");
+  });
+
+  it("buildIrqInstall: [irq, divAudio hi/lo, divClock hi/lo, src] — Timer0 (21), 41, 147, Timer-Clock", () => {
+    const f = buildIrqInstall(21, 41, 147, 1);
+    expect([f[4], f[5]]).toEqual([0x04, 0x02]);
+    expect(payloadOf(f)).toEqual([21, 0, 41, 1, 19, 1]); // 147 = 0x93 → hi 1, lo 0x13
+  });
+
+  it("buildIrqInstall ohne Teiler = nur zählen (Rate messen); Teiler werden auf 14 Bit geklemmt", () => {
+    expect(payloadOf(buildIrqInstall(21))).toEqual([21, 0, 0, 0, 0, 0]);
+    expect(payloadOf(buildIrqConfig(99999, 5, 0))).toEqual([0x7f, 0x7f, 0, 5, 0]);
+  });
+
+  it("buildIrqPeek/Restore/Status: SUBs 0x01/0x03/0x04", () => {
+    expect([buildIrqPeek(68)[5], ...payloadOf(buildIrqPeek(68))]).toEqual([0x01, 68]);
+    expect(buildIrqRestore()[5]).toBe(0x03);
+    expect(buildIrqStatus()[5]).toBe(0x04);
+    expect(buildIrqStatus()[4]).toBe(0x04);
+  });
+
+  it("parseIrqReport: Peek-Antwort [21, 0xC0025798] — Bit 7 der Bytes wandert ins hi-Byte", () => {
+    // 0xC0025798 → b0 0x98 (bit7) b1 0x57 b2 0x02 b3 0xC0 (bit7) → hi = 0b1001
+    const p = Uint8Array.from([0x01, ...encode7Bit(le32(21)), ...encode7Bit(le32(0xc0025798))]);
+    expect(Array.from(p.slice(6))).toEqual([9, 0x18, 0x57, 0x02, 0x40]);
+    const r = parseIrqReport(p);
+    expect(r).not.toBeNull();
+    expect(r!.sub).toBe(0x01);
+    expect(r!.values).toEqual([21, 0xc0025798]);
+    expect(r!.status).toBeUndefined();
+    expect(r!.error).toBeUndefined();
+  });
+
+  it("parseIrqReport: Status-Antwort liefert zwölf benannte Zähler", () => {
+    const vals = [1, 21, 0xc0025798, 70820, 412, 96, 3, 2, 17, 0, 0, 0];
+    const p = Uint8Array.from([0x04, ...vals.flatMap((v) => Array.from(encode7Bit(le32(v))))]);
+    const r = parseIrqReport(p)!;
+    expect(r.values).toEqual(vals);
+    expect(Object.keys(r.status!)).toEqual([...OTP_IRQ_STATUS_FIELDS]);
+    expect(r.status!.orig).toBe(0xc0025798);
+    expect(r.status!.ticks).toBe(70820);
+    expect(r.status!.egressFrames).toBe(17);
+  });
+
+  it("parseIrqReport: Einzelwert 0x13 = Fehler „schon installiert“; krumme Länge → null", () => {
+    const p = Uint8Array.from([0x02, ...encode7Bit(le32(0x13))]);
+    expect(parseIrqReport(p)!.error).toBe(0x13);
+    expect(parseIrqReport(Uint8Array.from([0x02, 1, 2]))).toBeNull();
   });
 });

@@ -37,6 +37,8 @@ export const OTP_PAYLOAD_MAX = 0x3fff;
 export const OtpCmd = {
   IDENTITY: 0x01,
   PARAM: 0x02,
+  /** Sprint 186: Periodik-Hook (Timer-Callback-Tabelle). Nur im EXEC-Build beantwortet. */
+  IRQ_HOOK: 0x04,
   /** Sprint 183: Modul-Lader. SUB 0x01 = Block senden, SUB 0x03 = ACK (Gerät → Host). */
   MODULE: 0x05,
   /** Sprint 141: 0x07 ist TELEMETRY (der C-Code ist die Autorität; SONG wich auf 0x11 aus). */
@@ -66,6 +68,16 @@ export const OtpSub = {
   /** Sprint 184 (Stufe 2, hinter Firmware-Flag): Chunk ins DDR und Commit. */
   MODULE_CHUNK: 0x02,
   MODULE_COMMIT: 0x04,
+  /** Sprint 185/186 (nur EXEC-Build): Callback gezielt rufen, Mailbox leeren. */
+  MODULE_CALLBACK: 0x05,
+  MODULE_DRAIN: 0x06,
+  /** Sprint 186: CMD 0x04 Periodik-Hook. Antwort immer SUB 0x7F (Report). */
+  IRQ_PEEK: 0x01,
+  IRQ_INSTALL: 0x02,
+  IRQ_RESTORE: 0x03,
+  IRQ_STATUS: 0x04,
+  IRQ_CONFIG: 0x05,
+  IRQ_REPORT: 0x7f,
 } as const;
 
 export const OTP_PART_MIN = 1;
@@ -1066,6 +1078,12 @@ export const OTP_MODULE_STATUS: Readonly<Record<number, string>> = {
   0x09: "unvollständig — Gesamtlänge ≠ code_size (Chunk verloren?)",
   0x0a: "passt nicht in den Slot (code+bss > Slot-Größe)",
   0x0b: "Chunk nicht lückenlos (Offset ≠ bisher empfangen)",
+  // Sprint 185/186 (nur EXEC-Build):
+  0x0c: "Pre-Call — init()/Callback wird JETZT gerufen (danach folgt der Endstatus)",
+  0x0d: "Modul nicht absolut gelinkt (kein OMR_FLAG_ABS_LINKED) — nicht ausgeführt",
+  0x0e: "Modul nicht platziert (kein Commit)",
+  0x0f: "Callback-Index > 6",
+  0x10: "Callback im api-Table ist 0 (nicht gesetzt)",
 } as const;
 
 export interface OtpModuleAck {
@@ -1181,6 +1199,98 @@ export function buildModuleChunk(moduleId: number, offset: number, rawChunk: Uin
 /** Commit: SUB 0x04, Payload `[module_id]` — platziert/reloziert das empfangene Modul. */
 export function buildModuleCommit(moduleId: number): Uint8Array {
   return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_COMMIT, [moduleId & 0x7f]);
+}
+
+// ── Sprint 185/186: Callback-Aufruf, Egress-Drain, Periodik-Hook (nur EXEC-Build) ──
+
+/** api-Slot-Index eines Modul-Callbacks (== Reihenfolge in OmniTribeModuleApi). */
+export const OTP_MODULE_CB = {
+  INIT: 0, ON_NRPN: 1, ON_CLOCK_TICK: 2, ON_AUDIO_TICK: 3, ON_NOTE_ON: 4, ON_NOTE_OFF: 5, DEINIT: 6,
+} as const;
+export type OtpModuleCb = (typeof OTP_MODULE_CB)[keyof typeof OTP_MODULE_CB];
+
+/**
+ * SUB 0x05: `[module_id, cb_index, 7-of-8(arg-bytes)]`. Rohe Argument-Bytes wie
+ * der Stub sie dekodiert: on_nrpn `[msb, lsb, val_lo, val_hi]`, on_clock/audio
+ * `[u32 LE]`, on_note_on `[ch, note, vel]`, on_note_off `[ch, note]`. Antwort:
+ * ACK 0x0C (Pre-Call) dann 0x00 — oder ein Fehlerstatus 0x0D..0x10.
+ */
+export function buildModuleCallback(moduleId: number, cb: OtpModuleCb, args: readonly number[] = []): Uint8Array {
+  return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_CALLBACK, [moduleId & 0x7f, cb & 0x7f, ...encode7Bit(args)]);
+}
+
+/** SUB 0x06: Modul-Mailbox im Task-Kontext leeren (Egress → Firmware). ACK: `[0x00, 0x7F, frames_lo7]`. */
+export function buildModuleDrain(): Uint8Array {
+  return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_DRAIN, []);
+}
+
+/** 14-Bit-Wert als `[hi7, lo7]`. */
+function be14(v: number): [number, number] {
+  const n = Math.max(0, Math.min(0x3fff, Math.round(v)));
+  return [(n >> 7) & 0x7f, n & 0x7f];
+}
+
+/** CMD 0x04 SUB 0x01: Tabellenwert `table[irq]` lesen (Firmware-Callback-Tabelle 0xC06A26A8). */
+export function buildIrqPeek(irq: number): Uint8Array {
+  return buildFrame(OtpCmd.IRQ_HOOK, OtpSub.IRQ_PEEK, [irq & 0x7f]);
+}
+/**
+ * CMD 0x04 SUB 0x02: Wrapper in `table[irq]` einhängen. `divAudio`/`divClock` = Teiler
+ * der Timer-Ticks (0 = aus), `clockSource` 0 = MIDI-0xF8, 1 = Timer-Teiler.
+ * Nur zählen (Rate messen): alle Teiler 0.
+ */
+export function buildIrqInstall(irq: number, divAudio = 0, divClock = 0, clockSource: 0 | 1 = 0): Uint8Array {
+  return buildFrame(OtpCmd.IRQ_HOOK, OtpSub.IRQ_INSTALL, [irq & 0x7f, ...be14(divAudio), ...be14(divClock), clockSource & 1]);
+}
+/** CMD 0x04 SUB 0x03: Original-Callback zurückschreiben. */
+export function buildIrqRestore(): Uint8Array {
+  return buildFrame(OtpCmd.IRQ_HOOK, OtpSub.IRQ_RESTORE, []);
+}
+/** CMD 0x04 SUB 0x04: zwölf Zähler abfragen (siehe `OTP_IRQ_STATUS_FIELDS`). */
+export function buildIrqStatus(): Uint8Array {
+  return buildFrame(OtpCmd.IRQ_HOOK, OtpSub.IRQ_STATUS, []);
+}
+/** CMD 0x04 SUB 0x05: nur Teiler/Quelle setzen (ohne Install). */
+export function buildIrqConfig(divAudio: number, divClock: number, clockSource: 0 | 1): Uint8Array {
+  return buildFrame(OtpCmd.IRQ_HOOK, OtpSub.IRQ_CONFIG, [...be14(divAudio), ...be14(divClock), clockSource & 1]);
+}
+
+export const OTP_IRQ_STATUS_FIELDS = [
+  "installed", "irq", "orig", "ticks", "audioTicks", "clockTicks",
+  "evNoteOn", "evNrpn", "egressFrames", "egressDropped", "egressRefused", "evClockMidi",
+] as const;
+
+export interface OtpIrqReport {
+  /** Echo des angefragten SUB (0x01..0x05). */
+  sub: number;
+  /** Rohe u32-Werte in Sendereihenfolge. */
+  values: number[];
+  /** Nur bei SUB 0x04 gefüllt: benannte Zähler. */
+  status?: Record<(typeof OTP_IRQ_STATUS_FIELDS)[number], number>;
+  /** Einzelwert ⇒ Fehlerstatus des Stubs (0x10 unbekannter SUB, 0x11 Nutzlast, 0x12 irq ≥ 101, 0x13 schon installiert, 0x14 Slot leer, 0x15 nichts installiert). */
+  error?: number;
+}
+
+/**
+ * CMD 0x04 SUB 0x7F: Payload `[sub, n × (hi, b0, b1, b2, b3)]` — je u32 eine
+ * 7-of-8-Gruppe zu genau vier Bytes (Bit j von `hi` = Bit 7 von `b_j`).
+ */
+export function parseIrqReport(payload: Uint8Array): OtpIrqReport | null {
+  if (payload.length < 1 || (payload.length - 1) % 5 !== 0) return null;
+  const sub = payload[0] & 0x7f;
+  const values: number[] = [];
+  for (let i = 1; i + 4 < payload.length + 1; i += 5) {
+    const hi = payload[i];
+    const b = (k: number) => (payload[i + 1 + k] & 0x7f) | (((hi >> k) & 1) << 7);
+    values.push((b(0) | (b(1) << 8) | (b(2) << 16) | (b(3) << 24)) >>> 0);
+  }
+  const rep: OtpIrqReport = { sub, values };
+  if (sub === OtpSub.IRQ_STATUS && values.length === OTP_IRQ_STATUS_FIELDS.length) {
+    rep.status = Object.fromEntries(OTP_IRQ_STATUS_FIELDS.map((f, k) => [f, values[k]])) as OtpIrqReport["status"];
+  } else if (values.length === 1 && values[0] >= 0x10 && values[0] <= 0x15) {
+    rep.error = values[0];
+  }
+  return rep;
 }
 
 /**
