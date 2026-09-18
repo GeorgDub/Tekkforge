@@ -17,7 +17,9 @@ Evidence levels used throughout: **works on the device** (measured on real hardw
 - **TekkForge** — *in daily use.* Pattern editor, song-to-set generator, sample bank
   workshop, MIDI control, effect presets, firmware workbench, device mirror, memory access.
 - **Omnitribe** — *modules run inside the device.* A small add-on inside the firmware that
-  loads plug-in modules over USB and runs them. Next: modules react to MIDI and make sound.
+  loads plug-in modules over USB and runs them, and now drives them from the device's own
+  timer so they make sound on their own. Next: reaching the modules from the device's pads
+  and internal sequencer.
 - **Bootloader** — *built, first run pending.* Start a firmware from the SD card without
   flashing; flash safely from the device's own menu. Four improvements built; first run over
   the debug connector.
@@ -94,25 +96,25 @@ were found without guesswork — the module code was placed at a different addre
 was built for, and the processor still had old instructions in its cache — and both are
 fixed in a way that is checked automatically at build time.
 
-### Built, tested tonight (event routing)
+### Event routing — measured on the device (18 Sept)
 
-Until now a module only did something when the computer poked it. The next build connects
-modules to the instrument itself:
+Until now a module only did something when the computer poked it. This build connected the
+modules to the instrument itself, and the pieces below were checked on real hardware:
 
-- **MIDI in:** notes, controllers and clock arriving over USB reach the modules (the
-  hacktribe control messages are deliberately left alone).
-- **Sound out:** what a module wants to play goes into the firmware's own input path, so the
-  instrument plays it like any incoming MIDI — an arpeggio, a chord, a filter sweep.
-- **Timing:** a periodic tick from the firmware's own timer, installed and removed at
-  runtime, drives arpeggiators and modulation.
-- **Safety:** every stage has counters, every stage can be switched off again, and a power
-  cycle restores the plain firmware. A review this week fixed the corner cases found on paper
-  (ordering during module load, state surviving a restart, a hanging arpeggio note, chords
-  never releasing, a modulation flood).
-
-The test plan for tonight: measure the timer rate → enable the tick → load the modulation
-matrix and watch it run by itself → play a note and see it arrive → arpeggiator audible and
-silent after release → chord player → filter sweep on part 1 → switch everything back off.
+- **Sound out (works):** what a module wants to play goes into the firmware's own input
+  path, so the instrument plays it like any incoming MIDI. Arpeggiator, chord player and a
+  modulation-matrix filter sweep were all heard coming out of the device.
+- **Timing (works):** a periodic tick from the firmware's own timer, installed and removed
+  at runtime, drives arpeggiators and modulation; the tick runs steadily with no skips.
+- **MIDI in (needs a different hook):** system-exclusive messages reach the modules, but
+  ordinary notes and controllers sent from the computer do *not* arrive at the current hook
+  point — the device routes those elsewhere before it reaches. Until that hook is added, the
+  modules are driven through direct commands from the computer instead. External-keyboard
+  input to the modules is therefore still open.
+- **Safety (works):** every stage has counters, every stage can be switched off again, and a
+  power cycle restores the plain firmware. A review this week fixed the corner cases found on
+  paper (ordering during module load, state surviving a restart, a hanging arpeggio note,
+  chords never releasing, a modulation flood).
 
 ### What comes next (planned)
 
@@ -135,7 +137,8 @@ silent after release → chord player → filter sweep on part 1 → switch ever
   oscillator-table entries. The extended modulation types (72-131) are now **settable,
   audible and correctly named on the device** via Omnitribe: the add-on calls the firmware's
   own mod-type setter, so all 132 types are reachable live even though the panel's own encoder
-  knob still stops at 72 (confirmed 18 Sept -- type 121 shows "S&H Filter" and sounds distinct).
+  knob still stops at 72 (confirmed 18 Sept -- mod type 120, which the panel numbers 121,
+  shows "S&H Filter" and sounds distinct).
   The 88 extra oscillator entries are likewise heard and confirmed. The running device uses
   this build with the Omnitribe add-on inside.
 - **Synth ↔ Sampler crossgrade** confirmed on the device with the product check handled; the
@@ -179,7 +182,7 @@ nothing is written. Only after that does "install" become a decision.
 | TekkForge editor, generator, banks, effects, device tools | works | listening tests of the newest sets; hidden device switches |
 | Omnitribe add-on: talk, read, set, inject, memory access | works | — |
 | Omnitribe modules: load, place, run, callbacks | works | — |
-| Omnitribe event routing: MIDI in, sound out, timer tick | built | device test tonight (ten stages, each reversible) |
+| Omnitribe event routing: sound out, timer tick | works | add a hook for external MIDI notes/controllers (system-exclusive already arrives) |
 | Omnitribe standalone (no computer), pads, on-device pages | planned | main-loop hook, then modules built into the firmware |
 | Bootloader with SD boot and flash installer | built | volatile run over the debug connector, then install decision |
 | Oscillator table +88 (OSZ88), crossgrade | works | — |
