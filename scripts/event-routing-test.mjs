@@ -108,6 +108,23 @@ const [, , op, ...args] = process.argv;
       const s1 = await status();
       if (s0 && s1) console.log(`\nclock_ticks +${s1.clock_ticks - s0.clock_ticks}, egress_frames +${s1.egress_frames - s0.egress_frames} (injizierte Noten), refused +${s1.egress_refused - s0.egress_refused}, dropped +${s1.egress_dropped - s0.egress_dropped}`);
     }
-    else console.log("Befehle: status | peek | install | rate | config | restore | drain | load | note | arp-demo");
+    else if (op === "modmatrix-lfo") {
+      // Slot 0 von Part 0: Source LFO1_SIN (1) → Target FILTER_CUTOFF (4), Depth 100.
+      // NRPN per plain CC 99/98/6/38 auf ch0 — der Ingress-Parser routet MSB 0x13/0x14/0x15
+      // an modmatrix.on_nrpn (MSB ≥ 0x07, Hacktribe ignoriert diese MSBs). Danach treibt
+      // der Audio-Tick den LFO; SET_MOD → CC 74 → Cutoff wobbelt hoerbar.
+      const secs = +(args[0] || 10);
+      if (!(await load("modmatrix"))) return;
+      const nrpn = (msb, lsb, val) => { out.sendMessage([0xb0, 99, msb]); out.sendMessage([0xb0, 98, lsb]); out.sendMessage([0xb0, 6, (val >> 7) & 0x7f]); out.sendMessage([0xb0, 38, val & 0x7f]); };
+      nrpn(0x13, 0, 1); await sleep(30); nrpn(0x14, 0, 4); await sleep(30); nrpn(0x15, 0, 100); await sleep(100);
+      const s0 = await status();
+      console.log(`modmatrix Slot 0: LFO1_SIN → CUTOFF, Depth 100. ${secs} s Drain-Schleife — Cutoff auf Part 1 sollte hoerbar wobbeln...`);
+      const tEnd = Date.now() + secs * 1000;
+      while (Date.now() < tEnd) { out.sendMessage(frame(0x05, 0x06, [])); await sleep(20); }
+      await sleep(200); rx = [];
+      const s1 = await status();
+      if (s0 && s1) console.log(`\nev_nrpn +${s1.ev_nrpn - s0.ev_nrpn} (erwartet 3), audio_ticks +${s1.audio_ticks - s0.audio_ticks}, egress_frames +${s1.egress_frames - s0.egress_frames} (CC-74-Injektionen)`);
+    }
+    else console.log("Befehle: status | peek | install | rate | config | restore | drain | load | note | arp-demo | modmatrix-lfo");
   } finally { out.closePort(); inp.closePort(); }
 })();
