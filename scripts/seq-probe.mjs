@@ -61,7 +61,7 @@ function classify(b) {
 }
 
 async function read() {
-  const r = await cmd04(0x05);
+  const r = await cmd04(0x06);
   if (!r) { console.log("KEIN REPORT — laeuft die Seq-Probe-Firmware und ist sie der einzige MIDI-Client?"); return null; }
   const [count, widx, magic, ...words] = r.vals;
   const ok = magic === 0x53455131;
