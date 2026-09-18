@@ -71,6 +71,7 @@ export const OtpSub = {
   /** Sprint 185/186 (nur EXEC-Build): Callback gezielt rufen, Mailbox leeren. */
   MODULE_CALLBACK: 0x05,
   MODULE_DRAIN: 0x06,
+  MODULE_UNPLACE: 0x07,
   /** Sprint 186: CMD 0x04 Periodik-Hook. Antwort immer SUB 0x7F (Report). */
   IRQ_PEEK: 0x01,
   IRQ_INSTALL: 0x02,
@@ -1258,7 +1259,14 @@ export function buildIrqConfig(divAudio: number, divClock: number, clockSource: 
 export const OTP_IRQ_STATUS_FIELDS = [
   "installed", "irq", "orig", "ticks", "audioTicks", "clockTicks",
   "evNoteOn", "evNrpn", "egressFrames", "egressDropped", "egressRefused", "evClockMidi",
+  /** Timer-Ticks, die der Wrapper ohne Modul-Aufruf verwarf, weil gerade ein Task-Kontext-Callback lief. */
+  "ticksSkipped",
 ] as const;
+
+/** SUB 0x07: Modul aus `placed_mask` nehmen (0x7F = alle) — bekommt dann keine Ereignisse mehr. ACK `[0x00, id, mask_lo7]`. */
+export function buildModuleUnplace(moduleId: number | "alle" = "alle"): Uint8Array {
+  return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_UNPLACE, [moduleId === "alle" ? 0x7f : moduleId & 0x7f]);
+}
 
 export interface OtpIrqReport {
   /** Echo des angefragten SUB (0x01..0x05). */

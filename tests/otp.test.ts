@@ -72,6 +72,7 @@ import {
   buildIrqStatus,
   buildIrqConfig,
   parseIrqReport,
+  buildModuleUnplace,
 } from "../src/core/otp";
 
 /**
@@ -883,8 +884,8 @@ describe("OTP Sprint 186: Callback, Drain, Periodik-Hook", () => {
     expect(r!.error).toBeUndefined();
   });
 
-  it("parseIrqReport: Status-Antwort liefert zwölf benannte Zähler", () => {
-    const vals = [1, 21, 0xc0025798, 70820, 412, 96, 3, 2, 17, 0, 0, 0];
+  it("parseIrqReport: Status-Antwort liefert dreizehn benannte Zähler (inkl. ticksSkipped)", () => {
+    const vals = [1, 21, 0xc0025798, 70820, 412, 96, 3, 2, 17, 0, 0, 0, 5];
     const p = Uint8Array.from([0x04, ...vals.flatMap((v) => Array.from(encode7Bit(le32(v))))]);
     const r = parseIrqReport(p)!;
     expect(r.values).toEqual(vals);
@@ -892,6 +893,13 @@ describe("OTP Sprint 186: Callback, Drain, Periodik-Hook", () => {
     expect(r.status!.orig).toBe(0xc0025798);
     expect(r.status!.ticks).toBe(70820);
     expect(r.status!.egressFrames).toBe(17);
+    expect(r.status!.ticksSkipped).toBe(5);
+  });
+
+  it("buildModuleUnplace: SUB 0x07 mit id oder 0x7F = alle", () => {
+    expect([buildModuleUnplace(9)[5], ...payloadOf(buildModuleUnplace(9))]).toEqual([0x07, 9]);
+    expect(payloadOf(buildModuleUnplace())).toEqual([0x7f]);
+    expect(payloadOf(buildModuleUnplace("alle"))).toEqual([0x7f]);
   });
 
   it("parseIrqReport: Einzelwert 0x13 = Fehler „schon installiert“; krumme Länge → null", () => {

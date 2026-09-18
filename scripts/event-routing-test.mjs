@@ -46,7 +46,7 @@ async function cmd04(sub, payload = [], ms = 1500) {
 }
 async function ack05(f, ms = 1500) { rx = []; out.sendMessage(f); const t = Date.now(); const a = []; const seen = new Set(); while (Date.now() - t < ms) { for (let k = 0; k < rx.length; k++) { const m = rx[k]; if (!seen.has(k) && m[1] === 0x7d && m[4] === 0x05 && m[5] === 0x03) { seen.add(k); a.push({ status: m[8], id: m[9], x: m[10] }); } } await sleep(8); } return a; }
 
-const STATUS_NAMES = ["installed", "irq", "orig", "ticks", "audio_ticks", "clock_ticks", "ev_note_on", "ev_nrpn", "egress_frames", "egress_dropped", "egress_refused", "ev_clock_midi"];
+const STATUS_NAMES = ["installed", "irq", "orig", "ticks", "audio_ticks", "clock_ticks", "ev_note_on", "ev_nrpn", "egress_frames", "egress_dropped", "egress_refused", "ev_clock_midi", "ticks_skipped"];
 async function status(print = true) {
   const r = await cmd04(0x04);
   if (!r) { if (print) console.log("status: KEIN REPORT"); return null; }
@@ -87,6 +87,7 @@ const [, , op, ...args] = process.argv;
     }
     else if (op === "config") { const dA = +args[0], dC = +args[1], src = +(args[2] || 0); const r = await cmd04(0x05, [hi7(dA), lo7(dA), hi7(dC), lo7(dC), src & 1]); console.log(r ? `config: div_audio=${r.vals[0]} div_clock=${r.vals[1]} src=${r.vals[2]}` : "KEIN REPORT"); }
     else if (op === "restore") { const r = await cmd04(0x03); console.log(r ? (r.vals.length === 1 ? `restore: Status 0x${r.vals[0].toString(16)}` : `restore: table[${r.vals[0]}] = ${hx(r.vals[1])}`) : "KEIN REPORT"); }
+    else if (op === "unplace") { const id = args[0] === undefined || args[0] === "all" ? 0x7f : +args[0]; const a = await ack05(frame(0x05, 0x07, [id & 0x7f])); console.log(a.length ? `unplace ${id === 0x7f ? "alle" : id}: Status 0x${a[0].status.toString(16).padStart(2, "0")}, placed_mask(low7)=0x${a[0].x.toString(16)}` : "KEIN ACK"); }
     else if (op === "drain") { const n = await drain(); console.log(n === null ? "KEIN ACK" : `drain ok, egress_frames(low7)=${n}`); await status(); }
     else if (op === "load") { await load(args[0]); await status(); }
     else if (op === "note") {
@@ -125,6 +126,6 @@ const [, , op, ...args] = process.argv;
       const s1 = await status();
       if (s0 && s1) console.log(`\nev_nrpn +${s1.ev_nrpn - s0.ev_nrpn} (erwartet 3), audio_ticks +${s1.audio_ticks - s0.audio_ticks}, egress_frames +${s1.egress_frames - s0.egress_frames} (CC-74-Injektionen)`);
     }
-    else console.log("Befehle: status | peek | install | rate | config | restore | drain | load | note | arp-demo | modmatrix-lfo");
+    else console.log("Befehle: status | peek | install | rate | config | restore | drain | load | unplace [id|all] | note | arp-demo | modmatrix-lfo");
   } finally { out.closePort(); inp.closePort(); }
 })();
