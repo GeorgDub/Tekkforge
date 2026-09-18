@@ -17,6 +17,10 @@ const ABS = "G:/IdeaProjects/Omnitribe/build/modules_abs";
 const wanted = process.argv.slice(2);
 let bins = fs.readdirSync(ABS).filter((f) => f.endsWith(".bin")).sort();
 if (wanted.length) bins = bins.filter((f) => wanted.includes(f.replace(/\.bin$/, "")));
+// audio_test (id 30) verbrennt im on_audio_tick absichtlich Zyklen (Budget-Watchdog-
+// Test) — mit aktivem Timer-Hook (Sprint 186) im IRQ-Kontext gefaehrlich. Nur laden,
+// wenn ausdruecklich genannt.
+else bins = bins.filter((f) => f !== "audio_test.bin");
 
 const out = new midi.Output(), inp = new midi.Input();
 const oi = find(out, "electribe"), ii = find(inp, "electribe");
