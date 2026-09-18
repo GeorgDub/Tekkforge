@@ -1,10 +1,9 @@
-// multi-module.mjs — ZWEI Module gleichzeitig: Chord auf Part 1, Arp auf Part 3.
-// otp_ev_note ruft JEDES platzierte Modul; jedes filtert per Kanal-Enable
-// (Chord enabled[0]=1, Arp enabled[0]=0 & enabled[2]=1). Braucht ringfix-Firmware
-// + arpeggiator.bin (enabled/target NRPN). setup/read/off wie bei prov-probe.
-//   node scripts/multi-module.mjs setup
-//   node scripts/multi-module.mjs read
-//   node scripts/multi-module.mjs off
+// chord-solo.mjs — ISOLATIONSTEST 1: NUR der Chord auf Part 1 (kein Arp).
+// setup: platziert+konfiguriert (ACK-gewartet, enabled[] verifiziert), kehrt zurueck.
+// read : liest die Telemetrie inkl. NEUER Cross-Call-Decke (inj_win_count/drain_calls).
+//   node scripts/chord-solo.mjs setup
+//   node scripts/chord-solo.mjs read      (nach dem Spielen)
+//   node scripts/chord-solo.mjs off       (Module entfernen = Injektion aus)
 import midi from "@julusian/midi"; import fs from "node:fs";
 const H=[0xf0,0x7d,0x01,0x02],END=0xf7;
 const enc7=(d)=>{const o=[];for(let i=0;i<d.length;i+=7){let k=0;const e=Math.min(i+7,d.length);for(let j=i;j<e;j++)if(d[j]&0x80)k|=1<<(j-i);o.push(k&0x7f);for(let j=i;j<e;j++)o.push(d[j]&0x7f);}return o;};
@@ -32,43 +31,41 @@ async function load(name){
   const bin=Array.from(fs.readFileSync(`G:/IdeaProjects/Omnitribe/build/modules_abs/${name}.bin`));
   const id=bin[6]|(bin[7]<<8);
   for(let o=0;o<bin.length;o+=180){const a=await ack(chunkFrame(id,o,bin.slice(o,o+180)),1200);if(!a.length||a[0].status!==0){console.log(`${name} chunk fail @${o}`);return null;}}
-  const c=await ack(fr(0x05,0x04,[id]));console.log(`${name} (id ${id}) commit: ${c.map(x=>"0x"+x.status.toString(16).padStart(2,"0")).join("→")}`);return id;
+  const c=await ack(fr(0x05,0x04,[id]));
+  console.log(`${name} (id ${id}) commit: ${c.map(x=>"0x"+x.status.toString(16).padStart(2,"0")).join("→")}`);
+  return id;
+}
+function showTelem(v){
+  if(!v){console.log("  KEIN Telemetrie-Report");return;}
+  const [eg,ref,dr,trip,rc,wr,ticks,non,pump,draining,win,dc]=v;
+  console.log(`  egress=${eg} refused=${ref} dropped=${dr}  rate_tripped=${trip}`);
+  console.log(`  inj_win_count=${win}/300  drain_calls=${dc}  pump=${pump}  draining=${draining}  ticks=${ticks}`);
 }
 (async()=>{
  try{
   const mode=process.argv[2]||"read";
   if(mode==="off"){const a=await ack(fr(0x05,0x07,[0x7f]));console.log("unplace all:",a.length?("0x"+a[0].status.toString(16)):"—","-> Injektion aus");return;}
   if(mode==="setup"){
-    await ack(fr(0x05,0x07,[0x7f]));
-    const inst=await cmd04(0x02,[21,0,0,hi7(21),lo7(21),1]);console.log("periodik:",inst?(inst.length===1?`0x${inst[0].toString(16)}(schon)`:`irq ${inst[0]}`):"—");
+    await ack(fr(0x05,0x07,[0x7f]));                       // unplace all
+    const inst=await cmd04(0x02,[21,0,0,hi7(21),lo7(21),1]);
+    console.log("periodik:",inst?(inst.length===1?`0x${inst[0].toString(16)} (schon installiert — ok)`:`irq ${inst[0]}`):"KEIN REPORT");
     await cmd04(0x05,[0,0,hi7(21),lo7(21),1]);
     const chordId=await load("chord"); if(chordId===null)return;
-    const arpId=await load("arpeggiator"); if(arpId===null)return;
-    const cfg=async(id,msb,lsb,val,tag)=>{const a=await ack(nrpn(id,msb,lsb,val));console.log(`  ${tag}: ${a.length?("0x"+a[0].status.toString(16).padStart(2,"0")):"KEIN ACK"}`);};
-    await cfg(chordId,0x1e,(0<<4)|0x00,0,  "chord type=Maj");
-    await cfg(chordId,0x1e,(0<<4)|0x02,200,"chord root=played");
-    await cfg(chordId,0x1e,(0<<4)|0x01,0,  "chord stagger=0");
-    await cfg(chordId,0x1e,(0<<4)|0x03,1,  "chord enabled[P1]=1");
-    // Arp NUR auf ch2 (Part 3): alle anderen Kanaele AUS, sonst startet die Arp-Ausgabe
-    // (Part 4) oder Spielen auf anderen Parts weitere Arp-Instanzen (Eingang==Ausgang-Haenger).
-    for(let ch=0; ch<16; ch++){ if(ch===2) continue; await cfg(arpId,0x16,(ch<<4)|0x06,0, `arp enabled[ch${ch}]=0`); }
-    await cfg(arpId,  0x16,(2<<4)|0x06,1,  "arp enabled[P3]=1");
-    await cfg(arpId,  0x16,(2<<4)|0x05,3,  "arp target[P3]=Part 4 (Ausgang != Eingang)");
-    const cg=await rd32(0xC2090000+0x24);
+    const cfg=async(msb,lsb,val,tag)=>{const a=await ack(nrpn(chordId,msb,lsb,val));console.log(`  ${tag}: ${a.length?("0x"+a[0].status.toString(16).padStart(2,"0")):"KEIN ACK"}`);};
+    await cfg(0x1e,(0<<4)|0x00,0,  "chord type=Maj");
+    await cfg(0x1e,(0<<4)|0x02,200,"chord root=played");
+    await cfg(0x1e,(0<<4)|0x01,0,  "chord stagger=0");
+    await cfg(0x1e,(0<<4)|0x03,1,  "chord enabled[P1]=1");
+    const cg=await rd32(0xC2000000+chordId*0x10000+0x24);
     const en=cg?await peek(cg+0,4):null;
     console.log(`  => chord enabled[0..3] = ${en?en.join(" "):"—"} (Part 1 muss 1 sein, Rest 0)`);
-    console.log("\nSETUP fertig: Chord auf Part 1 (Maj, root=gespielt), Arp auf Part 3 (ch0 des Arp AUS).");
-    console.log("Spiel Akkorde auf PART 1 und HALTE eine Note auf PART 3. Dann: node scripts/multi-module.mjs read");
+    console.log("\nSETUP fertig. NUR Chord auf Part 1, KEIN Arp.");
     return;
   }
   // read
-  const t=await cmd04(0x0a);
   const cg=await rd32(0xC2090000+0x24);
-  const hn=cg?await peek(cg+1252,4):null;
-  if(t){const[eg,ref,dr,trip,,wr,ticks,,pump,draining,win,dc,hits,lat]=t;
-    console.log(`egress=${eg} refused=${ref} dropped=${dr} rate_tripped=${trip}`);
-    console.log(`inj_hits=${hits} inj_hit_lat_max=${lat}  egress:inj_hits sollte ~1:1 sein (keine Kaskade)`);
-    console.log(`inj_win_count=${win}/300 drain_calls=${dc} pump=${pump} draining=${draining}`);}
-  console.log(`chord.held_n[0..3] = ${hn?hn.join(" "):"—"}`);
+  const hn=cg?await peek(cg+1252,4):null;   // held_n[0..3]
+  showTelem(await cmd04(0x0a));
+  console.log(`  chord.held_n[0..3] = ${hn?hn.join(" "):"—"}`);
  } finally{out.closePort();inp.closePort();}
 })();
