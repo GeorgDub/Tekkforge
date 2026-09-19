@@ -4,7 +4,17 @@
  * Dieses Skelett baut nur die Karten; Sende-Logik folgt in Task 5-8.
  */
 
-import { OMNI_MODULES, type OmniModule } from "../core/otp";
+import {
+  OMNI_MODULES,
+  type OmniModule,
+  buildModuleUpload,
+  buildModuleUnplace,
+  parseModuleAck,
+  istOtpAntwort,
+  OtpCmd,
+  OtpSub,
+} from "../core/otp";
+import { omniModuleBytes } from "../core/omniModuleBins";
 
 export interface OmniHooks {
   sysexSenden(f: Uint8Array): Promise<void>;
@@ -25,7 +35,7 @@ function kartenMarkup(m: OmniModule): string {
   const badge = m.tested ? "" : ` <span class="omni-badge">ungetestet</span>`;
   return `<div class="omni-karte" data-omni-modul="${m.id}">
     <div class="omni-kopf">${m.name} <small>id ${m.id}</small>${badge}
-      <span class="omni-led" data-omni-led="${m.id}"></span></div>
+      <span class="omni-led" id="omniLed${m.id}" data-omni-led="${m.id}"></span></div>
     <div class="omni-zeile">
       <label>Part <select data-omni-part="${m.id}">${
         Array.from({ length: 16 }, (_, i) => `<option value="${i}">${i + 1}</option>`).join("")
@@ -46,7 +56,74 @@ export function initOmni(h: OmniHooks): void {
       <span id="omniStatus">bereit</span>
     </div>
     <div class="omni-liste">${OMNI_MODULES.map(kartenMarkup).join("")}</div>`;
-  // Event-Handler folgen in Task 5-7.
+  // Event-Delegation fuers echte Panel. Der minimale Test-Stub (nur `innerHTML`,
+  // kein addEventListener) hat keine Traversierung — dort rufen die Tests
+  // modulLaden/modulEntladen direkt auf, darum ist dieser Zweig hier optional.
+  const container = $("viewOmni");
+  if (typeof container.addEventListener === "function") {
+    container.addEventListener("click", (e) => {
+      const t = e.target as HTMLElement | null;
+      const laden = t?.getAttribute?.("data-omni-laden");
+      const entladen = t?.getAttribute?.("data-omni-entladen");
+      if (laden) void modulLaden(Number(laden));
+      else if (entladen) void modulEntladen(Number(entladen));
+    });
+  }
+}
+
+/**
+ * Modul komplett laden: Chunks (Stufe 2, CMD 0x05 SUB 0x02) + abschliessender
+ * Commit (SUB 0x04), je gesendetem Frame auf ein ACK (SUB 0x03) gewartet.
+ * Nur ein fehlgeschlagener COMMIT bricht ab (Chunk-Fehler zeigen sich erst im
+ * Commit-Status, s. `OTP_MODULE_STATUS` 0x09/0x0a/0x0b).
+ */
+export async function modulLaden(id: number): Promise<void> {
+  if (!hooks) return;
+  const bytes = omniModuleBytes(id);
+  if (!bytes) {
+    statusSetzen(`Modul ${id}: kein Build gebuendelt`);
+    return;
+  }
+  const frames = buildModuleUpload(id, bytes); // N Chunks + Commit
+  for (let i = 0; i < frames.length; i++) {
+    await hooks.sysexSenden(frames[i]);
+    const ack = await hooks.warten((r) => istOtpAntwort(r, OtpCmd.MODULE, OtpSub.MODULE_ACK), 1500);
+    const a = ack ? parseModuleAck(parseFramePayload(ack)) : null;
+    if (a && !a.ok && frames[i][5] === OtpSub.MODULE_COMMIT) {
+      statusSetzen(`Commit-Fehler: ${a.text}`);
+      return;
+    }
+  }
+  platziert.add(id);
+  ledAktualisieren();
+  statusSetzen(`Modul ${id} geladen`);
+}
+
+/** Modul aus `placed_mask` nehmen (SUB 0x07) — bekommt am Geraet keine Ereignisse mehr. */
+export async function modulEntladen(id: number): Promise<void> {
+  if (!hooks) return;
+  await hooks.sysexSenden(buildModuleUnplace(id));
+  platziert.delete(id);
+  ledAktualisieren();
+  statusSetzen(`Modul ${id} entladen`);
+}
+
+/** ACK-Payload aus einem vollstaendigen OTP-Rahmen ziehen (ab Byte 8 bis vor CHK/F7). */
+function parseFramePayload(raw: Uint8Array): Uint8Array {
+  const len = ((raw[6] & 0x7f) << 7) | (raw[7] & 0x7f);
+  return raw.slice(8, 8 + len);
+}
+
+function statusSetzen(t: string): void {
+  const el = document.getElementById("omniStatus");
+  if (el) el.textContent = t;
+}
+
+function ledAktualisieren(): void {
+  for (const m of OMNI_MODULES) {
+    const led = document.getElementById(`omniLed${m.id}`);
+    led?.classList?.toggle("an", platziert.has(m.id));
+  }
 }
 
 export function omniZustand(): { module: { id: number; platziert: boolean }[] } {

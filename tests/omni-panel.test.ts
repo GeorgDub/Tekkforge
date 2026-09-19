@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { initOmni, omniZustand } from "../src/gui/omniPanel";
+import { initOmni, omniZustand, modulLaden, modulEntladen } from "../src/gui/omniPanel";
+import { OtpCmd, OtpSub, buildFrame } from "../src/core/otp";
 
 /**
  * Omni-Panel ueber denselben DOM-Stub wie die anderen Panel-Tests
@@ -68,5 +69,67 @@ describe("Omni-Panel", () => {
   it("omniZustand listet die Module (anfangs nicht platziert)", () => {
     initOmni(hooksStub());
     expect(omniZustand().module.every((m) => !m.platziert)).toBe(true);
+  });
+
+  /**
+   * Controller-Ruling (Task 5): kein jsdom im Projekt, der Panel-Test-Stub ist
+   * nur ein `innerHTML`-String ohne DOM-Baum — darum ruft der Test die
+   * Aktions-Funktionen direkt auf statt einen Klick auf `[data-omni-laden]`
+   * zu simulieren. Geprueft wird, was ueber `sysexSenden` ging und was
+   * `omniZustand()` danach fuehrt.
+   */
+  it("Laden sendet Chunks + Commit und wartet je ACK", async () => {
+    // ACK-Antwort simulieren: CMD 0x05 SUB 0x03, [status0, id, block]
+    const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 9, 0]);
+    const h = {
+      sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ack),
+    };
+    initOmni(h);
+    await modulLaden(9);
+    const gesendet = h.sysexSenden.mock.calls.map((c) => c[0]);
+    expect(gesendet.length).toBeGreaterThan(1); // mindestens ein Chunk + Commit
+    // mindestens ein Commit-Frame (SUB 0x04) ging raus
+    expect(gesendet.some((f) => f[5] === OtpSub.MODULE_COMMIT)).toBe(true);
+    // je gesendetem Frame wurde auf ein ACK gewartet
+    expect(h.warten.mock.calls.length).toBe(gesendet.length);
+    expect(omniZustand().module.find((m) => m.id === 9)!.platziert).toBe(true);
+  });
+
+  it("Entladen sendet Unplace und raeumt platziert", async () => {
+    const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 9, 0]);
+    const h = {
+      sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ack),
+    };
+    initOmni(h);
+    await modulLaden(9); // erst platzieren, damit das Entladen etwas raeumt
+    await modulEntladen(9);
+    expect(h.sysexSenden.mock.calls.some((c) => c[0][5] === OtpSub.MODULE_UNPLACE)).toBe(true);
+    expect(omniZustand().module.find((m) => m.id === 9)!.platziert).toBe(false);
+  });
+
+  it("Laden ohne gebuendeltes Modul sendet nichts und meldet den Status", async () => {
+    const h = hooksStub();
+    initOmni(h);
+    await modulLaden(999); // keine .bin fuer id 999 in omniModuleBins gebuendelt
+    expect(h.sysexSenden).not.toHaveBeenCalled();
+    expect(omniZustand().module.every((m) => !m.platziert)).toBe(true);
+  });
+
+  it("Commit-Fehler laesst das Modul unplatziert", async () => {
+    // Status 0x0a = "passt nicht in den Slot" (OTP_MODULE_STATUS) — auf jeden
+    // Frame geantwortet; nur beim COMMIT-Frame selbst greift der Abbruch.
+    const ackFehler = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x0a, 9, 0]);
+    const h = {
+      sysexSenden: vi.fn(async () => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ackFehler),
+    };
+    initOmni(h);
+    await modulLaden(9);
+    expect(omniZustand().module.find((m) => m.id === 9)!.platziert).toBe(false);
   });
 });
