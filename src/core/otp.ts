@@ -979,6 +979,30 @@ export function firmwareInfoText(fw: OtpFirmwareInfo): string {
   );
 }
 
+// ─── 0x52 Memory-Peek (READ ONLY, <= 64 Byte) ────────────────────────────────
+// Sonderrahmen des Hacktribe-Peek-Passthrough: KEIN CMD/SUB/LEN/CHK, sondern
+// F0 7D 01 02 52 <7-of-8(le32(addr) ++ le32(len))> F7. Gegenstelle: scripts/peek.mjs.
+const le32 = (v: number): number[] => [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
+
+export function buildPeek(addr: number, len: number): Uint8Array {
+  const l = Math.max(0, Math.min(64, len));
+  const nutz = encode7Bit([...le32(addr >>> 0), ...le32(l >>> 0)]);
+  return Uint8Array.from([OTP_SYSEX_START, ...OTP_MFR_ID, 0x52, ...nutz, OTP_SYSEX_END]);
+}
+export function istPeekAntwort(raw: Uint8Array | readonly number[]): boolean {
+  return raw.length >= 6 && raw[1] === OTP_MFR_ID[0] && raw[4] === 0x52;
+}
+export function parsePeek(raw: Uint8Array | readonly number[], len: number): Uint8Array | null {
+  if (raw.length < 2) return null;
+  const start = raw[0] === OTP_SYSEX_START ? 5 : 1;
+  const ende = raw[raw.length - 1] === OTP_SYSEX_END ? raw.length - 1 : raw.length;
+  return decode7Bit(Array.from(raw).slice(start, ende)).slice(0, len);
+}
+export function peekU32(raw: Uint8Array | readonly number[]): number | null {
+  const d = parsePeek(raw, 4);
+  return d && d.length >= 4 ? ((d[0] | (d[1] << 8) | (d[2] << 16) | (d[3] << 24)) >>> 0) : null;
+}
+
 // ─── Modul-Lader Stufe 1 (CMD 0x05) ──────────────────────────────────────────
 //
 // Gegenstelle: `handle_module_block_stage1` in Omnitribes
