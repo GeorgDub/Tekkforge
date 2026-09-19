@@ -8,6 +8,9 @@ import {
   omniParamSenden,
   presetLaden,
   allesAus,
+  omniStatusEinmal,
+  omniStatusStart,
+  omniWirdVerlassen,
 } from "../src/gui/omniPanel";
 import { OtpCmd, OtpSub, buildFrame, buildOmniNrpn, OMNI_MODULES as MODS } from "../src/core/otp";
 
@@ -296,5 +299,58 @@ describe("Omni-Panel", () => {
     await allesAus();
     const f = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array).find((x) => x[5] === OtpSub.MODULE_UNPLACE);
     expect(f && f[8]).toBe(0x7f);
+  });
+
+  /**
+   * Status-Poller (Task 8): IRQ-Status-Report (CMD 0x04 SUB 0x7F, Echo-SUB
+   * 0x04) mit 13 u32-Zaehlern + placed_mask-Peek (0xC2200084). `sysexAnfrage`
+   * unterscheidet die beiden Anfragen am Sonder-Frame des Peeks (Byte 4 ==
+   * 0x52, s. `buildPeek`/`istPeekAntwort` in core/otp.ts) — bei normalen
+   * `buildFrame`-Rahmen steht dort CMD.
+   */
+  it("Status-Poll fragt IRQ-Status und placed_mask-Peek ab", async () => {
+    const werte = new Array(13).fill(0);
+    const payload = [OtpSub.IRQ_STATUS, ...werte.flatMap(() => [0, 0, 0, 0, 0])];
+    const report = buildFrame(OtpCmd.IRQ_HOOK, OtpSub.IRQ_REPORT, payload);
+    const h = {
+      sysexSenden: vi.fn(async () => {}),
+      sysexAnfrage: vi.fn(async (f: Uint8Array) =>
+        f[4] === 0x52 ? Uint8Array.of(0xf0, 0x7d, 0x01, 0x02, 0x52, 0, 0, 0, 0, 0, 0xf7) : report,
+      ),
+      warten: vi.fn(async () => null),
+    };
+    initOmni(h);
+    await omniStatusEinmal();
+    expect(h.sysexAnfrage).toHaveBeenCalled();
+    // beide Anfragen gingen raus: einmal IRQ-Status (CMD 0x04), einmal Peek (0x52)
+    const angefragt = h.sysexAnfrage.mock.calls.map((c) => c[0] as Uint8Array);
+    expect(angefragt.some((f) => f[4] === OtpCmd.IRQ_HOOK && f[5] === OtpSub.IRQ_STATUS)).toBe(true);
+    expect(angefragt.some((f) => f[4] === 0x52)).toBe(true);
+  });
+
+  it("omniStatusStart pollt periodisch, omniWirdVerlassen stoppt das Interval", async () => {
+    vi.useFakeTimers();
+    try {
+      const werte = new Array(13).fill(0);
+      const payload = [OtpSub.IRQ_STATUS, ...werte.flatMap(() => [0, 0, 0, 0, 0])];
+      const report = buildFrame(OtpCmd.IRQ_HOOK, OtpSub.IRQ_REPORT, payload);
+      const h = {
+        sysexSenden: vi.fn(async () => {}),
+        sysexAnfrage: vi.fn(async (f: Uint8Array) =>
+          f[4] === 0x52 ? Uint8Array.of(0xf0, 0x7d, 0x01, 0x02, 0x52, 0, 0, 0, 0, 0, 0xf7) : report,
+        ),
+        warten: vi.fn(async () => null),
+      };
+      initOmni(h);
+      omniStatusStart();
+      await vi.advanceTimersByTimeAsync(1000);
+      const treffer = h.sysexAnfrage.mock.calls.length;
+      expect(treffer).toBeGreaterThan(0);
+      omniWirdVerlassen();
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(h.sysexAnfrage.mock.calls.length).toBe(treffer); // nach dem Stop kein weiterer Traffic
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

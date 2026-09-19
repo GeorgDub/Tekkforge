@@ -12,7 +12,7 @@ import { initEditor, loadProject, panelBridge, editorWirdSichtbar, appendPattern
 import { initConverter } from "./converter";
 import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
-import { initOmni } from "./omniPanel";
+import { initOmni, omniWirdVerlassen } from "./omniPanel";
 import { initGenerator, generatorWirdSichtbar } from "./generator";
 import { initMidiImport, midiImportWirdSichtbar, midiImportLadeLied } from "./midiImport";
 import { requestSysex, waitSysex } from "./midi";
@@ -46,6 +46,9 @@ function switchTab(tab: Tab): void {
   // Die Werkbank spielt weiter, wenn man sie nur verlaesst — Ton aus einem
   // Tab, den man nicht mehr sieht, ist ein Geist, den niemand sucht.
   if (aktiverTab === "stems" && tab !== "stems") stemWerkbankVerlassen();
+  // Status-Poller (IRQ-Status + placed_mask-Peek) soll nicht weiterlaufen,
+  // wenn man den Omni-Tab verlaesst — sonst Dauer-Traffic im Hintergrund.
+  if (aktiverTab === "omni" && tab !== "omni") omniWirdVerlassen();
   aktiverTab = tab;
   for (const [name, t] of Object.entries(TABS) as [Tab, (typeof TABS)[Tab]][]) {
     $(t.view).classList.toggle("hidden", name !== tab);

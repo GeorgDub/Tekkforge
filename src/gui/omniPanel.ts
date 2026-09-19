@@ -13,6 +13,11 @@ import {
   buildOmniNrpn,
   buildIrqInstall,
   buildIrqConfig,
+  buildIrqStatus,
+  parseIrqReport,
+  buildPeek,
+  istPeekAntwort,
+  peekU32,
   parseModuleAck,
   istOtpAntwort,
   OtpCmd,
@@ -28,6 +33,9 @@ export interface OmniHooks {
 
 let hooks: OmniHooks | null = null;
 const platziert = new Set<number>();
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+/** `placed_mask` liegt laut Geraetemessung an dieser festen DDR-Adresse (Omnitribe-Referenzskript peek.mjs). */
+const OMNI_PLACED_MASK_ADDR = 0xc2200084;
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -57,6 +65,7 @@ export function initOmni(h: OmniHooks): void {
   $("viewOmni").innerHTML = `<div class="omni-kopfleiste">
       <button id="omniPreset">Preset laden (Chord P1 + Arp P3-4)</button>
       <button id="omniAus">Alles aus</button>
+      <button id="omniStatusPoll">Status-Poll an</button>
       <span id="omniStatus">bereit</span>
     </div>
     <div class="omni-liste">${OMNI_MODULES.map(kartenMarkup).join("")}</div>`;
@@ -73,6 +82,12 @@ export function initOmni(h: OmniHooks): void {
       }
       if (t?.id === "omniAus") {
         void allesAus();
+        return;
+      }
+      if (t?.id === "omniStatusPoll") {
+        if (pollLaeuft()) omniWirdVerlassen();
+        else omniStatusStart();
+        t.textContent = pollLaeuft() ? "Status-Poll aus" : "Status-Poll an";
         return;
       }
       const laden = t?.getAttribute?.("data-omni-laden");
@@ -199,6 +214,50 @@ function parseFramePayload(raw: Uint8Array): Uint8Array {
 function statusSetzen(t: string): void {
   const el = document.getElementById("omniStatus");
   if (el) el.textContent = t;
+}
+
+function pollLaeuft(): boolean {
+  return pollTimer !== null;
+}
+
+/**
+ * Ein Poll-Zyklus: IRQ-Status (CMD 0x04 SUB 0x04, Antwort immer SUB 0x7F
+ * Report mit 13 Zaehlern) + `placed_mask`-Peek (0xC2200084, 4 Byte) abfragen
+ * und das Ergebnis in `#omniStatus` zeigen. Direkt aufrufbar (auch ohne
+ * laufenden Poller) — der Toggle-Button und `omniStatusStart` nutzen dieselbe
+ * Funktion.
+ */
+export async function omniStatusEinmal(): Promise<void> {
+  if (!hooks) return;
+  try {
+    const rep = await hooks.sysexAnfrage(
+      buildIrqStatus(),
+      (r) => istOtpAntwort(r, OtpCmd.IRQ_HOOK, OtpSub.IRQ_REPORT),
+      1200,
+    );
+    const info = parseIrqReport(parseFramePayload(rep));
+    const placedRaw = await hooks.sysexAnfrage(buildPeek(OMNI_PLACED_MASK_ADDR, 4), istPeekAntwort, 1200);
+    const placed = peekU32(placedRaw) ?? 0;
+    const egress = info?.status?.egressFrames ?? 0;
+    const ticks = info?.status?.ticks ?? 0;
+    statusSetzen(`placed_mask=0x${placed.toString(16)}  egress=${egress}  ticks=${ticks}`);
+  } catch {
+    statusSetzen("Status: keine Antwort");
+  }
+}
+
+/** Poller starten (alle ~1 s `omniStatusEinmal`) — kein Effekt, wenn er schon laeuft. */
+export function omniStatusStart(): void {
+  if (pollTimer) return;
+  pollTimer = setInterval(() => void omniStatusEinmal(), 1000);
+}
+
+/** Poller stoppen — beim Tab-Verlassen aus main.ts aufgerufen, damit im Ruhezustand kein Dauer-Traffic entsteht. */
+export function omniWirdVerlassen(): void {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
 }
 
 function ledAktualisieren(): void {
