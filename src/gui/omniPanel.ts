@@ -7,8 +7,10 @@
 import {
   OMNI_MODULES,
   type OmniModule,
+  type OmniParam,
   buildModuleUpload,
   buildModuleUnplace,
+  buildOmniNrpn,
   parseModuleAck,
   istOtpAntwort,
   OtpCmd,
@@ -68,7 +70,75 @@ export function initOmni(h: OmniHooks): void {
       if (laden) void modulLaden(Number(laden));
       else if (entladen) void modulEntladen(Number(entladen));
     });
+    // Delegation fuers echte Panel: Param-Widgets senden ihren NRPN-Callback
+    // bei `change`. Der minimale Test-Stub hat keinen `addEventListener` —
+    // Tests rufen `omniParamSenden`/`paramsRendern` direkt auf (s. omni-panel.test.ts).
+    container.addEventListener("change", (e) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.hasAttribute?.("data-omni-pid")) paramGeaendert(t as HTMLInputElement | HTMLSelectElement);
+    });
   }
+}
+
+/** Part-Auswahl der Modul-Karte lesen (0-basiert); Fallback Part 1 (0). */
+function aktuellerPart(id: number): number {
+  const sel = document.querySelector<HTMLSelectElement>(`[data-omni-part="${id}"]`);
+  return sel ? Number(sel.value) : 0;
+}
+
+function paramWidget(m: OmniModule, p: OmniParam): string {
+  const key = `data-omni-modul-id="${m.id}" data-omni-pid="${p.pid}"`;
+  if (p.kind === "toggle") return `<label>${p.label} <input type="checkbox" ${key}></label>`;
+  if (p.kind === "enum")
+    return `<label>${p.label} <select ${key}>${
+      p.options!.map((o) => `<option value="${o.wert}">${o.text}</option>`).join("")
+    }</select></label>`;
+  if (p.kind === "part")
+    return `<label>${p.label} <select ${key}>${
+      Array.from({ length: 16 }, (_, i) => `<option value="${i}">${i + 1}</option>`).join("")
+    }</select></label>`;
+  return `<label>${p.label} <input type="range" min="${p.min ?? 0}" max="${p.max ?? 127}" ${key}></label>`;
+}
+
+/**
+ * Params-Host eines Moduls per String-Splice in `viewOmni` ersetzen — nicht
+ * per `querySelector` auf einem Kind-Element: der Test-Stub kennt nur
+ * `innerHTML` als String (kein DOM-Baum), und dieselbe Implementierung muss
+ * unveraendert auch im echten Browser-DOM funktionieren (dort ist `innerHTML`
+ * ebenso ein String-Property). Die Param-Widgets selbst haben keine `<div>`,
+ * darum ist das naechste `</div>` nach der Markierung zuverlaessig deren Ende.
+ */
+function setParamsHost(id: number, html: string): void {
+  const container = $("viewOmni");
+  const marker = `data-omni-params="${id}">`;
+  const start = container.innerHTML.indexOf(marker);
+  if (start === -1) return;
+  const inhaltStart = start + marker.length;
+  const ende = container.innerHTML.indexOf("</div>", inhaltStart);
+  if (ende === -1) return;
+  container.innerHTML = container.innerHTML.slice(0, inhaltStart) + html + container.innerHTML.slice(ende);
+}
+
+/** Param-Widgets eines platzierten Moduls rendern (Enable-Toggle ist ein normaler Param darunter). */
+export function paramsRendern(id: number): void {
+  const m = OMNI_MODULES.find((x) => x.id === id);
+  if (!m) return;
+  setParamsHost(id, m.params.map((p) => paramWidget(m, p)).join(""));
+}
+
+/** on_nrpn(msb, (part<<4)|pid, value) fuer ein Omni-Modul senden — direkt testbar ohne DOM-Event. */
+export function omniParamSenden(modul: OmniModule, part: number, pid: number, value: number): void {
+  if (!hooks) return;
+  void hooks.sysexSenden(buildOmniNrpn(modul, part, pid, value));
+}
+
+function paramGeaendert(el: HTMLInputElement | HTMLSelectElement): void {
+  const id = Number(el.getAttribute("data-omni-modul-id"));
+  const pid = Number(el.getAttribute("data-omni-pid"));
+  const m = OMNI_MODULES.find((x) => x.id === id);
+  if (!m) return;
+  const wert = el instanceof HTMLInputElement && el.type === "checkbox" ? (el.checked ? 1 : 0) : Number(el.value);
+  omniParamSenden(m, aktuellerPart(id), pid, wert);
 }
 
 /**
@@ -95,6 +165,7 @@ export async function modulLaden(id: number): Promise<void> {
     }
   }
   platziert.add(id);
+  paramsRendern(id);
   ledAktualisieren();
   statusSetzen(`Modul ${id} geladen`);
 }
@@ -104,6 +175,7 @@ export async function modulEntladen(id: number): Promise<void> {
   if (!hooks) return;
   await hooks.sysexSenden(buildModuleUnplace(id));
   platziert.delete(id);
+  setParamsHost(id, "");
   ledAktualisieren();
   statusSetzen(`Modul ${id} entladen`);
 }

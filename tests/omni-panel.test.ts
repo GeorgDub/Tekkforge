@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { initOmni, omniZustand, modulLaden, modulEntladen } from "../src/gui/omniPanel";
-import { OtpCmd, OtpSub, buildFrame } from "../src/core/otp";
+import { initOmni, omniZustand, modulLaden, modulEntladen, paramsRendern, omniParamSenden } from "../src/gui/omniPanel";
+import { OtpCmd, OtpSub, buildFrame, buildOmniNrpn, OMNI_MODULES as MODS } from "../src/core/otp";
 
 /**
  * Omni-Panel ueber denselben DOM-Stub wie die anderen Panel-Tests
@@ -26,7 +26,7 @@ const el = (id: string): StubElement => {
 const g = globalThis as unknown as { document?: unknown };
 
 const hooksStub = () => ({
-  sysexSenden: vi.fn(async () => {}),
+  sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
   sysexAnfrage: vi.fn(async () => new Uint8Array()),
   warten: vi.fn(async () => null),
 });
@@ -131,5 +131,80 @@ describe("Omni-Panel", () => {
     initOmni(h);
     await modulLaden(9);
     expect(omniZustand().module.find((m) => m.id === 9)!.platziert).toBe(false);
+  });
+
+  /**
+   * Controller-Ruling (wie schon Task 5): kein jsdom, der Panel-Test-Stub kennt
+   * nur `innerHTML` als String (kein DOM-Baum, kein `querySelector`, kein echtes
+   * `dispatchEvent`). Der Brief-Testcode simuliert `dispatchEvent(new Event("change"))`
+   * auf einem per `querySelector` gefundenen Element — das geht mit diesem Stub
+   * nicht. Darum: Widgets werden per Substring im `viewOmni`-innerHTML geprueft
+   * (wie in den bestehenden Tests oben), und die Sende-Aktion `omniParamSenden`
+   * wird DIREKT aufgerufen statt ueber ein simuliertes `change`-Event.
+   */
+  it("rendert Parameter-Widgets, wenn ein Modul platziert ist", async () => {
+    const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 1, 0]);
+    const h = {
+      sysexSenden: vi.fn(async () => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ack),
+    };
+    initOmni(h);
+    await modulLaden(1); // Arp — gebuendelt, s. omniModuleBins
+    const karte = kartenAusschnitt(1);
+    const arp = MODS.find((m) => m.id === 1)!;
+    expect(arp.params.length).toBeGreaterThan(0);
+    for (const p of arp.params) {
+      expect(karte).toContain(`data-omni-pid="${p.pid}"`);
+    }
+  });
+
+  it("paramsRendern laesst sich unabhaengig vom Laden-Status direkt aufrufen", () => {
+    initOmni(hooksStub());
+    paramsRendern(9); // Chord — auch ohne vorheriges modulLaden
+    const karte = kartenAusschnitt(9);
+    const chord = MODS.find((m) => m.id === 9)!;
+    for (const p of chord.params) {
+      expect(karte).toContain(`data-omni-pid="${p.pid}"`);
+    }
+  });
+
+  it("modulEntladen leert den Params-Host wieder", async () => {
+    const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 9, 0]);
+    const h = {
+      sysexSenden: vi.fn(async () => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ack),
+    };
+    initOmni(h);
+    await modulLaden(9);
+    expect(kartenAusschnitt(9)).toContain('data-omni-pid="0"');
+    await modulEntladen(9);
+    expect(kartenAusschnitt(9)).not.toContain("data-omni-pid=");
+  });
+
+  it("omniParamSenden sendet den passenden NRPN-Callback (Arp-Latch, part=2)", () => {
+    const h = hooksStub();
+    initOmni(h);
+    const arp = MODS.find((m) => m.id === 1)!;
+    omniParamSenden(arp, 2, 0x04, 1);
+    expect(h.sysexSenden).toHaveBeenCalledTimes(1);
+    const f = h.sysexSenden.mock.calls[0][0] as Uint8Array;
+    expect(f[5]).toBe(OtpSub.MODULE_CALLBACK);
+    // Payload beginnt [id=1, cb=1 (ON_NRPN), ...]
+    expect([f[8], f[9]]).toEqual([1, 1]);
+    expect(f).toEqual(buildOmniNrpn(arp, 2, 0x04, 1));
+  });
+
+  it("Enable-Toggle nutzt Chord pid 0x03 / Arp pid 0x06 (dieselbe NRPN wie ein Param)", () => {
+    const h = hooksStub();
+    initOmni(h);
+    const chord = MODS.find((m) => m.id === 9)!;
+    const arp = MODS.find((m) => m.id === 1)!;
+    omniParamSenden(chord, 0, 0x03, 1);
+    omniParamSenden(arp, 0, 0x06, 1);
+    const [fChord, fArp] = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array);
+    expect(fChord).toEqual(buildOmniNrpn(chord, 0, 0x03, 1));
+    expect(fArp).toEqual(buildOmniNrpn(arp, 0, 0x06, 1));
   });
 });
