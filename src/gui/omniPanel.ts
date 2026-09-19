@@ -230,6 +230,14 @@ export async function presetLaden(): Promise<void> {
   await modulLaden(9);
   await modulLaden(1);
   if (!hooks) return;
+  // modulLaden() setzt bei einem Commit-Fehler nur den Status (still, kein
+  // Wurf) und laesst das Modul unplatziert — ohne diese Pruefung wuerden die
+  // folgenden ~21 NRPN- + IRQ-Frames an ein nicht platziertes Modul gehen und
+  // die Fehlermeldung wuerde am Ende vom Erfolgsstatus ueberschrieben.
+  if (!(platziert.has(9) && platziert.has(1))) {
+    statusSetzen("Preset abgebrochen — Modul-Commit fehlgeschlagen");
+    return;
+  }
   // Chord auf Part 1 (0): Dur, root=gespielt, stagger 0, aktiv
   await hooks.sysexSenden(buildOmniNrpn(chord, 0, 0x00, 0));
   await hooks.sysexSenden(buildOmniNrpn(chord, 0, 0x02, 200));

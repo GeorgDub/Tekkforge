@@ -262,6 +262,32 @@ describe("Omni-Panel", () => {
     expect(irqInstall).toBeDefined();
     // Payload == [21, 0,0, 0,21, 1]
     expect(Array.from(irqInstall!.slice(8, 14))).toEqual([21, 0, 0, 0, 21, 1]);
+    // auch die Konfig-NRPNs muessen dabei sein: Chord aktiv auf Part 1, Arp-Ziel Part 4
+    const chord = MODS.find((m) => m.id === 9)!;
+    const arp = MODS.find((m) => m.id === 1)!;
+    const gesendet = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array);
+    expect(gesendet).toContainEqual(buildOmniNrpn(chord, 0, 0x03, 1));
+    expect(gesendet).toContainEqual(buildOmniNrpn(arp, 2, 0x05, 3));
+  });
+
+  it("Preset bricht bei Commit-Fehler ab und sendet keine NRPN/Periodik-Frames", async () => {
+    // Status 0x0a = Commit-Fehler (wie im bestehenden modulLaden-Test) — das
+    // Chord-Modul (id 9) bleibt dadurch unplatziert, presetLaden darf dann
+    // weder die restlichen NRPNs noch die Periodik senden noch Erfolg melden.
+    const ackFehler = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x0a, 9, 0]);
+    const h = {
+      sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ackFehler),
+    };
+    initOmni(h);
+    await presetLaden();
+    const gesendet = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array);
+    expect(gesendet.some((f) => f[4] === OtpCmd.IRQ_HOOK && f[5] === OtpSub.IRQ_INSTALL)).toBe(false);
+    const chord = MODS.find((m) => m.id === 9)!;
+    expect(gesendet).not.toContainEqual(buildOmniNrpn(chord, 0, 0x03, 1));
+    const status = el("omniStatus") as unknown as { textContent?: string };
+    expect(status.textContent).toBe("Preset abgebrochen — Modul-Commit fehlgeschlagen");
   });
 
   it("Alles aus sendet Unplace 0x7F", async () => {
