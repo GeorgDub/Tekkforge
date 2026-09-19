@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { initOmni, omniZustand, modulLaden, modulEntladen, paramsRendern, omniParamSenden } from "../src/gui/omniPanel";
+import {
+  initOmni,
+  omniZustand,
+  modulLaden,
+  modulEntladen,
+  paramsRendern,
+  omniParamSenden,
+  presetLaden,
+  allesAus,
+} from "../src/gui/omniPanel";
 import { OtpCmd, OtpSub, buildFrame, buildOmniNrpn, OMNI_MODULES as MODS } from "../src/core/otp";
 
 /**
@@ -228,5 +237,38 @@ describe("Omni-Panel", () => {
     const [fChord, fArp] = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array);
     expect(fChord).toEqual(buildOmniNrpn(chord, 0, 0x03, 1));
     expect(fArp).toEqual(buildOmniNrpn(arp, 0, 0x06, 1));
+  });
+
+  /**
+   * Controller-Ruling (wie Task 5/6): kein jsdom, der Panel-Test-Stub kennt nur
+   * `innerHTML` als String — ein Klick auf `#omniPreset`/`#omniAus` laesst sich
+   * damit nicht simulieren. Darum werden die exportierten Aktions-Funktionen
+   * `presetLaden`/`allesAus` DIREKT aufgerufen statt per Button-Klick. Die
+   * Klick-Verdrahtung selbst existiert fuers echte Panel, bleibt hier aber
+   * ungetestet (wie schon in Task 5/6).
+   */
+  it("Preset installiert die Periodik (IRQ 21) mit den Skript-Bytes", async () => {
+    const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 0, 0]);
+    const h = {
+      sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ack),
+    };
+    initOmni(h);
+    await presetLaden();
+    const irqInstall = h.sysexSenden.mock.calls
+      .map((c) => c[0] as Uint8Array)
+      .find((f) => f[4] === OtpCmd.IRQ_HOOK && f[5] === OtpSub.IRQ_INSTALL);
+    expect(irqInstall).toBeDefined();
+    // Payload == [21, 0,0, 0,21, 1]
+    expect(Array.from(irqInstall!.slice(8, 14))).toEqual([21, 0, 0, 0, 21, 1]);
+  });
+
+  it("Alles aus sendet Unplace 0x7F", async () => {
+    const h = hooksStub();
+    initOmni(h);
+    await allesAus();
+    const f = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array).find((x) => x[5] === OtpSub.MODULE_UNPLACE);
+    expect(f && f[8]).toBe(0x7f);
   });
 });

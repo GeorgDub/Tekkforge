@@ -11,6 +11,8 @@ import {
   buildModuleUpload,
   buildModuleUnplace,
   buildOmniNrpn,
+  buildIrqInstall,
+  buildIrqConfig,
   parseModuleAck,
   istOtpAntwort,
   OtpCmd,
@@ -65,6 +67,14 @@ export function initOmni(h: OmniHooks): void {
   if (typeof container.addEventListener === "function") {
     container.addEventListener("click", (e) => {
       const t = e.target as HTMLElement | null;
+      if (t?.id === "omniPreset") {
+        void presetLaden();
+        return;
+      }
+      if (t?.id === "omniAus") {
+        void allesAus();
+        return;
+      }
       const laden = t?.getAttribute?.("data-omni-laden");
       const entladen = t?.getAttribute?.("data-omni-entladen");
       if (laden) void modulLaden(Number(laden));
@@ -196,6 +206,49 @@ function ledAktualisieren(): void {
     const led = document.getElementById(`omniLed${m.id}`);
     led?.classList?.toggle("an", platziert.has(m.id));
   }
+}
+
+/**
+ * Periodik-Hook installieren und konfigurieren — dieselben Bytes wie
+ * `multi-module.mjs` (Omnitribe-Referenzskript): IRQ 21 (Audio-Callback),
+ * kein Audio-Teiler, Clock-Teiler 21, Quelle Clock (1).
+ */
+export async function periodikInstallieren(): Promise<void> {
+  if (!hooks) return;
+  await hooks.sysexSenden(buildIrqInstall(21, 0, 21, 1)); // == multi-module.mjs cmd04(0x02,[21,0,0,0,21,1])
+  await hooks.sysexSenden(buildIrqConfig(0, 21, 1)); // == cmd04(0x05,[0,0,0,21,1])
+}
+
+/**
+ * Fest verdrahtetes Preset: Chord (id 9) auf Part 1 (0), Arp (id 1) nur auf
+ * Kanal 3 (2) mit Ziel-Part 4 (3), anschliessend die Periodik installieren —
+ * wie im Brief (Step 3) und `multi-module.mjs` vorgegeben.
+ */
+export async function presetLaden(): Promise<void> {
+  const chord = OMNI_MODULES.find((m) => m.id === 9)!;
+  const arp = OMNI_MODULES.find((m) => m.id === 1)!;
+  await modulLaden(9);
+  await modulLaden(1);
+  if (!hooks) return;
+  // Chord auf Part 1 (0): Dur, root=gespielt, stagger 0, aktiv
+  await hooks.sysexSenden(buildOmniNrpn(chord, 0, 0x00, 0));
+  await hooks.sysexSenden(buildOmniNrpn(chord, 0, 0x02, 200));
+  await hooks.sysexSenden(buildOmniNrpn(chord, 0, 0x01, 0));
+  await hooks.sysexSenden(buildOmniNrpn(chord, 0, 0x03, 1));
+  // Arp nur auf ch2 (Part 3), Ziel Part 4 (3), Enable je Kanal
+  for (let ch = 0; ch < 16; ch++) await hooks.sysexSenden(buildOmniNrpn(arp, ch, 0x06, ch === 2 ? 1 : 0));
+  await hooks.sysexSenden(buildOmniNrpn(arp, 2, 0x05, 3));
+  await periodikInstallieren();
+  statusSetzen("Preset geladen (Chord P1 + Arp P3-4)");
+}
+
+/** Alle platzierten Module auf einmal entladen (Unplace-Byte 0x7f = "alle"). */
+export async function allesAus(): Promise<void> {
+  if (!hooks) return;
+  await hooks.sysexSenden(buildModuleUnplace("alle"));
+  platziert.clear();
+  ledAktualisieren();
+  statusSetzen("alle Module entladen");
 }
 
 export function omniZustand(): { module: { id: number; platziert: boolean }[] } {
