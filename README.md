@@ -801,18 +801,26 @@ DSP-Kette, Bytes ausserhalb der bekannten Bereiche gegen die Referenz. Eine
 rote harte Pruefung → keine Datei. Der Bericht nennt Kopf, SD-Pfad, PCM-Hinweis
 und den Rueckweg. Tests: `firmware-karte`, `firmware-analyse`,
 `firmware-freigabe`, `firmware-ablage`, `bspatch`, plus GUI-Faelle in
-`firmware-werkbank.test.ts`. ⚠ **Am Geraet FALSIFIZIERT (2026-09-09):** Der
-reine Synth-Crossgrade taugt nicht. Die umgekoepfte Datei wird zwar angenommen
-und geflasht (die unveraenderte Stock-Synth-Datei faellt dagegen als „Invalid
-File"), aber danach haengt das Geraet in einer Update-Schleife — beim Booten
-wird erneut ein Update verlangt, ein zweiter Durchlauf hilft nicht. Ursache ist
-nicht der Kopf, sondern eine Panel-/MCU-Firmware-Pruefung im Synth-OS (die
-SYSTEM.VSB traegt ein eingebettetes Cortex-M3-Panel-Abbild; das OS faehrt beim
-Booten eine 12-stufige Panel-Firmware-Uebertragung). Rueckweg (belegt): die
-Werks-SYSTEM.VSB des Geraets flashen. Diagnose im haengenden Zustand:
-`node scripts/crossgrade-diagnose.cjs` (Inquiry-Byte `0x23` = Synth-OS,
-`0x24` = Sampler-OS). Details: Omnitribe
-`docs/reverse/e2synth_auf_e2s_crossgrade_v202.md` (Nachtrag 2026-09-09).
+`firmware-werkbank.test.ts`. ✅ **Am Geraet BESTAETIGT (2026-09-09):** Der
+Crossgrade funktioniert mit dem **Boot-ID-Tor-Patch**. Der reine Kopf-Crossgrade
+allein booted in die Update-Schleife (am Geraet belegt, Inquiry-Byte `0x23` =
+Synth-OS laeuft, also der Crossgrade BOOTET). Ursache war nicht der Kopf, sondern
+ein Plattform-Gate: das OS liest die geraeteinterne USER-Signatur
+(`elec2USR`=0x123 / `ele2sUSR`=0x124) und erzwingt bei Nichtuebereinstimmung
+Boot-Code `0xA` (Update-Schleife). Der Umpatcher (`core/crossgrade.ts`,
+`BOOT_GATE`) patcht dieses Tor: Synth-Payload akzeptiert die Sampler-USER-Daten
+(Vergleichswert `0x123`→`0x124` bei Datei-Offset `0x25F64`); Sampler-Payload
+booted unabhaengig vom USER-Stempel (`mov r3,#0xA`→`#0` bei `0x28AE0`). Mit dem
+Patch bootet die umgekoepfte Firmware normal, die Klangerzeugung laeuft. **Offene
+Grenze:** synth-eigene PCM-Sample-Oszillatoren bleiben an die geraeteeigene
+`PCM.VSB` (Sampler-PCM) gebunden, bis eine Synth-`PCM.VSB` vorliegt (Extraktion
+per Hacktribe `synth-pcm-dump`-Zweig, braucht Synth-Hardware). **Recovery:** laeuft
+nach dem Crossgrade schon Synth, nimmt dessen Updater nur Synth-Koepfe an — die
+Sampler-Firmware muss fuer den Rueckweg ebenfalls umgekoepft werden (der
+Umpatcher macht das, Zielordner richtet sich nach der laufenden Firmware).
+Diagnose im haengenden Zustand: `node scripts/crossgrade-diagnose.cjs`. Details:
+Omnitribe `docs/reverse/e2synth_auf_e2s_crossgrade_v202.md` +
+`crossgrade_idgate_befund_2026-09-09.md`.
 
 ### DSP-Patches — der Klang selbst (experimentell)
 
@@ -975,6 +983,19 @@ Part-Offset 0x08, 0-basiert) um — in .e2spat und in allen PTST-Slots einer
 stehen, ohne `--out` wird die Datei mit `.vorher`-Sicherung ersetzt. Ablauf
 am Geraet: Pattern Export All → umnummerieren → Import All.
 
+**Samples in den User-Bereich schieben** (Hacktribe kann nur 501+ laden, eine
+Bank mit Samples ab 19 kollidiert mit der Oszillator-Tabelle):
+`npx tsx scripts/samples-in-user-bereich.mjs --bank <e2sSample.all>
+[--patterns <.e2sallpat>] --out <ordner> [--ab 501]` nummeriert alle Samples in
+ihrer bisherigen Reihenfolge ab `--ab` durch (Default 501; `--ab 19` legt den
+KORG-Werkssatz aus `sampler_full.all` zurueck auf die Stock-Plaetze 19–421 —
+nur fuer Stock-Sampler-Firmware sinnvoll, unter Hacktribe sind 19–421
+Oszillatoren) (bitgenau, nur Tabellenindex und die drei
+Nummernfelder im korg/esli-Chunk aendern sich) und zieht in den BEARBEITETEN
+Init-Patterns (ab 151, vom unberuehrten Init abweichend) die Part-Verweise so
+nach, dass jeder Part dasselbe Sample trifft wie vorher; Verweise ins Leere
+bleiben stehen. Die Abbildung liegt als `<bank>.abbildung.json` daneben.
+
 **Die Oszillator-Grenze im Code (2026-09-03, Disassembly):** an drei
 Stellen (`0xC00787DC`, `0xC0078AB8`, `0xC00802E0`) steht `cmp r0, #N; bgt`
 — N = 17 in Stock (18 Synth-Modelle, dahinter Werks-Samples), 272 in
@@ -1020,6 +1041,230 @@ Anzeigeplaetzen 1, 250 und 499 („TF WERK 001" A, „TF WERK 250" C#, „TF WER
 Werksplaetze beschreibbar — dann baut die Sample-Pipeline auch dorthin.
 ⚠ Der Import ersetzt den User-Bereich 501–999; vorher exportieren, und
 KORGs Factory-Sample-Datei fuer den Rueckweg bereithalten.
+
+## Boot-Sektor, BOOT.VSB, Flash-Dump und Geräte-Monitor (2026-09-16, am Gerät belegt)
+
+Aus vanasoft23s Custom-Bootloader (freetribe, Branch `bootloader-mess`), seiner Firmware-
+Architekturkarte (electribe2-re) und dem Ghidra-Archiv der Sampler-Firmware sind vier
+Bausteine entstanden (Volltext: Omnitribe `docs/reverse/vanasoft23_bootloader_e2re_2026-09-16.md`,
+Kurzfassung `docs/2026-09-16-vanasoft-bootloader-boot-vsb.md`):
+
+- **`core/vsbKopf.ts`** — der 0x100-Byte-Kopf aller fünf Update-Dateien, so wie die Firmware ihn
+  **prüft** (Dekompilate `ValidateVsbResourceHeaderMagic`/`…Type`, `GetVsbPayloadLength`,
+  `Load*VsbToSerialFlash`): Magic, Name (SYSTEM 6 / BOOT 4 / PCM 3 / USER 4 / SLIC 4 Zeichen),
+  Identität `00 01 23|24` (Modus 0 = nur die laufende Variante; BOOT = Modus 1 = beide), Länge
+  u32 LE bei +0x3C (SYSTEM 0x200000, BOOT 0x20000, PCM 0x800000 exakt; USER ≤ 0x490000, SLICE
+  ≤ 0x90000 geklemmt), Revision ≥ 2.2 / 1.17 nur beim produktbewussten SYSTEM-Installer. Dazu
+  die Flash-Selektor-Karte (Selektor << 16).
+- **`core/bootSektor.ts`** — 128-KiB-Boot-Sektor bauen und lesen (AIS-Kopf 40 B, SBL 131022 B,
+  Jump 8 B, 16-Bit-Wortsumme), byte-gleich mit `scripts/make_bootsect.py` und mit dem, was das
+  Bootloader-Menü „Install bootloader“ nach Flash 0 schreibt; `baueBootVsb` verpackt ihn.
+- **`core/flashKarte.ts`** — 16-MiB-Flash-Dump (Bootloader-Menü „Dump flash to SD“, JTAG)
+  kartieren: Boot-Sektor, Firmware-Bauart, Main-Version (0x21FFF0), Gerätestempel
+  (`elec2USR`/`ele2sUSR` bei 0x220004), PCM-Kopf — und jede Region als Update-Datei ausschneiden.
+- **`core/e2Symbole.ts` + `core/geraeteMonitor.ts`** — benannte RAM-Adressen der Sampler-
+  Firmware (Stock, Hacktribe, TekkForge-Builds) mit Dekodern: 24 Stimmen-Slots
+  (`0xC06916A0`, +4 Zeiger auf `voice_t` → Part, +0x3A Oszillator-ID), Aktiv-Maske
+  `0xC06914EC`, Noten-/Release-Flags, Zuteilungs-Generation `0xC0691484`, Batterie-Client
+  (Zeigervariable `0xC03405C8` → +0x318 Schwellen-Zeiger, +0x320 Rohwert, +0x328 Stufe),
+  Laufzeit-Sample-Katalog `0xC036AD88` (999 × 0x45C).
+
+- **`core/hacktribeFlash.ts` + `core/geraeteFlash.ts`** — Hacktribes Flash-**Lese**-Kommando 0x55
+  (bewusst ohne 0x56/0x57): Kennungen (Gerätestempel 0x220004, Main-Version 0x21FFF0, PCM-Kopf
+  0x800000) und der 128-KiB-Boot-Sektor direkt aus dem Gerät. `scripts/flash_lesen.py` macht
+  dasselbe ohne die App (mido, braucht python-rtmidi).
+
+In der App: Firmware-Werkbank → Abschnitt **„Boot-Sektor, BOOT.VSB und Flash-Dump“**
+(`bootloader.bin` laden → Boot-Sektor / BOOT.VSB sichern; beliebige `.VSB` gegen Sampler- und
+Synth-Updater prüfen; Dump kartieren und zerlegen; **Kennungen und Boot-Sektor vom Gerät lesen** —
+der Werks-Boot-Sektor landet sofort als `Bootsektor-vom-Geraet-<Datum>.bin` und
+`BOOT-vom-Geraet-<Datum>.VSB` im Ordner `Downloads\TekkForge\Firmware`, das ist der Rückweg vor
+jeder Bootloader-Installation) und RAM-Panel → **„Geräte-Monitor“** (Stimmen & Batterie lesen,
+User-Samples 501–532). Nur Lesen und Dateien — nichts schreibt ins Gerät.
+
+### Erprobungsstand — am Gerät belegt (2026-09-16, Electribe 2 Sampler, MOD132-Build, Netzteil)
+
+| Lesung | Beobachtung |
+|---|---|
+| Monitor bei stehendem Gerät nach dem Einschalten | Maske 0, Generation 0, kein Slot; Batterie-Client vorhanden (Alkali-Tabelle 127/110/104/97, Rohwert 0, Stufe 0 = Netzteilbetrieb) |
+| Trigger-Note Part 1 über das Panel, danach lesen | Generation 0 → **2** (Note-On + Note-Off zählen je einmal), Slot nach 250 ms schon wieder frei |
+| Sequencer per MIDI-Start, Maske (4 B) während der Wiedergabe | `1E 00 00 00` — Slots 2–5 am DSP aktiv, zweimal gleich gelesen |
+| MIDI-Stop, dann Monitor | Maske `0x10`: Slot 5 = **Part 10, User-Sample 598, Note 60, „One-Shot läuft aus“**, Generation 76 |
+| **Flash lesen (Hacktribe 0x55)**: Kennungen | Antwortformat wie bei 0x52 (Echo 0x55 an Index 7, Daten ab 9); Gerätestempel `ele2sUSR` (Sampler 0x124), Main-Version 02.02.00, PCM-Kopf `KORG elec2PCM` (= die eingespielte Synth-Werks-PCM) |
+| **Flash lesen**: Boot-Sektor (128 KiB, 512 Häppchen, ~60 s) | Korgs Werks-Boot-Sektor lädt **drei** Sektionen: 60 B Vektoren → 0x80000000, **21 924 B Code → 0x80000040** (exakt die Größe des SBL-Programms im Ghidra-Archiv, 0x80000040–0x800055E3), 2 124 B Daten → 0x800055F0, dann Jump 0x80000000; keine Wortsumme (0xFFFF). Der Parser kennt seither beide Layouts (Werk / vanasoft) |
+| **Flash komplett lesen** (16 MiB) | Häppchen-Probe bestätigt **0x400 Bytes je Anfrage**; 7,4 MiB in 45 s, alle 16 MiB in gut zwei Minuten → `Flash-vom-Geraet-<Datum>.bin` (Abbruch sichert das Teilstück) — die vollständige Gerätesicherung ohne JTAG, kartiert mit Boot-Sektor, Firmware, Stempel, PCM |
+| Dump-Integrität | Boot-Region byte-gleich mit der separaten 128-KiB-Lesung; SYSTEM-Region byte-gleich mit `MOD132-IFX100-GROOVE96-SYSTEM.VSB`; User-Record `KORG ele2sUSR 01 01 D2 3B`; Katalog-Image 0x6B0000 leer |
+| **Pattern-Bank aus dem Dump** (`⬇ Pattern-Bank (.e2sallpat)`) | Flash 0x230000 = GLST-Block, 0x240000 = 250 × 0x4000 PTST-Records — mit dem 0x100-Kopf ergibt das **byte für byte die `.e2sallpat`, die das Gerät selbst exportiert** (4 161 792 Bytes). Aus dem Dump gebaut, in TekkForge importiert: 250 Patterns, „Mfmt Pattern“, „Advi$ory2“, „Hopback1“ … bis 239 = Korgs **Werks-Pattern-Bank**, 240–250 „Init Pattern“ (im Flash steht kein HARDTEKK-Set — die Sets wurden bisher nur von der SD in den RAM geladen). Landet in `Downloads\TekkForge\Sets`. Omnitribes `e2sallpat_reader.py` liest dieselbe Datei (250 belegt, Tempi 175/128/85 …). Dazu **„Pattern-Bank vom Gerät“**: liest nur die 4 MiB ab 0x230000 direkt vom Gerät — die Pattern-Sicherung ohne SD-Karte und ohne 16-MiB-Dump |
+| **Region vom Gerät (.VSB)** | Auswahl SYSTEM/PCM/USER/SLICE/BOOT, nur diese Region lesen, Kopf nach dem vorher gelesenen Gerätestempel: **SYSTEM 2 MiB in 13 s, PCM 8 MiB in 50 s, SLICE in 4 s** → `<REGION>-vom-Geraet-<Datum>.VSB`; jede Datei besteht die Kopfprüfung („das Gerät nähme sie per SD-Update an“) und ist in der Nutzlast byte-gleich mit dem Komplett-Dump — SYSTEM = MOD132-Build, PCM = TEST-Datei. Die Werks- oder Ist-Firmware und die Samples lassen sich damit einzeln sichern, ohne 16 MiB zu ziehen |
+| **Global aus dem Flash** | zwei GLST-Blöcke: **0x230000 = gespeicherte Global-Einstellungen** (MIDI-Kanal 1, Clock-Quelle auto, Chain Mode off, Batterietyp Alkali, Auto Power Off 4 h, Audio In Thru on, LCD-Kontrast 15 — Clock „auto“ und „Alkali“ decken sich mit dem, was Panel und Batterie-Client zeigen), **0x630000 = Werks-Vorgabe** (weicht in Audio In Thru, Clock-Quelle internal und +0x7D ab). Daneben bei 0x640000 der **SQEZ-Strom**: Kopf nennt 0x3E8000 entpackte Bytes = 250 × 0x4000 — die komprimierte Werks-Pattern-Bank, aus der der Werksreset (CommandTask-Handler 0x11) die Pattern-Region füllt. Die USER-Region 0x220000 trägt nur den 16-Byte-Stempel. Der Knopf holt zusätzlich den **laufenden Global-Block per SysEx 0x51** und vergleicht: am Gerät **identisch mit dem gespeicherten** — 0x230000 ist damit als der Speicherort der Global-Einstellungen belegt |
+| **SQEZ-Dekoder + Werks-Pattern-Bank** | Der komprimierte Strom bei 0x640000 (LZ77, 8-KiB-Fenster, kanonisches Huffman in Blöcken, CRC-16/ARC) ist aus der Firmware nachgebaut (`core/sqez.ts`, Python-Zwilling in Omnitribe): **CRC 0x81C2 stimmt, 250 × 0x4000 entpackt, 243 Records byte-gleich mit der Pattern-Region** — die 7 anderen (Pattern 1 „Mfmt Pattern“ statt „Advi$ory1“, sechs Init-Patterns 240–250) hatte der Nutzer überschrieben. Daraus entsteht die **Werks-Pattern-Bank als .e2sallpat** (Werks-Global 0x630000 als GLST + entpackte Records): aus dem Dump oder **direkt vom Gerät in 1,4 s** (128 KiB) → `Werksbank-vom-Geraet-<Datum>.e2sallpat`, byte-gleich mit dem Dump-Weg, in TekkForge importiert (250 Patterns, „Advi$ory1“ …). Der Werkszustand aller Patterns als Datei, ohne Werksreset |
+| **Slice-Region (0x750000)** | 540 Records à 0x444 = der ESLI-Schwanz ab +0x58 (64 Slices à Start/Länge/Attack/Amplitude, 64 Step-Zuordnungen, Schrittzahl, Beat, aktive Slices). Im Gerät: **404 Records beschrieben (Samples 1–403 und 421), 32 mit Slices** — z. B. Sample 337 mit 8 Slices auf 32 Schritten, 340 mit 11 auf 32, 341 mit 9 auf 16: die Werks-Slices der Sampler-PCM, die keine Firmware seither angefasst hat. Bericht und Regionentabelle nennen sie (`core/sliceFlash.ts`) |
+| **SD-Update-Paket bauen** | liest SYSTEM aus dem Gerät (laufender Build), nimmt eine gewählte PCM.VSB dazu, prüft beide gegen den Gerätestempel und legt sie als `KORG\<Ordner>\System\{SYSTEM,PCM}.VSB` in `Downloads\TekkForge\SD-Update-<Datum>` ab, mit LIESMICH (Kopf, Länge, MD5). Am Gerät belegt: SYSTEM 0x124 und die Sampler-Kopf-PCM bestehen die Prüfung, MD5 der App = MD5 von `md5sum`. Reihenfolge System→BOOT→PCM→USER→SLICE; geflasht wird nur am Gerät (`core/sdPaket.ts`, `core/md5.ts`) |
+| **Gerätebericht (alles lesen)** | ein Klick: Kennungen, Global (gespeichert/Werk/laufend), Pattern-Bank gegen Werksbank mit Liste der veränderten Patterns, Boot-Sektor-Layout (Werk / Custom-Bootloader), Slice-Region, Stimmen-Monitor, Sample-Katalog (blockweise bis zum ersten leeren 32er-Block — am Gerät **98 geladene User-Samples, 13,4 MB, bis Nr. 660**) → `Geraetebericht-<Datum>.md` in `Downloads\TekkForge\Firmware`, die Pattern-Bank dazu als `.e2sallpat` in `Sets`. Am Gerät: **29 s**, alle Abschnitte gefüllt, Lesefehler einzelner Schritte stehen im Text statt den Lauf abzubrechen (`core/geraeteBericht.ts`) |
+| PCM-Region des Geräts | byte-gleich mit `SYNTH-PCM-usersamples-TEST.VSB` (der Brick-Datei vom 11.09.) — die Werks-PCM aus `Stock-PCM-Restore` ist **nicht** eingespielt; erklärt „klingt falsch“. Die Sampler-Firmware bootet mit dieser PCM, der Boot-Hänger war synth-spezifisch |
+| User-Samples 501–532 (35 KB Katalog, ~6 s) | alle 32 geladen, 14 812–30 172 Bytes, **22 050 Hz** — die Bank war mit halber Rate gebaut (Rate nach Rolloff), der Katalog bestätigt es |
+
+Damit sind Slot-Maske, `voice_t`-Zeiger (Part-Zuordnung), Oszillator-ID, Notenzustand, Release-
+Flags und Generation live bestätigt. Die Batterie-Stufe ist am Netzteil 0 — das Update-Tor
+(Stufe ≥ 2) wird dann laut Firmware über den Listener-State umgangen; mit Batterien steht die
+Probe noch aus.
+
+**Zum Bootloader selbst (Stand 2026-09-17):** Der Handoff des vanasoft-Stands `3a0581f` patchte
+`0xC0025E4F` bedingungslos — im Synth-Image das `BEQ` des Produkt-ID-Tors, im Sampler-Image aber
+das `ldmfd` von `DisableMidiClockPulseGeneration` → Absturz beim Sequencer-Stop. Der eigene Umbau
+(Freetribe-Klon, Commits `c3172e4`/`44acb7f`/`ec3342e`) erkennt das Image am „PTST“-Marker
+(Sampler 0xC00CFF58, Synth 0xC00BA8B0) und patcht nur beim Synth-Image; der SD-Datei-Boot
+überspringt den VSB-Kopf; und der Bootloader kann jede KORG-`.VSB` (SYSTEM/BOOT/PCM/USER/SLICE)
+aus seinem Datei-Browser direkt in ihre Flash-Region schreiben (Dialog „Boot / Flash“ bzw. „Write to
+flash?“, Nutzlast erst komplett ins DDR, dann ein Schreiblauf mit Rücklesen). Alles kompiliert und im
+ELF geprüft, **am Gerät noch nicht gebootet.** Installation bleibt ein Ein-Schuss-Weg (Rückweg nur
+JTAG). Build: `Firmware\bootloader-flashinstall-2026-09-17\` (bin/elf/map, Boot-Sektor, BOOT.VSB).
+
+## Bootloader aus TekkForge heraus (2026-09-17, am Gerät ungetestet)
+
+Vier Knöpfe im Boot-Sektor-Bereich der Firmware-Werkbank, alle hinter einer getippten Bestätigung
+(„JA“), keiner schreibt Flash:
+
+| Knopf | Was passiert | Kern |
+|---|---|---|
+| **▶ Über SysEx starten (bootloader.bin, flüchtig)** | Hacktribes Loader-Weg nachgebaut (`execute_freetribe.py`): Pivot 0x58 → Magic `64 01 23 45 67` / Antwort `76 54 32 10` → 256-Byte-Häppchen 0x54 → Execute 0x57 an 0x80000000. Ohne Magic-Bestätigung fließt kein Häppchen. Das Gerät ist danach Bootloader, bis es aus/ein geht. | `core/bootloaderStart.ts` |
+| **Firmware per USB-DFU starten (flüchtig)** | Läuft der Bootloader (USB e2fb:1802), lädt TekkForge eine SYSTEM.VSB per DFU 1.1 (Alt 3 „Debug Firmware“, 4096-B-Blöcke, GETSTATUS-Polling) ins DDR; das Manifest löst den Sprung aus — der USB-Abriss dabei ist der Erfolgsfall. Keine SD nötig. WebUSB; `main.cjs` gibt nur e2fb:1802 frei. **Windows:** einmalig WinUSB (Zadig) auf das DFU-Interface. | `core/dfu.ts`, `gui/dfuUsb.ts` |
+| **Bootloader-SD vorbereiten (Dateien wählen…)** | Ordnet die Auswahl ein (SYSTEM → Boot/Flash, BOOT/PCM/USER/SLICE → Flash, rohes 2-MiB-Image → Boot), sortiert aus, was nicht auf die Karte gehört (bootloader.bin, Boot-Sektor, .syx), legt `Bootloader-SD-<Datum>` mit LIESMICH (Menü-Legende, Regeln, Rückweg, MD5) an. | `core/bootloaderSd.ts` |
+| **SysEx-Datei senden (.syx)** | Zerlegt und prüft die Datei (F0…F7, Datenbytes < 0x80), zählt OTP-/KORG-Frames, sendet frameweise mit Pause; bei OTP-Frames 300 ms Warten auf die Quittung `05 03`, eine Fehlerantwort stoppt. Für Omnitribes Modul-Bündel. | `core/syxDatei.ts` |
+
+Tests: `tests/bootloader-start.test.ts`, `dfu.test.ts`, `bootloader-sd.test.ts`, `syx-datei.test.ts`
+(Fake-Transporte). Offen, nur am Gerät prüfbar: ob der Hacktribe-Loader nach dem Pivot über USB-MIDI
+antwortet (oder nur über TRS), und ob Windows das DFU-Interface ohne Zadig hergibt.
+
+## Omnitribe (OTP) — Stand 2026-09-17, am Gerät aus TekkForge ungetestet
+
+Omnitribe (`G:\IdeaProjects\Omnitribe`) ist eine Firmware-Erweiterung für den Sampler, die als
+BSDIFF-Stub neben Stock oder Hacktribe läuft und ein eigenes SysEx-Protokoll spricht — OTP,
+Hersteller-ID `7D 01 02`, Rahmen `F0 7D 01 02 CMD SUB LEN_H LEN_L DATA… CHK F7` (Prüfsumme =
+XOR nur über DATA, 7 Bit). TekkForge kann das als Client — und zwar genau das, was der Stub
+(`src/firmware/bsdiff_stubs/sysex_layer1_hook.c`, die Quelle der Wahrheit) im Dispatch kennt:
+
+- **`core/otp.ts`** — Rahmenbauer und -parser ohne DOM/MIDI: XOR-Prüfsumme, 7-of-8-Kodierung,
+  `pack32_7bit`, 14- und 21-Bit-Werte; Anfragen `IDENTITY` (0x01/0x00), `FIRMWARE_INFO` (0x09/0x00),
+  `TELEMETRY` (0x07/0x01), `PARAM` SET/GET (0x02/0x00, 0x02/0x01) für **alle 16 Einträge der
+  Stub-Registry** je Part 1–16 (auf dem Draht 0-basiert), **`TRANSPORT`** (0x0E: Play 0x00, Stop 0x01,
+  Position 0x0A). Antwort-Parser mit Fehlercodes (`zu-kurz`, `kein-sysex`, `fremder-hersteller`,
+  `laenge`, `pruefsumme` — die letzten beiden zählt das Gerät als `error_count` bzw.
+  `chk_fail_count`). Die Telemetrie (29 × u32) wird wie Omnitribes `telemetry_read.py` in fünf
+  Stufen gedeutet: Hook-Aufrufe → F0 → erkannte Frames → Dispatch → gesendete Antworten, Verdikt
+  `LÄUFT` / `HÄNGT BEI …` / `GUARD HÄNGT` / `USB-STRUCT UNGÜLTIG`.
+- **Panel „Omnitribe (OTP)“** (Firmware-Werkbank, unter dem Boot-Sektor): ein Knopf fragt
+  IDENTITY + FIRMWARE_INFO + TELEMETRY nacheinander und zeigt die Antworten benannt; antwortet
+  das Gerät, erscheinen Part-Wahl und **16 Regler** (aus der Registry erzeugt), die beim Loslassen
+  `PARAM SET` senden, je Regler ein **„Lesen“** (`PARAM GET`, signed als int8 gedeutet, Aufzählungen
+  mit Stufenname) und **„Alle Werte vom Gerät lesen“**; **je Parameter sichtbar der Beleg-Status**
+  (✔ bewiesen / ◐ statisch, Maus darüber nennt die Quelle). Darunter der **TRANSPORT-Block**: Play,
+  Stop, Position als Takt · Step (16 Steps je Takt → Beats). Kommt auf IDENTITY nichts: **„Kein OTP —
+  auf dem Gerät läuft keine Omnitribe-Coexist-Firmware (Stock/Hacktribe ohne Hook antworten
+  nicht)“**. Nichts sendet beim Start; nur Klick und Regler.
+
+### Parameter-Registry (Beleg-Status wörtlich aus den C-Kommentaren des Stubs)
+
+„✔ bewiesen“ heisst: **Omnitribe** hat diesen Weg am Gerät gemessen oder gehört — nicht TekkForge.
+„◐ statisch“ heisst: Adresse und CC aus TABLE 6 / Opcodes hergeleitet, und der C-Kommentar sagt
+selbst „NICHT gemessen“. Auf dem OTP-Draht steht immer der Parameterwert selbst (14 Bit, das Gerät
+nimmt die unteren 8); `cc_bias`/`cc_scale` rechnet der Stub erst für die eingespeiste CC.
+
+| ID | Parameter | Bereich | signed | Weg im Stub | Fenster | Beleg | Quelle (C-Kommentar) |
+|---|---|---|---|---|---|---|---|
+| 0x0001 | Osc-Pitch | −64..63 Halbtöne | ja | Schreibzugriff | Live | ◐ | **2026-09-17 am Coexist NICHT live-wirksam:** 16 Adressen neu ausgemessen (Part 2 = 0xC0693E5E), Schreibzugriff landet (per 0x52 verifiziert), aber die Engine spielt aus einer berechneten Playback-Rate — nur die Panel-Funktion rechnet neu, Osc-Pitch hat weder CC noch NRPN. Firmware-Grenze, kein Adressfehler → statisch |
+| 0x0002 | Cutoff | 0..127 | – | CC 74 eingespeist | Live | ✔ | hörbar 2026-08-06 (20 = dumpfer); CC-Weg 2026-08-08 gemessen (Sprint 159) |
+| 0x0003 | Resonance | 0..127 | – | CC 71 eingespeist | Live | ✔ | 16 Adressen 2026-08-06 bei gestopptem Sequencer; CC-Weg 2026-08-08 |
+| 0x0004 | Level | 0..127 | – | CC 7 eingespeist | Pattern | ✔ | Schreibzugriff am Gerät NICHT hörbar (2026-08-07) → CC; 2026-08-08 end-to-end, Pegelverlauf gehört (Sprint 153) |
+| 0x0005 | Pan | −63..63 | ja (CC = Wert + 64) | CC 10 eingespeist | Pattern | ✔ | Adressen 2026-08-07 per 14-Punkt-CC-Reihe; Versatz 64 nach Fehlmessung 2026-08-08 (Sprint 157) — Kennlinie gemessen, korrigierter SET nicht als nachgemessen vermerkt |
+| 0x0006 | Voice Assign | 0..3 (Mono 1/Mono 2/Poly 1/Poly 2), Aufzählung | – | Schreibzugriff | Pattern | ◐ | Lesen hörbar belegt (Part 11), aber „dass unser SCHREIBZUGRIFF dort ankommt, ist NICHT gemessen“ (Sprint 172); Chord Set/Gate Arp abgewiesen |
+| 0x0007 | EG Attack | 0..127 | – | CC 73 eingespeist | Pattern | ◐ | Offset +0x14 aus TABLE 6; eingespeiste CC „NICHT gemessen“ (Sprint 174) |
+| 0x0008 | EG Decay/Release | 0..127 | – | CC 72 eingespeist | Pattern | ◐ | Offset +0x15 über den Dateiweg belegt; CC „NICHT gemessen“ (Sprint 174) |
+| 0x0009 | Osc Edit | 0..127 | – | CC 82 eingespeist | Pattern | ◐ | TABLE 6 +0x0B; „keiner der fünf ist am Gerät gemessen“ (Sprint 175) |
+| 0x000A | EG Int | −63..63 | ja (CC = Wert + 64) | CC 83 eingespeist | Pattern | ◐ | TABLE 6 +0x0F; Versatz 64 von Pan übernommen, nicht gemessen (Sprint 175) |
+| 0x000B | Mod Speed | 0..127 | – | CC 86 eingespeist | Pattern | ◐ | TABLE 6 +0x11 (Sprint 175) |
+| 0x000C | Mod Depth | 0..127 | – | CC 85 eingespeist | Pattern | ◐ | TABLE 6 +0x12 (Sprint 175) |
+| 0x000D | Glide | 0..127 | – | CC 81 eingespeist | Pattern | ◐ | TABLE 6 +0x25 (Sprint 175) |
+| 0x000E | IFX Edit | 0..127 | – | CC 87 eingespeist | Pattern | ◐ | TABLE 6 +0x22; „nichts davon am Gerät gemessen“ (Sprint 176) |
+| 0x000F | MFX Send | 0..1 (Off/On), Aufzählung | – | CC 105 eingespeist (CC = Wert × 127) | Pattern | ✔ | Schalter „am 2026-08-22 nativ belegt“: Anzeige OFF/ON, Byte 0x00/0x01, CC 105 0→0 / ≥10→1 (Sprint 181) — Byte-Beleg, keine Hörprobe |
+| 0x0010 | IFX On/Off | 0..1 (Off/On), Aufzählung | – | CC 104 eingespeist (CC = Wert × 127) | Pattern | ◐ | TABLE 6 +0x20; weder CC 104 → Byte noch Schwelle 64 gemessen (Sprint 177) |
+
+Aufzählungen (Voice Assign, MFX Send, IFX On/Off) klemmt der Stub nicht, sondern verwirft den SET
+**stumm** (kein Zähler); der Client wirft deshalb vorher. Stetige Werte klemmt das Gerät selbst.
+GET liest bei allen 16 direkt die Tabellenadresse — bei den CC-Weg-Parametern das Byte, das die
+Firmware nach der Einspeisung selbst pflegt. Hinweis: Omnitribes Sitzungsprotokoll
+`docs/hwtest/sitzung_2026-08-22.md` meldet für die ◐-Parameter nachträglich Byte- und teils
+Hörbelege; die Tabelle folgt bewusst dem C-Kommentar, nicht dem Protokoll.
+
+### TRANSPORT (CMD 0x0E, Sprint 166)
+
+Der Stub speist die MIDI-Nachricht in den Empfangsweg der Firmware ein; es gibt **keine Antwort**,
+Erfolg zählt in `otp_response_sent_count`, Absage in `error_count`.
+
+| Rahmen | Bytes | Was der Stub tut |
+|---|---|---|
+| Play | `F0 7D 01 02 0E 00 00 00 00 F7` | 0xFA (MIDI-Start) eingespeist |
+| Stop | `F0 7D 01 02 0E 01 00 00 00 F7` | 0xFC (MIDI-Stop) eingespeist |
+| Position (25 Beats = Takt 2 · Step 10) | `F0 7D 01 02 0E 0A 00 03 00 00 19 19 F7` | Song-Position-Pointer `F2 19 00` aus 21-Bit-Payload (MSB zuerst) |
+| Position 0x3FFF | `… 0E 0A 00 03 00 7F 7F 00 F7` | Grenzwert, wird angenommen |
+| Position 0x4000 | `… 0E 0A 00 03 01 00 00 01 F7` | **Stub sagt ab** (error_count) — TekkForge weist schon vorher ab, mit Meldung |
+
+Andere SUBs (Record, Tempo, Abfragen) zählt der Stub als `error_count`. Omnitribes Befund
+(2026-08-13, mit eigenen Werkzeugen): Play und Stop wirken am Gerät; Position wird eingespeist,
+aber die E2S wertet den Song-Position-Pointer nicht aus.
+
+Was die Bytes bestimmt hat — und was davon **Omnitribes** Befund ist, nicht unserer:
+
+| Punkt | Quelle |
+|---|---|
+| Am Gerät läuft der Stub `sysex_layer1_hook.c`, nicht der Loader; er antwortet auf IDENTITY und FIRMWARE_INFO mit derselben 15-Byte-Minimalform `00 01 00 00 00` (v0.1.0, keine Flags). Der Parser kennt zusätzlich das volle Loader-Layout (Git-Hash, Module, Flags) | Omnitribe Stub-Quelle; `docs/midi/otp_firmware_info.md` |
+| TELEMETRY-Antwort ist SUB 0x02 (143 Bytes), **nicht** die 0x7F-Form aus `sysex_schema.json` (Loader) | Stub `otp_send_telemetry`, `otp_codec.py` |
+| PARAM: Wert 14 Bit, das Gerät nimmt die unteren 8 Bit (signed als int8); die GET-Antwort liefert das Byte als 0..255 — −24 kommt als 232 und wird hier als int8 gedeutet, nicht 14-Bit-signed wie im Python-Codec | Stub `otp_param_clamp` / `otp_send_param_response` |
+| Osc-Pitch schreibt ins Live-Fenster, aber **2026-09-17 am Coexist nicht hörbar** (Engine liest berechnete Playback-Rate, kein CC/NRPN → über Speicher nicht live-modulierbar); Cutoff/Resonance gehen seit Sprint 159 als CC 74/71 durch die Firmware, der Part ist der MIDI-Kanal | Omnitribe 2026-08-06/08, Testabend 2026-09-17 |
+| Unbekannte SUBs = Stille (nur Timeout), SET/TRANSPORT haben keine Bestätigung — die Telemetrie zählt sie in `otp_response_sent_count` | `otp_protocol.md` §Silence-Policy, Stub-Dispatch |
+
+### Modul-Lader Stufe 1 (CMD 0x05, Sprint 183)
+
+Seit dem 2026-09-17 hat der Stub einen **Modul-Lader Stufe 1**: der Dispatch-Zweig `0x05` SUB `0x01`
+empfängt einen Modul-Block, dekodiert den 44-Byte-**OTMR**-Header (7-of-8, wie `encode7Bit`) und
+**validiert ihn nur** — Magic, API-Version, `module_id`, api-Zeiger ≠ 0 —, setzt Statuszähler und
+antwortet mit einem ACK (`0x05` SUB `0x03`, Nutzlast `[status, id, block]`). Stufe 1 **führt nichts
+aus** (kein `init()`/`deinit()`, kein Sprung auf den empfangenen api-Zeiger) und kopiert **nichts** nach
+`0xC6100000` — diese DDR-Region ist laut Omnitribes Speicherkarte BF523-Audio-Abbild plus Mailbox und am
+laufenden MOD132 nicht als frei vermessen. Damit ist ein Build mit diesem Zweig gefahrlos flüchtig
+bootbar. Modul-Ausführung wäre Stufe 2 (freies DDR erst per read-only `0x52`-Vermessung, dann `on_nrpn`
+im MIDI-Kontext) und hängt an einem Compile-Flag, das standardmäßig aus ist.
+
+Das Panel „Omnitribe (OTP)“ hat dafür zwei Knopfreihen. **Synthetische Sonden** treffen je einen
+Validierungszweig: **Gültiges Test-Modul** (`0x00`), **Falsche Magic** (`0x04`), **Kein api-Zeiger**
+(`0x07`), **Falsche Header-id** (`0x06`). Eine fünfte synthetische Sonde, **id 32**, zeigt die Stub-Grenze
+(`MAX_ID=32`, die Breite des Bitfelds; die frühere 16 war ein Planungswert des Loaders, der mit dem
+Modulbestand nicht mitgewachsen war). **Echte kompilierte Modul-Header** aus `build/modules/*.bin`, alle
+zwanzig gebauten Module (ids 0–30) → `0x00`, belegen den stärkeren Anspruch: der Stub validiert einen
+echten Modul-Header. Nur der 44-B-Kopf wird gesendet — ein ganzes Modul (140–2508 B) passt nicht in den
+264-B-Stub-Puffer, das kann erst Stufe 2 mit Chunk-Empfang ins DDR. Jeder Knopf zeigt Status und ob er
+passt; das ist der Beleg „der Modul-Lader läuft“, ohne je empfangenen Code auszuführen. Das Panel-Layout
+ist am 2026-09-17 in der echten Electron-App gegengeprüft (`scripts/otp-render-check.mjs`, ohne MIDI/Port).
+Gegenstelle: `buildModuleBlock` / `parseModuleAck` in `core/otp.ts`, Stub `handle_module_block_stage1`.
+
+**Stufe 2 ist vorgebaut, aber nicht aktiv** (hinter dem Firmware-Flag `OMNITRIBE_MODULE_STAGE2`, in keinem
+gebooteten Build): sie lädt ein ganzes Modul chunk-weise ins DDR (`buildModuleChunk`/`buildModuleCommit`/
+`buildModuleUpload`), reloziert die base-0-Zeiger (api, user_data, sieben Funktionszeiger) auf absolute
+DDR-Adressen und kann es ausführen. Ausführung hängt an einem zweiten Flag hinter einem `#error`; die
+DDR-Zieladresse hat keinen Default und kommt erst aus `ddr_survey.py`. Plan und Freigabe-Reihenfolge:
+Omnitribe `docs/firmware/modul_lader_stufe2_2026-09-17.md`.
+
+**Bewusst weggelassen:** STATE_DUMP, PATTERN, STREAM, WAVETABLE, FX/Groove (0x10), Chord-Slots,
+Echo-Schutz und Throttle-Queue der Bridge — der Stub hat dafür keinen Handler
+(hier gibt es keinen Notify-Strom und keinen Sweep; gesendet wird beim Loslassen).
+
+**Claim-Boundary:** 75 Tests (`tests/otp.test.ts`, `tests/otp-panel.test.ts`) mit den
+SynthStudio-Testvektoren, den Beispielrahmen der Spezifikation und je einem festen Byte-Vektor pro
+Parameter und TRANSPORT-Kommando — byte-genau. **Am 2026-09-17 erstmals TekkForge-Werkzeuge am
+Gerät gelaufen** (Coexist-Build, USB-MIDI): der KORG-Port reicht die 0x7D-Antworten durch,
+Cutoff/Resonance sind hörbar, Osc-Pitch ist als nicht live-wirksam entlarvt (s. Tabelle), und der
+Modul-Lader Stufe 1+2 ist am Gerät bewiesen (Ausführung hing — Module nicht selbst-tragend). Voller
+Bericht: Omnitribe `docs/hwtest/testabend_2026-09-17.md`. Der Port ist Single-Client.
 
 ## Step-Record-Layout (verifiziert)
 

@@ -25,6 +25,14 @@ export interface WerkbankHooks {
   lesen?(addr: number, len: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
   /** RAM schreiben mit Rueckleseprobe (fuer die fluechtige Oszillator-Probe); fehlt ohne MIDI. */
   schreiben?(addr: number, bytes: Uint8Array, was: string): Promise<boolean>;
+  /** Flash lesen (Hacktribe 0x55, nur lesen) — für Kennungen und den Werks-Boot-Sektor; fehlt ohne MIDI. */
+  lesenFlash?(addr: number, len: number, chunk?: number): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }>;
+  /** Der laufende Global-Block per SysEx 0x51 (256 B) — zum Vergleich mit dem im Flash gespeicherten. */
+  globalLive?(): Promise<Uint8Array | null>;
+  /** Rohen SysEx-Frame senden, ohne auf Antwort zu warten (Loader-Pivot/-Execute). */
+  sysexSenden?(frame: Uint8Array): Promise<void>;
+  /** Rohen SysEx-Frame senden und auf die erste Antwort warten, die `akzeptiere` erfüllt (Loader-Magic/-Häppchen). */
+  sysexAnfrage?(frame: Uint8Array, akzeptiere: (b: Uint8Array) => boolean, timeoutMs: number): Promise<Uint8Array>;
 }
 let hooks: WerkbankHooks | null = null;
 /** Eigene DSP-Patches aus Dateien oder Bauplaenen; das Register kommt dazu. */
@@ -63,6 +71,23 @@ import { analysiereFirmware, uebernehmeErweiterungen, type FirmwareAnalyse, type
 import { freigabe, LAUFENDE_FIRMWARE, type LaufendeFirmware, type Freigabe } from "../core/firmwareFreigabe";
 import { firmwareAblageZugang, sitzungsAblageAufnehmen, type AblageEintrag } from "./tekkFirmware";
 import { E2_GLOBAL_CHAIN_MODE_OFF, E2_GLOBAL_CLOCK_SOURCE_OFF } from "../core/e2sysex";
+import { baueBootSektor, liesBootSektor, baueBootVsb, BOOTSEKTOR_GROESSE, SBL_GROESSE } from "../core/bootSektor";
+import { starteBootloaderFluechtig, OC_RAM_SIZE, type LoaderIO } from "../core/bootloaderStart";
+import { baueBootloaderSd } from "../core/bootloaderSd";
+import { pruefeDfuImage, dfuFirmwareStarten } from "../core/dfu";
+import { verbindeBootloaderUsb, dfuTransportUsb, trenneBootloaderUsb } from "./dfuUsb";
+import { zerlegeSyx, beschreibeSyx, sendeSyxFrames, type SyxSendeIO } from "../core/syxDatei";
+import { standardKopf, pruefeVsbKopf, VSB_KOPF as VSB_KOPF_GROESSE, type VsbArt } from "../core/vsbKopf";
+import { liesFlashDump, schneideRegion, patternBankAusDump, patternNamenAusDump, type FlashDumpBefund } from "../core/flashKarte";
+import { berichtVsbPruefung, berichtBootSektor, berichtFlashDump } from "../core/bootBericht";
+import { liesFlashKennungen, liesBootSektorVomGeraet, kennungenText, probeHaeppchen, liesFlashKomplett, liesPatternBankVomGeraet, liesRegionVomGeraet, liesGlobalVomGeraet } from "../core/geraeteFlash";
+import { globalBerichtZeilen, globalLiveZeile } from "../core/globalFlash";
+import { werksbankAusDump, liesWerksbankVomGeraet, werksbankZeile } from "../core/werksbank";
+import { sliceKarte, sliceZeile } from "../core/sliceFlash";
+import { erstelleGeraeteBericht } from "../core/geraeteBericht";
+import { baueSdPaket } from "../core/sdPaket";
+import { md5Hex } from "../core/md5";
+import { OSZ_LISTEN, oszListeWahl } from "../core/oszNamen";
 import { zustandAusFirmware, unterschiede, hoechsterBelegter } from "../core/presetManager";
 import { leseSammlung, type SammlungsEintrag } from "../core/sammlung";
 import { leseSicherung } from "../core/geraetSicherung";
@@ -1515,15 +1540,537 @@ async function xgUmkoepfen(ziel: Variante): Promise<void> {
   }
   const hash = await sha256Hex(r.bytes);
   const ab = await legeAb("SYSTEM.VSB", r.bytes, `Crossgrade-${ziel}`);
+  const torZeile = r.gatePatch
+    ? r.gatePatch.angewendet
+      ? `Boot-ID-Tor gepatcht (Offset 0x${r.gatePatch.offset.toString(16)}) — bootet ohne Update-Schleife.`
+      : `⚠ ${r.gatePatch.grund}`
+    : "Boot-ID-Tor NICHT gepatcht (auf Wunsch) — kann in der Update-Schleife hängen.";
   xgStatus(
-    `Umgeköpft ${r.vonVariante} → ${ziel} (Byte 0x12 und 0x2E)${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}` +
+    `Umgeköpft ${r.vonVariante} → ${ziel} (Kopf 0x12/0x2E)${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""}` +
       (ab.pfad ? ` → ${ab.pfad}.` : " → Download.") +
+      "\n" +
+      torZeile +
       "\n" +
       r.geraetebefund +
       "\n" +
-      `Zum Experimentieren: als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
-      " Vorher die Werks-SYSTEM.VSB als Rückweg auf der SD behalten.",
+      `Als SYSTEM.VSB nach ${r.sdPfad} auf eine FAT32-SD-Karte, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` +
+      " ⚠ Der Zielordner richtet sich nach der AKTUELL laufenden Firmware (Synth liest KORG/electribe/System, Sampler KORG/electribe sampler/System)." +
+      " Vorher die Firmware der laufenden Variante als Rückweg auf der SD behalten.",
   );
+}
+
+// ─── Boot-Sektor, BOOT.VSB, Flash-Dump ──────────────────────────────────────
+let bootSektor: { name: string; bytes: Uint8Array } | null = null;
+let flashDump: { name: string; befund: FlashDumpBefund; bytes: Uint8Array } | null = null;
+
+function bootStatus(t: string): void {
+  const el = document.getElementById("bootStatus");
+  if (el) el.textContent = t;
+}
+function bootBerichtZeigen(zeilen: string[]): void {
+  const el = document.getElementById("bootBericht");
+  if (el) el.textContent = zeilen.join("\n");
+}
+/** Kopfvorlage: die geladene Basis, sonst ein Standardkopf der gewählten Identität. */
+function bootKopfVorlage(): { kopf: Uint8Array; woher: string; idLow: number } {
+  const wahl = (document.getElementById("bootIdentitaet") as HTMLSelectElement | null)?.value === "synth" ? "synth" : "sampler";
+  const idLow = VARIANTEN[wahl].idLow;
+  if (basis && basis.length >= VSB_KOPF_GROESSE) return { kopf: basis.subarray(0, VSB_KOPF_GROESSE), woher: "Kopf der geladenen Basis", idLow };
+  return { kopf: standardKopf(wahl, "SYSTEM"), woher: `Standardkopf (${VARIANTEN[wahl].label})`, idLow };
+}
+
+async function bootSblLaden(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const info = document.getElementById("bootSblInfo");
+  const sichern = document.getElementById("bootSektorSichern");
+  const vsb = document.getElementById("bootVsbSichern");
+  let sektor: Uint8Array;
+  let art: string;
+  if (bytes.length === BOOTSEKTOR_GROESSE && bytes[0] === 0x54 && bytes[1] === 0x49) {
+    sektor = bytes;
+    art = "fertiger Boot-Sektor";
+  } else if (bytes.length >= 0x1000 && bytes.length <= SBL_GROESSE) {
+    sektor = baueBootSektor(bytes);
+    art = `SBL ${bytes.length} Bytes → Boot-Sektor gebaut`;
+  } else {
+    bootSektor = null;
+    if (info) info.textContent = `${f.name}: ${bytes.length} Bytes — weder SBL (4 KiB … ${SBL_GROESSE} Bytes) noch Boot-Sektor (${BOOTSEKTOR_GROESSE})`;
+    sichern?.classList.add("hidden");
+    vsb?.classList.add("hidden");
+    return;
+  }
+  const b = liesBootSektor(sektor);
+  bootSektor = b.ok ? { name: f.name, bytes: sektor } : null;
+  if (info) info.textContent = `${f.name}: ${art}${b.ok ? "" : " — unbrauchbar"}`;
+  bootBerichtZeigen(berichtBootSektor(b));
+  sichern?.classList.toggle("hidden", !b.ok);
+  vsb?.classList.toggle("hidden", !b.ok);
+  bootStatus(b.ok ? "Boot-Sektor bereit. Als .bin (für JTAG/Bootloader-Install) oder als BOOT.VSB (für das SD-Update) sichern." : "Boot-Sektor unbrauchbar — siehe Bericht.");
+}
+
+const bootStempel = (): string => new Date().toISOString().slice(0, 10);
+
+async function bootVsbSichernKlick(): Promise<void> {
+  if (!bootSektor) return bootStatus("Erst bootloader.bin laden oder den Boot-Sektor vom Gerät lesen.");
+  const v = bootKopfVorlage();
+  const vsb = baueBootVsb(bootSektor.bytes, v.kopf, v.idLow);
+  const hash = await sha256Hex(vsb);
+  const name = bootSektor.name === "Gerät" ? `BOOT-vom-Geraet-${bootStempel()}.VSB` : "BOOT.VSB";
+  const ab = await legeAb(name, vsb, FIRMWARE_ORDNER);
+  const r = berichtVsbPruefung(vsb, name);
+  bootBerichtZeigen([...berichtBootSektor(liesBootSektor(bootSektor.bytes)), "", ...r.zeilen]);
+  bootStatus(
+    `${name} gesichert (${vsb.length} Bytes, ${v.woher}${hash ? `, SHA-256 ${hash.slice(0, 16)}…` : ""})${ab.pfad ? ` → ${ab.pfad}` : " → Download"}.\n` +
+      "Weg: NUR diese Datei als KORG/hacktribe/System/BOOT.VSB (Stock-Sampler: KORG/electribe sampler/System, Synth: KORG/electribe/System) auf die SD, Batterien ≥ Stufe 2 oder Netzteil, DATA UTILITY → SOFTWARE UPDATE. " +
+      "Keine SYSTEM.VSB daneben legen, sonst wird die mitgeflasht. ⚠ Fehler = nur noch JTAG.",
+  );
+}
+
+async function bootVsbPruefen(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const r = berichtVsbPruefung(bytes, f.name);
+  bootBerichtZeigen(r.zeilen);
+  bootStatus(r.samplerOk && r.synthOk ? "Beide Updater nehmen die Datei an." : r.samplerOk ? "Nur der Sampler-Updater nimmt die Datei an." : r.synthOk ? "Nur der Synth-Updater nimmt die Datei an." : "Kein Updater nimmt die Datei an — siehe rote Zeilen.");
+}
+
+async function bootDumpLaden(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const r = liesFlashDump(bytes);
+  const knoepfe = document.getElementById("bootDumpKnoepfe");
+  if (!r.ok) {
+    flashDump = null;
+    knoepfe?.classList.add("hidden");
+    bootBerichtZeigen([]);
+    return bootStatus(`${f.name}: ${r.grund}`);
+  }
+  flashDump = { name: f.name, befund: r, bytes };
+  knoepfe?.classList.remove("hidden");
+  bootBerichtZeigen(berichtFlashDump(r));
+  bootStatus(`${f.name} kartiert. Regionen lassen sich als Update-Dateien sichern (Kopf-Identität nach dem Gerätestempel${r.variante ? ` = ${r.variante}` : ", sonst nach der Auswahl"}).`);
+}
+
+function bootRegionSichern(region: string): void {
+  if (!flashDump) return bootStatus("Erst einen Flash-Dump laden.");
+  if (region === "SBL") {
+    const b = flashDump.befund.boot;
+    if (!b.ok) return bootStatus("Der Boot-Sektor des Dumps ist unbrauchbar — keine SBL.");
+    void legeAb("SBL.bin", b.sbl, FIRMWARE_ORDNER).then((ab) => bootStatus(`SBL.bin gesichert (${b.sbl.length} Bytes, Speicherbild ab 0x80000000)${ab.pfad ? ` → ${ab.pfad}` : ""}.`));
+    return;
+  }
+  if (region === "PATTERNS") {
+    let bank: Uint8Array;
+    try {
+      bank = patternBankAusDump(flashDump.bytes);
+    } catch (e) {
+      return bootStatus(e instanceof Error ? e.message : String(e));
+    }
+    const namen = patternNamenAusDump(flashDump.bytes).filter((n) => n).length;
+    const name = `Patterns-vom-Geraet-${bootStempel()}.e2sallpat`;
+    void legeAb(name, bank, "Sets").then((ab) => bootStatus(`${name} gesichert (${bank.length} Bytes, ${namen} Patterns mit Namen)${ab.pfad ? ` → ${ab.pfad}` : ""} — die komplette Pattern-Bank des Geräts, ladbar in TekkForge (Pattern-Bibliothek) und am Gerät.`));
+    return;
+  }
+  if (region === "WERKSBANK") {
+    const w = werksbankAusDump(flashDump.bytes);
+    if (!w.ok) return bootStatus(w.grund);
+    const name = `Werksbank-aus-Dump-${bootStempel()}.e2sallpat`;
+    void legeAb(name, w.bank, "Sets").then((ab) => bootStatus(`${name} gesichert (${w.bank.length} Bytes, CRC ${w.crcOk ? "stimmt" : "FALSCH"}${w.abweichungen ? `, ${w.abweichungen.length} Records im Flash verändert` : ""})${ab.pfad ? ` → ${ab.pfad}` : ""} — der Werkszustand aller 250 Patterns, ladbar in TekkForge und am Gerät.`));
+    return;
+  }
+  const art = region as VsbArt;
+  const v = bootKopfVorlage();
+  const kopf = flashDump.befund.variante ? standardKopf(flashDump.befund.variante, art) : v.kopf;
+  const out = schneideRegion(flashDump.bytes, art, kopf);
+  void legeAb(`${art}-aus-Dump.VSB`, out, FIRMWARE_ORDNER).then((ab) =>
+    bootStatus(`${art}-aus-Dump.VSB gesichert (${out.length} Bytes)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${flashDump?.befund.variante ? `nach Gerätestempel (${flashDump.befund.variante})` : v.woher}.`),
+  );
+}
+
+async function bootKennungenVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  bootStatus("Lese Kennungen aus dem Flash…");
+  const k = await liesFlashKennungen(hooks.lesenFlash);
+  bootBerichtZeigen(kennungenText(k));
+  const info = document.getElementById("bootGeraetInfo");
+  if (info) info.textContent = k.variante ? `Gerät: ${VARIANTEN[k.variante].label}` : "";
+  if (k.variante) {
+    const sel = document.getElementById("bootIdentitaet") as HTMLSelectElement | null;
+    if (sel) sel.value = k.variante;
+  }
+  bootStatus(k.fehler.length ? `Kennungen mit Fehlern: ${k.fehler[0]}` : "Kennungen gelesen — die Kopf-Identität ist auf das Gerät gestellt.");
+}
+
+async function bootSektorVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  bootStatus("Lese Boot-Sektor (128 KiB) aus dem Flash — 512 Häppchen, bitte warten…");
+  const r = await liesBootSektorVomGeraet(hooks.lesenFlash);
+  if (!r.ok) return bootStatus(`Boot-Sektor nicht gelesen: ${r.reason}`);
+  bootSektor = r.befund.ok ? { name: "Gerät", bytes: r.bytes } : null;
+  const info = document.getElementById("bootSblInfo");
+  if (info) info.textContent = `vom Gerät: ${r.befund.ok ? `AIS + SBL ${r.befund.sblGroesse} Bytes — ${r.befund.layout === "vanasoft" ? "Custom-Bootloader (vanasoft) installiert" : r.befund.layout === "werk" ? "Korg-Werks-SBL" : "fremdes Layout"}` : "unbrauchbar"}`;
+  bootBerichtZeigen(berichtBootSektor(r.befund));
+  document.getElementById("bootSektorSichern")?.classList.toggle("hidden", !r.befund.ok);
+  document.getElementById("bootVsbSichern")?.classList.toggle("hidden", !r.befund.ok);
+  if (!r.befund.ok) return bootStatus("Boot-Sektor gelesen, aber unbrauchbar — siehe Bericht.");
+  // Sofort sichern: der Sektor, der JETZT im Gerät steht, ist der Rückweg — als rohe 128 KiB und
+  // als BOOT.VSB für das SD-Update (Identität nach dem Gerät, wenn die Kennungen gelesen wurden).
+  const stempel = bootStempel();
+  const v = bootKopfVorlage();
+  const vsb = baueBootVsb(r.bytes, v.kopf, v.idLow);
+  const ab1 = await legeAb(`Bootsektor-vom-Geraet-${stempel}.bin`, r.bytes, FIRMWARE_ORDNER);
+  const ab2 = await legeAb(`BOOT-vom-Geraet-${stempel}.VSB`, vsb, FIRMWARE_ORDNER);
+  bootStatus(
+    `Boot-Sektor des Geräts gelesen (${r.befund.layout === "werk" ? "Korg-Werks-SBL" : r.befund.layout === "vanasoft" ? "Custom-Bootloader" : "fremdes Layout"}) und gesichert: ${ab1.pfad ?? "Download"} und ${ab2.pfad ?? "Download"} (Kopf: ${v.woher}). Das ist der Rückweg zum jetzigen Bootloader — vor jeder Installation eines anderen aufheben.`,
+  );
+}
+
+let dumpAbbruch = false;
+
+/** Den ganzen 16-MiB-Flash lesen — Komplettsicherung des Geräts ohne JTAG und ohne Bootloader. */
+async function bootFlashKomplett(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  dumpAbbruch = false;
+  document.getElementById("bootDumpAbbrechen")?.classList.remove("hidden");
+  bootStatus("Prüfe, wie groß ein Häppchen sein darf…");
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const r = await liesFlashKomplett(lesen, {
+    chunk: probe.chunk,
+    abbruch: () => dumpAbbruch,
+    fortschritt: (f) => {
+      const s = (Date.now() - t0) / 1000;
+      const rest = f.gelesen ? ((f.gesamt - f.gelesen) * s) / f.gelesen : 0;
+      bootStatus(`Flash lesen: ${(f.gelesen / 1048576).toFixed(2)} / 16 MiB (${probe.hinweis}, ${s.toFixed(0)} s, noch ~${(rest / 60).toFixed(0)} min) — Gerät nicht bedienen.`);
+    },
+  });
+  document.getElementById("bootDumpAbbrechen")?.classList.add("hidden");
+  const stempel = bootStempel();
+  if (!r.ok) {
+    if (r.gelesen > 0) {
+      const ab = await legeAb(`Flash-vom-Geraet-${stempel}-TEIL-${r.gelesen}.bin`, r.teil, FIRMWARE_ORDNER);
+      return bootStatus(`Abgebrochen (${r.reason}) nach ${r.gelesen} Bytes — Teilstück gesichert${ab.pfad ? `: ${ab.pfad}` : ""}.`);
+    }
+    return bootStatus(`Flash nicht gelesen: ${r.reason}`);
+  }
+  const ab = await legeAb(`Flash-vom-Geraet-${stempel}.bin`, r.bytes, FIRMWARE_ORDNER);
+  const befund = liesFlashDump(r.bytes);
+  if (befund.ok) {
+    flashDump = { name: `Flash-vom-Geraet-${stempel}.bin`, befund, bytes: r.bytes };
+    document.getElementById("bootDumpKnoepfe")?.classList.remove("hidden");
+    bootBerichtZeigen(berichtFlashDump(befund));
+  }
+  bootStatus(`Flash komplett gelesen (16 MiB in ${((Date.now() - t0) / 60000).toFixed(1)} min)${ab.pfad ? ` → ${ab.pfad}` : " → Download"}. Das ist die vollständige Sicherung des Geräts (Bootloader, Firmware, User-Daten, Pattern, PCM, Slices) — Regionen lassen sich unten als Update-Dateien ausschneiden.`);
+}
+
+/** Nur die Pattern-Bank (gut 4 MiB) vom Gerät lesen und als .e2sallpat sichern. */
+async function bootPatternBankVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  dumpAbbruch = false;
+  document.getElementById("bootDumpAbbrechen")?.classList.remove("hidden");
+  bootStatus("Prüfe, wie groß ein Häppchen sein darf…");
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const r = await liesPatternBankVomGeraet(lesen, {
+    chunk: probe.chunk,
+    abbruch: () => dumpAbbruch,
+    fortschritt: (f) => bootStatus(`Pattern-Bank lesen: ${(f.gelesen / 1048576).toFixed(2)} / ${(f.gesamt / 1048576).toFixed(2)} MiB (${probe.hinweis}, ${((Date.now() - t0) / 1000).toFixed(0)} s) — Gerät nicht bedienen.`),
+  });
+  document.getElementById("bootDumpAbbrechen")?.classList.add("hidden");
+  if (!r.ok) return bootStatus(`Pattern-Bank nicht gelesen: ${r.reason}`);
+  const benannt = r.namen.filter((n) => n);
+  const name = `Patterns-vom-Geraet-${bootStempel()}.e2sallpat`;
+  const ab = await legeAb(name, r.bank, "Sets");
+  bootStatus(`${name} gesichert (${((Date.now() - t0) / 1000).toFixed(0)} s, ${benannt.length} Patterns: ${benannt.slice(0, 3).map((n) => `„${n}“`).join(", ")}${benannt.length > 3 ? ", …" : ""})${ab.pfad ? ` → ${ab.pfad}` : ""} — ladbar in TekkForge (Import) und am Gerät (DATA UTILITY → LOAD ALL PATTERN).`);
+}
+
+/** Eine Flash-Region direkt vom Gerät als Update-Datei sichern; der Kopf folgt dem Gerätestempel. */
+async function bootRegionVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  const art = ((document.getElementById("bootRegionGeraetArt") as HTMLSelectElement | null)?.value ?? "SYSTEM") as VsbArt;
+  dumpAbbruch = false;
+  document.getElementById("bootDumpAbbrechen")?.classList.remove("hidden");
+  bootStatus("Lese Gerätestempel für den Kopf…");
+  const k = await liesFlashKennungen(lesen);
+  const kopf = k.variante ? standardKopf(k.variante, art) : bootKopfVorlage().kopf;
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const r = await liesRegionVomGeraet(lesen, art, kopf, {
+    chunk: probe.chunk,
+    abbruch: () => dumpAbbruch,
+    fortschritt: (f) => bootStatus(`${art} lesen: ${(f.gelesen / 1048576).toFixed(2)} / ${(f.gesamt / 1048576).toFixed(2)} MiB (${probe.hinweis}, ${((Date.now() - t0) / 1000).toFixed(0)} s) — Gerät nicht bedienen.`),
+  });
+  document.getElementById("bootDumpAbbrechen")?.classList.add("hidden");
+  if (!r.ok) return bootStatus(`${art} nicht gelesen: ${r.reason}${r.gelesen ? ` (nach ${r.gelesen} Bytes)` : ""}`);
+  const name = `${art}-vom-Geraet-${bootStempel()}.VSB`;
+  if (art === "SLICE") bootBerichtZeigen([sliceZeile(sliceKarte(r.nutz))]);
+  const pruefung = pruefeVsbKopf(r.datei, k.variante ?? "sampler");
+  const ab = await legeAb(name, r.datei, FIRMWARE_ORDNER);
+  bootStatus(`${name} gesichert (${r.datei.length} Bytes in ${((Date.now() - t0) / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}. Kopf ${k.variante ? `nach Gerätestempel (${VARIANTEN[k.variante].label})` : "aus der Vorlage"}, Prüfung: ${pruefung.ok ? "das Gerät nähme die Datei per SD-Update an" : pruefung.pruefungen.find((x) => !x.ok)?.detail ?? "nicht bestanden"}.`);
+}
+
+/** SD-Update-Paket: SYSTEM vom Gerät + gewählte PCM.VSB, geprüft, als KORG\Hacktribe\System abgelegt. */
+async function bootSdPaket(pcmDatei: File): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  const pcm = new Uint8Array(await pcmDatei.arrayBuffer());
+  bootStatus("Lese Gerätestempel…");
+  const k = await liesFlashKennungen(lesen);
+  const variante = k.variante ?? ((document.getElementById("bootIdentitaet") as HTMLSelectElement | null)?.value === "synth" ? "synth" : "sampler");
+  const identitaetQuelle = k.variante ? "Gerätestempel" : "Auswahl";
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const sys = await liesRegionVomGeraet(lesen, "SYSTEM", standardKopf(variante, "SYSTEM"), {
+    chunk: probe.chunk,
+    fortschritt: (f) => bootStatus(`SYSTEM vom Gerät lesen: ${(f.gelesen / 1048576).toFixed(2)} / 2 MiB (${((Date.now() - t0) / 1000).toFixed(0)} s) — Gerät nicht bedienen.`),
+  });
+  if (!sys.ok) return bootStatus(`SYSTEM nicht gelesen: ${sys.reason}`);
+  const paket = baueSdPaket(
+    [
+      { art: "SYSTEM", bytes: sys.datei, herkunft: `aus dem Gerät gelesen (${bootStempel()})` },
+      { art: "PCM", bytes: pcm, herkunft: pcmDatei.name },
+    ],
+    variante,
+    {
+      stempel: bootStempel(),
+      md5: md5Hex,
+      identitaetQuelle,
+      hinweis: `Zweck: die im Flash liegende Klangdatei durch \`${pcmDatei.name}\` ersetzen. Die App liest nur; geflasht wird ausschließlich am Gerät. Prüfe die Tabelle unten (Länge, MD5), bevor du kopierst.`,
+    },
+  );
+  for (const d of paket.dateien) {
+    const i = d.pfad.lastIndexOf("\\");
+    await legeAb(d.pfad.slice(i + 1), d.bytes, d.pfad.slice(0, i));
+  }
+  const ab = await legeAb("LIESMICH.md", paket.liesmich, paket.ordner, "text/markdown");
+  bootBerichtZeigen(paket.liesmich.split(/\r?\n/));
+  bootStatus(paket.alleOk ? `SD-Update-Paket gebaut${ab.pfad ? ` → ${ab.pfad.replace(/LIESMICH\.md$/, "")}` : ""} — den Ordner KORG auf die SD kopieren, dann am Gerät DATA UTILITY → SOFTWARE UPDATE.` : "SD-Update-Paket gebaut, aber mindestens eine Datei fällt bei der Kopfprüfung durch — siehe LIESMICH. NICHT einspielen.");
+}
+
+/**
+ * Bootloader (oder ein anderes 0x80000000-Image) FLÜCHTIG über SysEx starten — nichts wird geflasht.
+ * Kapert das laufende Gerät: ab dem Pivot ist es ein Loader, nur ein Aus-/Einschalten holt die
+ * Firmware zurück. Darum hinter einer Tipp-Bestätigung und nur mit angebundenem MIDI-Sendeweg.
+ */
+async function bootStartFluechtig(f: File): Promise<void> {
+  if (!hooks?.sysexSenden || !hooks.sysexAnfrage) {
+    return bootStatus("Kein SysEx-Sendeweg — MIDI aktivieren (und den KORG-Port frei lassen, er ist Single-Client).");
+  }
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  // Es muss das ROHE SBL-Image sein (läuft an 0x80000000), NICHT eine BOOT.VSB (0x100-Korg-Kopf)
+  // und NICHT der 128-KiB-Boot-Sektor (AIS-Kopf „TIPA“). Beide würden an 0x80000000 nicht starten.
+  const kopf = new TextDecoder("latin1").decode(bytes.subarray(0, 16));
+  if (kopf.startsWith("KORG SYSTEM FILE")) {
+    return bootStatus("Das ist eine .VSB (Korg-Kopf). Für den SysEx-Start die ROHE bootloader.bin laden, nicht die BOOT.VSB.");
+  }
+  if (bytes.length >= 4 && bytes[0] === 0x54 && bytes[1] === 0x49 && bytes[2] === 0x50 && bytes[3] === 0x41) {
+    return bootStatus("Das ist ein Boot-Sektor (AIS-Kopf „TIPA“). Für den SysEx-Start die ROHE bootloader.bin laden, nicht den Boot-Sektor.");
+  }
+  if (bytes.length === 0 || bytes.length > OC_RAM_SIZE) {
+    return bootStatus(`Image ${bytes.length} B passt nicht in ${OC_RAM_SIZE} B On-Chip-RAM (bootloader.bin = 131022 B).`);
+  }
+  const antwort = await frageText(
+    `„${f.name}" (${bytes.length} B) FLÜCHTIG über SysEx an 0x80000000 starten?\n\n` +
+      "Das Gerät wird ab jetzt zum Loader — die laufende Firmware ist weg, bis du es AUS- und wieder EINSCHALTEST. " +
+      "Es wird NICHTS ins Flash geschrieben. Zum Starten JA eintippen.",
+    "",
+  );
+  if ((antwort ?? "").trim().toUpperCase() !== "JA") return bootStatus("Abgebrochen — nichts gesendet.");
+
+  const io: LoaderIO = {
+    sende: (frame) => hooks!.sysexSenden!(frame),
+    sendeUndEmpfange: (frame, akzeptiere, timeoutMs) => hooks!.sysexAnfrage!(frame, akzeptiere, timeoutMs),
+    warte: (ms) => new Promise((r) => setTimeout(r, ms)),
+  };
+  bootStatus("Pivot gesendet — warte auf den Loader-Handshake…");
+  const r = await starteBootloaderFluechtig(bytes, io, {
+    fortschritt: (g, ges) => {
+      if (g === 1 || g === ges || g % 32 === 0) bootStatus(`Loader lädt: Häppchen ${g}/${ges} (${((g / ges) * 100).toFixed(0)} %)…`);
+    },
+  });
+  bootBerichtZeigen([
+    r.ok ? "✅ Bootloader flüchtig gestartet." : `❌ Abbruch im Schritt „${r.schritt}“.`,
+    r.nachricht,
+    `Häppchen: ${r.haeppchenGesendet}/${r.haeppchenGesamt}.`,
+  ]);
+  bootStatus(r.ok
+    ? "Bootloader läuft (flüchtig). Das USB-Gerät meldet sich als e2fb:1802 neu an. Aus-/Einschalten kehrt zur Firmware zurück."
+    : `Nicht gestartet: ${r.nachricht}`);
+}
+
+/** Bootloader-SD vorbereiten: gewählte Dateien einordnen, Ordner + LIESMICH am PC anlegen. Schreibt nichts auf die SD. */
+async function bootSdVorbereiten(dateien: File[]): Promise<void> {
+  const eingang = await Promise.all(dateien.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+  const paket = baueBootloaderSd(eingang, { stempel: bootStempel(), md5: md5Hex, bootloaderName: eingang.find((e) => e.bytes.length === 131022)?.name });
+  let letzterPfad: string | null = null;
+  for (const d of paket.dateien) {
+    if (!d.aufSd) continue;
+    const ab = await legeAb(d.name, d.bytes, paket.ordner);
+    letzterPfad = ab.pfad;
+  }
+  const ab = await legeAb("LIESMICH.md", paket.liesmich, paket.ordner, "text/markdown");
+  bootBerichtZeigen(paket.liesmich.split(/\r?\n/));
+  const n = paket.dateien.filter((d) => d.aufSd).length;
+  bootStatus(`Bootloader-SD vorbereitet: ${n} Datei(en) für die SD${paket.warnungen.length ? `, ${paket.warnungen.length} Warnung(en) (siehe LIESMICH)` : ""}${ab.pfad ? ` → ${ab.pfad.replace(/LIESMICH\.md$/, "")}` : letzterPfad ? ` → ${letzterPfad}` : ""}. Inhalt (ohne LIESMICH) ins Wurzelverzeichnis der SD kopieren.`);
+}
+
+/**
+ * Firmware per USB-DFU (Alt 3 „Debug Firmware") in den laufenden Bootloader laden und starten —
+ * flüchtig, ohne SD-Karte, ohne Flash. Voraussetzung: der Bootloader läuft (USB e2fb:1802).
+ */
+async function bootDfuStart(f: File): Promise<void> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const p = pruefeDfuImage(bytes);
+  if (!p.ok) return bootStatus(`DFU: Image abgelehnt — ${p.grund}.`);
+  const antwort = await frageText(
+    `„${f.name}“ (${p.art}, ${bytes.length} B) per USB-DFU in den Bootloader laden und FLÜCHTIG starten?\n\n` +
+      "Voraussetzung: der Bootloader läuft gerade (Display zeigt sein Menü, USB e2fb:1802). Es wird NICHTS geflasht; " +
+      "Aus/Ein stellt den Flash-Stand wieder her. Zum Starten JA eintippen.",
+    "",
+  );
+  if ((antwort ?? "").trim().toUpperCase() !== "JA") return bootStatus("Abgebrochen — nichts gesendet.");
+  bootStatus("USB: Bootloader wählen (Systemdialog)…");
+  let v;
+  try {
+    v = await verbindeBootloaderUsb();
+  } catch (e) {
+    return bootStatus(`DFU: keine Verbindung — ${e instanceof Error ? e.message : String(e)}`);
+  }
+  bootStatus(`Verbunden: ${v.geraet.productName ?? "Bootloader"}, Interface ${v.interfaceNr}, ${v.altName}. Lade…`);
+  const r = await dfuFirmwareStarten(bytes, dfuTransportUsb(v), {
+    fortschritt: (b, ges) => { if (b === 1 || b === ges || b % 32 === 0) bootStatus(`DFU: Block ${b}/${ges} (${((b / ges) * 100).toFixed(0)} %)…`); },
+  });
+  await trenneBootloaderUsb(v);
+  bootBerichtZeigen([r.ok ? "✅ DFU-Start ausgelöst." : "❌ DFU abgebrochen.", r.nachricht, `Blöcke: ${r.bloecke}/${r.bloeckeGesamt}.`]);
+  bootStatus(r.ok ? `DFU: ${r.nachricht}` : `DFU fehlgeschlagen: ${r.nachricht}`);
+}
+
+/** Eine .syx-Datei (z. B. Omnitribes Modul-Bündel) frameweise an die laufende Firmware senden. Kein Flash. */
+async function bootSyxSenden(f: File): Promise<void> {
+  if (!hooks?.sysexSenden || !hooks.sysexAnfrage) return bootStatus("Kein SysEx-Sendeweg — MIDI aktivieren (KORG-Port frei lassen, er ist Single-Client).");
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const z = zerlegeSyx(bytes);
+  if (z.fehler.length) {
+    bootBerichtZeigen([`❌ „${f.name}“ ist keine saubere SysEx-Datei:`, ...z.fehler.slice(0, 20)]);
+    return bootStatus(`SysEx-Datei abgelehnt: ${z.fehler.length} Problem(e), nichts gesendet.`);
+  }
+  const b = beschreibeSyx(z.frames);
+  const kommandos = Object.entries(b.otpKommandos).map(([k, n]) => `${k}×${n}`).join(", ");
+  const antwort = await frageText(
+    `„${f.name}“: ${b.anzahl} Frames (${b.otp} Omnitribe-OTP${kommandos ? ` [${kommandos}]` : ""}, ${b.korg} KORG, ${b.andere} andere; größter ${b.groessterFrame} B) an das Gerät senden?\n\n` +
+      "Geht an die LAUFENDE Firmware (Module landen im RAM, nichts wird geflasht). Zum Senden JA eintippen.",
+    "",
+  );
+  if ((antwort ?? "").trim().toUpperCase() !== "JA") return bootStatus("Abgebrochen — nichts gesendet.");
+  const io: SyxSendeIO = {
+    sende: (fr) => hooks!.sysexSenden!(fr),
+    sendeUndEmpfange: (fr, akzeptiere, t) => hooks!.sysexAnfrage!(fr, akzeptiere, t),
+    warte: (ms) => new Promise((r) => setTimeout(r, ms)),
+  };
+  const r = await sendeSyxFrames(z.frames, io, {
+    pauseMs: 20,
+    antwortTimeoutMs: b.otp > 0 ? 300 : 0, // OTP quittiert Block-Transfers; Timeouts sind kein Abbruch
+    // OTP-Fehlerantwort: F0 7D 01 02 <cmd> 03 <code≠0> …  — Sample-Transfer-ACK/Error laut otp_protocol.md
+    istFehlerAntwort: (a) => a.length >= 8 && a[1] === 0x7d && a[5] === 0x03 && a[6] !== 0x00,
+    fortschritt: (g, ges) => { if (g === 1 || g === ges || g % 10 === 0) bootStatus(`SysEx: Frame ${g}/${ges}…`); },
+  });
+  bootBerichtZeigen([r.ok ? "✅ SysEx-Datei gesendet." : "❌ Versand gestoppt.", r.nachricht, ...(r.fehlerAntwort ? [`Antwort: ${Array.from(r.fehlerAntwort).map((x) => x.toString(16).padStart(2, "0")).join(" ")}`] : [])]);
+  bootStatus(r.ok ? `SysEx: ${r.nachricht}` : `SysEx: ${r.nachricht}`);
+}
+
+/** Der ganze Gerätezustand in einem Lauf — Markdown in den Firmware-Ordner, Pattern-Bank in Sets. */
+async function bootGeraeteBericht(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const stempelDatei = bootStempel();
+  const liste = OSZ_LISTEN[oszListeWahl()] ?? [];
+  const r = await erstelleGeraeteBericht({
+    lesenFlash: hooks.lesenFlash,
+    lesenRam: hooks.lesen,
+    globalLive: hooks.globalLive,
+    oszName: (n) => liste[n - 1]?.[0] ?? `Osz ${n}`,
+    fortschritt: (s) => bootStatus(`Gerätebericht: ${s} … (Gerät nicht bedienen)`),
+  });
+  const md = r.zeilen.join("\n") + "\n";
+  const ab = await legeAb(`Geraetebericht-${stempelDatei}.md`, new TextEncoder().encode(md), FIRMWARE_ORDNER);
+  let bankHinweis = "";
+  if (r.patternBank) {
+    const pb = await legeAb(`Patterns-vom-Geraet-${stempelDatei}.e2sallpat`, r.patternBank, "Sets");
+    bankHinweis = pb.pfad ? `; Pattern-Bank → ${pb.pfad}` : "";
+  }
+  bootBerichtZeigen(r.zeilen);
+  bootStatus(`Gerätebericht fertig (${(r.dauerMs / 1000).toFixed(0)} s)${ab.pfad ? ` → ${ab.pfad}` : ""}${bankHinweis}.`);
+}
+
+/** Werks-Pattern-Bank direkt vom Gerät (Werks-Global + SQEZ-Strom, ~128 KiB). */
+async function bootWerksbankVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  const lesen = hooks.lesenFlash;
+  const probe = await probeHaeppchen(lesen);
+  const t0 = Date.now();
+  const w = await liesWerksbankVomGeraet(lesen, { chunk: probe.chunk, fortschritt: (g, ges) => bootStatus(`Werks-Pattern-Bank lesen: ${(g / 1024).toFixed(0)} / ${(ges / 1024).toFixed(0)} KiB …`) });
+  if (!w.ok) return bootStatus(`Werks-Pattern-Bank nicht gelesen: ${w.grund}`);
+  const name = `Werksbank-vom-Geraet-${bootStempel()}.e2sallpat`;
+  const ab = await legeAb(name, w.bank, "Sets");
+  bootBerichtZeigen([werksbankZeile(w)]);
+  bootStatus(`${name} gesichert (${((Date.now() - t0) / 1000).toFixed(1)} s, CRC ${w.crcOk ? "stimmt" : "FALSCH"}, z. B. ${w.namen.slice(0, 3).map((n) => `„${n}“`).join(", ")})${ab.pfad ? ` → ${ab.pfad}` : ""} — der Werkszustand aller 250 Patterns, ladbar in TekkForge und am Gerät (LOAD ALL PATTERN).`);
+}
+
+/** Global-Blöcke aus dem Flash des Geräts lesen und benannt zeigen. */
+async function bootGlobalVomGeraet(): Promise<void> {
+  if (!hooks?.lesenFlash) return bootStatus("Kein Flash-Lesepfad — MIDI aktivieren, Firmware am Gerät = Hacktribe.");
+  bootStatus("Lese Global-Blöcke aus dem Flash…");
+  const r = await liesGlobalVomGeraet(hooks.lesenFlash);
+  if (!r.ok) return bootStatus(`Global nicht gelesen: ${r.reason}`);
+  const zeilen = globalBerichtZeilen(r.global, true);
+  if (hooks.globalLive && r.global.gespeichert) {
+    let live: Uint8Array | null = null;
+    try {
+      live = await hooks.globalLive();
+    } catch {
+      live = null;
+    }
+    zeilen.push(globalLiveZeile(r.global.gespeichert, live));
+  }
+  bootBerichtZeigen(zeilen);
+  bootStatus(r.global.gespeichert ? "Global aus dem Flash gelesen — gespeicherter Block, Werks-Vorgabe und der laufende Block stehen im Bericht." : "Im Flash steht bei 0x230000 kein GLST-Block.");
+}
+
+function richteBootEin(): void {
+  if (!document.getElementById("bootPanel")) return;
+  document.getElementById("bootGlobalGeraet")?.addEventListener("click", () => void bootGlobalVomGeraet());
+  document.getElementById("bootWerksbankGeraet")?.addEventListener("click", () => void bootWerksbankVomGeraet());
+  document.getElementById("bootGeraeteBericht")?.addEventListener("click", () => void bootGeraeteBericht());
+  dateiKnopf("bootSdPaket", "bootSdPcmIn", (f) => void bootSdPaket(f));
+  document.getElementById("bootRegionGeraet")?.addEventListener("click", () => void bootRegionVomGeraet());
+  document.getElementById("bootFlashKomplett")?.addEventListener("click", () => void bootFlashKomplett());
+  document.getElementById("bootPatternsGeraet")?.addEventListener("click", () => void bootPatternBankVomGeraet());
+  document.getElementById("bootDumpAbbrechen")?.addEventListener("click", () => {
+    dumpAbbruch = true;
+    bootStatus("Abbruch angefordert — der laufende 64-KiB-Block wird noch beendet.");
+  });
+  dateiKnopf("bootSblLaden", "bootSblIn", (f) => void bootSblLaden(f));
+  dateiKnopf("bootStartFluechtig", "bootStartIn", (f) => void bootStartFluechtig(f));
+  dateiKnopf("bootDfuStart", "bootDfuIn", (f) => void bootDfuStart(f));
+  dateiKnopfMehrere("bootSdVorbereiten", "bootSdVorbereitenIn", (dateien) => void bootSdVorbereiten(dateien));
+  dateiKnopf("bootSyxSenden", "bootSyxIn", (f) => void bootSyxSenden(f));
+  document.getElementById("bootSektorSichern")?.addEventListener("click", () => {
+    if (!bootSektor) return bootStatus("Erst bootloader.bin laden oder den Boot-Sektor vom Gerät lesen.");
+    const name = bootSektor.name === "Gerät" ? `Bootsektor-vom-Geraet-${bootStempel()}.bin` : "bootsect.bin";
+    void legeAb(name, bootSektor.bytes, FIRMWARE_ORDNER).then((ab) =>
+      bootStatus(`${name} gesichert (128 KiB)${ab.pfad ? ` → ${ab.pfad}` : " → Download"} — das ist, was das Bootloader-Menü „Install bootloader“ nach Flash 0 schreibt bzw. was jetzt im Gerät steht.`),
+    );
+  });
+  document.getElementById("bootVsbSichern")?.addEventListener("click", () => void bootVsbSichernKlick());
+  dateiKnopf("bootVsbPruefen", "bootVsbPruefIn", (f) => void bootVsbPruefen(f));
+  document.getElementById("bootKennungenGeraet")?.addEventListener("click", () => void bootKennungenVomGeraet());
+  document.getElementById("bootSektorGeraet")?.addEventListener("click", () => void bootSektorVomGeraet());
+  dateiKnopf("bootDumpLaden", "bootDumpIn", (f) => void bootDumpLaden(f));
+  document.getElementById("bootDumpKnoepfe")?.addEventListener("click", (ev) => {
+    const t = (ev as Event | undefined)?.target as HTMLElement | null | undefined;
+    const region = t?.dataset?.region;
+    if (region) bootRegionSichern(region);
+  });
 }
 
 function richteCrossgradeEin(): void {
@@ -1557,6 +2104,7 @@ export function initFirmwareWerkbank(h: WerkbankHooks): void {
   if (!document.getElementById("fwPanel")) return;
   dateiKnopf("fwBasisLaden", "fwBasisIn", (f) => void basisLaden(f));
   richteCrossgradeEin();
+  richteBootEin();
   richteAblageEin();
   dateiKnopf("fwGrooveLaden", "fwGrooveIn", (f) => void groovesLaden(f));
   dateiKnopf("fwInitLaden", "fwInitIn", (f) => void initLaden(f));

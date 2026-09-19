@@ -72,6 +72,9 @@ import {
 import { initFxPresetPanel } from "./fxPreset";
 import { initPresetManager } from "./presetManager";
 import { initFirmwareWerkbank } from "./firmwareWerkbank";
+import { initOtpPanel } from "./otpPanel";
+import { liesMonitor, liesSampleStand, monitorText, sampleStandText } from "../core/geraeteMonitor";
+import { buildFlashReadRequest, parseFlashResponse, splitFlashRead, validateFlashRange } from "../core/hacktribeFlash";
 import { initSampleEditor, oeffneSampleEditor } from "./sampleEditor";
 import { packeNummernNeu, sortiereBank, type SortierSchluessel } from "../core/bankManager";
 import { planeSong, songText, type SongSchritt } from "../core/songModus";
@@ -1504,6 +1507,38 @@ async function ramReadBytes(
     out.set(parsed.data.subarray(0, c.len), off);
     off += c.len;
   }
+  if (chunks.length > 1) setRamStatus(`${chunks.length} Häppchen gelesen (${len} Bytes).`);
+  return { ok: true, bytes: out };
+}
+
+/**
+ * Liest `len` Bytes ab Flash-Adresse `addr` (Hacktribe 0x55, nur lesen). Gleiche Disziplin wie
+ * `ramReadBytes`: Häppchen, eigener Timeout je Häppchen, volle Länge oder Fehlschlag.
+ */
+async function flashReadBytes(
+  addr: number,
+  len: number,
+  chunk?: number,
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
+  const range = validateFlashRange(addr, len);
+  if (!range.ok) return { ok: false, reason: range.reason };
+  const chunks = splitFlashRead(addr, len, chunk);
+  const out = new Uint8Array(len);
+  let off = 0;
+  for (const [i, c] of chunks.entries()) {
+    if (chunks.length > 1 && (i % 16 === 0 || i === chunks.length - 1)) setRamStatus(`Lese Flash-Häppchen ${i + 1}/${chunks.length}…`);
+    let data: Uint8Array | null = null;
+    try {
+      const reply = await requestSysex(midi, buildFlashReadRequest(c.addr, c.len, midiOpts()), (b) => parseFlashResponse(b) !== null, 2500);
+      data = parseFlashResponse(reply);
+    } catch (e) {
+      return { ok: false, reason: `keine Antwort bei Flash 0x${c.addr.toString(16).toUpperCase()}. ${String(e)}` };
+    }
+    if (!data || data.length < c.len) return { ok: false, reason: `unvollständige Antwort bei Flash 0x${c.addr.toString(16).toUpperCase()} (${data?.length ?? 0} von ${c.len} Bytes)` };
+    out.set(data.subarray(0, c.len), off);
+    off += c.len;
+  }
+  if (chunks.length > 1) setRamStatus(`${chunks.length} Häppchen gelesen (${len} Bytes).`);
   return { ok: true, bytes: out };
 }
 
@@ -1736,6 +1771,30 @@ function setupRamPanel(): void {
     void ramWriteVerified(addr, bytes, "Zurückschreiben");
   });
 
+  // Geräte-Monitor: benannte Strukturen (Stimmen-Slots, Batterie, Sample-Katalog) nur lesen.
+  const monitorOut = (t: string) => {
+    const el = document.getElementById("ramMonitorOut");
+    if (el) el.textContent = t;
+  };
+  document.getElementById("ramMonitor")?.addEventListener("click", () => {
+    setRamStatus("Lese Stimmen-Slots und Batterie…");
+    void (async () => {
+      const b = await liesMonitor(ramReadBytes);
+      const liste = OSZ_LISTEN[oszListeWahl()];
+      monitorOut(`Gelesen ${new Date().toLocaleTimeString()} — gilt nur bei gestopptem Sequencer.
+` + monitorText(b, (n) => liste[n - 1]?.[0] ?? `Osz ${n}`));
+      setRamStatus(b.fehler.length ? `Monitor mit Fehlern: ${b.fehler[0]}` : "Monitor gelesen.");
+    })();
+  });
+  document.getElementById("ramMonitorSamples")?.addEventListener("click", () => {
+    setRamStatus("Lese User-Sample-Katalog 501–532 (35 KB)…");
+    void (async () => {
+      const r = await liesSampleStand(ramReadBytes, 500, 32);
+      monitorOut(r.fehler ? `Sample-Katalog: ${r.fehler}` : sampleStandText(r.stand));
+      setRamStatus(r.fehler ? `Katalog nicht gelesen: ${r.fehler}` : "Sample-Katalog gelesen.");
+    })();
+  });
+
   // Der Preset-Editor benutzt denselben Lese- und Schreibpfad — ein Schreibweg,
   // eine Stelle mit Schnappschuss und Rückleseprobe.
   const fxHooks = {
@@ -1750,7 +1809,32 @@ function setupRamPanel(): void {
   // Der Preset-Manager teilt sich Lese- und Schreibweg mit dem Editor.
   initPresetManager(fxHooks);
   // Die Firmware-Werkbank holt sich das aktuelle Pattern als Init-Pattern.
-  initFirmwareWerkbank({ aktuellesPattern: aktuellesPatternDatei, lesen: ramReadBytes, schreiben: fxHooks.schreiben });
+  initFirmwareWerkbank({
+    aktuellesPattern: aktuellesPatternDatei,
+    lesen: ramReadBytes,
+    schreiben: fxHooks.schreiben,
+    lesenFlash: flashReadBytes,
+    globalLive: async () => {
+      const reply = await requestSysex(midi, buildGlobalRequest(midiOpts()), (b) => decodeGlobalDump(b) !== null, 4000);
+      return decodeGlobalDump(reply);
+    },
+    // Roher SysEx-Weg für den flüchtigen Bootloader-Start (execute_freetribe-Protokoll).
+    // Der Inhalt der Antwort wird im Loader-Kern (bootloaderStart.ts) geprüft, darum matcht
+    // requestSysex hier den ersten eingehenden Frame (() => true).
+    sysexSenden: async (frame: Uint8Array) => {
+      await midi.sendAsync(frame);
+    },
+    sysexAnfrage: (frame: Uint8Array, akzeptiere: (b: Uint8Array) => boolean, timeoutMs: number) =>
+      requestSysex(midi, frame, akzeptiere, timeoutMs),
+  });
+  // Omnitribe (OTP): derselbe rohe SysEx-Weg. Sendet nur auf Klick, nie beim Start.
+  initOtpPanel({
+    sysexSenden: async (frame: Uint8Array) => {
+      await midi.sendAsync(frame);
+    },
+    sysexAnfrage: (frame: Uint8Array, akzeptiere: (b: Uint8Array) => boolean, timeoutMs: number) =>
+      requestSysex(midi, frame, akzeptiere, timeoutMs),
+  });
 }
 
 /**

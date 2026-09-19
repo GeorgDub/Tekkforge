@@ -12,15 +12,17 @@ import { initEditor, loadProject, panelBridge, editorWirdSichtbar, appendPattern
 import { initConverter } from "./converter";
 import { initPanel, panelWirdSichtbar } from "./panel";
 import { initPadDeck, padDeckWirdSichtbar } from "./paddeck";
+import { initOmni, omniWirdVerlassen } from "./omniPanel";
 import { initGenerator, generatorWirdSichtbar } from "./generator";
 import { initMidiImport, midiImportWirdSichtbar, midiImportLadeLied } from "./midiImport";
+import { requestSysex, waitSysex } from "./midi";
 import { initSampleManager, sampleManagerWirdSichtbar } from "./sampleManager";
 import { initPatternBibliothek, bibliothekWirdSichtbar } from "./patternBibliothek";
 import { initStemWerkbank, stemWerkbankWirdSichtbar, ladeAlsSpuren, stemWerkbankVerlassen } from "./stemWerkbank";
 import type { EditorProject } from "../core/editorModel";
 import { ramBytesFuer } from "../core/sampleRam";
 
-type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "generator" | "midi" | "bank" | "bib" | "stems" | "settings";
+type Tab = "start" | "editor" | "converter" | "panel" | "paddeck" | "omni" | "generator" | "midi" | "bank" | "bib" | "stems" | "settings";
 
 const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?: () => void }> = {
   start: { view: "viewStart", knopf: "tabStart", titel: "Start", sichtbar: startWirdSichtbar },
@@ -29,6 +31,7 @@ const TABS: Record<Tab, { view: string; knopf: string; titel: string; sichtbar?:
   // Panel und Pad-Deck zeigen Editor-Daten — beim Umschalten frisch rendern.
   panel: { view: "viewPanel", knopf: "tabPanel", titel: "E2S Panel", sichtbar: panelWirdSichtbar },
   paddeck: { view: "viewPadDeck", knopf: "tabPadDeck", titel: "Pad-Deck", sichtbar: padDeckWirdSichtbar },
+  omni: { view: "viewOmni", knopf: "tabOmni", titel: "Omnitribe" },
   generator: { view: "viewGenerator", knopf: "tabGenerator", titel: "Generator", sichtbar: generatorWirdSichtbar },
   midi: { view: "viewMidi", knopf: "tabMidi", titel: "MIDI zu Korg", sichtbar: midiImportWirdSichtbar },
   bank: { view: "viewBank", knopf: "tabBank", titel: "Sample-Manager", sichtbar: sampleManagerWirdSichtbar },
@@ -43,6 +46,9 @@ function switchTab(tab: Tab): void {
   // Die Werkbank spielt weiter, wenn man sie nur verlaesst — Ton aus einem
   // Tab, den man nicht mehr sieht, ist ein Geist, den niemand sucht.
   if (aktiverTab === "stems" && tab !== "stems") stemWerkbankVerlassen();
+  // Status-Poller (IRQ-Status + placed_mask-Peek) soll nicht weiterlaufen,
+  // wenn man den Omni-Tab verlaesst — sonst Dauer-Traffic im Hintergrund.
+  if (aktiverTab === "omni" && tab !== "omni") omniWirdVerlassen();
   aktiverTab = tab;
   for (const [name, t] of Object.entries(TABS) as [Tab, (typeof TABS)[Tab]][]) {
     $(t.view).classList.toggle("hidden", name !== tab);
@@ -83,6 +89,11 @@ initPatternBibliothek();
 initStemWerkbank();
 initPanel();
 initPadDeck(() => aktiverTab === "paddeck");
+initOmni({
+  sysexSenden: async (f) => { await panelBridge.midi.sendAsync(f); },
+  sysexAnfrage: (f, ok, t) => requestSysex(panelBridge.midi, f, ok, t),
+  warten: (ok, t) => waitSysex(panelBridge.midi, ok, t ?? 4000),
+});
 // Converter-Handoff: konvertiertes ESX-Ergebnis in den Editor laden + Tab wechseln.
 initConverter((project: EditorProject) => {
   if (loadProject(project)) {

@@ -2,8 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   analysiere,
   crossgrade,
+  vereinheitliche,
   unterschiedsBytes,
   VARIANTEN,
+  BOOT_GATE,
+  FAMILY_CHECK_LOOSE,
   VSB_TOTAL,
   VSB_HEADER,
   OFF_SUFFIX,
@@ -40,6 +43,22 @@ function macheVsb(variante: Variante, fuell = 0xab): Uint8Array {
   b[OFF_ID_HIGH] = 0x01;
   b[OFF_ID_LOW] = v.idLow;
   b[OFF_SUFFIX] = v.suffix;
+  return b;
+}
+
+/** Wie macheVsb, aber mit den erwarteten Boot-ID-Tor-Bytes der Payload-Variante. */
+function macheVsbMitTor(variante: Variante, fuell = 0xab): Uint8Array {
+  const b = macheVsb(variante, fuell);
+  const g = BOOT_GATE[variante];
+  for (let i = 0; i < g.erwartet.length; i++) b[g.offset + i] = g.erwartet[i];
+  return b;
+}
+
+/** Zusätzlich die family_check-Bytes setzen (für Loose-/Vereinheitlichungs-Tests). */
+function macheVsbMitTorUndFamily(variante: Variante, fuell = 0xab): Uint8Array {
+  const b = macheVsbMitTor(variante, fuell);
+  const f = FAMILY_CHECK_LOOSE[variante];
+  for (let i = 0; i < f.erwartet.length; i++) b[f.offset + i] = f.erwartet[i];
   return b;
 }
 
@@ -100,5 +119,83 @@ describe("crossgrade — umkoepfen", () => {
   it("unterschiedsBytes findet Abweichungen und Längendifferenz", () => {
     expect(unterschiedsBytes(new Uint8Array([1, 2, 3]), new Uint8Array([1, 9, 3]))).toEqual([1]);
     expect(unterschiedsBytes(new Uint8Array([1]), new Uint8Array([1, 2]))).toEqual([1]);
+  });
+});
+
+describe("crossgrade — Boot-ID-Tor-Patch (Umpatcher)", () => {
+  it("patcht das Synth-Boot-Tor beim Synth→Sampler-Weg, wenn die Bytes passen", () => {
+    const syn = macheVsbMitTor("synth");
+    const r = crossgrade(syn, "sampler");
+    const g = BOOT_GATE.synth;
+    expect(r.gatePatch?.angewendet).toBe(true);
+    for (let i = 0; i < g.gepatcht.length; i++) expect(r.bytes[g.offset + i]).toBe(g.gepatcht[i]);
+    // Kopf plus Tor sind geändert; Kopf allein bleibt exakt [0x12, 0x2E].
+    expect(r.kopfGeaendert).toEqual([OFF_SUFFIX, OFF_ID_LOW]);
+    expect(r.geaendert).toContain(g.offset);
+    expect(r.geaendert).toContain(OFF_SUFFIX);
+  });
+
+  it("patcht das Sampler-Boot-Tor beim Sampler→Synth-Weg (Recovery)", () => {
+    const sam = macheVsbMitTor("sampler");
+    const r = crossgrade(sam, "synth");
+    const g = BOOT_GATE.sampler;
+    expect(r.gatePatch?.angewendet).toBe(true);
+    for (let i = 0; i < g.gepatcht.length; i++) expect(r.bytes[g.offset + i]).toBe(g.gepatcht[i]);
+    // Sampler-Payload für den Synth-Updater: Kopf trägt jetzt Synth-Kennung.
+    expect(analysiere(r.bytes).variante).toBe("synth");
+  });
+
+  it("meldet, wenn das Tor nicht an der erwarteten Stelle steht — Kopf trotzdem umgeköpft", () => {
+    const syn = macheVsb("synth"); // ohne Tor-Bytes
+    const r = crossgrade(syn, "sampler");
+    expect(r.gatePatch?.angewendet).toBe(false);
+    expect(r.gatePatch?.grund).toMatch(/NICHT gefunden/);
+    expect(r.kopfGeaendert).toEqual([OFF_SUFFIX, OFF_ID_LOW]);
+    expect(r.geaendert).toEqual([OFF_SUFFIX, OFF_ID_LOW]); // nur Kopf
+    expect(analysiere(r.bytes).variante).toBe("sampler");
+  });
+
+  it("bootGate:false lässt das Tor unangetastet", () => {
+    const syn = macheVsbMitTor("synth");
+    const r = crossgrade(syn, "sampler", { bootGate: false });
+    expect(r.gatePatch).toBeUndefined();
+    expect(r.geaendert).toEqual([OFF_SUFFIX, OFF_ID_LOW]);
+    // Tor-Bytes unverändert
+    const g = BOOT_GATE.synth;
+    for (let i = 0; i < g.erwartet.length; i++) expect(r.bytes[g.offset + i]).toBe(g.erwartet[i]);
+  });
+});
+
+describe("crossgrade — einheitlicher Header (Loose-Updater)", () => {
+  it("vereinheitliche patcht Boot-Tor + family_check ohne Kopf-Änderung", () => {
+    const syn = macheVsbMitTorUndFamily("synth");
+    const r = vereinheitliche(syn);
+    expect(r.variante).toBe("synth");
+    expect(r.gatePatch.angewendet).toBe(true);
+    expect(r.familyPatch.angewendet).toBe(true);
+    // Kopf bleibt Synth (0x23, Suffix E2) — NICHT umgeköpft.
+    expect(analysiere(r.bytes).variante).toBe("synth");
+    expect(r.bytes[OFF_ID_LOW]).toBe(0x23);
+    const f = FAMILY_CHECK_LOOSE.synth;
+    for (let i = 0; i < f.gepatcht.length; i++) expect(r.bytes[f.offset + i]).toBe(f.gepatcht[i]);
+    // Geänderte Offsets = Boot-Tor + family_check, KEIN Kopf-Offset.
+    expect(r.geaendert).toContain(BOOT_GATE.synth.offset);
+    expect(r.geaendert).toContain(FAMILY_CHECK_LOOSE.synth.offset);
+    expect(r.geaendert).not.toContain(OFF_ID_LOW);
+  });
+
+  it("vereinheitliche funktioniert auch für Sampler-Payload", () => {
+    const sam = macheVsbMitTorUndFamily("sampler");
+    const r = vereinheitliche(sam);
+    expect(r.variante).toBe("sampler");
+    expect(r.familyPatch.angewendet).toBe(true);
+    expect(r.bytes[OFF_ID_LOW]).toBe(0x24); // Kopf bleibt Sampler
+  });
+
+  it("crossgrade mit familyLoose patcht den Updater zusätzlich", () => {
+    const syn = macheVsbMitTorUndFamily("synth");
+    const r = crossgrade(syn, "sampler", { familyLoose: true });
+    expect(r.familyPatch?.angewendet).toBe(true);
+    expect(r.geaendert).toContain(FAMILY_CHECK_LOOSE.synth.offset);
   });
 });

@@ -74,6 +74,15 @@
       .statusDot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
       .statusDot.an { background: var(--success); box-shadow: 0 0 6px var(--success); }
 
+      /* ── Omnitribe-Modul-Panel ──────────────────────────────── */
+      .omni-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+      .omni-karte { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+      .omni-kopf { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+      .omni-badge { color: var(--muted); font-weight: 400; font-size: 11px; }
+      .omni-led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); margin-left: auto; }
+      .omni-led.an { background: var(--success); box-shadow: 0 0 6px var(--success); }
+      .omni-params { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+
       /* ── Start-Dashboard ───────────────────────────────────── */
       .startHero {
         display: flex; gap: 18px; align-items: center; justify-content: space-between;
@@ -309,6 +318,7 @@
         <button id="tabConverter" class="railBtn" title="ESX-Converter">⇄</button>
         <button id="tabPanel" class="railBtn" title="E2S Panel">▦</button>
         <button id="tabPadDeck" class="railBtn" title="Pad-Deck">▤</button>
+        <button id="tabOmni" class="railBtn" title="Omnitribe">◈</button>
         <button id="tabGenerator" class="railBtn" title="Generator">✦</button>
         <button id="tabMidi" class="railBtn" title="MIDI zu Korg">♪</button>
         <button id="tabBank" class="railBtn" title="Sample-Manager">▩</button>
@@ -461,6 +471,13 @@
                   <button id="ramRead" class="ghost">Lesen</button>
                 </div>
                 <div id="ramNote" class="sub" style="margin:4px 0 0"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Geräte-Monitor (nur lesen):</b></span>
+                  <button id="ramMonitor" class="ghost" title="Stimmen-Slots (welcher Part spielt welchen Oszillator), Zuteilungs-Generation und Batterie-Stufe aus dem RAM lesen — Adressen aus dem Ghidra-Export der Sampler-Firmware. Gilt nur bei gestopptem Sequencer.">Stimmen &amp; Batterie lesen</button>
+                  <button id="ramMonitorSamples" class="ghost" title="Laufzeit-Katalog der User-Samples 501–532 lesen (geladen, Länge, Rate) — ~35 KB, dauert ein paar Sekunden">User-Samples 501–532</button>
+                  <span class="sub" style="margin:0">Sampler-Layout (Stock, Hacktribe, TekkForge); bei laufendem Sequencer sind Lesungen verschoben.</span>
+                </div>
+                <pre id="ramMonitorOut" class="sub" style="margin:4px 0 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
 
                 <div style="margin-top:8px">
                   <div style="color:var(--muted);font-size:10px;margin-bottom:2px">
@@ -756,8 +773,9 @@
               </details>
               <details id="xgPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
                 <summary style="cursor:pointer;font-weight:600">🎛 Synth-Firmware für den Sampler vorbereiten (Crossgrade)</summary>
-                <p class="sub" style="margin:6px 0">Aus einem Sampler einen echten <b>electribe 2 Synth</b> machen: die offizielle Synth-<code>SYSTEM.VSB</code> von Korg laden, hier auf die Sampler-Variante umköpfen und über die Update-Funktion des Geräts flashen. Nur zwei Kopf-Bytes ändern sich (Device-ID 0x0123→0x0124); die Synth-Klangerzeugung (Oszillatoren, VPM, Filter) steckt im Payload und reist mit. Umgekehrt geht auch (Sampler→Synth).</p>
-                <p class="sub" style="margin:6px 0;color:var(--warn,#c0392b);font-weight:600">⚠ Am Gerät falsifiziert (2026-09-09): Die umgeköpfte Datei wird angenommen und geflasht (die unveränderte Stock-Synth-Datei würde als „Invalid File" abgelehnt), aber das Gerät bleibt danach in einer <b>Update-Schleife</b> — beim Booten wird erneut ein Update verlangt, ein zweiter Durchlauf hilft nicht. Ursache ist nicht der Kopf, sondern eine Panel-/MCU-Firmware-Prüfung im Synth-OS. Nur zum Experimentieren; der belegte Rückweg ist die Werks-<code>SYSTEM.VSB</code> des Geräts.</p>
+                <p class="sub" style="margin:6px 0">Aus einem Sampler einen echten <b>electribe 2 Synth</b> machen (und umgekehrt): eine offizielle <code>SYSTEM.VSB</code> laden, hier umköpfen und über die Update-Funktion des Geräts flashen. Der Umpatcher macht zwei Dinge — er köpft den <b>Kopf</b> auf die Variante um, deren Updater die Datei annehmen soll (Byte 0x12/0x2E), und er patcht das <b>Boot-ID-Tor</b> im Payload, ohne das die umgeköpfte Firmware in der Update-Schleife hängt. Die Klangerzeugung (Oszillatoren, VPM, Filter) steckt im Payload und reist mit.</p>
+                <p class="sub" style="margin:6px 0;color:var(--ok,#2e7d32);font-weight:600">✅ Am Gerät bestätigt (2026-09-09): Mit dem Boot-ID-Tor-Patch bootet die umgeköpfte Firmware normal (ohne den Patch hängt sie in der Update-Schleife). Offene Grenze: synth-eigene PCM-Sample-Oszillatoren bleiben an die im Gerät vorhandene <code>PCM.VSB</code> gebunden (Sampler-PCM), bis eine Synth-<code>PCM.VSB</code> vorliegt.</p>
+                <p class="sub" style="margin:6px 0;color:var(--warn,#c0392b)">⚠ Zielordner = <b>aktuell laufende</b> Firmware: Synth liest <code>KORG/electribe/System/</code>, Sampler <code>KORG/electribe&nbsp;sampler/System/</code>. Läuft nach einem Crossgrade schon die andere Variante, muss auch die Rückweg-/nächste Datei für deren Updater umgeköpft werden — genau dafür ist der Umpatcher da.</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                   <button id="xgLaden" class="ghost" title="Eine offizielle electribe-2-SYSTEM.VSB laden (Synth oder Sampler)">SYSTEM.VSB laden…</button>
                   <input id="xgIn" type="file" accept=".vsb,.VSB" class="hidden" />
@@ -769,6 +787,115 @@
                 </div>
                 <p class="sub" style="margin:6px 0 0">⚠ Vor dem Flashen die passende Werks-<code>SYSTEM.VSB</code> des Geräts als Rückweg auf der SD-Karte behalten. PCM-Instrumente stammen aus der geräteeigenen <code>PCM.VSB</code> und bleiben die des Samplers.</p>
                 <div id="xgStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit</div>
+              </details>
+              <details id="bootPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
+                <summary style="cursor:pointer;font-weight:600">🥾 Boot-Sektor, BOOT.VSB und Flash-Dump (Custom-Bootloader)</summary>
+                <p class="sub" style="margin:6px 0">Der erste 128-KiB-Block des Flash trägt das AIS-Bootskript und den Bootloader (SBL). Aus vanasoft23s Freetribe-Bootloader (<code>bootloader.bin</code>, lädt nach 0x80000000) wird hier der Boot-Sektor gebaut und als <code>BOOT.VSB</code> verpackt — die Update-Funktion des Geräts (DATA UTILITY → SOFTWARE UPDATE) nimmt eine <code>KORG/…/System/BOOT.VSB</code> auch ohne SYSTEM.VSB an und schreibt sie nach Flash-Offset 0. Dazu: jede <code>.VSB</code> so prüfen, wie die Firmware sie prüft, und einen 16-MiB-Flash-Dump (Bootloader-Menü „Dump flash to SD“) kartieren und zerlegen.</p>
+                <p class="sub" style="margin:6px 0;color:var(--warn,#c0392b)"><b>⚠ Ein-Schuss-Weg.</b> Ein falscher Boot-Sektor macht das Gerät nur noch über JTAG (J9) erreichbar. Erst flüchtig testen (Knopf „▶ Über SysEx starten“ oder JTAG-Load), dann installieren. <b>Sampler-Umbau seit 2026-09-17 (am Gerät noch nicht belegt):</b> der Handoff erkennt das Firmware-Image am „PTST“-Marker und patcht 0xC0025E4F laut Byte-Analyse nur beim Synth-Image, sodass „Boot from flash“ auf Sampler-/Hacktribe-Firmware unangetastet bleiben sollte (der frühere Stand <code>3a0581f</code> stürzte dort beim Sequencer-Stop ab). Der Umbau ist kompiliert und im ELF geprüft, aber noch nicht am Gerät gebootet — erst flüchtig testen. Nichts hier schreibt ins Gerät.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <span class="sub" style="margin:0"><b>Boot-Sektor bauen:</b></span>
+                  <button id="bootSblLaden" class="ghost" title="bootloader.bin (SBL-Image, max. 131022 Bytes) oder einen fertigen 128-KiB-Boot-Sektor laden">bootloader.bin / Boot-Sektor laden…</button>
+                  <input id="bootSblIn" type="file" accept=".bin,.BIN" class="hidden" />
+                  <span class="sub" id="bootSblInfo" style="margin:0">nichts geladen</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Kopf-Identität <select id="bootIdentitaet" style="font-size:11px;padding:2px 4px"><option value="sampler">Sampler (0x000124)</option><option value="synth">Synth (0x000123)</option></select></label>
+                  <button id="bootSektorSichern" class="ghost hidden" title="Die 128 KiB (AIS-Kopf + SBL + Jump + Prüfsumme) als Datei sichern">⬇ Boot-Sektor .bin</button>
+                  <button id="bootVsbSichern" class="primary hidden" title="Boot-Sektor mit Korg-Kopf (Name BOOT, Länge 0x20000) als BOOT.VSB sichern — Kopfvorlage ist die geladene Basis, sonst ein Standardkopf">⬇ BOOT.VSB</button>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Flüchtig testen (SysEx, schreibt NICHTS ins Flash):</b></span>
+                  <button id="bootStartFluechtig" class="ghost" title="Die ROHE bootloader.bin (max. 131072 Bytes, läuft an 0x80000000) über den Hacktribe-SysEx-Loader flüchtig starten: Pivot 0x58 → Magic-Handshake → 0x54-Häppchen → 0x57 Execute. Das Gerät wird zum Loader, bis es aus- und wieder eingeschaltet wird; nichts wird geflasht. Braucht aktives MIDI und einen freien KORG-Port.">▶ Über SysEx starten (bootloader.bin, flüchtig)…</button>
+                  <input id="bootStartIn" type="file" accept=".bin,.BIN" class="hidden" />
+                  <span class="sub" style="margin:0;opacity:.75">kapert das Gerät bis zum Neustart — nur klicken, wenn du am Gerät bist</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Wenn der Bootloader läuft (Menü am Display, USB e2fb:1802):</b></span>
+                  <button id="bootDfuStart" class="ghost" title="Eine SYSTEM.VSB (oder ein rohes 2-MiB-Image) per USB-DFU (Alt 3 „Debug Firmware“) in den laufenden Bootloader laden; der startet sie flüchtig aus dem DDR. Keine SD-Karte nötig, nichts wird geflasht. Windows: braucht den WinUSB-Treiber auf dem DFU-Interface (einmalig mit Zadig).">Firmware per USB-DFU starten (flüchtig)…</button>
+                  <input id="bootDfuIn" type="file" accept=".vsb,.VSB,.bin,.BIN" class="hidden" />
+                  <button id="bootSdVorbereiten" class="ghost" title="Dateien wählen (SYSTEM/PCM/BOOT/USER/SLICE.VSB, rohe Images, gern bootloader.bin dazu): TekkForge ordnet sie ein, legt Downloads\TekkForge\Bootloader-SD-<Datum> mit LIESMICH an und sagt, was nicht auf die Karte gehört. Schreibt nichts auf die SD.">Bootloader-SD vorbereiten (Dateien wählen…)</button>
+                  <input id="bootSdVorbereitenIn" type="file" multiple class="hidden" />
+                  <button id="bootSyxSenden" class="ghost" title="Eine .syx-Datei (z. B. Omnitribes Modul-Bündel) frameweise an die LAUFENDE Firmware senden — 20 ms Pause je Frame, bei OTP-Frames wird auf die Quittung gewartet, eine Fehlerantwort stoppt. Module landen im RAM, nichts wird geflasht.">SysEx-Datei senden (.syx)…</button>
+                  <input id="bootSyxIn" type="file" accept=".syx,.SYX" class="hidden" />
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Vom Gerät lesen (Hacktribe, nur lesen):</b></span>
+                  <button id="bootKennungenGeraet" class="ghost" title="Gerätestempel (elec2USR/ele2sUSR), Main-Version und PCM-Kopf direkt aus dem Flash lesen — SysEx 0x55, ein paar Dutzend Bytes">Kennungen</button>
+                  <button id="bootSektorGeraet" class="ghost" title="Den ersten 128-KiB-Block (AIS + Werks-SBL) aus dem Flash lesen — der Rückweg, BEVOR ein eigener Bootloader installiert wird; wird sofort als .bin und BOOT.VSB in Downloads\TekkForge\Firmware gesichert (512 Häppchen, ~60 s)">Boot-Sektor (128 KiB)</button>
+                  <button id="bootFlashKomplett" class="ghost" title="Den ganzen 16-MiB-Flash lesen und als Flash-vom-Geraet-<Datum>.bin sichern — vollständige Gerätesicherung (Bootloader, Firmware, User-Daten, Pattern, PCM, Slices), ohne JTAG. Mit 0x400-Häppchen etwa zwei Minuten, sonst bis zu 10; Gerät solange nicht bedienen">Flash komplett (16 MiB, lange)</button>
+                  <button id="bootPatternsGeraet" class="ghost" title="Nur die Pattern-Bank lesen (Flash 0x230000–0x628000, gut 4 MiB, etwa eine halbe Minute) und als Patterns-vom-Geraet-<Datum>.e2sallpat in Downloads\TekkForge\Sets sichern — die Pattern-Sicherung ohne SD-Karte, ladbar in TekkForge und am Gerät">Pattern-Bank vom Gerät (.e2sallpat)</button>
+                  <button id="bootGeraeteBericht" class="primary" style="padding:2px 10px" title="Ein Klick, alles lesen: Kennungen, Global (gespeichert/Werk/laufend), Pattern-Bank gegen Werksbank, Slice-Region, Stimmen-Monitor und Sample-Katalog — als Geraetebericht-<Datum>.md in Downloads\TekkForge\Firmware, dazu die Pattern-Bank als .e2sallpat in Sets. Gut eine halbe Minute; nur Lesen">Gerätebericht (alles lesen)</button>
+                  <button id="bootWerksbankGeraet" class="ghost" title="Die Werks-Pattern-Bank direkt vom Gerät: Werks-Global + komprimierter SQEZ-Strom (etwa 128 KiB, gut eine Sekunde) → Werksbank-vom-Geraet-<Datum>.e2sallpat in Downloads\TekkForge\Sets — der Werkszustand aller 250 Patterns als Datei, ohne Werksreset">Werks-Patterns vom Gerät (.e2sallpat)</button>
+                  <button id="bootSdPaket" class="ghost" title="SD-Update-Paket bauen: SYSTEM.VSB wird aus dem Gerät gelesen (der laufende Build, 2 MiB, ~15 s), dazu die hier gewählte PCM.VSB; beide gegen den Gerätestempel geprüft und als KORG\Hacktribe\System\… in Downloads\TekkForge\SD-Update-<Datum> abgelegt, mit LIESMICH (Kopf, Länge, MD5). Nur den KORG-Ordner auf die SD kopieren; geflasht wird erst am Gerät (DATA UTILITY → SOFTWARE UPDATE)">SD-Update-Paket bauen (PCM wählen…)</button>
+                  <input id="bootSdPcmIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                  <button id="bootGlobalGeraet" class="ghost" title="Die Global-Einstellungen, wie sie im Flash gespeichert sind (0x230000), und die Werks-Vorgabe (0x630000) lesen und benannt zeigen — MIDI-Kanal, Clock, Chain Mode, Knob-Modus …; dazu der SQEZ-Kopf der komprimierten Werks-Pattern-Bank">Global aus dem Flash</button>
+                  <select id="bootRegionGeraetArt" title="Welche Flash-Region direkt vom Gerät als Update-Datei gesichert wird">
+                    <option value="SYSTEM">SYSTEM (Firmware, 2 MiB, ~15 s)</option>
+                    <option value="PCM">PCM (Werks-/User-Samples, 8 MiB, ~1 min)</option>
+                    <option value="USER">USER (Global, Pattern, Songs, 4,5 MiB, ~30 s)</option>
+                    <option value="SLICE">SLICE (Slice-Daten, 576 KiB, ~4 s)</option>
+                    <option value="BOOT">BOOT (Boot-Sektor, 128 KiB)</option>
+                  </select>
+                  <button id="bootRegionGeraet" class="ghost" title="Nur diese Region vom Gerät lesen und als <REGION>-vom-Geraet-<Datum>.VSB in Downloads\TekkForge\Firmware sichern — der Kopf trägt die Identität des Geräts (Stempel wird vorher gelesen), damit das Gerät die Datei per SD-Update wieder annimmt">Region vom Gerät (.VSB)</button>
+                  <button id="bootDumpAbbrechen" class="ghost hidden" title="Nach dem laufenden 64-KiB-Block abbrechen; das Teilstück wird gesichert">Abbrechen</button>
+                  <span class="sub" id="bootGeraetInfo" style="margin:0"></span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>VSB-Kopf prüfen:</b></span>
+                  <button id="bootVsbPruefen" class="ghost" title="Eine beliebige .VSB (SYSTEM/BOOT/PCM/USER/SLICE) laden und den Kopf gegen die Regeln des Sampler- und des Synth-Updaters halten">.VSB laden und prüfen…</button>
+                  <input id="bootVsbPruefIn" type="file" accept=".vsb,.VSB" class="hidden" />
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <span class="sub" style="margin:0"><b>Flash-Dump (16 MiB):</b></span>
+                  <button id="bootDumpLaden" class="ghost" title="FLASHDMP.BIN aus dem Bootloader-Menü oder einen JTAG-Dump laden und kartieren">Dump laden…</button>
+                  <input id="bootDumpIn" type="file" accept=".bin,.BIN" class="hidden" />
+                  <span id="bootDumpKnoepfe" class="hidden" style="display:flex;gap:6px;flex-wrap:wrap">
+                    <button class="ghost" data-region="SYSTEM" style="padding:2px 8px;font-size:11px" title="2 MiB ab 0x20000 als SYSTEM.VSB">⬇ SYSTEM.VSB</button>
+                    <button class="ghost" data-region="PCM" style="padding:2px 8px;font-size:11px" title="8 MiB ab 0x800000 als PCM.VSB">⬇ PCM.VSB</button>
+                    <button class="ghost" data-region="BOOT" style="padding:2px 8px;font-size:11px" title="Boot-Sektor als BOOT.VSB (Rückweg zum Werks-SBL, wenn der Dump vom Werkszustand stammt)">⬇ BOOT.VSB</button>
+                    <button class="ghost" data-region="USER" style="padding:2px 8px;font-size:11px" title="User-Region ab 0x220000 als USER.VSB">⬇ USER.VSB</button>
+                    <button class="ghost" data-region="SLICE" style="padding:2px 8px;font-size:11px" title="Slice-Region ab 0x750000 als SLICE.VSB">⬇ SLICE.VSB</button>
+                    <button class="ghost" data-region="SBL" style="padding:2px 8px;font-size:11px" title="Den rohen SBL aus dem Boot-Sektor (für Ghidra/GDB)">⬇ SBL.bin</button>
+                    <button class="ghost" data-region="PATTERNS" style="padding:2px 8px;font-size:11px" title="Die 250 Patterns des Geräts (GLST-Block 0x230000 + Records 0x240000) als .e2sallpat — genau die Datei, die das Gerät selbst exportiert; in TekkForge und am Gerät ladbar">⬇ Pattern-Bank (.e2sallpat)</button>
+                    <button class="ghost" data-region="WERKSBANK" style="padding:2px 8px;font-size:11px" title="Die unberührte Werks-Pattern-Bank: aus dem komprimierten SQEZ-Strom (0x640000) und dem Werks-Global (0x630000) entpackt — genau das, was der Werksreset ins Gerät schreibt, als .e2sallpat">⬇ Werks-Pattern-Bank (.e2sallpat)</button>
+                  </span>
+                </div>
+                <pre id="bootBericht" class="sub" style="margin:6px 0 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
+                <div id="bootStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit</div>
+              </details>
+              <details id="otpPanel" style="margin-top:12px;border:1px solid var(--accent2);border-radius:6px;padding:8px">
+                <summary style="cursor:pointer;font-weight:600">🛰 Omnitribe (OTP) — Coexist-Firmware fragen, 16 Parameter je Part setzen, Transport</summary>
+                <p class="sub" style="margin:6px 0">Omnitribe ist eine Firmware-Erweiterung für den Sampler, die neben Stock oder Hacktribe läuft und ein eigenes SysEx-Protokoll spricht (Hersteller-ID 0x7D „OTP“). Antwortet das Gerät, kennt es <code>IDENTITY</code>, <code>FIRMWARE_INFO</code> und eine <code>TELEMETRY</code>, die den Zustand des Hooks in fünf Stufen erklärt — dazu <code>PARAM</code> für alle 16 Parameter der Stub-Registry je Part 1–16 und <code>TRANSPORT</code> (Play, Stop, Position). Stock- und Hacktribe-Firmware ohne Hook antworten nicht; dann steht hier „Kein OTP“ und sonst nichts. Nichts sendet von allein — nur Knöpfe und Regler.</p>
+                <p class="sub" style="margin:6px 0;opacity:.8"><b>Beleg-Status je Parameter</b> (aus den Kommentaren im Stub-C-Code, nicht aus TekkForge): <b>✔ bewiesen</b> = Omnitribe hat diesen Weg am Gerät gemessen oder gehört; <b>◐ statisch</b> = Adresse/CC aus Tabellen hergeleitet, „nicht am Gerät gemessen“ — heute zu hören. Maus über den Status zeigt die Quelle. <b>Stand 2026-09-17:</b> aus TekkForge heraus am Gerät noch nichts davon gehört.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+                  <button id="otpFragen" class="primary" style="padding:2px 10px" title="Drei Anfragen nacheinander: IDENTITY (CMD 0x01), FIRMWARE_INFO (CMD 0x09), TELEMETRY (CMD 0x07); je 1,5 s Wartezeit. Braucht aktives MIDI und einen freien KORG-Port">Gerät fragen (IDENTITY + FIRMWARE_INFO + TELEMETRY)</button>
+                </div>
+                <pre id="otpBericht" class="sub" style="margin:6px 0 0;white-space:pre-wrap;font-family:monospace;font-size:11px"></pre>
+                <div id="otpRegler" class="hidden" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Part <select id="otpPart" style="font-size:11px;padding:2px 4px"></select></label>
+                    <button id="otpLesen" class="ghost" title="PARAM GET für alle 16 Parameter dieses Parts nacheinander; die Regler springen auf die gelesenen Werte">Alle Werte vom Gerät lesen</button>
+                    <span class="sub" style="margin:0;opacity:.75">Regler loslassen = PARAM SET senden · „Lesen“ = PARAM GET für diesen Parameter</span>
+                  </div>
+                  <div id="otpReglerTabelle" style="display:grid;grid-template-columns:auto 1fr auto auto auto;gap:5px 10px;align-items:center;margin-top:6px;max-width:720px"></div>
+                  <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
+                    <div class="sub" style="margin:0 0 4px;font-weight:600">TRANSPORT (CMD 0x0E) — der Stub speist die MIDI-Nachricht in die Firmware ein</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                      <button id="otpPlay" class="ghost" title="SUB 0x00 → MIDI-Start 0xFA eingespeist. Omnitribe 2026-08-13: wirkt am Gerät">▶ Play</button>
+                      <button id="otpStop" class="ghost" title="SUB 0x01 → MIDI-Stop 0xFC eingespeist. Omnitribe 2026-08-13: wirkt am Gerät">■ Stop</button>
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Takt <input id="otpPosTakt" type="number" min="1" max="1024" step="1" value="1" style="width:5em;font-size:11px;padding:2px 4px" /></label>
+                      <label class="sub" style="margin:0;display:flex;align-items:center;gap:4px">Step <input id="otpPosStep" type="number" min="1" max="16" step="1" value="1" style="width:4em;font-size:11px;padding:2px 4px" /></label>
+                      <span id="otpPosBeats" class="sub" style="margin:0;min-width:9em"></span>
+                      <button id="otpPosSenden" class="ghost" title="SUB 0x0A → Song-Position-Pointer F2 lsb msb aus (Takt−1)·16 + (Step−1) Beats; über 0x3FFF wird hier abgewiesen. Omnitribe 2026-08-13: eingespeist, aber die E2S wertet den SPP nicht aus">Position senden</button>
+                    </div>
+                  </div>
+                  <div style="margin-top:8px;border-top:1px solid var(--line,#3333);padding-top:6px">
+                    <div class="sub" style="margin:0 0 4px;font-weight:600">Modul-Lader Stufe 1 (CMD 0x05) — Header empfangen und prüfen, nichts ausführen</div>
+                    <p class="sub" style="margin:0 0 4px;opacity:.8">Sendet ein Test-Modul als 0x05-Block; der Stub dekodiert und validiert nur den 44-Byte-OTMR-Header und schickt einen ACK mit Status zurück. Er kopiert nichts nach 0xC6100000 und ruft weder <code>init()</code> noch <code>deinit()</code> auf — es läuft kein empfangener Code. Ausführung wäre Stufe 2 (erst nach Geräte-DDR-Vermessung). Antwortet nichts, kennt der geladene Stub CMD 0x05 nicht (älteres Abbild) — dann bleibt der Modul-Lader stumm.</p>
+                    <div id="otpModulKnoepfe" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+                  </div>
+                </div>
+                <div id="otpStatus" class="sub" style="margin-top:4px;white-space:pre-line">bereit — noch nichts gesendet</div>
               </details>
             </div>
             <button id="midiEnable" class="primary">MIDI aktivieren</button>
@@ -958,6 +1085,7 @@
       <!-- ═══════════ E2S PANEL (Hardware-Lookalike, gebaut von src/gui/panel.ts) ═══════════ -->
       <section id="viewPanel" class="hidden"></section>
       <section id="viewPadDeck" class="hidden"></section>
+      <section id="viewOmni" class="hidden"></section>
       <section id="viewGenerator" class="hidden"></section>
 
       <!-- ═══════════ MIDI ZU KORG ═══════════ -->
