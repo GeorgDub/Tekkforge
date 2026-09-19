@@ -34,7 +34,9 @@ export interface OmniHooks {
 let hooks: OmniHooks | null = null;
 const platziert = new Set<number>();
 let pollTimer: ReturnType<typeof setInterval> | null = null;
-/** `placed_mask` liegt laut Geraetemessung an dieser festen DDR-Adresse (Omnitribe-Referenzskript peek.mjs). */
+/** Re-Entrancy-Schutz fuer `omniStatusEinmal` — ein Zyklus (zwei sysexAnfrage-Roundtrips) kann laenger als das 1000-ms-Poll-Intervall dauern. */
+let zyklusLaeuft = false;
+/** `placed_mask` liegt laut Geraetemessung an dieser festen DDR-Adresse (Omnitribe-Referenzskript u4-diag.mjs: MOD2+0x84, MOD2=0xC2200000). */
 const OMNI_PLACED_MASK_ADDR = 0xc2200084;
 
 function $(id: string): HTMLElement {
@@ -126,14 +128,25 @@ function paramWidget(m: OmniModule, p: OmniParam): string {
 }
 
 /**
- * Params-Host eines Moduls per String-Splice in `viewOmni` ersetzen — nicht
- * per `querySelector` auf einem Kind-Element: der Test-Stub kennt nur
- * `innerHTML` als String (kein DOM-Baum), und dieselbe Implementierung muss
- * unveraendert auch im echten Browser-DOM funktionieren (dort ist `innerHTML`
- * ebenso ein String-Property). Die Param-Widgets selbst haben keine `<div>`,
- * darum ist das naechste `</div>` nach der Markierung zuverlaessig deren Ende.
+ * Params-Host eines Moduls gezielt setzen — NICHT `viewOmni.innerHTML` als
+ * Ganzes neu schreiben: im echten Browser-DOM wird dabei der gesamte Teilbaum
+ * neu geparst, und Formularzustand (`select.value`/`checkbox.checked`) steht
+ * nicht in `innerHTML` und geht verloren (`aktuellerPart` laese danach falsch).
+ * Echtes DOM (hat `document.querySelector`): den `[data-omni-params]`-Knoten
+ * direkt greifen und nur dessen `innerHTML` setzen — `viewOmni` selbst (an dem
+ * die click/change-Delegation haengt) bleibt unangetastet.
+ * Test-Stub (nur `getElementById`, kein `querySelector`, `innerHTML` nur ein
+ * gespeicherter String): auf die bisherige String-Splice-Logik zurueckfallen.
+ * Die Param-Widgets selbst haben keine `<div>`, darum ist das naechste
+ * `</div>` nach der Markierung zuverlaessig deren Ende.
  */
 function setParamsHost(id: number, html: string): void {
+  const doc = document as unknown as { querySelector?: (s: string) => { innerHTML: string } | null };
+  if (typeof doc.querySelector === "function") {
+    const host = doc.querySelector(`[data-omni-params="${id}"]`);
+    if (host) host.innerHTML = html;
+    return;
+  }
   const container = $("viewOmni");
   const marker = `data-omni-params="${id}">`;
   const start = container.innerHTML.indexOf(marker);
@@ -168,9 +181,12 @@ function paramGeaendert(el: HTMLInputElement | HTMLSelectElement): void {
 
 /**
  * Modul komplett laden: Chunks (Stufe 2, CMD 0x05 SUB 0x02) + abschliessender
- * Commit (SUB 0x04), je gesendetem Frame auf ein ACK (SUB 0x03) gewartet.
- * Nur ein fehlgeschlagener COMMIT bricht ab (Chunk-Fehler zeigen sich erst im
- * Commit-Status, s. `OTP_MODULE_STATUS` 0x09/0x0a/0x0b).
+ * Commit (SUB 0x04), je gesendetem Frame auf ein ACK (SUB 0x03) gewartet —
+ * wie `load()` in `scripts/chord-solo.mjs`/`multi-module.mjs`: JEDER Frame
+ * wird geprueft, nicht nur der Commit. Ein Timeout (`warten` liefert `null`)
+ * oder ein abgelehnter Chunk (`status!=0`) bricht sofort ab — sonst wuerde ein
+ * stummer Port oder ein verlorener Chunk (Status 0x09/0x0b) still als Erfolg
+ * durchfallen, obwohl das Modul am Geraet gar nicht vollstaendig ankam.
  */
 export async function modulLaden(id: number): Promise<void> {
   if (!hooks) return;
@@ -184,8 +200,9 @@ export async function modulLaden(id: number): Promise<void> {
     await hooks.sysexSenden(frames[i]);
     const ack = await hooks.warten((r) => istOtpAntwort(r, OtpCmd.MODULE, OtpSub.MODULE_ACK), 1500);
     const a = ack ? parseModuleAck(parseFramePayload(ack)) : null;
-    if (a && !a.ok && frames[i][5] === OtpSub.MODULE_COMMIT) {
-      statusSetzen(`Commit-Fehler: ${a.text}`);
+    if (!a || !a.ok) {
+      const grund = ack === null ? "keine Antwort (Timeout)" : (a ? a.text : "ungueltiges ACK");
+      statusSetzen(`Modul ${id}: Laden fehlgeschlagen (${grund})`);
       return;
     }
   }
@@ -229,6 +246,8 @@ function pollLaeuft(): boolean {
  */
 export async function omniStatusEinmal(): Promise<void> {
   if (!hooks) return;
+  if (zyklusLaeuft) return; // vorheriger Zyklus laeuft noch (kann > 1000 ms dauern) — diesen Tick auslassen
+  zyklusLaeuft = true;
   try {
     const rep = await hooks.sysexAnfrage(
       buildIrqStatus(),
@@ -243,6 +262,8 @@ export async function omniStatusEinmal(): Promise<void> {
     statusSetzen(`placed_mask=0x${placed.toString(16)}  egress=${egress}  ticks=${ticks}`);
   } catch {
     statusSetzen("Status: keine Antwort");
+  } finally {
+    zyklusLaeuft = false;
   }
 }
 
@@ -286,6 +307,7 @@ export async function periodikInstallieren(): Promise<void> {
 export async function presetLaden(): Promise<void> {
   const chord = OMNI_MODULES.find((m) => m.id === 9)!;
   const arp = OMNI_MODULES.find((m) => m.id === 1)!;
+  await allesAus(); // unplace all zuerst — wie `fr(0x05,0x07,[0x7f])` im Setup der Referenzskripte, kein Alt-Modul haengen lassen
   await modulLaden(9);
   await modulLaden(1);
   if (!hooks) return;

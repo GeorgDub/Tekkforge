@@ -74,6 +74,15 @@
       .statusDot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
       .statusDot.an { background: var(--success); box-shadow: 0 0 6px var(--success); }
 
+      /* ── Omnitribe-Modul-Panel ──────────────────────────────── */
+      .omni-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+      .omni-karte { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+      .omni-kopf { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+      .omni-badge { color: var(--muted); font-weight: 400; font-size: 11px; }
+      .omni-led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); margin-left: auto; }
+      .omni-led.an { background: var(--success); box-shadow: 0 0 6px var(--success); }
+      .omni-params { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+
       /* ── Start-Dashboard ───────────────────────────────────── */
       .startHero {
         display: flex; gap: 18px; align-items: center; justify-content: space-between;

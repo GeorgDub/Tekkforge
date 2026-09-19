@@ -124,6 +124,45 @@ describe("Omni-Panel", () => {
     expect(omniZustand().module.find((m) => m.id === 9)!.platziert).toBe(true);
   });
 
+  it("Laden bricht bei Timeout (warten->null) ab: nicht platziert, Fehlerstatus", async () => {
+    const h = {
+      sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => null), // jeder Frame liefert Timeout
+    };
+    initOmni(h);
+    await modulLaden(9);
+    expect(omniZustand().module.find((m) => m.id === 9)!.platziert).toBe(false);
+    const status = el("omniStatus") as unknown as { textContent?: string };
+    expect(status.textContent).toContain("fehlgeschlagen");
+    expect(status.textContent).toContain("Timeout");
+    // nach einem Timeout auf dem ersten Frame wurde kein Commit mehr gesendet
+    const gesendet = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array);
+    expect(gesendet.some((f) => f[5] === OtpSub.MODULE_COMMIT)).toBe(false);
+  });
+
+  it("Laden bricht bei abgelehntem Chunk (status!=0, vor dem Commit) sofort ab", async () => {
+    // Erster ACK-Aufruf (erster Chunk) ok, zweiter (naechster Chunk) abgelehnt —
+    // der Commit-Frame darf dann gar nicht mehr gesendet werden.
+    let n = 0;
+    const h = {
+      sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => {
+        n++;
+        const status = n === 1 ? 0x00 : 0x0b; // "Chunk nicht lueckenlos"
+        return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [status, 9, n]);
+      }),
+    };
+    initOmni(h);
+    await modulLaden(9);
+    expect(omniZustand().module.find((m) => m.id === 9)!.platziert).toBe(false);
+    expect(n).toBeGreaterThanOrEqual(2); // mind. zwei Frames geprueft, dann Abbruch
+    const gesendet = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array);
+    expect(gesendet.length).toBe(n); // kein weiterer Frame nach dem Abbruch gesendet
+    expect(gesendet.some((f) => f[5] === OtpSub.MODULE_COMMIT)).toBe(false);
+  });
+
   it("Entladen sendet Unplace und raeumt platziert", async () => {
     const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 9, 0]);
     const h = {
@@ -250,6 +289,20 @@ describe("Omni-Panel", () => {
    * Klick-Verdrahtung selbst existiert fuers echte Panel, bleibt hier aber
    * ungetestet (wie schon in Task 5/6).
    */
+  it("Preset sendet zuerst Unplace 0x7f (allesAus), bevor es laedt", async () => {
+    const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 0, 0]);
+    const h = {
+      sysexSenden: vi.fn(async (_f: Uint8Array) => {}),
+      sysexAnfrage: vi.fn(async () => new Uint8Array()),
+      warten: vi.fn(async () => ack),
+    };
+    initOmni(h);
+    await presetLaden();
+    const gesendet = h.sysexSenden.mock.calls.map((c) => c[0] as Uint8Array);
+    const ersterUnplace = gesendet.findIndex((f) => f[5] === OtpSub.MODULE_UNPLACE && f[8] === 0x7f);
+    expect(ersterUnplace).toBe(0); // allererster gesendeter Frame
+  });
+
   it("Preset installiert die Periodik (IRQ 21) mit den Skript-Bytes", async () => {
     const ack = buildFrame(OtpCmd.MODULE, OtpSub.MODULE_ACK, [0x00, 0, 0]);
     const h = {
