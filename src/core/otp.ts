@@ -1244,6 +1244,57 @@ export function buildModuleCallback(moduleId: number, cb: OtpModuleCb, args: rea
   return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_CALLBACK, [moduleId & 0x7f, cb & 0x7f, ...encode7Bit(args)]);
 }
 
+// ─── Omni-Modul-Register (fuer das TekkForge-Panel) ──────────────────────────
+export type OmniParamKind = "enum" | "range" | "toggle" | "part";
+export interface OmniParam {
+  pid: number; label: string; kind: OmniParamKind;
+  min?: number; max?: number; options?: readonly { wert: number; text: string }[]; perPart?: boolean;
+}
+export interface OmniModule { id: number; name: string; msb: number; tested: boolean; params: readonly OmniParam[]; }
+
+const CHORD_TYPEN = [
+  { wert: 0, text: "Dur" }, { wert: 1, text: "Moll" }, { wert: 2, text: "Dur7" },
+  { wert: 3, text: "Moll7" }, { wert: 4, text: "Sus4" }, { wert: 5, text: "Dim" },
+] as const;
+const ARP_MODI = [
+  { wert: 0, text: "Up" }, { wert: 1, text: "Down" }, { wert: 2, text: "UpDown" }, { wert: 3, text: "DownUp" },
+  { wert: 4, text: "Random" }, { wert: 5, text: "Chord" }, { wert: 6, text: "Order" },
+] as const;
+const ARP_RATEN = [
+  { wert: 0, text: "1/4" }, { wert: 1, text: "1/8" }, { wert: 2, text: "1/16" },
+  { wert: 3, text: "1/32" }, { wert: 4, text: "1/8T" }, { wert: 5, text: "1/16T" },
+] as const;
+
+export const OMNI_MODULES: readonly OmniModule[] = [
+  { id: 9, name: "Chord", msb: 0x1e, tested: true, params: [
+    { pid: 0x00, label: "Typ", kind: "enum", options: CHORD_TYPEN },
+    { pid: 0x01, label: "Stagger", kind: "range", min: 0, max: 100 },
+    { pid: 0x02, label: "Root (>127 = gespielt)", kind: "range", min: 0, max: 200 },
+    { pid: 0x03, label: "Aktiv", kind: "toggle", perPart: true },
+  ] },
+  { id: 1, name: "Arp", msb: 0x16, tested: true, params: [
+    { pid: 0x00, label: "Modus", kind: "enum", options: ARP_MODI },
+    { pid: 0x01, label: "Rate", kind: "enum", options: ARP_RATEN },
+    { pid: 0x02, label: "Oktaven", kind: "range", min: 1, max: 4 },
+    { pid: 0x03, label: "Gate %", kind: "range", min: 1, max: 100 },
+    { pid: 0x04, label: "Latch", kind: "toggle", perPart: true },
+    { pid: 0x05, label: "Ziel-Part", kind: "part", perPart: true },
+    { pid: 0x06, label: "Aktiv", kind: "toggle", perPart: true },
+    { pid: 0x07, label: "Eingang stumm", kind: "toggle", perPart: true },
+  ] },
+  { id: 19, name: "spectral_morph", msb: 0x00, tested: false, params: [] },
+  { id: 20, name: "sd_stream", msb: 0x00, tested: false, params: [] },
+  { id: 21, name: "audio_input_routing", msb: 0x00, tested: false, params: [] },
+  { id: 30, name: "audio_test", msb: 0x00, tested: false, params: [] },
+];
+
+/** on_nrpn(msb, (part<<4)|pid, value14) fuer ein Omni-Modul. */
+export function buildOmniNrpn(mod: OmniModule, part: number, pid: number, value: number): Uint8Array {
+  return buildModuleCallback(mod.id, OTP_MODULE_CB.ON_NRPN, [
+    mod.msb & 0x7f, ((part & 0x0f) << 4) | (pid & 0x0f), value & 0xff, (value >> 8) & 0xff,
+  ]);
+}
+
 /** SUB 0x06: Modul-Mailbox im Task-Kontext leeren (Egress → Firmware). ACK: `[0x00, 0x7F, frames_lo7]`. */
 export function buildModuleDrain(): Uint8Array {
   return buildFrame(OtpCmd.MODULE, OtpSub.MODULE_DRAIN, []);
