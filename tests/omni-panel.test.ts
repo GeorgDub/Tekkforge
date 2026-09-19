@@ -40,6 +40,21 @@ function kartenAusschnitt(modulId: number): string {
   return html.slice(start, ende === -1 ? html.length : ende);
 }
 
+/**
+ * Nur das oeffnende Tag des Widgets zu einer `data-omni-pid` — nicht nur die
+ * Substring-Anwesenheit des Attributs, sondern der tatsaechliche Element-Typ
+ * (`<select` vs. `<input type="...">`), damit z.B. ein versehentlich auf
+ * `<input type="text">` umgestelltes enum/range/toggle-Widget auffaellt.
+ */
+function widgetAusschnitt(karte: string, pid: number): string {
+  const marker = `data-omni-pid="${pid}"`;
+  const idx = karte.indexOf(marker);
+  expect(idx).toBeGreaterThanOrEqual(0);
+  const tagStart = karte.lastIndexOf("<", idx);
+  const tagEnde = karte.indexOf(">", idx);
+  return karte.slice(tagStart, tagEnde + 1);
+}
+
 beforeEach(() => {
   elemente.clear();
   g.document = {
@@ -157,6 +172,13 @@ describe("Omni-Panel", () => {
     for (const p of arp.params) {
       expect(karte).toContain(`data-omni-pid="${p.pid}"`);
     }
+    // Nicht nur Attribut-Anwesenheit, sondern je ein Vertreter jeder `kind`-
+    // Klasse mit dem korrekten Element-Typ (Review-Finding: ein Regressions-
+    // Bug wie "alle Params als <input type=text>" faellt sonst nicht auf).
+    expect(widgetAusschnitt(karte, 0)).toContain("<select"); // Modus — enum
+    expect(widgetAusschnitt(karte, 2)).toContain('type="range"'); // Oktaven — range
+    expect(widgetAusschnitt(karte, 4)).toContain('type="checkbox"'); // Latch — toggle
+    expect(widgetAusschnitt(karte, 5)).toContain("<select"); // Ziel-Part — part (16 Parts)
   });
 
   it("paramsRendern laesst sich unabhaengig vom Laden-Status direkt aufrufen", () => {
